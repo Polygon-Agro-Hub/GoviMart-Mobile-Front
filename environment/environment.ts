@@ -1,11 +1,10 @@
 export const environment = {
-  production: true,
-
+  
   // LOCAL --------------------
-  // API_BASE_URL: "http://192.168.8.101:3000/govimart/",
+  API_BASE_URL: "http://192.168.1.18:3000/govimart/",
 
   // DEV --------------------
-  API_BASE_URL: "https://govimart-mobile-api.vercel.app/govimart/",
+  // API_BASE_URL: "https://govimart-mobile-api.vercel.app/govimart/",
 
   // UAT --------------------
   // API_BASE_URL: "https://govimart-mobile-api-uat.vercel.app/govimart/",

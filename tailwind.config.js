@@ -6,5 +6,8 @@ module.exports = {
   theme: {
     extend: {},
   },
+  safelist: process.env.NODE_ENV === 'development' ? [
+    { pattern: /^(p|m|w|h|bg|text|rounded|flex|items|justify|border|opacity)-/ }
+  ] : [],
   plugins: [],
 };
