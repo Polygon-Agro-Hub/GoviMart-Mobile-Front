@@ -13,7 +13,7 @@ const Splash: React.FC = () => {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace("Home");
+      navigation.replace("ChooseAuth");
     }, 2000);
 
     return () => clearTimeout(timer);
