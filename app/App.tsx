@@ -7,10 +7,12 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import Splash from "@/component/common/Splash";
 import ChooseAuth from "@/component/auth/ChooseAuth";
-import DeliveryLocation from "@/component/orders/DeliveryLocation";
+import DeliveryLocation from "@/component/auth/DeliveryLocation";
 import Login from "@/component/auth/Login";
+import SignUp from "@/component/auth/SignUp";
 import Home from "@/component/home/Home";
 import { navigationRef } from "../navigationRef";
+import { GlobalAlert } from "@/component/common/AlertModal";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -25,9 +27,11 @@ function AppContent() {
             <Stack.Screen name="ChooseAuth" component={ChooseAuth} />
             <Stack.Screen name="DeliveryLocation" component={DeliveryLocation} />
             <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="SignUp" component={SignUp} />
             <Stack.Screen name="Home" component={Home} />
           </Stack.Navigator>
         </NavigationContainer>
+        <GlobalAlert />
       </SafeAreaView>
     </GestureHandlerRootView>
   );

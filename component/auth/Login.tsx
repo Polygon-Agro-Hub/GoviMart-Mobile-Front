@@ -95,7 +95,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           <View className="space-y-4">
             {/* Input 1: Mobile / Email */}
             <View>
-              <View className="w-full bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5 py-0.5">
+              <View className="w-full h-[50px] bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5">
                 <View className="mr-3">
                   <MaterialIcons name="email" size={20} color="black" />
                 </View>
@@ -106,14 +106,14 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   placeholderTextColor="black"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  className="flex-1 h-12 text-sm text-black font-semibold"
+                  className="flex-1 text-sm text-black font-semibold p-0"
                 />
               </View>
             </View>
 
             {/* Input 2: Password */}
             <View className="mt-4">
-              <View className="w-full bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5 py-0.5">
+              <View className="w-full h-[50px] bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5">
                 <View className="mr-3 ml-1">
                   <FontAwesome6 name="lock" size={18} color="black" />
                 </View>
@@ -124,7 +124,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   placeholderTextColor="black"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  className="flex-1 h-12 text-sm text-black font-semibold"
+                  className="flex-1 text-sm text-black font-semibold p-0"
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="pl-2">
                   <Ionicons name={showPassword ? "eye" : "eye-off"} size={20} color="black" />
@@ -153,7 +153,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           <View className="mt-8">
             {/* Sign In Button */}
             <TouchableOpacity 
-              className={`w-full py-4 rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
+              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
               activeOpacity={isValid ? 0.8 : 1}
               onPress={handleSignIn}
               disabled={loading || !isValid}

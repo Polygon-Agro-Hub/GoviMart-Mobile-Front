@@ -28,13 +28,15 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         {showBackButton && navigation && (
           <TouchableOpacity
             onPress={onBackPress ?? (() => navigation.goBack())}
-            className="items-start"
+            className={`w-12 h-12 rounded-full items-center justify-center shadow-sm border ${
+              dark ? "bg-[#1F1F1F] border-gray-800" : "bg-white border-gray-200"
+            }`}
+            activeOpacity={0.7}
           >
             <Entypo
               name="chevron-left"
               size={30}
               color={dark ? "white" : "black"}
-              className={`rounded-full p-2 ${dark ? "bg-[#1F1F1F]" : "bg-[#F7FAFF]"}`}
             />
           </TouchableOpacity>
         )}
@@ -43,7 +45,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       {/* Middle section for Title */}
       <View className="flex-1 items-center">
         <Text
-          className={`text-2xl font-bold text-center ${dark ? "text-white" : "text-black"}`}
+          className={`text-xl font-bold text-center ${dark ? "text-white" : "text-[#001D4A]"}`}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.7}
@@ -53,7 +55,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       </View>
 
       {/* Right section (balanced placeholder) */}
-      <View className="w-12 items-end" />
+      <View className="w-12" />
     </View>
   );
 };
