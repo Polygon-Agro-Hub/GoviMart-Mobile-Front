@@ -123,7 +123,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
               <TouchableOpacity
                 onPress={onRescan}
                 activeOpacity={0.8}
-                className="bg-[#6E3DD1] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
+                className="bg-[#FF9114] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
               >
                 <FontAwesome5 name="undo" size={18} color="white" />
                 <Text className="text-white font-bold text-base">Re-Scan</Text>
@@ -135,7 +135,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
               <TouchableOpacity
                 onPress={onOpenOngoing}
                 activeOpacity={0.8}
-                className="bg-[#6E3DD1] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
+                className="bg-[#FF9114] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
               >
                 <Text className="text-white font-bold text-base">
                   Open Ongoing Activity
@@ -147,7 +147,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
               <TouchableOpacity
                 onPress={onClose}
                 activeOpacity={0.8}
-                className="bg-[#6E3DD1] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
+                className="bg-[#FF9114] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
               >
                 <Text className="text-white font-bold text-base">OK</Text>
               </TouchableOpacity>
@@ -171,7 +171,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
                     inputRange: [0, 1],
                     outputRange: ["0%", "100%"],
                   }),
-                  backgroundColor: "#6E3DD1",
+                  backgroundColor: "#FF9114",
                 }}
               />
             </View>

@@ -1,21 +1,23 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
 
 interface CustomHeaderProps {
-  title: string;
+  title?: string;
   showBackButton?: boolean;
   navigation?: any;
   onBackPress?: () => void;
   dark?: boolean;
+  showLogo?: boolean;
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
-  title,
+  title = "",
   showBackButton = false,
   navigation,
   onBackPress,
   dark = false,
+  showLogo = false,
 }) => {
   return (
     <View
@@ -42,16 +44,23 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         )}
       </View>
 
-      {/* Middle section for Title */}
+      {/* Middle section for Title or Logo */}
       <View className="flex-1 items-center">
-        <Text
-          className={`text-xl font-bold text-center ${dark ? "text-white" : "text-[#001D4A]"}`}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-        >
-          {title}
-        </Text>
+        {showLogo ? (
+          <Image
+            source={require("@/assets/images/public/govimart-logo.png")}
+            style={{ width: 140, height: 40, resizeMode: "contain" }}
+          />
+        ) : (
+          <Text
+            className={`text-xl font-bold text-center ${dark ? "text-white" : "text-[#001D4A]"}`}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {title}
+          </Text>
+        )}
       </View>
 
       {/* Right section (balanced placeholder) */}

@@ -10,6 +10,7 @@ import ChooseAuth from "@/component/auth/ChooseAuth";
 import DeliveryLocation from "@/component/auth/DeliveryLocation";
 import Login from "@/component/auth/Login";
 import SignUp from "@/component/auth/SignUp";
+import SignUpOTP from "@/component/auth/SignUpOTP";
 import Home from "@/component/home/Home";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
@@ -28,6 +29,7 @@ function AppContent() {
             <Stack.Screen name="DeliveryLocation" component={DeliveryLocation} />
             <Stack.Screen name="Login" component={Login} />
             <Stack.Screen name="SignUp" component={SignUp} />
+            <Stack.Screen name="SignUpOTP" component={SignUpOTP} />
             <Stack.Screen name="Home" component={Home} />
           </Stack.Navigator>
         </NavigationContainer>

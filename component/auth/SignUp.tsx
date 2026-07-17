@@ -12,17 +12,21 @@ import {
   Image,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome, FontAwesome5, FontAwesome6, Ionicons, MaterialIcons, Entypo, AntDesign } from "@expo/vector-icons";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomHeader from "@/component/common/CustomHeader";
+import { AlertModal } from "@/component/common/AlertModal";
 
 type SignUpNavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
+type SignUpRouteProp = RouteProp<RootStackParamList, "SignUp">;
 
 interface SignUpProps {
   navigation: SignUpNavigationProp;
+  route: SignUpRouteProp;
 }
 
 interface PhoneCode {
@@ -44,8 +48,21 @@ const getFlagUrl = (countryCode: string): string => {
   return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
 };
 
-const SignUp: React.FC<SignUpProps> = ({ navigation }) => {
+const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [tab, setTab] = useState<"home" | "business">("home");
+
+  // AlertModal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const showAlert = (title: string, message: string, type: "success" | "error" = "error") => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   // Form Fields
   const [title, setTitle] = useState("");
@@ -156,6 +173,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation }) => {
         companyName: tab === "business" ? companyName.trim() : null,
         companyPhoneCode: tab === "business" ? companyPhoneCode : null,
         companyPhoneNumber: tab === "business" ? companyNumber.trim() : null,
+        city: route.params?.nearestCity || null,
+        cityId: route.params?.cityId || null,
       };
 
       setIsLoading(true);
@@ -165,18 +184,29 @@ const SignUp: React.FC<SignUpProps> = ({ navigation }) => {
       );
 
       if (response.data && response.data.status) {
-        Alert.alert(
-          "Registration Successful",
-          "Your account has been created. Please sign in.",
-          [{ text: "OK", onPress: () => navigation.navigate("Login") }]
-        );
+        if (response.data.verificationRequired) {
+          navigation.navigate("SignUpOTP", {
+            phoneCode,
+            phoneNumber,
+            email,
+            method: response.data.method,
+            referenceId: response.data.referenceId,
+            signupToken: response.data.signupToken,
+          });
+        } else {
+          Alert.alert(
+            "Registration Successful",
+            "Your account has been created. Please sign in.",
+            [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+          );
+        }
       } else {
-        Alert.alert("Signup Failed", response.data.message || "Failed to register.");
+        showAlert("Signup Failed", response.data.message || "Failed to register.");
       }
     } catch (err: any) {
       console.error("Signup error:", err);
       const msg = err.response?.data?.message || "An unexpected error occurred.";
-      Alert.alert("Signup Error", msg);
+      showAlert("Signup Error", msg);
     } finally {
       setIsLoading(false);
     }
@@ -686,6 +716,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
 
+
+
           {/* Sign In Redirect Link */}
           <View className="flex-row items-center justify-center mt-3">
             <Text className="text-xs text-gray-500">
@@ -784,6 +816,16 @@ const SignUp: React.FC<SignUpProps> = ({ navigation }) => {
         }}
         searchKeys={["name", "dialCode"]}
         renderItem={renderCountryItem}
+      />
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+        autoClose={false}
+        showOkButton={true}
       />
     </KeyboardAvoidingView>
   );

@@ -82,7 +82,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
       setValidationError(`Delivery not available in ${selectedCity.city} yet, but we’re working on it and coming to your area soon!`);
       return;
     }
-    navigation.navigate("SignUp");
+    navigation.navigate("SignUp", { nearestCity: selectedCity.city, cityId: selectedCity.id });
   };
 
   const renderCityItem = (
@@ -177,7 +177,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
           <View className="flex-row items-center">
             <View className="mr-3">
               {isLoading ? (
-                <ActivityIndicator size="small" color="#6E3DD1" />
+                <ActivityIndicator size="small" color="black" />
               ) : (
                 <FontAwesome6 name="location-dot" size={18} color="black" />
               )}
