@@ -9,6 +9,7 @@ interface CustomHeaderProps {
   onBackPress?: () => void;
   dark?: boolean;
   showLogo?: boolean;
+  titleColor?: string;
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
@@ -18,6 +19,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
   onBackPress,
   dark = false,
   showLogo = false,
+  titleColor,
 }) => {
   return (
     <View
@@ -54,6 +56,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         ) : (
           <Text
             className={`text-xl font-bold text-center ${dark ? "text-white" : "text-[#001D4A]"}`}
+            style={titleColor ? { color: titleColor } : undefined}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.7}

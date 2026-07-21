@@ -118,6 +118,15 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
         >
           <Text className="text-white text-base font-bold">Sign in</Text>
         </TouchableOpacity>
+
+        {/* Temporary Customize Packages Button */}
+        <TouchableOpacity 
+          className="w-full bg-[#6C3CD1] py-4 rounded-full items-center justify-center mt-4"
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate("ExcludeListAdd", { customerId: 1002 })}
+        >
+          <Text className="text-white text-base font-bold">Customize Packages (Staging)</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

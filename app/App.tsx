@@ -12,6 +12,8 @@ import Login from "@/component/auth/Login";
 import SignUp from "@/component/auth/SignUp";
 import SignUpOTP from "@/component/auth/SignUpOTP";
 import Home from "@/component/home/Home";
+import ExcludeListAdd from "@/component/exclude-items/ExcludeListAdd";
+import ExcludeListSummery from "@/component/exclude-items/ExcludeListSummery";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
 
@@ -31,6 +33,8 @@ function AppContent() {
             <Stack.Screen name="SignUp" component={SignUp} />
             <Stack.Screen name="SignUpOTP" component={SignUpOTP} />
             <Stack.Screen name="Home" component={Home} />
+            <Stack.Screen name="ExcludeListAdd" component={ExcludeListAdd} />
+            <Stack.Screen name="ExcludeListSummery" component={ExcludeListSummery} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
