@@ -14,8 +14,12 @@ import SignUpOTP from "@/component/auth/SignUpOTP";
 import Home from "@/component/home/Home";
 import ExcludeListAdd from "@/component/exclude-items/ExcludeListAdd";
 import ExcludeListSummery from "@/component/exclude-items/ExcludeListSummery";
+import Profile from "@/component/auth/Profile";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
+
+import { Provider } from "react-redux";
+import { store } from "../store";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -35,6 +39,7 @@ function AppContent() {
             <Stack.Screen name="Home" component={Home} />
             <Stack.Screen name="ExcludeListAdd" component={ExcludeListAdd} />
             <Stack.Screen name="ExcludeListSummery" component={ExcludeListSummery} />
+            <Stack.Screen name="Profile" component={Profile} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
@@ -45,8 +50,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AppContent />
-    </SafeAreaProvider>
+    <Provider store={store}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </Provider>
   );
 }

@@ -21,6 +21,9 @@ import NoDataFound from "../common/NoDataFound";
 import CustomHeader from "../common/CustomHeader";
 import LoadingPage from "../common/LoadingPage";
 import ToggleSwitch from "../common/ToggleSwitch";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { environment } from "@/environment/environment";
 
 type ExcludeListAddNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -31,7 +34,7 @@ interface CustomerData {
   name?: string;
   title?: string;
   number?: string;
-  cusId?: number;
+  cusId?: number | string;
   id?: number;
   firstName?: string;
   lastName?: string;
@@ -67,13 +70,7 @@ interface CropRowProps {
   onToggleExclude: (cropId: number) => void;
 }
 
-const MOCK_CROPS: Crop[] = [
-  { id: 1, displayName: "Carrot (Local)", image: "https://cdn-icons-png.flaticon.com/512/4056/4056860.png", isIncluded: false, isExcluded: false },
-  { id: 2, displayName: "Potato (Nuwara Eliya)", image: "https://cdn-icons-png.flaticon.com/512/1041/1041355.png", isIncluded: true, isExcluded: false },
-  { id: 3, displayName: "Leeks", image: "https://cdn-icons-png.flaticon.com/512/3014/3014502.png", isIncluded: false, isExcluded: true },
-  { id: 4, displayName: "Tomato", image: "https://cdn-icons-png.flaticon.com/512/1202/1202125.png", isIncluded: false, isExcluded: false },
-  { id: 5, displayName: "Cabbage", image: "https://cdn-icons-png.flaticon.com/512/1143/1143828.png", isIncluded: false, isExcluded: false },
-];
+
 
 const CropRow = React.memo(
   ({
@@ -85,7 +82,6 @@ const CropRow = React.memo(
   }: CropRowProps) => {
     return (
       <View className="flex-row justify-between items-center my-1 px-6 mb-2">
-        {/* Crop image + name */}
         <View className="flex-row items-center gap-4 flex-1">
           <Image
             source={{ uri: item.image }}
@@ -100,7 +96,6 @@ const CropRow = React.memo(
           </Text>
         </View>
 
-        {/* Include / Exclude toggles */}
         <View className="flex-row items-center" style={{ gap: 20 }}>
           <ToggleSwitch
             isOn={isIncluded}
@@ -132,12 +127,11 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   const [crops, setCrops] = useState<Crop[]>([]);
   const [filteredCrops, setFilteredCrops] = useState<Crop[]>([]);
 
-  const [selectedIncludeCrops, setSelectedIncludeCrops] = useState<number[]>(
-    [],
-  );
-  const [selectedExcludeCrops, setSelectedExcludeCrops] = useState<number[]>(
-    [],
-  );
+  const [selectedIncludeCrops, setSelectedIncludeCrops] = useState<number[]>([]);
+  const [selectedExcludeCrops, setSelectedExcludeCrops] = useState<number[]>([]);
+
+  const [initialIncludeIds, setInitialIncludeIds] = useState<number[]>([]);
+  const [initialExcludeIds, setInitialExcludeIds] = useState<number[]>([]);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -192,29 +186,88 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
     return true;
   }, [navigation]);
 
-  useEffect(() => {
-    // Mock customer data & crop list preloading
-    setCustomerDataLoading(true);
-    setListLoading(true);
-    const timer = setTimeout(() => {
-      setCustomerData({
-        firstName: "Kamal",
-        lastName: "Perera",
-        phoneNumber: "+94771122300",
-        cusId: 1002,
-        id: 1002,
-        title: "Mr",
-      });
-      setCrops(MOCK_CROPS);
-      setFilteredCrops(MOCK_CROPS);
-      setSelectedIncludeCrops([2]);
-      setSelectedExcludeCrops([3]);
+  const fetchCropsAndPreferences = useCallback(async () => {
+    try {
+      setListLoading(true);
+      setCustomerDataLoading(true);
+
+      const token = await AsyncStorage.getItem("userToken");
+      if (!token) {
+        Alert.alert("Authentication Required", "Please log in to customize packages.");
+        setCustomerDataLoading(false);
+        setListLoading(false);
+        navigation.navigate("ChooseAuth");
+        return;
+      }
+
+      try {
+        const profileRes = await axios.get(
+          `${environment.API_BASE_URL}api/customer/profile`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (profileRes.data && profileRes.data.status) {
+          setCustomerData(profileRes.data.data);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch customer profile:", err);
+      }
+
+      const suggestionsRes = await axios.get(
+        `${environment.API_BASE_URL}api/customer/marketplace/suggestions`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const excludedRes = await axios.get(
+        `${environment.API_BASE_URL}api/customer/marketplace/excluded-items`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const includedRes = await axios.get(
+        `${environment.API_BASE_URL}api/customer/marketplace/include-items`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const dbSuggestions = suggestionsRes.data.items || [];
+      const dbExcluded = excludedRes.data.items || [];
+      const dbIncluded = includedRes.data.items || [];
+
+      const formattedCrops: Crop[] = dbSuggestions.map((item: any) => ({
+        id: item.id,
+        displayName: item.displayName,
+        image: item.image,
+      }));
+
+      const includedIds = dbIncluded.map((item: any) => item.id);
+      const excludedIds = dbExcluded.map((item: any) => item.id);
+
+      setCrops(formattedCrops);
+      setFilteredCrops(formattedCrops);
+      setSelectedIncludeCrops(includedIds);
+      setSelectedExcludeCrops(excludedIds);
+      setInitialIncludeIds(includedIds);
+      setInitialExcludeIds(excludedIds);
+
+    } catch (error: any) {
+      console.error("Error loading crops and preferences:", error);
+      Alert.alert(
+        "Connection Error",
+        "Failed to connect to backend. Falling back to local data."
+      );
+      setCrops([]);
+      setFilteredCrops([]);
+      setSelectedIncludeCrops([]);
+      setSelectedExcludeCrops([]);
+      setInitialIncludeIds([]);
+      setInitialExcludeIds([]);
+    } finally {
       setCustomerDataLoading(false);
       setListLoading(false);
-    }, 800);
-
-    return () => clearTimeout(timer);
+    }
   }, [customerId]);
+
+  useEffect(() => {
+    fetchCropsAndPreferences();
+  }, [fetchCropsAndPreferences]);
 
   useFocusEffect(
     useCallback(() => {
@@ -236,8 +289,47 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
 
   const handlesubmitexcludelist = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      if (token) {
+        const addedIncludes = selectedIncludeCrops.filter(id => !initialIncludeIds.includes(id));
+        const deletedIncludes = initialIncludeIds.filter(id => !selectedIncludeCrops.includes(id));
+        const addedExcludes = selectedExcludeCrops.filter(id => !initialExcludeIds.includes(id));
+        const deletedExcludes = initialExcludeIds.filter(id => !selectedExcludeCrops.includes(id));
+
+        const getCropNames = (ids: number[]) => {
+          return crops.filter(c => ids.includes(c.id)).map(c => c.displayName);
+        };
+
+        const addIncludeNames = getCropNames(addedIncludes);
+        const delIncludeNames = getCropNames(deletedIncludes);
+        const addExcludeNames = getCropNames(addedExcludes);
+        const delExcludeNames = getCropNames(deletedExcludes);
+
+        const authHeaders = { Authorization: `Bearer ${token}` };
+
+        if (addIncludeNames.length > 0) {
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/add-include-items`, 
+            { items: addIncludeNames }, { headers: authHeaders }
+          );
+        }
+        if (delIncludeNames.length > 0) {
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-included`, 
+            { items: delIncludeNames }, { headers: authHeaders }
+          );
+        }
+        if (addExcludeNames.length > 0) {
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/exclude-items`, 
+            { items: addExcludeNames }, { headers: authHeaders }
+          );
+        }
+        if (delExcludeNames.length > 0) {
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`, 
+            { items: delExcludeNames }, { headers: authHeaders }
+          );
+        }
+      }
+      
       const currentData = getCurrentCustomerData();
       navigation.navigate("ExcludeListSummery", {
         customerId: Number(customerId),
@@ -247,7 +339,12 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         cusId: currentData.customerId,
         id: Number(currentData.id) || undefined,
       });
-    }, 1000);
+    } catch (err: any) {
+      console.error("Failed to submit excludelist changes:", err);
+      Alert.alert("Submission Error", "Failed to save excludelist preferences to backend.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSearch = (query: string) => {
@@ -304,10 +401,11 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       if (crops.length > 0) {
         setFilteredCrops(crops);
       }
+      fetchCropsAndPreferences();
     });
 
     return unsubscribe;
-  }, [navigation, crops]);
+  }, [navigation, crops, fetchCropsAndPreferences]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -330,7 +428,20 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   }, []);
 
   if (listLoading) {
-    return <LoadingPage message="Loading Item List..." fullScreen={true} />;
+    return (
+      <View className="flex-1 bg-white">
+        <CustomHeader
+          title="Customize Packages"
+          titleColor="black"
+          showBackButton={true}
+          navigation={navigation}
+          onBackPress={handleBackPress}
+        />
+        <View className="flex-1 justify-center items-center">
+          <LoadingPage message="Loading Item List..." fullScreen={false} />
+        </View>
+      </View>
+    );
   }
 
   return (

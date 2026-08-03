@@ -15,4 +15,5 @@ export type RootStackParamList = {
   } | undefined;
   ExcludeListAdd: { customerId: number; name?: string; title?: string; number?: string; id?: number } | undefined;
   ExcludeListSummery: { customerId: number; name?: string; title?: string; phoneNumber?: string; cusId?: string; id?: number } | undefined;
+  Profile: undefined;
 };

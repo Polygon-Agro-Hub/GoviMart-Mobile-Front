@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
@@ -7,6 +7,8 @@ import { environment } from "@/environment/environment";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import axios from "axios";
+import { useDispatch } from "react-redux";
+import { loginSuccess, setRememberMeDetails } from "../../store/authSlice";
 
 type LoginNavigationProp = StackNavigationProp<RootStackParamList, "Login">;
 
@@ -20,8 +22,32 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
+
+  useEffect(() => {
+    const loadRemembered = async () => {
+      try {
+        const storedEmail = await AsyncStorage.getItem("rememberedEmail");
+        const storedPassword = await AsyncStorage.getItem("rememberedPassword");
+        if (storedEmail && storedPassword) {
+          setIdentifier(storedEmail);
+          setPassword(storedPassword);
+          setRememberMe(true);
+          dispatch(
+            setRememberMeDetails({
+              rememberMe: true,
+              rememberedDetails: { email: storedEmail, password: storedPassword },
+            })
+          );
+        }
+      } catch (e) {
+        console.error("Failed to load remembered details:", e);
+      }
+    };
+    loadRemembered();
+  }, [dispatch]);
 
   const handleSignIn = async () => {
     if (!isValid) return;
@@ -34,20 +60,63 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
       });
 
       if (response.data && response.data.success) {
-        const { token, firstName, lastName, email, phoneNumber, image } = response.data.data;
-        
-        // Save user session details
+        const { token, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType } = response.data.data;
+        const loginTime = Date.now();
+
+        // Save session details to AsyncStorage
+        await AsyncStorage.setItem("userLoginTime", loginTime.toString());
         await AsyncStorage.setItem("userToken", token);
-        await AsyncStorage.setItem("userProfile", JSON.stringify({
+        const userProfile = {
           firstName,
           lastName,
           email,
           phoneNumber,
           image,
-        }));
+          firstTimeUser,
+          buyerType,
+          id: response.data.data.id,
+        };
+        await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
+
+        // Dispatch login to Redux
+        dispatch(loginSuccess({ token, userProfile, loginTime }));
+
+        // Handle Remember Me details
+        if (rememberMe) {
+          await AsyncStorage.setItem("rememberedEmail", identifier.trim());
+          await AsyncStorage.setItem("rememberedPassword", password.trim());
+          dispatch(
+            setRememberMeDetails({
+              rememberMe: true,
+              rememberedDetails: { email: identifier.trim(), password: password.trim() },
+            })
+          );
+        } else {
+          await AsyncStorage.removeItem("rememberedEmail");
+          await AsyncStorage.removeItem("rememberedPassword");
+          dispatch(
+            setRememberMeDetails({
+              rememberMe: false,
+              rememberedDetails: null,
+            })
+          );
+        }
 
         Alert.alert("Success", "Login successful!", [
-          { text: "OK", onPress: () => navigation.navigate("Home") }
+          {
+            text: "OK",
+            onPress: () => {
+              if (buyerType === "Retail" && firstTimeUser === 0) {
+                navigation.navigate("ExcludeListAdd", {
+                  customerId: response.data.data.id,
+                  name: `${firstName} ${lastName}`,
+                  number: phoneNumber,
+                });
+              } else {
+                navigation.navigate("Home");
+              }
+            }
+          }
         ]);
       } else {
         Alert.alert("Login Failed", response.data.message || "An error occurred during login.");

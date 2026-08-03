@@ -16,6 +16,9 @@ import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import CustomHeader from "../common/CustomHeader";
 import ConfirmationModal from "../common/ConfirmationModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { environment } from "@/environment/environment";
 
 type ExcludeListSummeryNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -39,13 +42,7 @@ interface PreferCrop {
   image: string;
 }
 
-const MOCK_EXCLUDE_CROPS: ExcludeCrop[] = [
-  { excludeId: 3, displayName: "Leeks", image: "https://cdn-icons-png.flaticon.com/512/3014/3014502.png" }
-];
 
-const MOCK_PREFER_CROPS: PreferCrop[] = [
-  { preId: 2, displayName: "Potato (Nuwara Eliya)", image: "https://cdn-icons-png.flaticon.com/512/1041/1041355.png" }
-];
 
 const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   route,
@@ -54,8 +51,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   const { customerId = 1002, name = "Kamal Perera", title = "Mr", phoneNumber = "+94771122300", cusId = "1002", id } =
     route.params || {};
 
-  const [excludeCrops, setExcludeCrops] = useState<ExcludeCrop[]>(MOCK_EXCLUDE_CROPS);
-  const [preferCrops, setPreferCrops] = useState<PreferCrop[]>(MOCK_PREFER_CROPS);
+  const [excludeCrops, setExcludeCrops] = useState<ExcludeCrop[]>([]);
+  const [preferCrops, setPreferCrops] = useState<PreferCrop[]>([]);
 
   const [selectedExcludeIds, setSelectedExcludeIds] = useState<number[]>([]);
   const [selectedPreferIds, setSelectedPreferIds] = useState<number[]>([]);
@@ -86,8 +83,46 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   });
 
   const fetchLists = useCallback(async () => {
-    setExcludeCrops(MOCK_EXCLUDE_CROPS);
-    setPreferCrops(MOCK_PREFER_CROPS);
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      if (!token) {
+        Alert.alert("Authentication Required", "Please log in to view customize packages summary.");
+        navigation.navigate("ChooseAuth");
+        return;
+      }
+
+      const includedRes = await axios.get(
+        `${environment.API_BASE_URL}api/customer/marketplace/include-items`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const excludedRes = await axios.get(
+        `${environment.API_BASE_URL}api/customer/marketplace/excluded-items`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const dbIncluded = includedRes.data.items || [];
+      const dbExcluded = excludedRes.data.items || [];
+
+      const formattedIncluded = dbIncluded.map((item: any) => ({
+        preId: item.id,
+        displayName: item.displayName,
+        image: item.image,
+      }));
+
+      const formattedExcluded = dbExcluded.map((item: any) => ({
+        excludeId: item.id,
+        displayName: item.displayName,
+        image: item.image,
+      }));
+
+      setPreferCrops(formattedIncluded);
+      setExcludeCrops(formattedExcluded);
+
+    } catch (error) {
+      setExcludeCrops([]);
+      setPreferCrops([]);
+    }
   }, []);
 
   useFocusEffect(
@@ -168,27 +203,74 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     setDeleteModalVisible(true);
   };
 
-  const confirmDeleteAction = () => {
+  const confirmDeleteAction = async () => {
     if (!itemToDelete) return;
     setDeleteModalVisible(false);
 
     const { id, type } = itemToDelete;
-    if (type === "prefer") {
-      setPreferCrops((prev) => prev.filter((crop) => crop.preId !== id));
-      setSelectedPreferIds((prev) => prev.filter((item) => item !== id));
-    } else if (type === "exclude") {
-      setExcludeCrops((prev) => prev.filter((crop) => crop.excludeId !== id));
-      setSelectedExcludeIds((prev) => prev.filter((item) => item !== id));
-    } else if (type === "bulk-prefer") {
-      setPreferCrops((prev) =>
-        prev.filter((crop) => !selectedPreferIds.includes(crop.preId))
-      );
-      setSelectedPreferIds([]);
-    } else if (type === "bulk-exclude") {
-      setExcludeCrops((prev) =>
-        prev.filter((crop) => !selectedExcludeIds.includes(crop.excludeId))
-      );
-      setSelectedExcludeIds([]);
+    const token = await AsyncStorage.getItem("userToken");
+
+    try {
+      if (type === "prefer") {
+        const crop = preferCrops.find((c) => c.preId === id);
+        if (crop && token) {
+          await axios.post(
+            `${environment.API_BASE_URL}api/customer/marketplace/delete-included`,
+            { items: [crop.displayName] },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        }
+        setPreferCrops((prev) => prev.filter((c) => c.preId !== id));
+        setSelectedPreferIds((prev) => prev.filter((item) => item !== id));
+      } else if (type === "exclude") {
+        const crop = excludeCrops.find((c) => c.excludeId === id);
+        if (crop && token) {
+          await axios.post(
+            `${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`,
+            { items: [crop.displayName] },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        }
+        setExcludeCrops((prev) => prev.filter((c) => c.excludeId !== id));
+        setSelectedExcludeIds((prev) => prev.filter((item) => item !== id));
+      } else if (type === "bulk-prefer") {
+        if (token) {
+          const cropsToDelete = preferCrops
+            .filter((c) => selectedPreferIds.includes(c.preId))
+            .map((c) => c.displayName);
+          if (cropsToDelete.length > 0) {
+            await axios.post(
+              `${environment.API_BASE_URL}api/customer/marketplace/delete-included`,
+              { items: cropsToDelete },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          }
+        }
+        setPreferCrops((prev) =>
+          prev.filter((crop) => !selectedPreferIds.includes(crop.preId))
+        );
+        setSelectedPreferIds([]);
+      } else if (type === "bulk-exclude") {
+        if (token) {
+          const cropsToDelete = excludeCrops
+            .filter((c) => selectedExcludeIds.includes(c.excludeId))
+            .map((c) => c.displayName);
+          if (cropsToDelete.length > 0) {
+            await axios.post(
+              `${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`,
+              { items: cropsToDelete },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          }
+        }
+        setExcludeCrops((prev) =>
+          prev.filter((crop) => !selectedExcludeIds.includes(crop.excludeId))
+        );
+        setSelectedExcludeIds([]);
+      }
+    } catch (err: any) {
+      console.error("Delete operation failed:", err);
+      Alert.alert("Error", "Failed to delete item(s) from database.");
     }
 
     setItemToDelete(null);
@@ -211,6 +293,34 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       return () => backHandler.remove();
     }, [navigation, customerId]),
   );
+
+  const handleCompleteOnboarding = async () => {
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      if (token) {
+        await axios.post(
+          `${environment.API_BASE_URL}api/customer/update-user-status`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // Update local AsyncStorage profile
+        const profileStr = await AsyncStorage.getItem("userProfile");
+        if (profileStr) {
+          const profileObj = JSON.parse(profileStr);
+          profileObj.firstTimeUser = 1;
+          await AsyncStorage.setItem("userProfile", JSON.stringify(profileObj));
+        }
+      }
+
+      Alert.alert("Success", "Package preferences configured successfully!", [
+        { text: "OK", onPress: () => navigation.navigate("Home") }
+      ]);
+    } catch (err: any) {
+      console.error("Failed to complete onboarding:", err);
+      Alert.alert("Error", "Failed to update onboarding status. Please try again.");
+    }
+  };
 
   const fullTitle =
     customerName.firstName && customerName.lastName
@@ -254,7 +364,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       />
 
       <View className="mx-auto w-full max-w-[500px]">
-        <Text className="text-center text-black text-base -mt-[15px]">
+        <Text className="text-center text-black text-base -mt-[3px]">
           {customerName.firstName && customerName.lastName
             ? `Customer ID : ${customerName.cusId}`
             : "Customer ID : 1002"}
@@ -473,13 +583,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       {/* Bottom CTA */}
       <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
         <TouchableOpacity
-          onPress={() =>
-            Alert.alert(
-              "Select Order Type",
-              "Select Order Type triggered (Staging).",
-              [{ text: "OK", onPress: () => navigation.navigate("ChooseAuth") }]
-            )
-          }
+          onPress={handleCompleteOnboarding}
           activeOpacity={0.8}
           className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
         >
