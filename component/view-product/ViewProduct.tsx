@@ -1,0 +1,359 @@
+import React, { useState } from "react";
+import {
+    View,
+    Text,
+    Image,
+    TouchableOpacity,
+    SafeAreaView,
+    StatusBar,
+    ScrollView,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { StackScreenProps } from "@react-navigation/stack";
+import { RootStackParamList } from "@/types/types";
+
+type Props = StackScreenProps<RootStackParamList, "ViewProduct">;
+
+const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
+    const { product } = route.params;
+
+    const [unit, setUnit] = useState<"kg" | "g">("g");
+    const [quantity, setQuantity] = useState(500);
+
+    const increaseQty = () => {
+        if (unit === "g") {
+            setQuantity((prev) => prev + 100);
+        } else {
+            setQuantity((prev) => Number((prev + 0.5).toFixed(1)));
+        }
+    };
+
+    const decreaseQty = () => {
+        if (unit === "g") {
+            if (quantity > 100) setQuantity((prev) => prev - 100);
+        } else {
+            if (quantity > 0.5)
+                setQuantity((prev) => Number((prev - 0.5).toFixed(1)));
+        }
+    };
+
+    const changeUnit = (value: "kg" | "g") => {
+        setUnit(value);
+
+        if (value === "g") {
+            setQuantity(500);
+        } else {
+            setQuantity(1);
+        }
+    };
+
+    return (
+        <View className="flex-1 bg-[#FCEFD9]">
+
+            <StatusBar
+                backgroundColor="#FCEFD9"
+                barStyle="dark-content"
+            />
+
+            {/* Close Button */}
+
+            <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                className="absolute right-5 top-3 z-50 bg-white w-11 h-11 rounded-full items-center justify-center"
+            >
+                <Ionicons
+                    name="close"
+                    size={24}
+                    color="#000"
+                />
+            </TouchableOpacity>
+
+            {/* Product Image */}
+            <ScrollView
+
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                    // paddingBottom: 120, // Prevent content from being hidden behind the bottom bar
+                    flexGrow: 1,
+                }}
+            >
+
+
+                <View className="items-center mt-16 mb-16">
+                    <Image
+                        source={{ uri: product.image }}
+                        resizeMode="contain"
+                        style={{
+                            width: "100%",
+                            height: 300,
+                        }}
+                    />
+                </View>
+
+                {/* Bottom Card */}
+
+                <View
+                    className="bg-white flex-1 mt-2 px-6 pt-7 h-screen"
+                    style={{
+                        flex: 1,
+                        borderTopLeftRadius: 34,
+                        borderTopRightRadius: 34,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.12,
+                        shadowRadius: 8,
+                        shadowOffset: {
+                            width: 0,
+                            height: -4,
+                        },
+
+                        elevation: 10,
+                    }}
+                >
+                    {/* Product Name */}
+
+                    <Text
+                        className="text-black font-bold"
+                        style={{
+                            fontSize: 28
+                        }}
+                    >
+                        {product.name}
+                    </Text>
+
+                    {/* Unit Switch */}
+
+                    <View className="flex-row mt-5">
+
+                        <TouchableOpacity
+                            onPress={() => changeUnit("kg")}
+                            style={{
+                                width: 58,
+                                height: 34,
+                                borderRadius: 17,
+                                backgroundColor:
+                                    unit === "kg"
+                                        ? "#FF931E"
+                                        : "#FFD3A0",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                marginRight: 10,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    color: "white",
+                                    fontWeight: "700",
+                                }}
+                            >
+                                kg
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => changeUnit("g")}
+                            style={{
+                                width: 58,
+                                height: 34,
+                                borderRadius: 17,
+                                backgroundColor:
+                                    unit === "g"
+                                        ? "#FF931E"
+                                        : "#FFD3A0",
+                                justifyContent: "center",
+                                alignItems: "center",
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    color: "white",
+                                    fontWeight: "700",
+                                }}
+                            >
+                                g
+                            </Text>
+                        </TouchableOpacity>
+
+                    </View>
+
+                    {/* Divider */}
+
+                    <View
+                        style={{
+                            height: 1,
+                            backgroundColor: "#ECECEC",
+                            marginVertical: 20,
+                        }}
+                    />
+
+                    {/* Weight */}
+
+                    <Text
+                        style={{
+                            color: "#666",
+                            fontSize: 20,
+                            marginBottom: 5,
+                        }}
+                    >
+                        {quantity} {unit}
+                    </Text>
+
+                    {/* Price */}
+
+                    <Text
+                        style={{
+                            fontSize: 34,
+                            fontWeight: "bold",
+                            color: "#000",
+                        }}
+                    >
+                        {product.price}
+                    </Text>
+
+                    {/* Savings */}
+
+                    <View
+                        style={{
+                            backgroundColor: "#EFF8D9",
+                            marginTop: 16,
+                            borderRadius: 12,
+                            padding: 14,
+                            flexDirection: "row",
+                        }}
+                    >
+                        <Ionicons
+                            name="heart"
+                            color="#000"
+                            size={18}
+                            style={{ marginTop: 2 }}
+                        />
+
+                        <Text
+                            style={{
+                                flex: 1,
+                                marginLeft: 10,
+                                fontSize: 14,
+                                color: "#222",
+                            }}
+                        >
+                            You save{" "}
+                            <Text style={{ fontWeight: "bold" }}>
+                                Rs.50.00
+                            </Text>{" "}
+                            shopping within us than the marketplace.
+                        </Text>
+                    </View>
+
+                </View>
+            </ScrollView>
+
+            {/* Bottom Cart */}
+
+            <View
+                style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 88,
+                    backgroundColor: "#FFF",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: "#ECECEC",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.12,
+                    shadowRadius: 8,
+                    shadowOffset: {
+                        width: 0,
+                        height: -3,
+                    },
+
+                    elevation: 12,
+                }}
+            >
+                {/* Delete */}
+
+                <TouchableOpacity
+                    style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: "#F3F3F3",
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <Ionicons
+                        name="trash-outline"
+                        size={24}
+                        color="#BDBDBD"
+                    />
+                </TouchableOpacity>
+
+                {/* Qty */}
+
+                <TouchableOpacity
+                    onPress={decreaseQty}
+                    style={{
+                        marginLeft: 15,
+                    }}
+                >
+                    <Ionicons
+                        name="remove-circle"
+                        size={30}
+                        color="#000"
+                    />
+                </TouchableOpacity>
+
+                <Text
+                    style={{
+                        fontSize: 18,
+                        fontWeight: "700",
+                        marginHorizontal: 10,
+                        minWidth: 65,
+                        textAlign: "center",
+                    }}
+                >
+                    {quantity} {unit}
+                </Text>
+
+                <TouchableOpacity onPress={increaseQty}>
+                    <Ionicons
+                        name="add-circle"
+                        size={30}
+                        color="#000"
+                    />
+                </TouchableOpacity>
+
+                {/* Add To Cart */}
+
+                <TouchableOpacity
+                    style={{
+                        flex: 1,
+                        height: 52,
+                        backgroundColor: "#000",
+                        borderRadius: 28,
+                        marginLeft: 16,
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <Text
+                        style={{
+                            color: "#FFF",
+                            fontSize: 17,
+                            fontWeight: "700",
+                        }}
+                    >
+                        Add to Cart
+                    </Text>
+                </TouchableOpacity>
+
+            </View>
+
+        </View>
+    );
+};
+
+export default ViewProduct;
