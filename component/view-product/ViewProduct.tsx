@@ -112,9 +112,10 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
                     {/* Product Name */}
 
                     <Text
-                        className="text-black font-bold"
+                        className="text-black"
                         style={{
-                            fontSize: 28
+                            fontSize: 28,
+                            fontWeight: 500
                         }}
                     >
                         {product.name}
@@ -201,8 +202,8 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
                     <Text
                         style={{
-                            fontSize: 34,
-                            fontWeight: "bold",
+                            fontSize: 30,
+                            fontWeight: 700,
                             color: "#000",
                         }}
                     >
@@ -213,7 +214,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
                     <View
                         style={{
-                            backgroundColor: "#EFF8D9",
+                            backgroundColor: "#F3FFE4",
                             marginTop: 16,
                             borderRadius: 12,
                             padding: 14,
