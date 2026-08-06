@@ -17,8 +17,8 @@ import { RootState } from "../../store";
 import HomeHeader from "./HomeHeader";
 import axios from "axios";
 import { environment } from "@/environment/environment";
+import HomeBannerSlider from "./HomeBannerSlider";
 
-const { width } = Dimensions.get("window");
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -46,50 +46,50 @@ interface Product {
 }
 
 const CATEGORIES: Category[] = [
-  { 
-    id: "packages", 
-    name: "Packages", 
-    image: "https://cdn-icons-png.flaticon.com/512/2956/2956820.png", 
-    circleBg: "#FFE4E6", 
-    borderColor: "#FDA4AF", 
+  {
+    id: "packages",
+    name: "Packages",
+    image: "https://cdn-icons-png.flaticon.com/512/2956/2956820.png",
+    circleBg: "#FFE4E6",
+    borderColor: "#FDA4AF",
     activeBg: "#F43F5E",
-    active: false 
+    active: false
   },
-  { 
-    id: "veggies", 
-    name: "Veggies", 
-    image: "https://cdn-icons-png.flaticon.com/512/2909/2909848.png", 
-    circleBg: "#FFFFFF", 
-    borderColor: "#84CC16", 
-    activeBg: "#84CC16", 
-    active: true 
+  {
+    id: "veggies",
+    name: "Veggies",
+    image: "https://cdn-icons-png.flaticon.com/512/2909/2909848.png",
+    circleBg: "#FFFFFF",
+    borderColor: "#84CC16",
+    activeBg: "#84CC16",
+    active: true
   },
-  { 
-    id: "fruits", 
-    name: "Fruits", 
-    image: "https://cdn-icons-png.flaticon.com/512/415/415733.png", 
-    circleBg: "#FFE4E6", 
-    borderColor: "#F87171", 
+  {
+    id: "fruits",
+    name: "Fruits",
+    image: "https://cdn-icons-png.flaticon.com/512/415/415733.png",
+    circleBg: "#FFE4E6",
+    borderColor: "#F87171",
     activeBg: "#EF4444",
-    active: false 
+    active: false
   },
-  { 
-    id: "cereal", 
-    name: "Cereal", 
-    image: "https://cdn-icons-png.flaticon.com/512/2674/2674486.png", 
-    circleBg: "#FEF9C3", 
-    borderColor: "#FDE047", 
+  {
+    id: "cereal",
+    name: "Cereal",
+    image: "https://cdn-icons-png.flaticon.com/512/2674/2674486.png",
+    circleBg: "#FEF9C3",
+    borderColor: "#FDE047",
     activeBg: "#EAB308",
-    active: false 
+    active: false
   },
-  { 
-    id: "spices", 
-    name: "Spices", 
-    image: "https://cdn-icons-png.flaticon.com/512/8106/8106571.png", 
-    circleBg: "#FFEDD5", 
-    borderColor: "#FDBA74", 
+  {
+    id: "spices",
+    name: "Spices",
+    image: "https://cdn-icons-png.flaticon.com/512/8106/8106571.png",
+    circleBg: "#FFEDD5",
+    borderColor: "#FDBA74",
     activeBg: "#D97706",
-    active: false 
+    active: false
   },
 ];
 
@@ -150,8 +150,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [bannerSlides, setBannerSlides] = useState<{ id: number; image: string; details: string }[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("veggies");
   const [activeProducts, setActiveProducts] = useState<{ [id: number]: { quantity: number; unit: "g" | "kg" } }>({});
-  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  const slideScrollRef = useRef<ScrollView>(null);
 
   // Fetch dynamic banners from backend
   useEffect(() => {
@@ -189,21 +187,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     fetchBanners();
   }, []);
 
-  // Auto-slide banner effect
-  useEffect(() => {
-    if (bannerSlides.length === 0) return;
-    const timer = setInterval(() => {
-      const nextIndex = (activeSlideIndex + 1) % bannerSlides.length;
-      setActiveSlideIndex(nextIndex);
-      slideScrollRef.current?.scrollTo({
-        x: nextIndex * (width - 48),
-        animated: true,
-      });
-    }, 4000);
-
-    return () => clearInterval(timer);
-  }, [activeSlideIndex, bannerSlides.length]);
-
   // Chunk products into rows of 2 for grid layout
   const productRows: Product[][] = [];
   for (let i = 0; i < PRODUCTS.length; i += 2) {
@@ -227,47 +210,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         <HomeHeader onPressProfile={handleProfileNavigation} />
 
         {/* Dynamic Image Slides (Banners) */}
-        {bannerSlides.length > 0 && (
-          <View className="mx-6 mt-4">
-            <ScrollView
-              ref={slideScrollRef}
-              horizontal
-              pagingEnabled
-              snapToInterval={width - 48}
-              snapToAlignment="center"
-              decelerationRate="fast"
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => {
-                const slideWidth = width - 48;
-                const index = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
-                setActiveSlideIndex(index);
-              }}
-              style={{ height: 160, borderRadius: 20, width: width - 48 }}
-            >
-              {bannerSlides.map((slide) => (
-                <Image
-                  key={slide.id}
-                  source={{ uri: slide.image }}
-                  style={{ width: width - 48, height: 160, borderRadius: 20 }}
-                  resizeMode="cover"
-                />
-              ))}
-            </ScrollView>
-
-            {/* Slide Indicators */}
-            <View className="flex-row justify-center items-center gap-1.5 mt-3">
-              {bannerSlides.map((_, index) => (
-                <View
-                  key={index}
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{
-                    backgroundColor: activeSlideIndex === index ? "#6D5AE6" : "#E5E5EA",
-                  }}
-                />
-              ))}
-            </View>
-          </View>
-        )}
+        <HomeBannerSlider bannerSlides={bannerSlides} />
 
         {/* Search Bar */}
         <View
@@ -419,128 +362,139 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 };
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={product.id}
-                    className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
-                    style={{
-                      borderTopLeftRadius: 100,
-                      borderTopRightRadius: 100,
-                      borderBottomLeftRadius: 18,
-                      borderBottomRightRadius: 18,
-                    }}
+                    activeOpacity={0.9}
+                    className="flex-1"
+                    onPress={() =>
+                      navigation.navigate("ViewProduct", {
+                        product,
+                      })
+                    }
                   >
-                    {/* Circular Product Image Container */}
-                    <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
-                      <Image
-                        source={{ uri: product.image }}
-                        className="w-12 h-12"
-                        resizeMode="contain"
-                      />
-                    </View>
+                    <View
+                      key={product.id}
+                      className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
+                      style={{
+                        borderTopLeftRadius: 100,
+                        borderTopRightRadius: 100,
+                        borderBottomLeftRadius: 18,
+                        borderBottomRightRadius: 18,
+                      }}
+                    >
+                      {/* Circular Product Image Container */}
+                      <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
+                        <Image
+                          source={{ uri: product.image }}
+                          className="w-12 h-12"
+                          resizeMode="contain"
+                        />
+                      </View>
 
-                    {/* Product Details */}
-                    <Text className="text-black font-bold text-sm mt-1 text-center" numberOfLines={1}>
-                      {product.name}
-                    </Text>
+                      {/* Product Details */}
+                      <Text className="text-black font-bold text-sm mt-1 text-center" numberOfLines={1}>
+                        {product.name}
+                      </Text>
 
-                    {!cartItem ? (
-                      <>
-                        <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                          {product.weight}
-                        </Text>
-                        <Text className="text-black font-extrabold text-sm mt-1 text-center">
-                          {product.price}
-                        </Text>
-
-                        {/* Add Button */}
-                        <TouchableOpacity
-                          activeOpacity={0.8}
-                          onPress={handleAddProduct}
-                          className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
-                          style={{
-                            shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 5,
-                          }}
-                        >
-                          <Ionicons name="add" size={20} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <>
-                        {/* Unit Switcher: kg vs g */}
-                        <View className="flex-row items-center justify-center mt-2 mb-1">
-                          {/* kg button */}
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => toggleUnit("kg")}
-                            style={{
-                              backgroundColor: cartItem.unit === "kg" ? "#FF9114" : "#FFC179",
-                              width: 36,
-                              height: 22,
-                              borderRadius: 11,
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Text className="text-white text-[11px] font-bold">kg</Text>
-                          </TouchableOpacity>
-
-                          {/* Arrow icon */}
-                          <Text className="text-black font-black text-xs mx-1.5">↔</Text>
-
-                          {/* g button */}
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => toggleUnit("g")}
-                            style={{
-                              backgroundColor: cartItem.unit === "g" ? "#FF9114" : "#FFC179",
-                              width: 36,
-                              height: 22,
-                              borderRadius: 11,
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Text className="text-white text-[11px] font-bold">g</Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        {/* Quantity Selector capsule */}
-                        <View className="flex-row items-center justify-between bg-white border border-[#E5E5EA] rounded-full px-1 py-1 w-full max-w-[124px] mt-1.5 shadow-sm">
-                          {/* Minus Button */}
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={handleDecrement}
-                            className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                          >
-                            <Ionicons name="remove" size={14} color="#FFFFFF" />
-                          </TouchableOpacity>
-
-                          {/* Qty value */}
-                          <Text className="text-black font-bold text-[11px]">
-                            {cartItem.quantity} {cartItem.unit}
+                      {!cartItem ? (
+                        <>
+                          <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            {product.weight}
+                          </Text>
+                          <Text className="text-black font-extrabold text-sm mt-1 text-center">
+                            {product.price}
                           </Text>
 
-                          {/* Plus Button */}
+                          {/* Add Button */}
                           <TouchableOpacity
                             activeOpacity={0.8}
-                            onPress={handleIncrement}
-                            className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                            onPress={handleAddProduct}
+                            className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                            style={{
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.3,
+                              shadowRadius: 4,
+                              elevation: 5,
+                            }}
                           >
-                            <Ionicons name="add" size={14} color="#FFFFFF" />
+                            <Ionicons name="add" size={20} color="#FFFFFF" />
                           </TouchableOpacity>
-                        </View>
+                        </>
+                      ) : (
+                        <>
+                          {/* Unit Switcher: kg vs g */}
+                          <View className="flex-row items-center justify-center mt-2 mb-1">
+                            {/* kg button */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => toggleUnit("kg")}
+                              style={{
+                                backgroundColor: cartItem.unit === "kg" ? "#FF9114" : "#FFC179",
+                                width: 36,
+                                height: 22,
+                                borderRadius: 11,
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Text className="text-white text-[11px] font-bold">kg</Text>
+                            </TouchableOpacity>
 
-                        {/* Price */}
-                        <Text className="text-black font-extrabold text-sm mt-3 text-center">
-                          {product.price}
-                        </Text>
-                      </>
-                    )}
-                  </View>
+                            {/* Arrow icon */}
+                            <Text className="text-black font-black text-xs mx-1.5">↔</Text>
+
+                            {/* g button */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => toggleUnit("g")}
+                              style={{
+                                backgroundColor: cartItem.unit === "g" ? "#FF9114" : "#FFC179",
+                                width: 36,
+                                height: 22,
+                                borderRadius: 11,
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Text className="text-white text-[11px] font-bold">g</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Quantity Selector capsule */}
+                          <View className="flex-row items-center justify-between bg-white border border-[#E5E5EA] rounded-full px-1 py-1 w-full max-w-[124px] mt-1.5 shadow-sm">
+                            {/* Minus Button */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={handleDecrement}
+                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                            >
+                              <Ionicons name="remove" size={14} color="#FFFFFF" />
+                            </TouchableOpacity>
+
+                            {/* Qty value */}
+                            <Text className="text-black font-bold text-[11px]">
+                              {cartItem.quantity} {cartItem.unit}
+                            </Text>
+
+                            {/* Plus Button */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={handleIncrement}
+                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                            >
+                              <Ionicons name="add" size={14} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Price */}
+                          <Text className="text-black font-extrabold text-sm mt-3 text-center">
+                            {product.price}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
