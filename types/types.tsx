@@ -26,4 +26,17 @@ export type RootStackParamList = {
       isNew?: boolean;
     };
   };
+  ViewPackage: {
+    itemPackage: {
+      id: number;
+      name: string;
+      image: string;
+      price: number;
+      packageItems: {
+        itemName: string;
+        quantity: number;
+      }[];
+    };
+  }
+  MyCart: undefined;
 };
