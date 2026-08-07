@@ -21,6 +21,8 @@ import { GlobalAlert } from "@/component/common/AlertModal";
 import { Provider } from "react-redux";
 import { store } from "../store";
 import ViewProduct from "@/component/view-product/ViewProduct";
+import ViewPackage from "@/component/view-package/ViewPackage";
+import MyCart from "@/component/my-cart/MyCart";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -42,6 +44,8 @@ function AppContent() {
             <Stack.Screen name="ExcludeListSummery" component={ExcludeListSummery} />
             <Stack.Screen name="Profile" component={Profile} />
             <Stack.Screen name="ViewProduct" component={ViewProduct} />
+            <Stack.Screen name="ViewPackage" component={ViewPackage} />
+            <Stack.Screen name="MyCart" component={MyCart} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />

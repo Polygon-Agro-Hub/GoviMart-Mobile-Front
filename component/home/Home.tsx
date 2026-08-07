@@ -187,6 +187,23 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     fetchBanners();
   }, []);
 
+
+  const samplePackage = {// Using this package as a sample for navigation
+    id: 1,
+    name: "Veggie Pack",
+    image:
+      "https://cdn-icons-png.flaticon.com/512/1135/1135534.png",
+    price: 1200,
+    packageItems: [
+      { itemName: "Herbs", quantity: 10 },
+      { itemName: "Up Country Fruits", quantity: 4 },
+      { itemName: "Up Country Vegetables", quantity: 10 },
+      { itemName: "Low Country Fruits", quantity: 2 },
+      { itemName: "Low Country Vegetables", quantity: 3 },
+      { itemName: "Yams", quantity: 2 },
+    ],
+  }
+
   // Chunk products into rows of 2 for grid layout
   const productRows: Product[][] = [];
   for (let i = 0; i < PRODUCTS.length; i += 2) {
@@ -195,6 +212,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleProfileNavigation = () => {
     navigation.navigate("Profile");
+  };
+
+  const handleViewPackageNavigation = () => {
+    navigation.navigate("ViewPackage", {
+      itemPackage: samplePackage,
+    });
+  };
+
+  const handleMyCartNavigation = () => {
+    navigation.navigate("MyCart");
   };
 
   return (
@@ -515,13 +542,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         </TouchableOpacity>
 
         {/* Cart Tab */}
-        <TouchableOpacity activeOpacity={0.8} className="p-2">
+        <TouchableOpacity activeOpacity={0.8} className="p-2" onPress={handleMyCartNavigation}>
           <Ionicons name="basket-outline" size={22} color="#FFFFFF" />
         </TouchableOpacity>
 
         {/* Notifications Tab */}
         <TouchableOpacity activeOpacity={0.8} className="p-2">
-          <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
+          <Ionicons name="notifications-outline" size={22} color="#FFFFFF" onPress={handleViewPackageNavigation} />
         </TouchableOpacity>
 
         {/* Profile Tab */}

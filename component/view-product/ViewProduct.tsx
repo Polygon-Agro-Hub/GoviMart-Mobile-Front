@@ -11,6 +11,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
+import CartToast from "../common/CartToast";
+import ViewCartPopup from "../common/ViewCartPopup";
+import ProductBottomCart from "../common/BottomCart";
 
 type Props = StackScreenProps<RootStackParamList, "ViewProduct">;
 
@@ -19,6 +22,10 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
     const [unit, setUnit] = useState<"kg" | "g">("g");
     const [quantity, setQuantity] = useState(500);
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastMessage, setToastMessage] = useState("");
+
+    const [viewCartVisible, setViewCartVisible] = useState(false);
 
     const increaseQty = () => {
         if (unit === "g") {
@@ -45,6 +52,61 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         } else {
             setQuantity(1);
         }
+    };
+
+    const onAddToCart = async () => {
+        // API
+
+        console.log("Added");
+        showCartMessage("Added to Cart");
+
+        //   setTopToast("Added to Cart");
+
+        //   setBottomToast(true);
+
+        //   setTimeout(() => {
+        //     setBottomToast(false);
+        //   }, 3000);
+    };
+
+    const onUpdateCart = async () => {
+        // API
+
+        console.log("Updated");
+
+        //   setTopToast("Cart Updated");
+
+        //   setBottomToast(true);
+
+        //   setTimeout(() => {
+        //     setBottomToast(false);
+        //   }, 3000);
+        showCartMessage("Cart Updated");
+
+    };
+
+    const onRemoveFromCart = async () => {
+        // API
+
+        console.log("Removed");
+
+        //   setTopToast("Removed from Cart");
+
+        //   setBottomToast(false);
+
+        showCartMessage("Removed from Cart");
+        setViewCartVisible(false);
+    };
+    const showCartMessage = (message: string) => {
+        setToastMessage(message);
+
+        setToastVisible(true);
+
+        setViewCartVisible(true);
+
+        setTimeout(() => {
+            setToastVisible(false);
+        }, 4000);
     };
 
     return (
@@ -248,110 +310,28 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
             </ScrollView>
 
             {/* Bottom Cart */}
+            <CartToast
+                visible={toastVisible}
+                message={toastMessage}
+            />
 
-            <View
-                style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: 88,
-                    backgroundColor: "#FFF",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingHorizontal: 12,
-                    borderTopWidth: 1,
-                    borderTopColor: "#ECECEC",
-                    shadowColor: "#000",
-                    shadowOpacity: 0.12,
-                    shadowRadius: 8,
-                    shadowOffset: {
-                        width: 0,
-                        height: -3,
-                    },
+            <ViewCartPopup
+                visible={viewCartVisible}
+                itemCount={1}
+            // onPress={() => navigation.navigate("Cart")}
+            />
 
-                    elevation: 12,
-                }}
-            >
-                {/* Delete */}
-
-                <TouchableOpacity
-                    style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: "#F3F3F3",
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <Ionicons
-                        name="trash-outline"
-                        size={24}
-                        color="#BDBDBD"
-                    />
-                </TouchableOpacity>
-
-                {/* Qty */}
-
-                <TouchableOpacity
-                    onPress={decreaseQty}
-                    style={{
-                        marginLeft: 15,
-                    }}
-                >
-                    <Ionicons
-                        name="remove-circle"
-                        size={30}
-                        color="#000"
-                    />
-                </TouchableOpacity>
-
-                <Text
-                    style={{
-                        fontSize: 18,
-                        fontWeight: "700",
-                        marginHorizontal: 10,
-                        minWidth: 65,
-                        textAlign: "center",
-                    }}
-                >
-                    {quantity} {unit}
-                </Text>
-
-                <TouchableOpacity onPress={increaseQty}>
-                    <Ionicons
-                        name="add-circle"
-                        size={30}
-                        color="#000"
-                    />
-                </TouchableOpacity>
-
-                {/* Add To Cart */}
-
-                <TouchableOpacity
-                    style={{
-                        flex: 1,
-                        height: 52,
-                        backgroundColor: "#000",
-                        borderRadius: 28,
-                        marginLeft: 16,
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: "#FFF",
-                            fontSize: 17,
-                            fontWeight: "700",
-                        }}
-                    >
-                        Add to Cart
-                    </Text>
-                </TouchableOpacity>
-
-            </View>
+            <ProductBottomCart
+                minimumValue={500}
+                step={100}
+                quantity={quantity}
+                unit={unit}
+                onIncrease={increaseQty}
+                onDecrease={decreaseQty}
+                onAddToCart={onAddToCart}
+                onUpdateCart={onUpdateCart}
+                onRemoveFromCart={onRemoveFromCart}
+            />
 
         </View>
     );
