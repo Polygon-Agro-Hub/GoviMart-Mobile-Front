@@ -61,7 +61,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#5B5B5B",
+                        color: "#0000",
                     }}
                 >
                     For Packages
@@ -70,7 +70,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        fontWeight: "600",
+                        fontWeight: "500",
                     }}
                 >
                     Rs. {formatPrice(packageTotal)}
@@ -89,7 +89,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#5B5B5B",
+                        color: "#0000",
                     }}
                 >
                     Ala Carte Items
@@ -98,7 +98,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        fontWeight: "600",
+                        fontWeight: "500",
                     }}
                 >
                     Rs. {formatPrice(productTotal)}
@@ -117,7 +117,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#5B5B5B",
+                        color: "#0000",
                     }}
                 >
                     Discount
@@ -126,8 +126,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#D62828",
-                        fontWeight: "700",
+                        fontWeight: "500",
                     }}
                 >
                     - Rs. {formatPrice(discount)}
@@ -164,8 +163,8 @@ const OrderSummary: React.FC<Props> = ({
 
                 <Text
                     style={{
-                        fontSize: 20,
-                        fontWeight: "800",
+                        fontSize: 18,
+                        fontWeight: "700",
                     }}
                 >
                     Rs. {formatPrice(total)}

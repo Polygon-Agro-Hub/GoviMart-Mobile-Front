@@ -5,7 +5,7 @@ import {
     Image,
     TouchableOpacity,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 interface PackageItem {
     id: number;
@@ -118,10 +118,8 @@ const PackageCartCard: React.FC<Props> = ({
                         height: 36,
                         borderRadius: 18,
                         backgroundColor: "#FFF",
-
                         justifyContent: "center",
                         alignItems: "center",
-
                         shadowColor: "#000",
                         shadowOpacity: 0.08,
                         shadowRadius: 4,
@@ -132,9 +130,9 @@ const PackageCartCard: React.FC<Props> = ({
                         elevation: 3,
                     }}
                 >
-                    <Ionicons
+                    <FontAwesome6
                         name="trash"
-                        size={19}
+                        size={17}
                         color="#000"
                     />
                 </TouchableOpacity>
@@ -142,13 +140,18 @@ const PackageCartCard: React.FC<Props> = ({
 
             {/* DIVIDER */}
 
-            <View
-                style={{
-                    height: 1,
-                    backgroundColor: "#EFEFEF",
-                    marginVertical: 14,
-                }}
-            />
+            <View className="flex-row items-center my-4">
+                <View className="flex-1 h-[1px] overflow-hidden">
+                    <View className="flex-row">
+                        {Array.from({ length: 100 }).map((_, index) => (
+                            <View
+                                key={index}
+                                className="w-1 h-[1px] bg-[#D9D9D9] mr-1"
+                            />
+                        ))}
+                    </View>
+                </View>
+            </View>
 
             {/* BOTTOM */}
 
@@ -181,12 +184,13 @@ const PackageCartCard: React.FC<Props> = ({
 
                 {/* MINUS */}
 
-                <TouchableOpacity
-                    disabled={isMinimum}
-                    onPress={() => onDecrease(item.id)}
-                    activeOpacity={0.8}
-                    style={{
-                        width: 32,
+                {!isMinimum ? (
+                    <TouchableOpacity
+                        disabled={isMinimum}
+                        onPress={() => onDecrease(item.id)}
+                        activeOpacity={0.8}
+                        style={{
+                            width: 32,
                         height: 32,
                         borderRadius: 16,
 
@@ -200,10 +204,34 @@ const PackageCartCard: React.FC<Props> = ({
                 >
                     <Ionicons
                         name="remove"
-                        size={18}
+                        size={16}
                         color="#FFF"
                     />
-                </TouchableOpacity>
+                </TouchableOpacity>)
+                :
+                <TouchableOpacity
+                        disabled={isMinimum}
+                        onPress={() => onDecrease(item.id)}
+                        activeOpacity={0.8}
+                        style={{
+                            width: 30,
+                        height: 30,
+                        borderRadius: 16,
+
+                        justifyContent: "center",
+                        alignItems: "center",
+
+                        backgroundColor: isMinimum
+                            ? "#D9D9D9"
+                            : "#000",
+                    }}
+                >
+                    <FontAwesome6
+                        name="trash"
+                        size={17}
+                        color="#FFF"
+                    />
+                </TouchableOpacity>}
 
                 {/* QUANTITY */}
 

@@ -39,4 +39,5 @@ export type RootStackParamList = {
     };
   }
   MyCart: undefined;
+  PackageConfirmation: undefined;
 };

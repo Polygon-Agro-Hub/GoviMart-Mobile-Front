@@ -279,27 +279,28 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                     }}
                 >
                     {/* Package Section */}
+                    {packages.length > 0 && <>
+                        <Text
+                            style={{
+                                fontSize: 15,
+                                fontWeight: "700",
+                                marginBottom: 12,
+                                marginTop: 6,
+                            }}
+                        >
+                            Packages ({packages.length.toString().padStart(2, "0")})
+                        </Text>
 
-                    <Text
-                        style={{
-                            fontSize: 15,
-                            fontWeight: "700",
-                            marginBottom: 12,
-                            marginTop: 6,
-                        }}
-                    >
-                        Packages ({packages.length.toString().padStart(2, "0")})
-                    </Text>
-
-                    {packages.map((item) => (
-                        <PackageCartCard
-                            key={item.id}
-                            item={item}
-                            onIncrease={increasePackage}
-                            onDecrease={decreasePackage}
-                            onDelete={deletePackage}
-                        />
-                    ))}
+                        {packages.map((item) => (
+                            <PackageCartCard
+                                key={item.id}
+                                item={item}
+                                onIncrease={increasePackage}
+                                onDecrease={decreasePackage}
+                                onDelete={deletePackage}
+                            />
+                        ))}
+                    </>}
 
                     {/* Product Section */}
                     {products.length > 0 && <>

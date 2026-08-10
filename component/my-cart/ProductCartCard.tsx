@@ -5,7 +5,7 @@ import {
     Image,
     TouchableOpacity,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 interface ProductItem {
     id: number;
@@ -114,22 +114,27 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
                         elevation: 2,
                     }}
                 >
-                    <Ionicons
+                    <FontAwesome6
                         name="trash"
-                        size={18}
+                        size={16}
                     />
                 </TouchableOpacity>
             </View>
 
             {/* Divider */}
 
-            <View
-                style={{
-                    height: 1,
-                    backgroundColor: "#EFEFEF",
-                    marginVertical: 14,
-                }}
-            />
+            <View className="flex-row items-center my-4">
+                <View className="flex-1 h-[1px] overflow-hidden">
+                    <View className="flex-row">
+                        {Array.from({ length: 100 }).map((_, index) => (
+                            <View
+                                key={index}
+                                className="w-1 h-[1px] bg-[#D9D9D9] mr-1"
+                            />
+                        ))}
+                    </View>
+                </View>
+            </View>
 
             {/* Bottom */}
 
@@ -211,28 +216,49 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
                 />
                 {/* Minus */}
 
-                <TouchableOpacity
-                    disabled={isMinimum}
-                    onPress={() => onDecrease(item.id)}
-                    style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 15,
+                {!isMinimum ? (
+                    <TouchableOpacity
+                        disabled={isMinimum}
+                        style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
 
-                        backgroundColor: isMinimum
-                            ? "#D9D9D9"
-                            : "#000",
+                            backgroundColor: isMinimum
+                                ? "#D9D9D9"
+                                : "#000",
 
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <Ionicons
-                        name="remove"
-                        size={18}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>
+                            justifyContent: "center",
+                            alignItems: "center",
+                        }}
+                    >
+                        <Ionicons
+                            name="remove"
+                            size={18}
+                            color="#FFF"
+                        />
+                    </TouchableOpacity>) :
+                    <TouchableOpacity
+                        disabled={isMinimum}
+                        style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+
+                            backgroundColor: isMinimum
+                                ? "#D9D9D9"
+                                : "#000",
+
+                            justifyContent: "center",
+                            alignItems: "center",
+                        }}
+                    >
+                        <FontAwesome6
+                            name="trash"
+                            size={17}
+                            color="#FFF"
+                        />
+                    </TouchableOpacity>}
 
                 <Text
                     style={{
