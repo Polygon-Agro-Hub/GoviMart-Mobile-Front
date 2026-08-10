@@ -9,6 +9,7 @@ import Checkbox from "expo-checkbox";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import { loginSuccess, setRememberMeDetails } from "../../store/authSlice";
+import authService from "@/services/auth/auth.service";
 
 type LoginNavigationProp = StackNavigationProp<RootStackParamList, "Login">;
 
@@ -54,11 +55,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${environment.API_BASE_URL}api/auth/login`, {
-        identifier: identifier.trim(),
-        password: password.trim(),
-      });
-
+      const response = await authService.login({
+         identifier: identifier.trim(), password: password.trim()
+         });
       if (response.data && response.data.success) {
         const { token, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType } = response.data.data;
         const loginTime = Date.now();

@@ -20,6 +20,7 @@ import { environment } from "@/environment/environment";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import { AlertModal } from "@/component/common/AlertModal";
+import authService from "@/services/auth/auth.service";
 
 type SignUpNavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
 type SignUpRouteProp = RouteProp<RootStackParamList, "SignUp">;
@@ -178,10 +179,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       };
 
       setIsLoading(true);
-      const response = await axios.post(
-        `${environment.API_BASE_URL}api/auth/signup`,
-        payload
-      );
+      // const response = await axios.post(
+      //   `${environment.API_BASE_URL}api/auth/signup`,
+      //   payload
+      // );
+      const response = await authService.signUp(payload);
 
       if (response.data && response.data.status) {
         if (response.data.verificationRequired) {
