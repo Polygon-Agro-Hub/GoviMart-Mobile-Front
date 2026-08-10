@@ -12,22 +12,34 @@ interface ProductItem {
     name: string;
     image: string;
     price: number;
-    quantity: number;
     weight: number;
     unit: "g" | "kg";
+    minimumWeight: number;
+    step: number;
 }
 
 interface Props {
     item: ProductItem;
+    onIncrease: (id: number) => void;
+    onDecrease: (id: number) => void;
+    onDelete: (id: number) => void;
+    onChangeUnit: (id: number, unit: "g" | "kg") => void;
 }
 
-const ProductCartCard: React.FC<Props> = ({ item }) => {
+const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrease, onChangeUnit }) => {
+    const isMinimum = item.weight <= item.minimumWeight;
+
+    const formatPrice = (value: number) =>
+        value.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
     return (
         <View
             style={{
                 backgroundColor: "#FFF",
                 borderRadius: 20,
-                padding: 14,
+                padding: 20,
                 marginBottom: 14,
 
                 borderWidth: 1,
@@ -81,15 +93,12 @@ const ProductCartCard: React.FC<Props> = ({ item }) => {
                             fontSize: 18,
                         }}
                     >
-                        Rs.
-                        {item.price.toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                        })}
+                        Rs. {formatPrice(item.price)}
                     </Text>
                 </View>
 
                 <TouchableOpacity
+                    onPress={() => onDelete(item.id)}
                     style={{
                         width: 34,
                         height: 34,
@@ -142,6 +151,9 @@ const ProductCartCard: React.FC<Props> = ({ item }) => {
                 {/* kg */}
 
                 <TouchableOpacity
+                    onPress={() =>
+                        onChangeUnit(item.id, "kg")
+                    }
                     style={{
                         marginLeft: 10,
                         backgroundColor:
@@ -168,6 +180,9 @@ const ProductCartCard: React.FC<Props> = ({ item }) => {
                 {/* g */}
 
                 <TouchableOpacity
+                    onPress={() =>
+                        onChangeUnit(item.id, "g")
+                    }
                     style={{
                         marginLeft: 8,
                         backgroundColor:
@@ -192,20 +207,21 @@ const ProductCartCard: React.FC<Props> = ({ item }) => {
                 </TouchableOpacity>
 
                 <View
-                    style={{
-                        flex: 1,
-                    }}
+                    style={{ flex: 1 }}
                 />
-
                 {/* Minus */}
 
                 <TouchableOpacity
+                    disabled={isMinimum}
+                    onPress={() => onDecrease(item.id)}
                     style={{
                         width: 30,
                         height: 30,
                         borderRadius: 15,
 
-                        backgroundColor: "#000",
+                        backgroundColor: isMinimum
+                            ? "#D9D9D9"
+                            : "#000",
 
                         justifyContent: "center",
                         alignItems: "center",
@@ -231,6 +247,7 @@ const ProductCartCard: React.FC<Props> = ({ item }) => {
                 {/* Plus */}
 
                 <TouchableOpacity
+                    onPress={() => onIncrease(item.id)}
                     style={{
                         width: 30,
                         height: 30,

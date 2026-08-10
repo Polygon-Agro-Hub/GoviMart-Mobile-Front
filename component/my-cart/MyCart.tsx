@@ -31,9 +31,10 @@ interface ProductItem {
     name: string;
     image: string;
     price: number;
-    quantity: number;
     weight: number;
     unit: "g" | "kg";
+    minimumWeight: number;
+    step: number;
 }
 
 interface Props {
@@ -60,27 +61,174 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             image:
                 "https://images.unsplash.com/photo-1571575173700-afb9492e6a50?w=800",
             price: 1200,
-            quantity: 1,
             weight: 500,
             unit: "g",
+            minimumWeight: 500,
+            step: 100,
         },
+
         {
             id: 2,
             name: "Sweet Potato",
             image:
                 "https://images.unsplash.com/photo-1596097635121-14b63b7a0c19?w=800",
             price: 600,
-            quantity: 1,
             weight: 1,
             unit: "kg",
+            minimumWeight: 1,
+            step: 1,
         },
     ]);
 
+    const increaseWeight = (id: number) => {
+        setProducts((currentProducts) =>
+            currentProducts.map((product) => {
+
+                if (product.id !== id) {
+                    return product;
+                }
+
+                return {
+                    ...product,
+                    weight: product.weight + product.step!,
+                };
+            })
+        );
+    };
+
+    const decreaseWeight = (id: number) => {
+        setProducts((currentProducts) =>
+            currentProducts.map((product) => {
+                if (product.id !== id) {
+                    return product;
+                }
+
+                const newWeight =
+                    product.weight - product.step!;
+
+                if (newWeight < product.minimumWeight) {
+                    return product;
+                }
+
+                return {
+                    ...product,
+                    weight: newWeight,
+                };
+            })
+        );
+    };
+
+    const deleteProduct = (id: number) => {
+        setProducts((currentProducts) =>
+            currentProducts.filter(
+                (product) => product.id !== id
+            )
+        );
+    };
+
+    const productTotal = products.reduce(
+        (total, product) => {
+            const weightMultiplier =
+                product.unit === "kg"
+                    ? product.weight / product.minimumWeight
+                    : product.weight / product.minimumWeight;
+
+            return total + product.price * weightMultiplier;
+        },
+        0
+    );
+
+    const changeProductUnit = (
+        id: number,
+        newUnit: "g" | "kg"
+    ) => {
+        setProducts((currentProducts) =>
+            currentProducts.map((product) => {
+                if (product.id !== id) {
+                    return product;
+                }
+
+                // Already selected
+                if (product.unit === newUnit) {
+                    return product;
+                }
+
+                if (newUnit === "kg") {
+                    // g → kg
+                    return {
+                        ...product,
+                        weight: product.weight / 1000,
+                        minimumWeight:
+                            product.minimumWeight / 1000,
+                        step: product.step / 1000,
+                        unit: "kg",
+                    };
+                }
+
+                // kg → g
+                return {
+                    ...product,
+                    weight: product.weight * 1000,
+                    minimumWeight:
+                        product.minimumWeight * 1000,
+                    step: product.step * 1000,
+                    unit: "g",
+                };
+            })
+        );
+    };
+    const increasePackage = (id: number) => {
+        setPackages((currentPackages) =>
+            currentPackages.map((pkg) => {
+                if (pkg.id !== id) {
+                    return pkg;
+                }
+
+                return {
+                    ...pkg,
+                    quantity: pkg.quantity + 1,
+                };
+            })
+        );
+    };
+
+    const decreasePackage = (id: number) => {
+        setPackages((currentPackages) =>
+            currentPackages.map((pkg) => {
+                if (pkg.id !== id) {
+                    return pkg;
+                }
+
+                if (pkg.quantity <= 1) {
+                    return pkg;
+                }
+
+                return {
+                    ...pkg,
+                    quantity: pkg.quantity - 1,
+                };
+            })
+        );
+    };
+
+    const deletePackage = (id: number) => {
+        setPackages((currentPackages) =>
+            currentPackages.filter(
+                (pkg) => pkg.id !== id
+            )
+        );
+    };
+
+    const packageTotal = packages.reduce(
+        (total, pkg) =>
+            total + pkg.price * pkg.quantity,
+        0
+    );
     return (
         <View
             style={{
                 flex: 1,
-                backgroundColor: "#F7F7F7",
+                backgroundColor: "#FFF",
             }}
         >
             {/* Header */}
@@ -147,36 +295,44 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                         <PackageCartCard
                             key={item.id}
                             item={item}
+                            onIncrease={increasePackage}
+                            onDecrease={decreasePackage}
+                            onDelete={deletePackage}
                         />
                     ))}
 
                     {/* Product Section */}
+                    {products.length > 0 && <>
+                        <Text
+                            style={{
+                                fontSize: 15,
+                                fontWeight: "700",
+                                marginTop: 24,
+                                marginBottom: 12,
+                            }}
+                        >
+                            Ala Carte Items ({products.length.toString().padStart(2, "0")})
+                        </Text>
 
-                    <Text
-                        style={{
-                            fontSize: 15,
-                            fontWeight: "700",
-                            marginTop: 24,
-                            marginBottom: 12,
-                        }}
-                    >
-                        Ala Carte Items ({products.length.toString().padStart(2, "0")})
-                    </Text>
-
-                    {products.map((item) => (
-                        <ProductCartCard
-                            key={item.id}
-                            item={item}
-                        />
-                    ))}
+                        {products.map((item) => (
+                            <ProductCartCard
+                                key={item.id}
+                                item={item}
+                                onIncrease={increaseWeight}
+                                onDecrease={decreaseWeight}
+                                onDelete={deleteProduct}
+                                onChangeUnit={changeProductUnit}
+                            />
+                        ))}
+                    </>}
                 </ScrollView>
             </View>
 
             {/* Part 3 */}
 
             <OrderSummary
-                packageTotal={1200}
-                productTotal={1200}
+                packageTotal={packageTotal}
+                productTotal={productTotal}
                 discount={100}
             //   onCheckout={() => navigation.navigate("Checkout")}
             />
