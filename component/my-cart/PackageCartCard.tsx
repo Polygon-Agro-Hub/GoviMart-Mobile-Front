@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import {
     View,
     Text,
-    TouchableOpacity,
     Image,
+    TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -18,39 +18,67 @@ interface PackageItem {
 
 interface Props {
     item: PackageItem;
+
+    onIncrease: (id: number) => void;
+    onDecrease: (id: number) => void;
+    onDelete: (id: number) => void;
 }
 
 const PackageCartCard: React.FC<Props> = ({
     item,
+    onIncrease,
+    onDecrease,
+    onDelete,
 }) => {
-    const [qty, setQty] = useState(item.quantity);
+    const isMinimum = item.quantity <= 1;
+
+    const formatPrice = (value: number) =>
+        value.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
 
     return (
         <View
             style={{
-                backgroundColor: "#F3F3F3",
+                backgroundColor: "#FFF",
                 borderRadius: 20,
-                overflow: "hidden",
+                padding: 20,
+                marginBottom: 14,
+
                 borderWidth: 1,
-                borderColor: "#E5E7EB",
+                borderColor: "#E9E9E9",
+
+                shadowColor: "#000",
+                shadowOpacity: 0.05,
+                shadowRadius: 6,
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                elevation: 2,
             }}
         >
-            {/* Top */}
+            {/* TOP */}
 
             <View
                 style={{
                     flexDirection: "row",
-                    padding: 14,
+                    alignItems: "center",
                 }}
             >
+                {/* Package Image */}
+
                 <Image
                     source={{ uri: item.image }}
                     style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 12,
+                        width: 62,
+                        height: 62,
+                        borderRadius: 14,
                     }}
                 />
+
+                {/* Package Details */}
 
                 <View
                     style={{
@@ -60,9 +88,9 @@ const PackageCartCard: React.FC<Props> = ({
                 >
                     <Text
                         style={{
-                            fontSize: 16,
+                            fontSize: 17,
                             fontWeight: "600",
-                            color: "#111827",
+                            color: "#111",
                         }}
                     >
                         {item.name}
@@ -70,121 +98,149 @@ const PackageCartCard: React.FC<Props> = ({
 
                     <Text
                         style={{
-                            fontSize: 18,
-                            fontWeight: "700",
-                            color: "#000",
                             marginTop: 4,
+                            fontSize: 17,
+                            fontWeight: "700",
+                            color: "#111",
                         }}
                     >
-                        Rs.{" "}
-                        {item.price.toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                        })}
+                        Rs. {formatPrice(item.price)}
                     </Text>
                 </View>
 
-                {/* Delete */}
+                {/* DELETE */}
 
                 <TouchableOpacity
+                    onPress={() => onDelete(item.id)}
+                    activeOpacity={0.8}
                     style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        backgroundColor: "#EAEAEA",
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: "#FFF",
+
                         justifyContent: "center",
                         alignItems: "center",
+
+                        shadowColor: "#000",
+                        shadowOpacity: 0.08,
+                        shadowRadius: 4,
+                        shadowOffset: {
+                            width: 0,
+                            height: 2,
+                        },
+                        elevation: 3,
                     }}
                 >
                     <Ionicons
                         name="trash"
-                        size={16}
+                        size={19}
                         color="#000"
                     />
                 </TouchableOpacity>
             </View>
 
-            {/* Bottom */}
+            {/* DIVIDER */}
 
             <View
                 style={{
-                    borderTopWidth: 1,
-                    borderTopColor: "#E5E7EB",
+                    height: 1,
+                    backgroundColor: "#EFEFEF",
+                    marginVertical: 14,
+                }}
+            />
+
+            {/* BOTTOM */}
+
+            <View
+                style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
                 }}
             >
+                {/* TOTAL ITEMS */}
+
                 <Text
                     style={{
-                        color: "#808080",
-                        fontSize: 13,
+                        fontSize: 14,
+                        color: "#777",
                     }}
                 >
-                    Total Items : {item.totalItems}
-                </Text>
-
-                <View
-                    style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                    }}
-                >
-                    {/* Minus */}
-
-                    <TouchableOpacity
-                        onPress={() =>
-                            qty > 1 && setQty(qty - 1)
-                        }
-                        style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            backgroundColor:
-                                qty === 1 ? "#D9D9D9" : "#000",
-                            justifyContent: "center",
-                            alignItems: "center",
-                        }}
-                    >
-                        <Ionicons
-                            name="remove"
-                            size={14}
-                            color="#FFF"
-                        />
-                    </TouchableOpacity>
-
+                    Total Items:{" "}
                     <Text
                         style={{
-                            marginHorizontal: 20,
-                            fontSize: 15,
+                            color: "#111",
                             fontWeight: "600",
                         }}
                     >
-                        {qty}
+                        {item.totalItems}
                     </Text>
+                </Text>
 
-                    {/* Plus */}
+                <View style={{ flex: 1 }} />
 
-                    <TouchableOpacity
-                        onPress={() => setQty(qty + 1)}
-                        style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            backgroundColor: "#000",
-                            justifyContent: "center",
-                            alignItems: "center",
-                        }}
-                    >
-                        <Ionicons
-                            name="add"
-                            size={14}
-                            color="#FFF"
-                        />
-                    </TouchableOpacity>
-                </View>
+                {/* MINUS */}
+
+                <TouchableOpacity
+                    disabled={isMinimum}
+                    onPress={() => onDecrease(item.id)}
+                    activeOpacity={0.8}
+                    style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+
+                        justifyContent: "center",
+                        alignItems: "center",
+
+                        backgroundColor: isMinimum
+                            ? "#D9D9D9"
+                            : "#000",
+                    }}
+                >
+                    <Ionicons
+                        name="remove"
+                        size={18}
+                        color="#FFF"
+                    />
+                </TouchableOpacity>
+
+                {/* QUANTITY */}
+
+                <Text
+                    style={{
+                        minWidth: 48,
+                        textAlign: "center",
+                        fontSize: 15,
+                        fontWeight: "700",
+                        color: "#111",
+                    }}
+                >
+                    {item.quantity}
+                </Text>
+
+                {/* PLUS */}
+
+                <TouchableOpacity
+                    onPress={() => onIncrease(item.id)}
+                    activeOpacity={0.8}
+                    style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+
+                        backgroundColor: "#000",
+
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <Ionicons
+                        name="add"
+                        size={18}
+                        color="#FFF"
+                    />
+                </TouchableOpacity>
             </View>
         </View>
     );
