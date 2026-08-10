@@ -14,7 +14,7 @@ import SignUpOTP from "@/component/auth/SignUpOTP";
 import Home from "@/component/home/Home";
 import ExcludeListAdd from "@/component/exclude-items/ExcludeListAdd";
 import ExcludeListSummery from "@/component/exclude-items/ExcludeListSummery";
-import Profile from "@/component/auth/Profile";
+import Profile from "@/component/my-profile/Profile";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
 
