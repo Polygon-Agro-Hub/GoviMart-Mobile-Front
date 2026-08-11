@@ -23,6 +23,9 @@ import { store } from "../store";
 import ViewProduct from "@/component/view-product/ViewProduct";
 import ViewPackage from "@/component/view-package/ViewPackage";
 import MyCart from "@/component/my-cart/MyCart";
+import SavedAddresses from "@/component/saved-addresses/SavedAddresses";
+import EditAddress from "@/component/edit-address/EditAddress";
+import AddNewAddress from "@/component/add-new-address/AddNewAddress";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -46,6 +49,10 @@ function AppContent() {
             <Stack.Screen name="ViewProduct" component={ViewProduct} />
             <Stack.Screen name="ViewPackage" component={ViewPackage} />
             <Stack.Screen name="MyCart" component={MyCart} />
+            <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
+            <Stack.Screen name="EditAddress" component={EditAddress} />
+            <Stack.Screen name="AddNewAddress" component={AddNewAddress} />
+
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
