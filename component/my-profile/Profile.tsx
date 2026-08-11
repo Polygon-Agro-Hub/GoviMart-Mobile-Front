@@ -33,7 +33,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
 
   const dispatch = useDispatch();
 
-  const [creditBalance, setCreditBalance] = useState<number>(-1200);
+  const [creditBalance, setCreditBalance] = useState<number>(1200);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -296,7 +296,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="house"
             title="My Saved Addresses"
             onPress={() => {
-              // navigation.navigate("DeliveryAddressBooks");
+              navigation.navigate("SavedAddresses");
             }}
           />
 

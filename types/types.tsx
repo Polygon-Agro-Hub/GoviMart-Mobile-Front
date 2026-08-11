@@ -40,4 +40,7 @@ export type RootStackParamList = {
   }
   MyCart: undefined;
   PackageConfirmation: undefined;
+  SavedAddresses: undefined;
+  EditAddress: undefined;
+  AddNewAddress: undefined;
 };
