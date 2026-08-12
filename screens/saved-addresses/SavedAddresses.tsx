@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 
 type SavedAddressesNavigationProp = StackNavigationProp<
     RootStackParamList,

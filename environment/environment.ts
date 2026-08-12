@@ -1,7 +1,7 @@
 export const environment = {
   
   // LOCAL --------------------
-  API_BASE_URL: "http://192.168.8.100:3000/govimart/",
+  API_BASE_URL: "http://192.168.8.104:3000/govimart/",
 
   // DEV --------------------
   // API_BASE_URL: "https://dev-mob-api.govimart.com/govimart/",

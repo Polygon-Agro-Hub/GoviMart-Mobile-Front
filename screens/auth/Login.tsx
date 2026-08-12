@@ -8,7 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import axios from "axios";
 import { useDispatch } from "react-redux";
-import { loginSuccess, setRememberMeDetails } from "../../store/authSlice";
+import { loginSuccess, setRememberMeDetails } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
 
 type LoginNavigationProp = StackNavigationProp<RootStackParamList, "Login">;

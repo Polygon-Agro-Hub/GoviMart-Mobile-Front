@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
-import CustomHeader from "../common/CustomHeader";
+import { RootStackParamList } from "@/types/types";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type AddAddressNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -21,16 +21,6 @@ type AddAddressNavigationProp = StackNavigationProp<
 
 interface AddAddressProps {
     navigation: AddAddressNavigationProp;
-}
-
-interface InputFieldProps {
-    icon: keyof typeof Ionicons.glyphMap | any;
-    label: string;
-    value: string;
-    onChangeText: (text: string) => void;
-    placeholder?: string;
-    keyboardType?: "default" | "phone-pad";
-    maxLength?: number;
 }
 
 // INPUT FIELD

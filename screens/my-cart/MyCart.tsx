@@ -8,9 +8,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import PackageCartCard from "./PackageCartCard";
-import ProductCartCard from "./ProductCartCard";
-import OrderSummary from "./OrderSummary";
+import PackageCartCard from "@/component/my-cart/PackageCartCard";
+import ProductCartCard from "@/component/my-cart/ProductCartCard";
+import OrderSummary from "@/component/my-cart/OrderSummary";
 
 type NavigationProp = StackNavigationProp<
     RootStackParamList,

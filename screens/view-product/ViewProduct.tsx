@@ -11,9 +11,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import CartToast from "../common/CartToast";
-import ViewCartPopup from "../common/ViewCartPopup";
-import ProductBottomCart from "../common/BottomCart";
+import CartToast from "@/component/common/CartToast";
+import ViewCartPopup from "@/component/common/ViewCartPopup";
+import ProductBottomCart from "@/component/common/BottomCart";
 
 type Props = StackScreenProps<RootStackParamList, "ViewProduct">;
 
