@@ -66,9 +66,8 @@ const InputField = ({
                 style={{
                     width: 36,
                     height: 36,
-                    borderRadius: 999,
-                    backgroundColor: "#FFFF",
-
+                    borderRadius: 18,
+                    backgroundColor: "#F2F2F6",
                     justifyContent: "center",
                     alignItems: "center",
                 }}
@@ -133,7 +132,7 @@ const DropdownField = ({
     onSelect,
     highlighted = false,
 }: {
-    icon: keyof typeof Ionicons.glyphMap | any;
+    icon?: keyof typeof Ionicons.glyphMap | any;
     label: string;
     value: string;
     open: boolean;
@@ -172,7 +171,7 @@ const DropdownField = ({
             >
                 {/* Icon */}
 
-                <View
+                {icon && <View
                     style={{
                         width: 36,
                         height: 36,
@@ -190,7 +189,7 @@ const DropdownField = ({
                         size={17}
                         color="#0000"
                     />
-                </View>
+                </View>}
 
                 {/* Content */}
 

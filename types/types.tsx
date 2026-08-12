@@ -44,4 +44,7 @@ export type RootStackParamList = {
   SavedAddresses: undefined;
   EditAddress: undefined;
   AddNewAddress: undefined;
+  ReportComplaint: undefined;
+  ComplaintHistory: undefined;
+  ViewComplaint: undefined;
 };
