@@ -5,17 +5,28 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import Splash from "@/component/common/Splash";
-import ChooseAuth from "@/component/auth/ChooseAuth";
-import DeliveryLocation from "@/component/auth/DeliveryLocation";
-import Login from "@/component/auth/Login";
-import SignUp from "@/component/auth/SignUp";
-import SignUpOTP from "@/component/auth/SignUpOTP";
-import Home from "@/component/home/Home";
-import ExcludeListAdd from "@/component/exclude-items/ExcludeListAdd";
-import ExcludeListSummery from "@/component/exclude-items/ExcludeListSummery";
+import Splash from "@/screens/common/Splash";
+import ChooseAuth from "@/screens/auth/ChooseAuth";
+import DeliveryLocation from "@/screens/auth/DeliveryLocation";
+import Login from "@/screens/auth/Login";
+import SignUp from "@/screens/auth/SignUp";
+import UpdatePassword from "@/screens/auth/UpdatePassword";
+import SignUpOTP from "@/screens/auth/SignUpOTP";
+import Home from "@/screens/home/Home";
+import ExcludeListAdd from "@/screens/exclude-items/ExcludeListAdd";
+import ExcludeListSummery from "@/screens/exclude-items/ExcludeListSummery";
+import Profile from "@/screens/my-profile/Profile";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
+
+import { Provider } from "react-redux";
+import { store } from "../store";
+import ViewProduct from "@/screens/view-product/ViewProduct";
+import ViewPackage from "@/screens/view-package/ViewPackage";
+import MyCart from "@/screens/my-cart/MyCart";
+import SavedAddresses from "@/screens/saved-addresses/SavedAddresses";
+import EditAddress from "@/screens/edit-address/EditAddress";
+import AddNewAddress from "@/screens/add-new-address/AddNewAddress";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -30,11 +41,20 @@ function AppContent() {
             <Stack.Screen name="ChooseAuth" component={ChooseAuth} />
             <Stack.Screen name="DeliveryLocation" component={DeliveryLocation} />
             <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="UpdatePassword" component={UpdatePassword} />
             <Stack.Screen name="SignUp" component={SignUp} />
             <Stack.Screen name="SignUpOTP" component={SignUpOTP} />
             <Stack.Screen name="Home" component={Home} />
             <Stack.Screen name="ExcludeListAdd" component={ExcludeListAdd} />
             <Stack.Screen name="ExcludeListSummery" component={ExcludeListSummery} />
+            <Stack.Screen name="Profile" component={Profile} />
+            <Stack.Screen name="ViewProduct" component={ViewProduct} />
+            <Stack.Screen name="ViewPackage" component={ViewPackage} />
+            <Stack.Screen name="MyCart" component={MyCart} />
+            <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
+            <Stack.Screen name="EditAddress" component={EditAddress} />
+            <Stack.Screen name="AddNewAddress" component={AddNewAddress} />
+
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
@@ -45,8 +65,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AppContent />
-    </SafeAreaProvider>
+    <Provider store={store}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </Provider>
   );
 }
