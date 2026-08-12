@@ -10,6 +10,7 @@ import ChooseAuth from "@/screens/auth/ChooseAuth";
 import DeliveryLocation from "@/screens/auth/DeliveryLocation";
 import Login from "@/screens/auth/Login";
 import SignUp from "@/screens/auth/SignUp";
+import UpdatePassword from "@/screens/auth/UpdatePassword";
 import SignUpOTP from "@/screens/auth/SignUpOTP";
 import Home from "@/screens/home/Home";
 import ExcludeListAdd from "@/screens/exclude-items/ExcludeListAdd";
@@ -40,6 +41,7 @@ function AppContent() {
             <Stack.Screen name="ChooseAuth" component={ChooseAuth} />
             <Stack.Screen name="DeliveryLocation" component={DeliveryLocation} />
             <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="UpdatePassword" component={UpdatePassword} />
             <Stack.Screen name="SignUp" component={SignUp} />
             <Stack.Screen name="SignUpOTP" component={SignUpOTP} />
             <Stack.Screen name="Home" component={Home} />

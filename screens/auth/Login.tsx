@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Platform } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
@@ -18,12 +18,27 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ navigation }) => {
+  const scrollViewRef = useRef<ScrollView>(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
 
@@ -59,7 +74,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
          identifier: identifier.trim(), password: password.trim()
          });
       if (response.data && response.data.success) {
-        const { token, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType } = response.data.data;
+        const { token, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType, isDashUser, isPswUpdated } = response.data.data;
         const loginTime = Date.now();
 
         // Save session details to AsyncStorage
@@ -105,7 +120,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           {
             text: "OK",
             onPress: () => {
-              if (buyerType === "Retail" && firstTimeUser === 0) {
+              if (isDashUser === 1 && isPswUpdated === 0) {
+                navigation.navigate("UpdatePassword", {
+                  customerId: response.data.data.id,
+                  name: `${firstName} ${lastName}`,
+                  number: phoneNumber,
+                });
+              } else if (buyerType === "Retail" && firstTimeUser === 0) {
                 navigation.navigate("ExcludeListAdd", {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
@@ -141,21 +162,26 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
       </View>
 
       {/* Bottom section: White container overlapping the image with rounded top-right */}
-      <View className="flex-1 bg-white mt-[-40px] rounded-tr-[60px] overflow-hidden">
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1 bg-white mt-[-40px] rounded-tr-[60px] overflow-hidden"
+      >
         <ScrollView 
+          ref={scrollViewRef}
           className="flex-1 px-6 pt-6"
           contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Logo centered */}
           <View className="items-center mb-6">
             <Image
-              source={require("@/assets/images/public/govimart-logo.png")}
+              source={require("@/assets/images/public/polygon-logo.png")}
               className="w-48 h-12"
               resizeMode="contain"
             />
             <Text className="text-2xl font-black text-black mt-2">
-              Welcome to GoViMart
+              Welcome to Polygon
             </Text>
           </View>
 
@@ -245,7 +271,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             </View>
           </View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   Image,
+  Keyboard,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -50,7 +51,22 @@ const getFlagUrl = (countryCode: string): string => {
 };
 
 const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
+  const scrollViewRef = useRef<ScrollView>(null);
   const [tab, setTab] = useState<"home" | "business">("home");
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
@@ -322,6 +338,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         className="flex-1 px-4 mt-6"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

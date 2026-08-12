@@ -7,7 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/store/authSlice";
 
-const logo = require("@/assets/images/public/govimart-logo.png");
+const logo = require("@/assets/images/public/polygon-logo.png");
 
 type SplashNavigationProp = StackNavigationProp<RootStackParamList, "Splash">;
 
