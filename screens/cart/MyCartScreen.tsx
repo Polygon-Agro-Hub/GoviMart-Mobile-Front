@@ -2,15 +2,14 @@ import React, { useState } from "react";
 import {
     View,
     Text,
-    TouchableOpacity,
     ScrollView,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import PackageCartCard from "@/component/my-cart/PackageCartCard";
 import ProductCartCard from "@/component/my-cart/ProductCartCard";
 import OrderSummary from "@/component/my-cart/OrderSummary";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type NavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -233,42 +232,12 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         >
             {/* Header */}
 
-            <View
-                style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: 60,
-                }}
-            >
-                <TouchableOpacity
-                    onPress={() => navigation.goBack()}
-                    style={{
-                        position: "absolute",
-                        left: 16,
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: "#FFF",
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <Ionicons
-                        name="chevron-back"
-                        size={22}
-                    />
-                </TouchableOpacity>
-
-                <Text
-                    style={{
-                        fontSize: 18,
-                        fontWeight: "700",
-                    }}
-                >
-                    My Cart
-                </Text>
-            </View>
+            <CustomHeader
+                title="My Cart"
+                titleColor="black"
+                showBackButton={true}
+                navigation={navigation}
+            />
 
             <View style={{ flex: 1 }}>
                 <ScrollView

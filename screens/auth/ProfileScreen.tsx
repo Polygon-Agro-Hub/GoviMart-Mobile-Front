@@ -306,7 +306,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="headset"
             title="Report a Complaint"
             onPress={() => {
-              // navigation.navigate("ReportComplaint");
+              navigation.navigate("ReportComplaint");
             }}
           />
 
