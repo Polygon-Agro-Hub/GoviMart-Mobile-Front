@@ -3,6 +3,7 @@ export type RootStackParamList = {
   ChooseAuth: undefined;
   DeliveryLocation: undefined;
   Login: undefined;
+  UpdatePassword: { customerId: number; name?: string; number?: string } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   Home: undefined;
   SignUpOTP: {
@@ -43,4 +44,7 @@ export type RootStackParamList = {
   SavedAddresses: undefined;
   EditAddress: undefined;
   AddNewAddress: undefined;
+  ReportComplaint: undefined;
+  ComplaintHistory: undefined;
+  ViewComplaint: undefined;
 };

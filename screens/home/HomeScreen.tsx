@@ -13,11 +13,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { useSelector } from "react-redux";
-import { RootState } from "../../store";
-import HomeHeader from "./HomeHeader";
+import { RootState } from "@/store";
+import HomeHeader from "@/component/home/HomeHeader";
 import axios from "axios";
 import { environment } from "@/environment/environment";
-import HomeBannerSlider from "./HomeBannerSlider";
+import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;

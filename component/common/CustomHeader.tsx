@@ -50,7 +50,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       <View className="flex-1 items-center">
         {showLogo ? (
           <Image
-            source={require("@/assets/images/public/govimart-logo.png")}
+            source={require("@/assets/images/public/polygon-logo.png")}
             style={{ width: 140, height: 40, resizeMode: "contain" }}
           />
         ) : (

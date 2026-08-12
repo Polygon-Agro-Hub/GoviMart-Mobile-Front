@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
-import CustomHeader from "../common/CustomHeader";
+import { RootStackParamList } from "@/types/types";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type EditAddressNavigationProp = StackNavigationProp<
     RootStackParamList,

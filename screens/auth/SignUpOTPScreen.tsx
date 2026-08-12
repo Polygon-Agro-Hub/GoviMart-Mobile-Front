@@ -11,6 +11,7 @@ import {
   Image,
   Linking,
   Alert,
+  Keyboard,
 } from "react-native";
 import { RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -32,6 +33,7 @@ interface SignUpOTPProps {
 }
 
 const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
+  const scrollViewRef = useRef<ScrollView>(null);
   const phoneCode = route.params?.phoneCode || "+94";
   const phoneNumber = route.params?.phoneNumber || "771122300";
   const email = route.params?.email || "";
@@ -39,6 +41,20 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [referenceId, setReferenceId] = useState(route.params?.referenceId || "");
   const [signupToken, setSignupToken] = useState(route.params?.signupToken || "");
   const formattedPhone = `${phoneCode} ${phoneNumber}`;
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -200,6 +216,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       />
 
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",

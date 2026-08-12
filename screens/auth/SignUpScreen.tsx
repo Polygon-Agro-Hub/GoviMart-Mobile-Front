@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   Image,
+  Keyboard,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -50,7 +51,22 @@ const getFlagUrl = (countryCode: string): string => {
 };
 
 const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
+  const scrollViewRef = useRef<ScrollView>(null);
   const [tab, setTab] = useState<"home" | "business">("home");
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
@@ -72,6 +88,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [phoneCode, setPhoneCode] = useState(""); // empty default
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [nic, setNic] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyPhoneCode, setCompanyPhoneCode] = useState(""); // empty default
   const [companyNumber, setCompanyNumber] = useState(""); // maps to companyPhone
@@ -113,6 +130,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     if (!email.trim()) newErrors.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       newErrors.email = "Invalid email address";
+    }
+
+    if (!nic.trim()) {
+      newErrors.nic = "NIC Number is required";
+    } else if (!/^[0-9]{9}[vVxX]$/.test(nic.trim()) && !/^[0-9]{12}$/.test(nic.trim())) {
+      newErrors.nic = "Invalid NIC format";
     }
 
     if (tab === "business") {
@@ -167,6 +190,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         phoneNumber: phoneNumber.trim(),
         buyerType: tab === "home" ? "Retail" : "Wholesale",
         email: email.trim().toLowerCase(),
+        nic: nic.trim().toUpperCase(),
         password,
         confirmPassword,
         agreeToMarketing: true,
@@ -314,6 +338,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         className="flex-1 px-4 mt-6"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -493,6 +518,31 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
                 <Text className="text-red-500 text-xs font-semibold">{errors.email}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* NIC Number Input */}
+          <View>
+            <View
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
+                errors.nic ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+              }`}
+            >
+              <FontAwesome name="id-card" size={16} color="black" />
+              <TextInput
+                placeholder="NIC Number"
+                placeholderTextColor="#000000"
+                autoCapitalize="characters"
+                value={nic}
+                onChangeText={setNic}
+                className="flex-1 text-sm text-black font-semibold p-0"
+              />
+            </View>
+            {errors.nic && (
+              <View className="flex-row items-center gap-x-1 mt-1 ml-3">
+                <MaterialIcons name="error" size={12} color="#E02424" />
+                <Text className="text-red-500 text-xs font-semibold">{errors.nic}</Text>
               </View>
             )}
           </View>

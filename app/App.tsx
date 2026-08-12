@@ -5,27 +5,31 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import Splash from "@/component/common/Splash";
-import ChooseAuth from "@/component/auth/ChooseAuth";
-import DeliveryLocation from "@/component/auth/DeliveryLocation";
-import Login from "@/component/auth/Login";
-import SignUp from "@/component/auth/SignUp";
-import SignUpOTP from "@/component/auth/SignUpOTP";
-import Home from "@/component/home/Home";
-import ExcludeListAdd from "@/component/exclude-items/ExcludeListAdd";
-import ExcludeListSummery from "@/component/exclude-items/ExcludeListSummery";
-import Profile from "@/component/my-profile/Profile";
+import Splash from "@/screens/splash/SplashScreen";
+import ChooseAuth from "@/screens/auth/ChooseAuth";
+import DeliveryLocation from "@/screens/auth/DeliveryLocationScreen";
+import Login from "@/screens/auth/SignInScreen";
+import SignUp from "@/screens/auth/SignUpScreen";
+import UpdatePassword from "@/screens/auth/UpdatePasswordScreen";
+import SignUpOTP from "@/screens/auth/SignUpOTPScreen";
+import Home from "@/screens/home/HomeScreen";
+import ExcludeListAdd from "@/screens/exclude-items/ExcludeListAddScreen";
+import ExcludeListSummery from "@/screens/exclude-items/ExcludeListSummeryScreen";
+import Profile from "@/screens/auth/ProfileScreen";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
 
 import { Provider } from "react-redux";
 import { store } from "../store";
-import ViewProduct from "@/component/view-product/ViewProduct";
-import ViewPackage from "@/component/view-package/ViewPackage";
-import MyCart from "@/component/my-cart/MyCart";
-import SavedAddresses from "@/component/saved-addresses/SavedAddresses";
-import EditAddress from "@/component/edit-address/EditAddress";
-import AddNewAddress from "@/component/add-new-address/AddNewAddress";
+import ViewProduct from "@/screens/products/ViewProductScreen";
+import ViewPackage from "@/screens/packages/ViewPackageScreen";
+import MyCart from "@/screens/cart/MyCartScreen";
+import SavedAddresses from "@/screens/saved-addresses/SavedAddressesScreen";
+import EditAddress from "@/screens/account/EditAddressScreen";
+import AddNewAddress from "@/screens/account/AddNewAddressScreen";
+import ReportComplaint from "@/screens/complaints/ReportComplaintScreen";
+import ComplaintHistory from "@/screens/complaints/ComplaintHistoryScreen";
+import ViewComplaint from "@/screens/complaints/ViewComplaintScreen";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -40,6 +44,7 @@ function AppContent() {
             <Stack.Screen name="ChooseAuth" component={ChooseAuth} />
             <Stack.Screen name="DeliveryLocation" component={DeliveryLocation} />
             <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="UpdatePassword" component={UpdatePassword} />
             <Stack.Screen name="SignUp" component={SignUp} />
             <Stack.Screen name="SignUpOTP" component={SignUpOTP} />
             <Stack.Screen name="Home" component={Home} />
@@ -52,7 +57,9 @@ function AppContent() {
             <Stack.Screen name="SavedAddresses" component={SavedAddresses} />
             <Stack.Screen name="EditAddress" component={EditAddress} />
             <Stack.Screen name="AddNewAddress" component={AddNewAddress} />
-
+            <Stack.Screen name="ReportComplaint" component={ReportComplaint} />
+            <Stack.Screen name="ComplaintHistory" component={ComplaintHistory} />
+            <Stack.Screen name="ViewComplaint" component={ViewComplaint} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />

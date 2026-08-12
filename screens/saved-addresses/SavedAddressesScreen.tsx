@@ -8,7 +8,8 @@ import {
 } from "react-native";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type SavedAddressesNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -86,63 +87,12 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                 backgroundColor: "#FFFFFF",
             }}
         >
-            {/* ================= HEADER ================= */}
-
-            <View
-                style={{
-                    height: 58,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingHorizontal: 12,
-                }}
-            >
-                {/* Back Button */}
-
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => navigation.goBack()}
-                    style={{
-                        position: "absolute",
-                        left: 12,
-
-                        width: 38,
-                        height: 38,
-                        borderRadius: 19,
-
-                        backgroundColor: "#FFFFFF",
-
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 2,
-                        },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 4,
-
-                        elevation: 2,
-                    }}
-                >
-                    <Ionicons
-                        name="chevron-back"
-                        size={22}
-                        color="#111"
-                    />
-                </TouchableOpacity>
-
-                <Text
-                    style={{
-                        fontSize: 15,
-                        fontWeight: "700",
-                        color: "#111",
-                    }}
-                >
-                    Saved Addresses
-                </Text>
-            </View>
+            <CustomHeader
+                title="Saved Addresses"
+                titleColor="black"
+                showBackButton={true}
+                navigation={navigation}
+            />
 
             {/* ================= CONTENT ================= */}
 
@@ -160,7 +110,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                     activeOpacity={0.85}
                     onPress={() => {
                         console.log("Add new address");
-                         navigation.navigate("AddNewAddress");
+                        navigation.navigate("AddNewAddress");
                     }}
                     style={{
                         height: 58,

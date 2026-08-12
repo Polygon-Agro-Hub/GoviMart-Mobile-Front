@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
-import CustomHeader from "../common/CustomHeader";
+import { RootStackParamList } from "@/types/types";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type AddAddressNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -21,16 +21,6 @@ type AddAddressNavigationProp = StackNavigationProp<
 
 interface AddAddressProps {
     navigation: AddAddressNavigationProp;
-}
-
-interface InputFieldProps {
-    icon: keyof typeof Ionicons.glyphMap | any;
-    label: string;
-    value: string;
-    onChangeText: (text: string) => void;
-    placeholder?: string;
-    keyboardType?: "default" | "phone-pad";
-    maxLength?: number;
 }
 
 // INPUT FIELD
@@ -76,9 +66,8 @@ const InputField = ({
                 style={{
                     width: 36,
                     height: 36,
-                    borderRadius: 999,
-                    backgroundColor: "#FFFF",
-
+                    borderRadius: 18,
+                    backgroundColor: "#F2F2F6",
                     justifyContent: "center",
                     alignItems: "center",
                 }}
@@ -143,7 +132,7 @@ const DropdownField = ({
     onSelect,
     highlighted = false,
 }: {
-    icon: keyof typeof Ionicons.glyphMap | any;
+    icon?: keyof typeof Ionicons.glyphMap | any;
     label: string;
     value: string;
     open: boolean;
@@ -182,7 +171,7 @@ const DropdownField = ({
             >
                 {/* Icon */}
 
-                <View
+                {icon && <View
                     style={{
                         width: 36,
                         height: 36,
@@ -200,7 +189,7 @@ const DropdownField = ({
                         size={17}
                         color="#0000"
                     />
-                </View>
+                </View>}
 
                 {/* Content */}
 

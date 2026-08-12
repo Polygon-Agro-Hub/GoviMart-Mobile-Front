@@ -4,16 +4,16 @@
     "slug": "govi-mart",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/public/app-icon.png",
+    "icon": "./assets/images/public/app-icon-android.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/public/app-icon.png",
+      "image": "./assets/images/public/app-icon-android.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
     "android": {
-      "package": "com.polygonagro.GoviMart",
+      "package": "com.polygonagro.Polygon",
       "versionCode": 1,
       "compileSdkVersion": 36,
       "targetSdkVersion": 36,
@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/public/app-icon.png",
+        "foregroundImage": "./assets/images/public/app-icon-android.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -39,8 +39,8 @@
       ]
     },
     "ios": {
-      "icon": "./assets/images/public/app-icon.png",
-      "bundleIdentifier": "com.polygonagro.GoviMart",
+      "icon": "./assets/images/public/app-icon-android.png",
+      "bundleIdentifier": "com.polygonagro.Polygon",
       "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
@@ -55,7 +55,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/images/public/app-icon.png"
+      "favicon": "./assets/images/public/app-icon-android.png"
     },
     "plugins": [
       [

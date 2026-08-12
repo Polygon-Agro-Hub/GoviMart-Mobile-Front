@@ -13,14 +13,14 @@ import {
   Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import { TextInput } from "react-native-gesture-handler";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import NoDataFound from "../common/NoDataFound";
-import CustomHeader from "../common/CustomHeader";
-import LoadingPage from "../common/LoadingPage";
-import ToggleSwitch from "../common/ToggleSwitch";
+import NoDataFound from "@/component/common/NoDataFound";
+import CustomHeader from "@/component/common/CustomHeader";
+import LoadingPage from "@/component/common/LoadingPage";
+import ToggleSwitch from "@/component/common/ToggleSwitch";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { environment } from "@/environment/environment";

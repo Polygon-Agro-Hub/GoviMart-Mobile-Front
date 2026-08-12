@@ -8,14 +8,14 @@ import {
   ScrollView,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
-import { RootState } from "../../store";
-import { logoutSuccess } from "../../store/authSlice";
+import { RootState } from "@/store";
+import { logoutSuccess } from "@/store/authSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
-import CustomHeader from "../common/CustomHeader";
-import ProfileMenuItem from "./ProfileMenuItemCard";
+import CustomHeader from "@/component/common/CustomHeader";
+import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 
 type ProfileNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -306,7 +306,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="headset"
             title="Report a Complaint"
             onPress={() => {
-              // navigation.navigate("ReportComplaint");
+              navigation.navigate("ReportComplaint");
             }}
           />
 

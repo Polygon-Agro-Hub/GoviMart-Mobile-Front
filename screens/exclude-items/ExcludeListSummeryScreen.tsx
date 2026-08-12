@@ -10,12 +10,12 @@ import {
   Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import { ScrollView } from "react-native-gesture-handler";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import CustomHeader from "../common/CustomHeader";
-import ConfirmationModal from "../common/ConfirmationModal";
+import CustomHeader from "@/component/common/CustomHeader";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { environment } from "@/environment/environment";
