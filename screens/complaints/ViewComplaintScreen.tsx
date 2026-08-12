@@ -7,7 +7,7 @@ import {
     TouchableOpacity,
     StyleSheet,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
@@ -41,6 +41,8 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
         photos: [
             "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=300",
             "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=301",
+            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300",
+            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300",
             "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300",
         ],
     };
@@ -164,8 +166,9 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                                 },
                             ]}
                         >
-                            <Ionicons
+                            <FontAwesome6
                                 name="paper-plane"
+                                solid
                                 size={19}
                                 color="#FFFFFF"
                             />
@@ -181,7 +184,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                             </Text>
 
                             <Text style={styles.timelineDate}>
-                                At 11:00AM on July 2, 2026.
+                                At 10:00AM on July 2, 2026.
                             </Text>
                         </View>
                     </View>
@@ -212,12 +215,14 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                             <Text style={styles.timelineDescription}>
                                 We are reviewing your complaint.
                             </Text>
+
+                            <Text style={styles.timelineDate}>
+                                At 13:00AM on July 2, 2026.
+                            </Text>
                         </View>
                     </View>
 
-                    {/* ================================================= */}
                     {/* PENDING RESOLUTION */}
-                    {/* ================================================= */}
 
                     <View
                         style={[
@@ -249,6 +254,10 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
 
                             <Text style={styles.timelineDescription}>
                                 Our team will get back to you soon.
+                            </Text>
+
+                            <Text style={styles.timelineDate}>
+                                At 12:00AM on July 2, 2026.
                             </Text>
                         </View>
                     </View>
@@ -375,14 +384,14 @@ const styles = StyleSheet.create({
 
         minHeight: 64,
 
-        marginBottom: 9,
+        marginBottom: 20,
     },
 
     timelineIcon: {
-        width: 30,
-        height: 30,
+        width: 35,
+        height: 35,
 
-        borderRadius: 15,
+        borderRadius: 999,
 
         justifyContent: "center",
         alignItems: "center",
@@ -393,7 +402,7 @@ const styles = StyleSheet.create({
     timelineContent: {
         flex: 1,
 
-        marginLeft: 6,
+        marginLeft: 10,
 
         paddingTop: 1,
     },
