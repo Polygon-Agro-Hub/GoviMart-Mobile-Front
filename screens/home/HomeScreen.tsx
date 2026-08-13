@@ -18,6 +18,7 @@ import HomeHeader from "@/component/home/HomeHeader";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
+import BottomNavigation from "@/component/common/BottomNavigationBar";
 
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -530,32 +531,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       </ScrollView>
 
       {/* Floating Bottom Navigation Bar */}
-      <View className="absolute bottom-6 left-6 right-6 bg-black rounded-[32px] h-[64px] flex-row items-center justify-around px-3 shadow-lg z-20">
-        {/* Home Tab (Active) */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          className="flex-row items-center px-4 py-2 rounded-full"
-          style={{ backgroundColor: "#FFA07A" }}
-        >
-          <Ionicons name="home" size={18} color="#FFFFFF" />
-          <Text className="text-white text-xs font-extrabold ml-1.5">Home</Text>
-        </TouchableOpacity>
-
-        {/* Cart Tab */}
-        <TouchableOpacity activeOpacity={0.8} className="p-2" onPress={handleMyCartNavigation}>
-          <Ionicons name="basket-outline" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        {/* Notifications Tab */}
-        <TouchableOpacity activeOpacity={0.8} className="p-2">
-          <Ionicons name="notifications-outline" size={22} color="#FFFFFF" onPress={handleViewPackageNavigation} />
-        </TouchableOpacity>
-
-        {/* Profile Tab */}
-        <TouchableOpacity onPress={handleProfileNavigation} activeOpacity={0.8} className="p-2">
-          <Ionicons name="person-outline" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <BottomNavigation activeScreen="Home" navigation={navigation} />
     </View>
   );
 };

@@ -15,7 +15,7 @@ import SignUpOTP from "@/screens/auth/SignUpOTPScreen";
 import Home from "@/screens/home/HomeScreen";
 import ExcludeListAdd from "@/screens/exclude-items/ExcludeListAddScreen";
 import ExcludeListSummery from "@/screens/exclude-items/ExcludeListSummeryScreen";
-import Profile from "@/screens/auth/ProfileScreen";
+import Profile from "@/screens/account/ProfileScreen";
 import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
 
@@ -30,6 +30,9 @@ import AddNewAddress from "@/screens/account/AddNewAddressScreen";
 import ReportComplaint from "@/screens/complaints/ReportComplaintScreen";
 import ComplaintHistory from "@/screens/complaints/ComplaintHistoryScreen";
 import ViewComplaint from "@/screens/complaints/ViewComplaintScreen";
+import MyAccount from "@/screens/account/EditMyAccountScreen";
+import DeleteAccount from "@/screens/account/DeleteAccountScreen";
+import Notifications from "@/screens/notification/NotificationScreen";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -60,6 +63,9 @@ function AppContent() {
             <Stack.Screen name="ReportComplaint" component={ReportComplaint} />
             <Stack.Screen name="ComplaintHistory" component={ComplaintHistory} />
             <Stack.Screen name="ViewComplaint" component={ViewComplaint} />
+            <Stack.Screen name="MyAccount" component={MyAccount} />
+            <Stack.Screen name="DeleteAccount" component={DeleteAccount} />
+            <Stack.Screen name="Notification" component={Notifications} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />

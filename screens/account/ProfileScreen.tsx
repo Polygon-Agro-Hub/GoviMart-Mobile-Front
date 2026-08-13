@@ -266,7 +266,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="thumbs-up"
             title="My Account"
             onPress={() => {
-              // navigation.navigate("MyAccount");
+              navigation.navigate("MyAccount");
             }}
           />
 

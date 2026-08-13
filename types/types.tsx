@@ -47,4 +47,8 @@ export type RootStackParamList = {
   ReportComplaint: undefined;
   ComplaintHistory: undefined;
   ViewComplaint: undefined;
+  MyAccount: undefined;
+  DeleteAccount: undefined;
+  Notification: undefined;
+  
 };
