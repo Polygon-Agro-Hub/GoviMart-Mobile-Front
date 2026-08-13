@@ -28,18 +28,14 @@ export const InputField = ({
     return (
         <View
             style={{
-                height: 58,
+                height: 67,
                 borderWidth: 1,
                 borderColor: "#D9DEE5",
-                borderRadius: 30,
-
+                borderRadius: 40,
                 flexDirection: "row",
                 alignItems: "center",
-
                 paddingHorizontal: 11,
-
                 marginBottom: 12,
-
                 backgroundColor: "#FFFFFF",
             }}
         >
@@ -49,7 +45,7 @@ export const InputField = ({
                 style={{
                     width: 36,
                     height: 36,
-                    borderRadius: 18,
+                    borderRadius: 999,
                     backgroundColor: "#F2F2F6",
                     justifyContent: "center",
                     alignItems: "center",
@@ -76,7 +72,7 @@ export const InputField = ({
                     style={{
                         fontSize: 14,
                         color: "#555",
-                        lineHeight: 14,
+                        lineHeight: 19,
                         marginBottom: 4,
                     }}
                 >
@@ -96,6 +92,7 @@ export const InputField = ({
                         fontSize: 14,
                         color: "#111",
                         fontWeight: "500",
+                        paddingLeft: 0
                     }}
                 />
             </View>
@@ -135,20 +132,15 @@ export const DropdownField = ({
                 activeOpacity={0.8}
                 onPress={() => setOpen(!open)}
                 style={{
-                    height: 58,
-
+                    height: 67,
                     borderWidth: highlighted ? 2 : 1,
                     borderColor: highlighted
                         ? "#0788FF"
                         : "#D9DEE5",
-
-                    borderRadius: 30,
-
+                    borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-
                     paddingHorizontal: 11,
-
                     backgroundColor: "#FFFFFF",
                 }}
             >
@@ -159,9 +151,7 @@ export const DropdownField = ({
                         width: 36,
                         height: 36,
                         borderRadius: 18,
-
                         backgroundColor: "#F2F2F6",
-
                         justifyContent: "center",
                         alignItems: "center",
                     }}
@@ -187,7 +177,7 @@ export const DropdownField = ({
                         style={{
                             fontSize: 14,
                             color: "#555",
-                            lineHeight: 16,
+                            lineHeight: 19,
                             marginBottom: 4,
                         }}
                     >
@@ -229,13 +219,10 @@ export const DropdownField = ({
                         top: 62,
                         left: 0,
                         right: 0,
-
                         backgroundColor: "#FFFFFF",
-
                         borderRadius: 14,
                         borderWidth: 1,
                         borderColor: "#E1E4E8",
-
                         shadowColor: "#000",
                         shadowOffset: {
                             width: 0,
@@ -243,9 +230,7 @@ export const DropdownField = ({
                         },
                         shadowOpacity: 0.12,
                         shadowRadius: 6,
-
                         elevation: 7,
-
                         overflow: "hidden",
                     }}
                 >
