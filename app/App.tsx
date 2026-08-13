@@ -24,7 +24,7 @@ import { store } from "../store";
 import ViewProduct from "@/screens/products/ViewProductScreen";
 import ViewPackage from "@/screens/packages/ViewPackageScreen";
 import MyCart from "@/screens/cart/MyCartScreen";
-import SavedAddresses from "@/screens/saved-addresses/SavedAddressesScreen";
+import SavedAddresses from "@/screens/account/SavedAddressesScreen";
 import EditAddress from "@/screens/account/EditAddressScreen";
 import AddNewAddress from "@/screens/account/AddNewAddressScreen";
 import ReportComplaint from "@/screens/complaints/ReportComplaintScreen";
