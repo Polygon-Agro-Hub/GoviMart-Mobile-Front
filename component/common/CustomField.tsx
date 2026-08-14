@@ -9,6 +9,7 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 // INPUT FIELD
 
 export const InputField = ({
+    isIconThemeDark,
     icon,
     label,
     value,
@@ -16,86 +17,119 @@ export const InputField = ({
     keyboardType = "default",
     placeholder,
     maxLength,
+    error
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
+    isIconThemeDark?: boolean,
     label: string;
     value: string;
     onChangeText: (text: string) => void;
     keyboardType?: "default" | "phone-pad" | "email-address";
     placeholder?: string;
     maxLength?: number;
+    error?: string
 }) => {
+    const handleIconColor = () => {
+        if (isIconThemeDark) {
+            return "#00000"
+        }
+        return "#F2F2F6"
+    }
+    const handleBackgroundColor = () => {
+        if (isIconThemeDark) {
+            return "#FFFFF"
+        }
+        return "#00000"
+    }
     return (
         <View
             style={{
-                height: 67,
-                borderWidth: 1,
-                borderColor: "#D9DEE5",
-                borderRadius: 40,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 11,
-                marginBottom: 12,
-                backgroundColor: "#FFFFFF",
+                marginBottom: error ?-1  : 12,
             }}
         >
-            {/* Icon */}
-
             <View
                 style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 999,
-                    backgroundColor: "#F2F2F6",
-                    justifyContent: "center",
+                    height: 67,
+                    borderWidth: 1,
+                    borderColor: "#D9DEE5",
+                    borderRadius: 40,
+                    flexDirection: "row",
                     alignItems: "center",
+                    paddingHorizontal: 11,
+                    backgroundColor: "#FFFFFF",
                 }}
             >
-                <FontAwesome6
-                    name={icon}
-                    solid
-                    size={17}
-                    color="#0000"
-                />
-            </View>
+                {/* Icon */}
 
-            {/* Text */}
-
-            <View
-                style={{
-                    flex: 1,
-                    marginLeft: 10,
-                    justifyContent: "center",
-                }}
-            >
-                <Text
+                <View
                     style={{
-                        fontSize: 14,
-                        color: "#555",
-                        lineHeight: 19,
-                        marginBottom: 4,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 999,
+                        backgroundColor: handleIconColor(),
+                        justifyContent: "center",
+                        alignItems: "center",
                     }}
                 >
-                    {label}
-                </Text>
+                    <FontAwesome6
+                        name={icon}
+                        solid
+                        size={17}
+                        color={handleBackgroundColor()}
+                    />
+                </View>
 
-                <TextInput
-                    value={value}
-                    onChangeText={onChangeText}
-                    keyboardType={keyboardType}
-                    placeholder={placeholder}
-                    placeholderTextColor="#9CA3AF"
-                    maxLength={maxLength}
+                {/* Text */}
+
+                <View
                     style={{
-                        height: 21,
-                        paddingVertical: 0,
-                        fontSize: 14,
-                        color: "#111",
-                        fontWeight: "500",
-                        paddingLeft: 0
+                        flex: 1,
+                        marginLeft: 10,
+                        justifyContent: "center",
                     }}
-                />
+                >
+                    <Text
+                        style={{
+                            fontSize: 14,
+                            color: "#555",
+                            lineHeight: 19,
+                            marginBottom: 4,
+                        }}
+                    >
+                        {label}
+                    </Text>
+
+                    <TextInput
+                        value={value}
+                        onChangeText={onChangeText}
+                        keyboardType={keyboardType}
+                        placeholder={placeholder}
+                        placeholderTextColor="#9CA3AF"
+                        maxLength={maxLength}
+                        style={{
+                            height: 21,
+                            paddingVertical: 0,
+                            fontSize: 14,
+                            color: "#111",
+                            fontWeight: "500",
+                            paddingLeft: 0
+                        }}
+                    />
+                </View>
             </View>
+            {/* Error Message */}
+            {error ? (
+                <Text
+                    style={{
+                        fontSize: 11,
+                        color: "#FF3B30",
+                        marginTop: 4,
+                        marginLeft: 16,
+                    }}
+                >
+                    {error}
+                </Text>
+            ) : null}
         </View>
     );
 };
@@ -111,6 +145,7 @@ export const DropdownField = ({
     options,
     onSelect,
     highlighted = false,
+    error
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -120,11 +155,12 @@ export const DropdownField = ({
     options: string[];
     onSelect: (value: string) => void;
     highlighted?: boolean;
+    error?: string
 }) => {
     return (
         <View
             style={{
-                marginBottom: 12,
+                marginBottom: error ? -1 : 12,
                 zIndex: open ? 100 : 1,
             }}
         >
@@ -271,6 +307,19 @@ export const DropdownField = ({
                     ))}
                 </View>
             )}
+            {/* Error Message */}
+            {error ? (
+                <Text
+                    style={{
+                        fontSize: 11,
+                        color: "#FF3B30",
+                        marginTop: 4,
+                        marginLeft: 16,
+                    }}
+                >
+                    {error}
+                </Text>
+            ) : null}
         </View>
     );
 };

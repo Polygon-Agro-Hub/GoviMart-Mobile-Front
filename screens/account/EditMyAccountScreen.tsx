@@ -37,8 +37,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     const [titleOpen, setTitleOpen] = useState(false);
     const [codeOpen, setCodeOpen] = useState(false);
     const [moreMenuVisible, setMoreMenuVisible] = useState(false);
-
-
+    const [firstNameError, setFirstNameError] = useState("");
+    const [lastNameError, setLastNameError] = useState("");
+    const [codeError, setCodeError] = useState("");
+    const [titleError, setTitleError] = useState("");
+    const [mobileNumberError, setMobileNumberError] = useState("");
+    const [emailError, setEmailError] = useState("");
     const titleOptions = [
         "Mr",
         "Mrs",
@@ -53,6 +57,42 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
     // UPDATE ACCOUNT
     const handleUpdate = () => {
+        // Clear previous errors
+        setFirstNameError("");
+        setMobileNumberError("");
+        setEmailError("");
+
+        let hasError = false;
+
+        // First Name
+        if (!firstName.trim()) {
+            setFirstNameError("Required");
+            hasError = true;
+        }
+
+        // Phone
+        if (!mobileNumber.trim()) {
+            setMobileNumberError("Required");
+            hasError = true;
+        } else if (!/^\+947\d{8}$/.test(mobileNumber)) {
+            setMobileNumberError("Invalid phone number");
+            hasError = true;
+        }
+
+        // Email
+        if (!email.trim()) {
+            setEmailError("Required");
+            hasError = true;
+        } else if (
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+        ) {
+            setEmailError("Invalid email address");
+            hasError = true;
+        }
+
+        if (hasError) {
+            return;
+        }
         Alert.alert(
             "Success",
             "Your account information has been updated.",
@@ -89,7 +129,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 <CustomHeader navigation={navigation} title="My Account" showBackButton={true} />
 
                 {/* Delete ellipsis */}
-                
+
 
                 <TouchableOpacity
                     activeOpacity={0.8}
@@ -146,7 +186,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         <TouchableOpacity
                             activeOpacity={0.7}
                             onPress={() => {
-                                
+
                                 navigation.navigate("DeleteAccount");
                                 setMoreMenuVisible(false)
                             }}
@@ -157,7 +197,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 alignItems: "center",
                             }}
                         >
-                
+
                             <Text
                                 style={{
                                     marginLeft: 10,
@@ -171,7 +211,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         </TouchableOpacity>
                     </View>
                 )}
-                
+
             </View>
 
             <ScrollView
@@ -273,8 +313,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 onSelect={(value: string) => {
                                     setTitle(value);
                                     setTitleOpen(false);
+                                    if (titleError) { setTitleError("") }
                                 }}
                                 icon="user"
+                                error={titleError}
                             />
                         </View>
 
@@ -289,7 +331,15 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 icon="user"
                                 label="First Name"
                                 value={firstName}
-                                onChangeText={setFirstName}
+                                onChangeText={(text) => {
+                                    setFirstName(text);
+
+                                    // Optional: remove error while typing
+                                    if (firstNameError) {
+                                        setFirstNameError("");
+                                    }
+                                }}
+                                error={firstNameError}
                             />
                         </View>
                     </View>
@@ -305,7 +355,13 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                             icon="user"
                             label="Last Name"
                             value={lastName}
-                            onChangeText={setLastName}
+                            onChangeText={(text) => {
+                                setLastName(text)
+                                if (lastNameError) {
+                                    setLastNameError("")
+                                }
+                            }}
+                            error={lastNameError}
                         />
                     </View>
 
@@ -334,8 +390,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 onSelect={(value: string) => {
                                     setCode(value);
                                     setCodeOpen(false);
+                                    if (codeError) { setCodeError("") }
                                 }}
                                 icon="flag"
+                                error={codeError}
                             />
                         </View>
 
@@ -350,9 +408,15 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 icon="phone"
                                 label="Mobile Number"
                                 value={mobileNumber}
-                                onChangeText={setMobileNumber}
+                                onChangeText={(text) => {
+                                    setMobileNumber(text)
+                                    if (mobileNumberError) {
+                                        setMobileNumberError("")
+                                    }
+                                }}
                                 keyboardType="phone-pad"
                                 maxLength={9}
+                                error={mobileNumberError}
                             />
                         </View>
                     </View>
@@ -362,8 +426,14 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         icon="house"
                         label="Email"
                         value={email}
-                        onChangeText={setEmail}
+                        onChangeText={(text) => {
+                            setEmail(text);
+                            if (emailError) {
+                                setEmailError("")
+                            }
+                        }}
                         keyboardType="email-address"
+                        error={emailError}
                     />
                 </View>
             </ScrollView>
