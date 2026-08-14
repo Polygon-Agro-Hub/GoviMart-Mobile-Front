@@ -5,14 +5,14 @@ interface Props {
     packageTotal: number;
     productTotal: number;
     discount: number;
-    // onCheckout?: () => void;
+    onCheckout?: () => void;
 }
 
 const OrderSummary: React.FC<Props> = ({
     packageTotal,
     productTotal,
     discount,
-    // onCheckout,
+    onCheckout,
 }) => {
     const total = packageTotal + productTotal - discount;
 
@@ -175,7 +175,7 @@ const OrderSummary: React.FC<Props> = ({
 
             <TouchableOpacity
                 activeOpacity={0.85}
-                // onPress={onCheckout}
+                onPress={onCheckout}
                 style={{
                     height: 56,
                     backgroundColor: "#000",

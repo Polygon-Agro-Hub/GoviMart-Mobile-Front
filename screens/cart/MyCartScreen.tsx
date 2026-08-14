@@ -304,7 +304,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 packageTotal={packageTotal}
                 productTotal={productTotal}
                 discount={100}
-            //   onCheckout={() => navigation.navigate("Checkout")}
+                // onCheckout={() => navigation.navigate("PaymentMethod", {total:800})}
+                // onCheckout={() => navigation.navigate("OrderDeliveryMethod")}
+                onCheckout={() => navigation.navigate("SetLocation")}
+                       
             />
         </View>
     );
