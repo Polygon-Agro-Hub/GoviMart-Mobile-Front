@@ -50,5 +50,8 @@ export type RootStackParamList = {
   MyAccount: undefined;
   DeleteAccount: undefined;
   Notification: undefined;
-  
+  PaymentMethod: {total: number;};
+  OrderDeliveryMethod: undefined;
+  OrderConfirmed: undefined
+  SetLocation: undefined;
 };
