@@ -34,10 +34,12 @@ import MyAccount from "@/screens/account/EditMyAccountScreen";
 import DeleteAccount from "@/screens/account/DeleteAccountScreen";
 import Notifications from "@/screens/notification/NotificationScreen";
 import PaymentMethod from "@/screens/payment/PaymentMethodScreen";
-import OrderDeliveryMethod from "@/screens/locations/OrderDeliveryMethod";
+import OrderDeliveryMethod from "@/screens/locations/OrderDeliveryMethodScreen";
 import OrderConfirmed from "@/screens/order/OrderConfirmedScreen";
 import SetLocation from "@/screens/locations/SetLocationScreen";
 import ChoosePickupCentre from "@/screens/locations/ChoosePickupCentreScreen";
+import OrderHistory from "@/screens/order/OrderHistoryScreen";
+import OrderDetails from "@/screens/order/OrderDetailsScreen";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -76,6 +78,8 @@ function AppContent() {
             <Stack.Screen name="OrderConfirmed" component={OrderConfirmed} />
             <Stack.Screen name="SetLocation" component={SetLocation} />
             <Stack.Screen name="ChoosePickupCentre" component={ChoosePickupCentre} />
+            <Stack.Screen name="OrderHistory" component={OrderHistory} />
+            <Stack.Screen name="OrderDetails" component={OrderDetails} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
