@@ -101,7 +101,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* CART */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("MyCart")}
+                onPress={() => navigation.navigate("OrderHistory")}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -137,7 +137,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                             marginLeft: 6,
                         }}
                     >
-                        Cart
+                        Orders
                     </Text>
                 )}
             </TouchableOpacity>
