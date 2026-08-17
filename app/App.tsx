@@ -37,6 +37,7 @@ import PaymentMethod from "@/screens/payment/PaymentMethodScreen";
 import OrderDeliveryMethod from "@/screens/locations/OrderDeliveryMethod";
 import OrderConfirmed from "@/screens/order/OrderConfirmedScreen";
 import SetLocation from "@/screens/locations/SetLocationScreen";
+import ChoosePickupCentre from "@/screens/locations/ChoosePickupCentreScreen";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -74,6 +75,7 @@ function AppContent() {
             <Stack.Screen name="OrderDeliveryMethod" component={OrderDeliveryMethod} />
             <Stack.Screen name="OrderConfirmed" component={OrderConfirmed} />
             <Stack.Screen name="SetLocation" component={SetLocation} />
+            <Stack.Screen name="ChoosePickupCentre" component={ChoosePickupCentre} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />

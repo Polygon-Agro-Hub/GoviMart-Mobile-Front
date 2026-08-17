@@ -16,6 +16,7 @@ import { RootStackParamList } from "@/types/types";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
+import BottomNavigation from "@/component/common/BottomNavigationBar";
 
 type ProfileNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -98,7 +99,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 20,
-          paddingBottom: 30,
+          paddingBottom: 120,
         }}
       >
         <View
@@ -195,7 +196,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           <Text
             style={{
               marginTop: 15,
-              fontSize:14,
+              fontSize: 14,
               color: "#111",
               fontWeight: "400",
             }}
@@ -215,7 +216,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           </Text>
 
           {creditBalance < 0 && (<>
-            <Text className="text-center px-5 my-2" style={{fontSize: 13}}>
+            <Text className="text-center px-5 my-2" style={{ fontSize: 13 }}>
               You won’t be able to place a new order until the negative balance is cleared. This balance occurred due to a previous return order. Once the outstanding amount is paid, you’ll be able to place orders again.
               Thank you for your understanding!
             </Text>
@@ -223,10 +224,10 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
               activeOpacity={0.85}
               // onPress={onCheckout}
               style={{
-              paddingVertical: 12,
-              marginTop: 10,
-              marginBottom: 10,
-                width:"90%",
+                paddingVertical: 12,
+                marginTop: 10,
+                marginBottom: 10,
+                width: "90%",
                 backgroundColor: "#FF383C",
                 borderRadius: 30,
 
@@ -320,6 +321,8 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           />
         </View>
       </ScrollView>
+      {/* Floating Bottom Navigation Bar */}
+      <BottomNavigation activeScreen="Profile" navigation={navigation} />
     </View>
   );
 };
