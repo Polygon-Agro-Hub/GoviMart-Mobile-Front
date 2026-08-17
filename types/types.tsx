@@ -54,4 +54,6 @@ export type RootStackParamList = {
   OrderDeliveryMethod: undefined;
   OrderConfirmed: undefined
   SetLocation: undefined;
+  ChoosePickupCentre: undefined;
+
 };
