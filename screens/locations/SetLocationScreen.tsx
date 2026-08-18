@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type SetLocationNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -115,20 +116,43 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
     };
 
     // CONFIRM
-    const handleConfirmLocation = () => {
-        console.log(
-            "Selected Location:",
-            selectedLocation
-        );
+    const handleConfirmLocation = async () => {
+        try {
+            const latitude = selectedLocation?.latitude;
+            const longitude = selectedLocation?.longitude;
 
-        // Example:
-        //
-        // navigation.navigate("AddAddress", {
-        //     latitude: selectedLocation.latitude,
-        //     longitude: selectedLocation.longitude,
-        // });
+            if (
+                latitude === undefined ||
+                longitude === undefined
+            ) {
+                console.log("Location not selected");
+                return;
+            }
 
-        navigation.goBack();
+            console.log("Selected Location:", {
+                latitude,
+                longitude,
+            });
+
+            // Save location
+            await AsyncStorage.setItem(
+                "selectedLatitude",
+                latitude.toString()
+            );
+
+            await AsyncStorage.setItem(
+                "selectedLongitude",
+                longitude.toString()
+            );
+
+            // Go back to AddNewAddress
+            navigation.goBack();
+        } catch (error) {
+            console.error(
+                "Error saving selected location:",
+                error
+            );
+        }
     };
 
     return (
@@ -140,7 +164,7 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
         >
 
             {/* HEADER */}
-           <CustomHeader navigation={navigation} showBackButton title="Set Location"/>
+            <CustomHeader navigation={navigation} showBackButton title="Set Location" />
 
             {/* INSTRUCTION */}
             <View

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import customerService from "@/services/customer/customer.service";
 
 type SavedAddressesNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -31,22 +32,28 @@ interface Address {
 const SavedAddresses: React.FC<SavedAddressesProps> = ({
     navigation,
 }) => {
-    const [addresses, setAddresses] = React.useState<Address[]>([
-        {
-            id: 1,
-            title: "Home",
-            name: "Mr. Namal Perera",
-            address: "18/34 Road, Homagama, Sri Lanka",
-            phone: "0701122500",
-        },
-        {
-            id: 2,
-            title: "Parent’s Home",
-            name: "Mr. Amal Perera",
-            address: "11/B, Diyagama Road, Homagama, Sri Lanka",
-            phone: "0701122500",
-        },
-    ]);
+    const [addresses, setAddresses] = React.useState<Address[]>([]);
+    
+    useEffect(()=>{
+        const fetchingSavedAddresses =async()=>{
+            try{
+                const response = await customerService.getSavedAddresses()
+                console.log("fetched saved addresse: ", response.data.message)
+                if(!response.data.hasAddress){
+                    setAddresses([])
+                    return
+                }else{
+                    // setAddresses()
+                    //need to set response.data.result
+                }
+
+            }
+            catch(error){
+                console.log("failed to fetching saved addresses: ", error)
+            }
+        }
+        fetchingSavedAddresses()
+    },[])
 
     const handleDelete = (id: number) => {
         Alert.alert(
@@ -200,7 +207,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                 {/* ================= ADDRESS LIST ================= */}
 
-                {addresses.map((item) => (
+                {addresses.length >0 ? (addresses.map((item) => (
                     <View
                         key={item.id}
                         style={{
@@ -448,7 +455,8 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                             </TouchableOpacity>
                         </View>
                     </View>
-                ))}
+                ))): <View >
+                    <Text style={{alignSelf:"center", justifyContent: "center", marginTop: 300}}>No saved addresses found</Text></View>}
             </ScrollView>
         </View>
     );

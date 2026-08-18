@@ -17,7 +17,8 @@ export const InputField = ({
     keyboardType = "default",
     placeholder,
     maxLength,
-    error
+    error,
+    prefix
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     isIconThemeDark?: boolean,
@@ -28,6 +29,7 @@ export const InputField = ({
     placeholder?: string;
     maxLength?: number;
     error?: string
+    prefix?: string
 }) => {
     const handleIconColor = () => {
         if (isIconThemeDark) {
@@ -44,7 +46,7 @@ export const InputField = ({
     return (
         <View
             style={{
-                marginBottom: error ?-1  : 12,
+                marginBottom: error ? -1 : 12,
             }}
         >
             <View
@@ -99,22 +101,40 @@ export const InputField = ({
                         {label}
                     </Text>
 
-                    <TextInput
-                        value={value}
-                        onChangeText={onChangeText}
-                        keyboardType={keyboardType}
-                        placeholder={placeholder}
-                        placeholderTextColor="#9CA3AF"
-                        maxLength={maxLength}
-                        style={{
-                            height: 21,
-                            paddingVertical: 0,
-                            fontSize: 14,
-                            color: "#111",
-                            fontWeight: "500",
-                            paddingLeft: 0
-                        }}
-                    />
+                    <View style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                    }}>
+                        {prefix && (
+                            <Text
+                                style={{
+                                    fontSize: 14,
+                                    color: "#9CA3AF",
+                                    fontWeight: "500",
+                                    marginRight: 4,
+                                }}
+                            >
+                                {prefix}
+                            </Text>
+                        )}
+
+                        <TextInput
+                            value={value}
+                            onChangeText={onChangeText}
+                            keyboardType={keyboardType}
+                            placeholder={placeholder}
+                            placeholderTextColor="#9CA3AF"
+                            maxLength={maxLength}
+                            style={{
+                                height: 21,
+                                paddingVertical: 0,
+                                fontSize: 14,
+                                color: "#111",
+                                fontWeight: "500",
+                                paddingLeft: 0
+                            }}
+                        />
+                    </View>
                 </View>
             </View>
             {/* Error Message */}

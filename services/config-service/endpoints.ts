@@ -7,6 +7,13 @@ export const ENDPOINTS = {
     UPDATE_PASSWORD: "api/auth/update-password",
   },
 
+  CUSTOMER: {
+    GET_ACCOUNT_DETAILS: "api/customer/account-details",
+    GET_SAVED_ADDRESSES: "api/customer/fetch-saved-addresses",
+    ADD_ADDRESS: "api/customer/add-address",
+    UPDATE_ADDRESS: "api/customer/update-address/:addressId"
+  }
+
   // BANNER: {
   //   GET_ALL: "/api/banner/list",
   // },

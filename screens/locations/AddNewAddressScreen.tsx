@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
     View,
     Text,
-    TextInput,
     TouchableOpacity,
     ScrollView,
     KeyboardAvoidingView,
@@ -13,6 +12,10 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import { DropdownField, InputField } from "@/component/common/CustomField";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import customerService from "@/services/customer/customer.service";
 
 type AddAddressNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -23,319 +26,66 @@ interface AddAddressProps {
     navigation: AddAddressNavigationProp;
 }
 
-// INPUT FIELD
-
-const InputField = ({
-    icon,
-    label,
-    value,
-    onChangeText,
-    keyboardType = "default",
-    placeholder,
-    maxLength,
-}: {
-    icon: keyof typeof Ionicons.glyphMap | any;
-    label: string;
-    value: string;
-    onChangeText: (text: string) => void;
-    keyboardType?: "default" | "phone-pad" | "email-address";
-    placeholder?: string;
-    maxLength?: number;
-}) => {
-    return (
-        <View
-            style={{
-                height: 58,
-                borderWidth: 1,
-                borderColor: "#D9DEE5",
-                borderRadius: 30,
-
-                flexDirection: "row",
-                alignItems: "center",
-
-                paddingHorizontal: 11,
-
-                marginBottom: 12,
-
-                backgroundColor: "#FFFFFF",
-            }}
-        >
-            {/* Icon */}
-
-            <View
-                style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: "#F2F2F6",
-                    justifyContent: "center",
-                    alignItems: "center",
-                }}
-            >
-                <FontAwesome6
-                    name={icon}
-                    solid
-                    size={17}
-                    color="#0000"
-                />
-            </View>
-
-            {/* Text */}
-
-            <View
-                style={{
-                    flex: 1,
-                    marginLeft: 10,
-                    justifyContent: "center",
-                }}
-            >
-                <Text
-                    style={{
-                        fontSize: 14,
-                        color: "#555",
-                        lineHeight: 14,
-                        marginBottom: 4,
-                    }}
-                >
-                    {label}
-                </Text>
-
-                <TextInput
-                    value={value}
-                    onChangeText={onChangeText}
-                    keyboardType={keyboardType}
-                    placeholder={placeholder}
-                    placeholderTextColor="#9CA3AF"
-                    maxLength={maxLength}
-                    style={{
-                        height: 21,
-                        paddingVertical: 0,
-                        fontSize: 14,
-                        color: "#111",
-                        fontWeight: "500",
-                    }}
-                />
-            </View>
-        </View>
-    );
-};
-
-// DROPDOWN
-
-const DropdownField = ({
-    icon,
-    label,
-    value,
-    open,
-    setOpen,
-    options,
-    onSelect,
-    highlighted = false,
-}: {
-    icon?: keyof typeof Ionicons.glyphMap | any;
-    label: string;
-    value: string;
-    open: boolean;
-    setOpen: (value: boolean) => void;
-    options: string[];
-    onSelect: (value: string) => void;
-    highlighted?: boolean;
-}) => {
-    return (
-        <View
-            style={{
-                marginBottom: 12,
-                zIndex: open ? 100 : 1,
-            }}
-        >
-            <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setOpen(!open)}
-                style={{
-                    height: 58,
-
-                    borderWidth: highlighted ? 2 : 1,
-                    borderColor: highlighted
-                        ? "#0788FF"
-                        : "#D9DEE5",
-
-                    borderRadius: 30,
-
-                    flexDirection: "row",
-                    alignItems: "center",
-
-                    paddingHorizontal: 11,
-
-                    backgroundColor: "#FFFFFF",
-                }}
-            >
-                {/* Icon */}
-
-                {icon && <View
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-
-                        backgroundColor: "#F2F2F6",
-
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <FontAwesome6
-                        name={icon}
-                        solid
-                        size={17}
-                        color="#0000"
-                    />
-                </View>}
-
-                {/* Content */}
-
-                <View
-                    style={{
-                        flex: 1,
-                        marginLeft: 10,
-                        justifyContent: "center",
-                    }}
-                >
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            color: "#555",
-                            lineHeight: 16,
-                            marginBottom: 4,
-                        }}
-                    >
-                        {label}
-                    </Text>
-
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            lineHeight: 18,
-                            color: "#111",
-                            fontWeight: "500",
-                        }}
-                    >
-                        {value}
-                    </Text>
-                </View>
-
-                {/* Arrow */}
-
-                <Ionicons
-                    name={
-                        open
-                            ? "chevron-up"
-                            : "chevron-down"
-                    }
-                    size={19}
-                    color="#111"
-                />
-            </TouchableOpacity>
-
-            {/* Dropdown Options */}
-
-            {open && (
-                <View
-                    style={{
-                        position: "absolute",
-
-                        top: 62,
-                        left: 0,
-                        right: 0,
-
-                        backgroundColor: "#FFFFFF",
-
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: "#E1E4E8",
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 3,
-                        },
-                        shadowOpacity: 0.12,
-                        shadowRadius: 6,
-
-                        elevation: 7,
-
-                        overflow: "hidden",
-                    }}
-                >
-                    {options.map((option) => (
-                        <TouchableOpacity
-                            key={option}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                                onSelect(option);
-                                setOpen(false);
-                            }}
-                            style={{
-                                minHeight: 44,
-                                paddingHorizontal: 16,
-                                justifyContent: "center",
-
-                                borderBottomWidth: 1,
-                                borderBottomColor: "#F1F1F1",
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    color:
-                                        option === value
-                                            ? "#000"
-                                            : "#555",
-
-                                    fontWeight:
-                                        option === value
-                                            ? "700"
-                                            : "400",
-                                }}
-                            >
-                                {option}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
-        </View>
-    );
-};
-
 const AddNewAddress: React.FC<AddAddressProps> = ({
     navigation,
 }) => {
-    const [saveAddressAs, setSaveAddressAs] =
-        useState("");
+    const [saveAddressAs, setSaveAddressAs] = useState("");
     const [title, setTitle] = useState("");
     const [titleOpen, setTitleOpen] = useState(false);
-
-    const [billingName, setBillingName] =
-        useState("");
-
-    const [mobileNumber1, setMobileNumber1] =
-        useState("");
-
-    const [mobileNumber2, setMobileNumber2] =
-        useState("");
-
-    const [buildingType, setBuildingType] =
-        useState("");
-
-    const [geoLocationAttached, setGeoLocationAttached] =
-        useState(false);
-    const [buildingTypeOpen, setBuildingTypeOpen] =
-        useState(false);
+    const [billingName, setBillingName] = useState("");
+    const [mobileNumber1, setMobileNumber1] = useState("");
+    const [mobileNumber2, setMobileNumber2] = useState("");
+    const [phoneCode1, setPhoneCode1] = useState("+94")
+    const [phoneCode2, setPhoneCode2] = useState("+94")
+    const [buildingType, setBuildingType] = useState("");
+    const [buildingNo, setBuildingNo] = useState("")
+    const [streetName, setStreetName] = useState("")
+    const [city, setCity] = useState("")
+    const [apartmentName, setApartmentName] = useState("")
+    const [unitNo, setUnitNo] = useState("")
+    const [floorNo, setFloorNo] = useState("")
+    const [latitude, setLatitude] = useState<number | null>(null);
+    const [longitude, setLongitude] = useState<number | null>(null);
+    const [geoLocationAttached, setGeoLocationAttached] = useState(false);
+    const [buildingTypeOpen, setBuildingTypeOpen] = useState(false);
+    const [cityOpen, setCityOpen] = useState(false)
     const titleOptions = ["Mr", "Mrs", "Ms", "Miss"];
     const buildingTypes = [
         "House",
         "Apartment",
     ];
+    const cityOptions = ["Colombo", "Ampara", "Walpola", "Matale", "Badulla"]
+
+    useFocusEffect(
+        useCallback(() => {
+            const getSelectedLocation = async () => {
+                try {
+                    const latitude = await AsyncStorage.getItem(
+                        "selectedLatitude"
+                    );
+
+                    const longitude = await AsyncStorage.getItem(
+                        "selectedLongitude"
+                    );
+
+                    if (latitude && longitude) {
+                        console.log("Latitude:", latitude);
+                        console.log("Longitude:", longitude);
+
+                        setLatitude(Number(latitude));
+                        setLongitude(Number(longitude));
+                    }
+                } catch (error) {
+                    console.error(
+                        "Error getting location:",
+                        error
+                    );
+                }
+            };
+
+            getSelectedLocation();
+        }, [])
+    );
 
     // HANDLERS
 
@@ -370,12 +120,23 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
 
         setMobileNumber2(cleaned);
     };
+    const handleStreetName = (text: string) => {
+        setStreetName(text)
+    }
+    const handleBuildingNo = (text: string) => {
+        setBuildingNo(text)
+    }
+
+    const handleCity = (text: string) => {
+        setCity(text)
+    }
 
 
     // SAVE BUTTON
 
 
-    const handleSaveAddress = () => {
+    const handleSaveAddress = async () => {
+
         if (!saveAddressAs.trim()) {
             Alert.alert(
                 "Required",
@@ -408,42 +169,106 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
             return;
         }
 
-        if (!geoLocationAttached) {
+        if (!(latitude && longitude)) {
             Alert.alert(
                 "Required",
                 "Please attach your Geo Location.",
             );
             return;
         }
+        try {
+            if (buildingType === "House") {
+                const payload = {
+                    buildingType: buildingType,
+                    saveAs: saveAddressAs,
+                    title: title,
+                    phonecode1: phoneCode1,
+                    phone1: mobileNumber1,
+                    phonecode2: phoneCode2,
+                    phone2: mobileNumber2,
+                    longitude,
+                    latitude,
+                    buildingNo,
+                    houseNo: buildingNo,
+                    streetName,
+                    city,
+                }
+                const req = await customerService.addNewAddress(payload)
 
-        const address = {
-            saveAddressAs,
-            billingName,
-            mobileNumber1,
-            mobileNumber2,
-            buildingType,
-            geoLocationAttached,
-        };
+                if (req.data) {
+                    console.log("address added sucessfully.", req.data.insertId)
+                    await AsyncStorage.multiRemove([
+                        "selectedLatitude",
+                        "selectedLongitude",
+                    ]);
+                    Alert.alert(
+                        "Success",
+                        "Address saved successfully.",
+                        [
+                            {
+                                text: "OK",
+                                onPress: () => navigation.goBack(),
+                            },
+                        ],
+                    );
+                }
+            }
+            else {
+                const payload = {
+                    buildingType: buildingType,
+                    saveAs: saveAddressAs,
+                    title: title,
+                    phonecode1: phoneCode1,
+                    phone1: mobileNumber1,
+                    phonecode2: phoneCode2,
+                    phone2: mobileNumber2,
+                    longitude,
+                    latitude,
+                    buildingNo,
+                    buildingName: apartmentName,
+                    unitNo,
+                    floorNo,
+                    houseNo: buildingNo,
+                    streetName,
+                    city,
+                }
+                const req = await customerService.addNewAddress(payload)
+                if (req.data) {
+                    await AsyncStorage.multiRemove([
+                        "selectedLatitude",
+                        "selectedLongitude",
+                    ]);
+                    Alert.alert(
+                        "Success",
+                        "Address saved successfully.",
+                        [
+                            {
+                                text: "OK",
+                                onPress: () => navigation.goBack(),
+                            },
+                        ],
+                    );
+                }
 
-        console.log(
-            "New Address:",
-            address,
-        );
 
-        Alert.alert(
-            "Success",
-            "Address saved successfully.",
-            [
-                {
-                    text: "OK",
-                    onPress: () => navigation.goBack(),
-                },
-            ],
-        );
+            }
+        }
+        catch (error) {
+            console.log("error from add new address: ", error)
+        }
+
     };
 
+    const setBackgroundColor = () => {
+        if (saveAddressAs &&
+            billingName &&
+            mobileNumber1 &&
+            buildingType ) {
+            return "black"
+        }
+        else { return "#8FA1AA" }
+    }
 
-    // RENDER
 
     return (
         <View
@@ -477,7 +302,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                     contentContainerStyle={{
                         paddingHorizontal: 11,
                         paddingTop: 10,
-                        paddingBottom: 100,
+                        paddingBottom: 220,
                     }}
                 >
 
@@ -497,26 +322,31 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                     <View
                         style={{
                             flexDirection: "row",
-                            gap: 8,
+                            gap: 5
                         }}
                     >
                         {/* TITLE */}
-
-                        <DropdownField
-                            icon="user"
-                            label="Title"
-                            value={title}
-                            open={titleOpen}
-                            setOpen={setTitleOpen}
-                            options={titleOptions}
-                            onSelect={setTitle}
-                        />
+                        <View
+                            style={{
+                                flex: 0.7,
+                            }}
+                        >
+                            <DropdownField
+                                icon="user"
+                                label="Title"
+                                value={title}
+                                open={titleOpen}
+                                setOpen={setTitleOpen}
+                                options={titleOptions}
+                                onSelect={setTitle}
+                            />
+                        </View>
 
                         {/* BILLING NAME */}
 
                         <View
                             style={{
-                                flex: 1.2,
+                                flex: 1,
                             }}
                         >
                             <InputField
@@ -536,7 +366,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         label="Mobile Number - 1 *"
                         value={mobileNumber1}
                         onChangeText={handleMobileNumber1}
-                        placeholder="07XXXXXXXX"
+                        prefix={phoneCode1}
+                        placeholder="7XXXXXXXX"
                         keyboardType="phone-pad"
                         maxLength={10}
                     />
@@ -548,8 +379,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         icon="phone"
                         label="Mobile Number - 2 (Optional)"
                         value={mobileNumber2}
+                        prefix={phoneCode2}
                         onChangeText={handleMobileNumber2}
-                        placeholder="07XXXXXXXX"
+                        placeholder="7XXXXXXXX"
                         keyboardType="phone-pad"
                         maxLength={10}
                     />
@@ -564,16 +396,69 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         options={buildingTypes}
                         onSelect={setBuildingType}
                     />
+                    {/*type == apartment => specific fileds*/}
 
-                    {/* ================================================= */}
+                    {buildingType == "Apartment" && <>
+                        <InputField
+                            icon="road"
+                            label="Apartment / Building No"
+                            value={buildingNo}
+                            onChangeText={setBuildingNo}
+                            placeholder="Type Here"
+                        />
+                        <InputField
+                            icon="road"
+                            label="Apartment / Building Name"
+                            value={apartmentName}
+                            onChangeText={setApartmentName}
+                            placeholder="e.g 14/B"
+                        />
+                        <InputField
+                            icon="road"
+                            label="Flat / Unit Number"
+                            value={unitNo}
+                            onChangeText={setUnitNo}
+                            placeholder="Type Here"
+                        />
+                        <InputField
+                            icon="road"
+                            label="Floor Number"
+                            value={floorNo}
+                            onChangeText={setFloorNo}
+                            placeholder="e.g. 3rd Floor"
+                        /></>}
+
+                    {buildingType === "House" &&
+                        <InputField
+                            icon="house"
+                            label="Building / House No"
+                            value={buildingNo}
+                            onChangeText={handleBuildingNo}
+                            placeholder="e.g 14/B"
+                        />}
+                    <InputField
+                        icon="road"
+                        label="Street Name"
+                        value={streetName}
+                        onChangeText={handleStreetName}
+                        placeholder="Type Here"
+                    />
+                    <DropdownField
+                        icon="mountain-city"
+                        label="Your City"
+                        value={city}
+                        open={cityOpen}
+                        setOpen={setCityOpen}
+                        options={cityOptions}
+                        onSelect={setCity}
+                    />
+
                     {/* GEO LOCATION */}
-                    {/* ================================================= */}
 
                     <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={() => {
-                            // Replace this with your map/location screen
-                            setGeoLocationAttached(true);
+                            navigation.navigate("SetLocation")
                         }}
                         style={{
                             height: 58,
@@ -636,7 +521,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                                     fontWeight: "500",
                                 }}
                             >
-                                {geoLocationAttached
+                                {(latitude && longitude) != null
                                     ? "Attached"
                                     : "Click Here"}
                             </Text>
@@ -678,13 +563,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                             borderRadius: 26,
 
                             backgroundColor:
-                                saveAddressAs &&
-                                    billingName &&
-                                    mobileNumber1 &&
-                                    buildingType &&
-                                    geoLocationAttached
-                                    ? "#000000"
-                                    : "#8FA1AA",
+                               setBackgroundColor(),
 
                             justifyContent: "center",
                             alignItems: "center",
