@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,10 +13,11 @@ import { logoutSuccess } from "@/store/authSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome6, Ionicons } from "@expo/vector-icons";
+import { FontAwesome6 } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
+import customerService from "@/services/customer/customer.service";
 
 type ProfileNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -34,7 +35,26 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
 
   const dispatch = useDispatch();
 
-  const [creditBalance, setCreditBalance] = useState<number>(1200);
+
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchAcccountDetails = async () => {
+      try{
+      const response = await customerService.getAccountDetails()
+      if(response.data) {
+        const {creditBalance} = response.data.data
+        setCreditBalance(Number(creditBalance!))}
+        console.log("acc details fetchihng success: ", response.data.data)
+      }
+      
+      catch(error){
+        console.log("error fetching acc details: ", error)
+      }
+    }
+    fetchAcccountDetails()
+  }, [])
+
 
   const handleLogout = async () => {
     Alert.alert(
@@ -212,7 +232,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
               color: creditBalance < 0 ? "#FF383C" : "#000",
             }}
           >
-            Rs. {creditBalance.toFixed(2)}
+            Rs. {creditBalance?.toFixed(2)!}
           </Text>
 
           {creditBalance < 0 && (<>
