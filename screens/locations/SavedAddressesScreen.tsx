@@ -30,6 +30,7 @@ interface Address {
     address: string;
     phone: string;
     buildingType?: string;
+    raw?: any;
 }
 
 const formatAddress = (item: any) => {
@@ -71,6 +72,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                             address: formatAddress(item),
                             phone: item.phone1 ? `${item.phonecode1 || ''}${item.phone1}` : "No Phone Provided",
                             buildingType: item.buildingType,
+                            raw: item,
                         }));
                         setAddresses(mapped);
                     }
@@ -121,11 +123,12 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
     const handleView = (address: Address) => {
         console.log("View address:", address);
+        navigation.navigate("ViewLocation",{latitude: Number(address.raw!.latitude), longitude:  Number(address.raw!.longitude)})
     };
 
     const handleEdit = (address: Address) => {
         if (!address) return;
-        navigation.navigate("EditAddress");
+        navigation.navigate("EditAddress", { address: address.raw || address });
         console.log("Edit address:", address);
     };
 
