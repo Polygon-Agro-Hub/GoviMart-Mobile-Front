@@ -43,7 +43,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
       try{
       const response = await customerService.getAccountDetails()
       if(response.data) {
-        const {creditBalance} = response.data.data
+        const {creditBalance } = response.data.data
         setCreditBalance(Number(creditBalance!))}
         console.log("acc details fetchihng success: ", response.data.data)
       }
@@ -297,7 +297,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="lock"
             title="Update My Password"
             onPress={() => {
-              // navigation.navigate("UpdatePassword");
+              navigation.navigate("UpdatePassword", {redirectTo:"Profile"});
             }}
           />
 

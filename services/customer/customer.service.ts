@@ -16,13 +16,34 @@ class CustomerService {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.CUSTOMER.ADD_ADDRESS, data, { headers })
     }
-    async updateAddress(data: any) {
+    async updateAddress(addressId: number, data: any) {
         const headers = await getAuthHeader();
-        return apiClient.put(ENDPOINTS.CUSTOMER.UPDATE_ADDRESS, data, { headers })
+        const url = ENDPOINTS.CUSTOMER.UPDATE_ADDRESS.replace(":addressId", String(addressId));
+        return apiClient.put(url, data, { headers })
     }
     async deleteAddress(addressId: number, buildingType: string) {
         const headers = await getAuthHeader();
         return apiClient.delete(`${ENDPOINTS.CUSTOMER.DELETE_ADDRESS}/${addressId}?buildingType=${buildingType}`, { headers })
+    }
+    async updateUserDetails(data: any) {
+        const headers = await getAuthHeader();
+        return apiClient.put(ENDPOINTS.CUSTOMER.UPDATE_USER_DETAILS, data, { headers })
+    }
+    async deleteAccount() {
+        const headers = await getAuthHeader();
+        return apiClient.delete(ENDPOINTS.CUSTOMER.DELETE_ACCOUNT, { headers })
+    }
+    async sendPhoneChangeOtp(data: { phoneCode: string; phoneNumber: string }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.CUSTOMER.SEND_PHONE_CHANGE_OTP, data, { headers })
+    }
+    async verifyPhoneChange(data: any) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.CUSTOMER.VERIFY_PHONE_CHANGE_OTP, data, { headers })
+    }
+    async resendPhoneChangeOtp(data: { signupToken: string }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.CUSTOMER.RESEND_PHONE_CHANGE_OTP, data, { headers })
     }
 }
 export default new CustomerService
