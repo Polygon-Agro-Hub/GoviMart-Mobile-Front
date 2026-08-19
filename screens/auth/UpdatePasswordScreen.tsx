@@ -39,7 +39,7 @@ interface UpdatePasswordProps {
 
 const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
-  const { customerId, name, number } = route.params || {};
+  const { customerId, name, number, redirectTo } = route.params || {};
 
   // Form Fields State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -141,11 +141,18 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
               text: "OK",
               onPress: () => {
                 // Navigate to Customize Packages (ExcludeListAdd screen)
+                if( redirectTo == "Profile"){
+                    navigation.navigate("Profile")
+                }
+                else if(redirectTo == "ExcludeListAdd"){
                 navigation.navigate("ExcludeListAdd", {
                   customerId: customerId || 0,
                   name: name,
                   number: number,
-                });
+                });}
+                else{
+                  navigation.goBack();
+                }
               },
             },
           ],

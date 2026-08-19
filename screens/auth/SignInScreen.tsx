@@ -125,6 +125,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
                   number: phoneNumber,
+                  redirectTo:"ExcludeListAdd"
                 });
               } else if (buyerType === "Retail" && firstTimeUser === 0) {
                 navigation.navigate("ExcludeListAdd", {
