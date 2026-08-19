@@ -11,7 +11,8 @@ export const ENDPOINTS = {
     GET_ACCOUNT_DETAILS: "api/customer/account-details",
     GET_SAVED_ADDRESSES: "api/customer/fetch-saved-addresses",
     ADD_ADDRESS: "api/customer/add-address",
-    UPDATE_ADDRESS: "api/customer/update-address/:addressId"
+    UPDATE_ADDRESS: "api/customer/update-address/:addressId",
+    DELETE_ADDRESS: "api/customer/delete-address"
   }
 
   // BANNER: {
