@@ -14,14 +14,21 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { InputField } from "@/component/common/CustomField";
+import { RouteProp } from "@react-navigation/native";
+import LoadingPage from "@/component/common/LoadingPage";
+import customerService from "@/services/customer/customer.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type EditAddressNavigationProp = StackNavigationProp<
     RootStackParamList,
     "EditAddress"
 >;
 
+type EditAddressRouteProp = RouteProp<RootStackParamList, "EditAddress">;
+
 interface EditAddressProps {
     navigation: EditAddressNavigationProp;
+    route: EditAddressRouteProp;
 }
 
 
@@ -312,27 +319,32 @@ const DropdownField = ({
 
 const EditAddress: React.FC<EditAddressProps> = ({
     navigation,
+    route,
 }) => {
-    const [saveAddressAs, setSaveAddressAs] = useState("Home");
-    const [title, setTitle] = useState("Mr");
-    const [firstName, setFirstName] = useState("Anjula");
-    const [mobileNumber1, setMobileNumber1] =
-        useState("0781122800");
-    const [mobileNumber2, setMobileNumber2] = useState("");
-    const [buildingType, setBuildingType] =
-        useState("House");
-    const [buildingNo, setBuildingNo] =
-        useState("111/2B");
-    const [streetName, setStreetName] =
-        useState("Galle Road");
-    const [city, setCity] = useState("Minuwangoda");
+    const addressParam = route.params?.address || {};
+
+    const [saveAddressAs, setSaveAddressAs] = useState(addressParam.saveAs || "Home");
+    const [title, setTitle] = useState(addressParam.title || "Mr");
+    const [firstName, setFirstName] = useState(addressParam.fullName || "");
+    const [mobileNumber1, setMobileNumber1] = useState(addressParam.phone1 || "");
+    const [mobileNumber2, setMobileNumber2] = useState(addressParam.phone2 || "");
+    const [buildingType, setBuildingType] = useState(addressParam.buildingType || "House");
+    const [buildingNo, setBuildingNo] = useState(addressParam.buildingNo || addressParam.houseNo || "");
+    const [streetName, setStreetName] = useState(addressParam.streetName || "");
+    const [city, setCity] = useState(addressParam.city || "Colombo");
+    const [phoneCode1, setPhoneCode1] = useState(addressParam.phonecode1 || "+94");
+    const [phoneCode2, setPhoneCode2] = useState(addressParam.phonecode2 || "+94");
+    const [buildingName, setBuildingName] = useState(addressParam.buildingName || "");
+    const [unitNo, setUnitNo] = useState(addressParam.unitNo || "");
+    const [floorNo, setFloorNo] = useState(addressParam.floorNo || "");
+    const [latitude, setLatitude] = useState(addressParam.latitude || null);
+    const [longitude, setLongitude] = useState(addressParam.longitude || null);
 
     const [titleOpen, setTitleOpen] = useState(false);
-    const [buildingTypeOpen, setBuildingTypeOpen] =
-        useState(false);
+    const [buildingTypeOpen, setBuildingTypeOpen] = useState(false);
     const [cityOpen, setCityOpen] = useState(false);
-    const [saveAddressOpen, setSaveAddressOpen] =
-        useState(false);
+    const [saveAddressOpen, setSaveAddressOpen] = useState(false);
+    const [updating, setUpdating] = useState(false);
 
     const handleFirstNameChange = (text: string) => {
         setFirstName(text);
@@ -380,7 +392,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
         "Other",
     ];
 
-    const handleUpdateAddress = () => {
+    const handleUpdateAddress = async () => {
         if (!saveAddressAs.trim()) {
             Alert.alert(
                 "Required",
@@ -429,28 +441,63 @@ const EditAddress: React.FC<EditAddressProps> = ({
             return;
         }
 
-        console.log({
-            saveAddressAs,
-            title,
-            firstName,
-            mobileNumber1,
-            mobileNumber2,
-            buildingType,
-            buildingNo,
-            streetName,
-            city,
-        });
+        if (!addressParam.id) {
+            Alert.alert(
+                "Error",
+                "Invalid address. Please try again."
+            );
+            return;
+        }
 
-        Alert.alert(
-            "Success",
-            "Address updated successfully.",
-            [
-                {
-                    text: "OK",
-                    onPress: () => navigation.goBack(),
-                },
-            ]
-        );
+        try {
+            setUpdating(true);
+
+            const payload: any = {
+                buildingType,
+                saveAs: saveAddressAs,
+                title,
+                fullName: firstName,
+                phonecode1: phoneCode1,
+                phone1: mobileNumber1,
+                phonecode2: phoneCode2,
+                phone2: mobileNumber2,
+                buildingNo,
+                houseNo: buildingNo,
+                streetName,
+                city,
+                buildingName: buildingName || "",
+                unitNo: unitNo || "",
+                floorNo: floorNo || "",
+                latitude: latitude || "",
+                longitude: longitude || "",
+            };
+
+            const response = await customerService.updateAddress(
+                addressParam.id,
+                payload
+            );
+
+            if (response.data) {
+                Alert.alert(
+                    "Success",
+                    "Address updated successfully.",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => navigation.goBack(),
+                        },
+                    ]
+                );
+            }
+        } catch (error) {
+            console.log("failed to update address: ", error);
+            Alert.alert(
+                "Error",
+                "Failed to update address. Please try again."
+            );
+        } finally {
+            setUpdating(false);
+        }
     };
 
 
@@ -523,7 +570,8 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         <View style={{ flex: 1.2 }}>
                             <InputField
                                 icon="user"
-                                label="First Name"
+                                label="Billing Name"
+                                placeholder="Type Here"
                                 value={firstName!}
                                 onChangeText={handleFirstNameChange}
                                 isIconThemeDark = {true}
@@ -691,6 +739,24 @@ const EditAddress: React.FC<EditAddressProps> = ({
                     </TouchableOpacity>
                 </ScrollView>
 
+                {updating && (
+                    <View
+                        style={{
+                            position: "absolute",
+                            top: 0,
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: "rgba(255, 255, 255, 0.8)",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            zIndex: 999,
+                        }}
+                    >
+                        <LoadingPage message="Updating Address..." fullScreen={false} />
+                    </View>
+                )}
+
                 {/* BOTTOM BUTTON */}
 
                 <View
@@ -721,6 +787,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                     <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={handleUpdateAddress}
+                        disabled={updating}
                         style={{
                             height: 50,
 
@@ -740,6 +807,8 @@ const EditAddress: React.FC<EditAddressProps> = ({
                             shadowRadius: 5,
 
                             elevation: 4,
+
+                            opacity: updating ? 0.6 : 1,
                         }}
                     >
                         <Text
@@ -749,7 +818,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                                 fontWeight: "800",
                             }}
                         >
-                            Update Address
+                            {updating ? "Updating..." : "Update Address"}
                         </Text>
                     </TouchableOpacity>
                 </View>

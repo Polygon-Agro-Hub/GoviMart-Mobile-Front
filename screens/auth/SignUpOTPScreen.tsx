@@ -20,6 +20,7 @@ import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import axios from "axios";
 import { environment } from "@/environment/environment";
+import customerService from "@/services/customer/customer.service";
 
 type SignUpOTPRouteProp = RouteProp<RootStackParamList, "SignUpOTP">;
 type SignUpOTPNavigationProp = StackNavigationProp<
@@ -40,6 +41,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const method = route.params?.method || "sms";
   const [referenceId, setReferenceId] = useState(route.params?.referenceId || "");
   const [signupToken, setSignupToken] = useState(route.params?.signupToken || "");
+  const flow = route.params?.flow || "signup";
+  const accountDetails = route.params?.accountDetails || null;
   const formattedPhone = `${phoneCode} ${phoneNumber}`;
 
   useEffect(() => {
@@ -142,23 +145,45 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
     setIsVerifying(true);
     try {
-      const response = await axios.post(
-        `${environment.API_BASE_URL}api/auth/verify-signup`,
-        {
+      if (flow === "changePhone") {
+        const response = await customerService.verifyPhoneChange({
           code,
           referenceId,
           signupToken,
-        }
-      );
+          accountDetails,
+        });
 
-      if (response.data && response.data.status) {
-        Alert.alert(
-          "Registration Successful",
-          "Your account has been successfully created. Please sign in.",
-          [{ text: "OK", onPress: () => navigation.navigate("Login") }]
-        );
+        if (response.data && response.data.status) {
+          Alert.alert(
+            "Phone Number Updated",
+            response.data.message || "Your mobile number has been successfully updated.",
+            [{
+              text: "OK",
+              onPress: () => navigation.navigate("MyAccount"),
+            }]
+          );
+        } else {
+          Alert.alert("Verification Failed", response.data?.message || "Failed to verify the code.");
+        }
       } else {
-        Alert.alert("Verification Failed", response.data.message || "Failed to verify the code.");
+        const response = await axios.post(
+          `${environment.API_BASE_URL}api/auth/verify-signup`,
+          {
+            code,
+            referenceId,
+            signupToken,
+          }
+        );
+
+        if (response.data && response.data.status) {
+          Alert.alert(
+            "Registration Successful",
+            "Your account has been successfully created. Please sign in.",
+            [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+          );
+        } else {
+          Alert.alert("Verification Failed", response.data.message || "Failed to verify the code.");
+        }
       }
     } catch (err: any) {
       console.error("Verification error:", err);
@@ -173,24 +198,43 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     setOtp(["", "", "", "", ""]);
     setIsResending(true);
     try {
-      const response = await axios.post(
-        `${environment.API_BASE_URL}api/auth/resend-signup-otp`,
-        {
+      if (flow === "changePhone") {
+        const response = await customerService.resendPhoneChangeOtp({
           signupToken,
-        }
-      );
+        });
 
-      if (response.data && response.data.status) {
-        setReferenceId(response.data.referenceId);
-        setSignupToken(response.data.signupToken);
-        setTimeLeft(method === "email" ? 240 : 76);
-        setIsExpired(false);
-        Alert.alert(
-          "Code Resent",
-          response.data.message || "A new 5-digit verification code has been sent."
-        );
+        if (response.data && response.data.status) {
+          setReferenceId(response.data.referenceId);
+          setSignupToken(response.data.signupToken);
+          setTimeLeft(method === "email" ? 240 : 76);
+          setIsExpired(false);
+          Alert.alert(
+            "Code Resent",
+            response.data.message || "A new 5-digit verification code has been sent."
+          );
+        } else {
+          Alert.alert("Resend Failed", response.data?.message || "Failed to resend the code.");
+        }
       } else {
-        Alert.alert("Resend Failed", response.data.message || "Failed to resend the code.");
+        const response = await axios.post(
+          `${environment.API_BASE_URL}api/auth/resend-signup-otp`,
+          {
+            signupToken,
+          }
+        );
+
+        if (response.data && response.data.status) {
+          setReferenceId(response.data.referenceId);
+          setSignupToken(response.data.signupToken);
+          setTimeLeft(method === "email" ? 240 : 76);
+          setIsExpired(false);
+          Alert.alert(
+            "Code Resent",
+            response.data.message || "A new 5-digit verification code has been sent."
+          );
+        } else {
+          Alert.alert("Resend Failed", response.data.message || "Failed to resend the code.");
+        }
       }
     } catch (err: any) {
       console.error("Resend error:", err);

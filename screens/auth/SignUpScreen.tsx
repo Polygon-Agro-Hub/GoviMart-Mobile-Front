@@ -218,6 +218,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             method: response.data.method,
             referenceId: response.data.referenceId,
             signupToken: response.data.signupToken,
+            flow: "signup"
           });
         } else {
           Alert.alert(
