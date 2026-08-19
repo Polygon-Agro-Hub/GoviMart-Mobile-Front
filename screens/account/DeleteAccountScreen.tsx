@@ -13,6 +13,11 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import LoadingPage from "@/component/common/LoadingPage";
+import customerService from "@/services/customer/customer.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useDispatch } from "react-redux";
+import { logoutSuccess } from "@/store/authSlice";
 
 type DeleteAccountNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -26,13 +31,15 @@ interface DeleteAccountProps {
 const DeleteAccount: React.FC<DeleteAccountProps> = ({
     navigation,
 }) => {
+    const dispatch = useDispatch();
     const [confirmation, setConfirmation] = useState("");
+    const [deleting, setDeleting] = useState(false);
 
     const isDeleteEnabled =
         confirmation.toUpperCase() === "DELETE";
 
     const handleDelete = () => {
-        if (!isDeleteEnabled) {
+        if (!isDeleteEnabled || deleting) {
             return;
         }
 
@@ -47,8 +54,29 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                 {
                     text: "Delete",
                     style: "destructive",
-                    onPress: () => {
-                        console.log("Delete account");
+                    onPress: async () => {
+                        try {
+                            setDeleting(true);
+                            const response = await customerService.deleteAccount();
+
+                            await AsyncStorage.removeItem("userToken");
+                            await AsyncStorage.removeItem("userProfile");
+                            await AsyncStorage.removeItem("userLoginTime");
+
+                            dispatch(logoutSuccess());
+
+                            navigation.reset({
+                                index: 0,
+                                routes: [{ name: "ChooseAuth" }],
+                            });
+                        } catch (error) {
+                            console.log("failed to delete account: ", error);
+                            setDeleting(false);
+                            Alert.alert(
+                                "Error",
+                                "Failed to delete account. Please try again."
+                            );
+                        }
                     },
                 },
             ],
@@ -132,7 +160,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                             textAlign: "center",
                             fontSize: 14,
                             lineHeight: 18,
-                            fontWeight:"400",
+                            fontWeight: "400",
                             color: "#494A65",
                             paddingHorizontal: 8,
                             marginBottom: 18,
@@ -168,7 +196,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                                 fontSize: 14,
                                 fontWeight: "700",
                                 color: "#00000",
-                                marginLeft:10,
+                                marginLeft: 10,
                                 marginBottom: 9,
                             }}
                         >
@@ -340,6 +368,24 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                     </View>
                 </ScrollView>
 
+                {deleting && (
+                    <View
+                        style={{
+                            position: "absolute",
+                            top: 0,
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: "rgba(255, 255, 255, 0.85)",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            zIndex: 999,
+                        }}
+                    >
+                        <LoadingPage message="Deleting Account..." fullScreen={false} />
+                    </View>
+                )}
+
                 {/* Delete Button */}
 
                 <View
@@ -356,7 +402,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                 >
                     <TouchableOpacity
                         activeOpacity={0.85}
-                        disabled={!isDeleteEnabled}
+                        disabled={!isDeleteEnabled || deleting}
                         onPress={handleDelete}
                         style={{
                             height: 52,
@@ -367,7 +413,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                             justifyContent: "center",
                             alignItems: "center",
 
-                            opacity: isDeleteEnabled ? 1 : 0.95,
+                            opacity: (!isDeleteEnabled || deleting) ? 0.6 : 1,
 
                             shadowColor: "#000",
                             shadowOffset: {
@@ -387,7 +433,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                                 letterSpacing: 0.2,
                             }}
                         >
-                            Delete My Account
+                            {deleting ? "Deleting..." : "Delete My Account"}
                         </Text>
                     </TouchableOpacity>
                 </View>

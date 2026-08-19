@@ -40,6 +40,7 @@ import SetLocation from "@/screens/locations/SetLocationScreen";
 import ChoosePickupCentre from "@/screens/locations/ChoosePickupCentreScreen";
 import OrderHistory from "@/screens/order/OrderHistoryScreen";
 import OrderDetails from "@/screens/order/OrderDetailsScreen";
+import ViewLocation from "@/screens/locations/ViewLocation";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -80,6 +81,7 @@ function AppContent() {
             <Stack.Screen name="ChoosePickupCentre" component={ChoosePickupCentre} />
             <Stack.Screen name="OrderHistory" component={OrderHistory} />
             <Stack.Screen name="OrderDetails" component={OrderDetails} />
+            <Stack.Screen name="ViewLocation" component={ViewLocation} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
