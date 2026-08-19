@@ -20,5 +20,9 @@ class CustomerService {
         const headers = await getAuthHeader();
         return apiClient.put(ENDPOINTS.CUSTOMER.UPDATE_ADDRESS, data, { headers })
     }
+    async deleteAddress(addressId: number, buildingType: string) {
+        const headers = await getAuthHeader();
+        return apiClient.delete(`${ENDPOINTS.CUSTOMER.DELETE_ADDRESS}/${addressId}?buildingType=${buildingType}`, { headers })
+    }
 }
 export default new CustomerService

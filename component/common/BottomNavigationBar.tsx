@@ -14,7 +14,7 @@ type BottomScreen =
 
 interface BottomNavigationProps {
     activeScreen: BottomScreen;
-    navigation: Navigation | any
+    navigation: any
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
