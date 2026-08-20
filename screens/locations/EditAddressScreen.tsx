@@ -31,107 +31,7 @@ interface EditAddressProps {
     route: EditAddressRouteProp;
 }
 
-
-// INPUT FIELD
-
-// const InputField = ({
-//     icon,
-//     label,
-//     value,
-//     onChangeText,
-//     keyboardType = "default",
-//     placeholder,
-//     maxLength,
-// }: {
-//     icon: keyof typeof Ionicons.glyphMap | any;
-//     label: string;
-//     value: string;
-//     onChangeText: (text: string) => void;
-//     keyboardType?: "default" | "phone-pad" | "email-address";
-//     placeholder?: string;
-//     maxLength?: number;
-// }) => {
-//     return (
-//         <View
-//             style={{
-//                 height: 58,
-//                 borderWidth: 1,
-//                 borderColor: "#D9DEE5",
-//                 borderRadius: 30,
-
-//                 flexDirection: "row",
-//                 alignItems: "center",
-
-//                 paddingHorizontal: 11,
-
-//                 marginBottom: 12,
-
-//                 backgroundColor: "#FFFFFF",
-//             }}
-//         >
-//             {/* Icon */}
-
-//             <View
-//                 style={{
-//                     width: 36,
-//                     height: 36,
-//                     borderRadius: 18,
-//                     backgroundColor: "#000",
-
-//                     justifyContent: "center",
-//                     alignItems: "center",
-//                 }}
-//             >
-//                 <FontAwesome6
-//                     name={icon}
-//                     solid
-//                     size={17}
-//                     color="#FFFFFF"
-//                 />
-//             </View>
-
-//             {/* Text */}
-
-//             <View
-//                 style={{
-//                     flex: 1,
-//                     marginLeft: 10,
-//                     justifyContent: "center",
-//                 }}
-//             >
-//                 <Text
-//                     style={{
-//                         fontSize: 14,
-//                         color: "#555",
-//                         lineHeight: 14,
-//                         marginBottom: 4,
-//                     }}
-//                 >
-//                     {label}
-//                 </Text>
-
-//                 <TextInput
-//                     value={value}
-//                     onChangeText={onChangeText}
-//                     keyboardType={keyboardType}
-//                     placeholder={placeholder}
-//                     placeholderTextColor="#9CA3AF"
-//                     maxLength={maxLength}
-//                     style={{
-//                         height: 21,
-//                         paddingVertical: 0,
-//                         fontSize: 14,
-//                         color: "#111",
-//                         fontWeight: "500",
-//                     }}
-//                 />
-//             </View>
-//         </View>
-//     );
-// };
-
 // DROPDOWN
-
 const DropdownField = ({
     icon,
     label,
@@ -574,7 +474,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                                 placeholder="Type Here"
                                 value={firstName!}
                                 onChangeText={handleFirstNameChange}
-                                isIconThemeDark = {true}
+                                isIconThemeDark={true}
                             />
                         </View>
                     </View>

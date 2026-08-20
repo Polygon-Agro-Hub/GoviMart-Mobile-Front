@@ -1,158 +1,213 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
-    TouchableOpacity,
     TextInput,
+    TouchableOpacity,
     ScrollView,
-    Image,
     Alert,
+    KeyboardAvoidingView,
     Platform,
+    Image,
+    ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RouteProp } from "@react-navigation/native";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import LoadingPage from "@/component/common/LoadingPage";
+import complaintService from "@/services/complaint/complaint.service";
+import * as ImagePicker from "expo-image-picker";
 
 type ReportComplaintNavigationProp = StackNavigationProp<
     RootStackParamList,
     "ReportComplaint"
 >;
 
+type ReportComplaintRouteProp = RouteProp<RootStackParamList, "ReportComplaint">;
+
 interface ReportComplaintProps {
     navigation: ReportComplaintNavigationProp;
+    route: ReportComplaintRouteProp;
 }
+
+interface ComplaintCategory {
+    id: number;
+    categoryEnglish: string;
+    categorySinhala?: string;
+    categoryTamil?: string;
+}
+
+const MAX_IMAGES = 6;
 
 const ReportComplaint: React.FC<ReportComplaintProps> = ({
     navigation,
 }) => {
-    const [category, setCategory] = useState("");
+    const [categories, setCategories] = useState<ComplaintCategory[]>([]);
     const [categoryOpen, setCategoryOpen] = useState(false);
-    const [description, setDescription] = useState("");
-    const [photos, setPhotos] = useState<string[]>([]);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+        null
+    );
+    const [selectedCategoryName, setSelectedCategoryName] = useState("");
+    const [complain, setComplain] = useState("");
+    const [images, setImages] = useState<
+        { uri: string; name: string; type: string }[]
+    >([]);
+    const [loadingCategories, setLoadingCategories] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
 
-    const categories = [
-        "Product Quality",
-        "Missing Item",
-        "Damaged Product",
-        "Wrong Product",
-        "Delivery Issue",
-        "Payment Issue",
-        "Other",
-    ];
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const response = await complaintService.getComplaintCategories();
+                if (response.data && response.data.status) {
+                    setCategories(response.data.data || []);
+                }
+            } catch (error) {
+                console.log("failed to fetch complaint categories: ", error);
+                Alert.alert("Error", "Failed to load complaint categories.");
+            } finally {
+                setLoadingCategories(false);
+            }
+        };
+        fetchCategories();
+    }, []);
 
-    // =====================================================
-    // PICK PHOTOS
-    // =====================================================
+    const pickImage = async () => {
+        // const remainingPhotos = MAX_IMAGES - images.length;
 
-    const handleAddPhoto = async () => {
-        if (photos.length >= 6) {
-            Alert.alert(
-                "Photo Limit",
-                "You can upload a maximum of 6 photos.",
-            );
-            return;
-        }
 
-        const permission =
+        const { status } =
             await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (!permission.granted) {
+        if (status !== "granted") {
             Alert.alert(
                 "Permission Required",
-                "Please allow photo library access to upload photos.",
+                "Please allow access to your photo library."
             );
             return;
         }
 
-        const remainingPhotos = 6 - photos.length;
-
-        const result =
-            await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ["images"],
-                allowsMultipleSelection: true,
-                selectionLimit: remainingPhotos,
-                quality: 0.8,
-            });
-
-        if (!result.canceled) {
-            const selectedPhotos = result.assets.map(
-                (asset) => asset.uri,
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsMultipleSelection: true,
+            selectionLimit: MAX_IMAGES,
+            aspect: [4, 3],
+            quality: 0.7,
+        });
+        if (images.length + result.assets!.length > MAX_IMAGES) {
+            Alert.alert(
+                "Limit Reached",
+                `You can attach up to ${MAX_IMAGES} images.`
             );
+            return;
+        }
 
-            setPhotos((previous) => [
-                ...previous,
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            const selectedPhotos = result.assets.map(
+                (asset, index) => ({
+                    uri: asset.uri,
+                    name: asset.fileName || `image_${Date.now()}_${index}.jpg`,
+                    type: asset.mimeType || "image/jpeg",
+                }));
+            setImages((prev) => [
+                ...prev,
                 ...selectedPhotos,
             ]);
         }
     };
 
-    // =====================================================
-    // REMOVE PHOTO
-    // =====================================================
-
-    const handleRemovePhoto = (index: number) => {
-        setPhotos((previous) =>
-            previous.filter((_, i) => i !== index),
-        );
+    const removeImage = (index: number) => {
+        setImages((prev) => prev.filter((_, i) => i !== index));
     };
 
-    // =====================================================
-    // SUBMIT
-    // =====================================================
+    const handleSubmit = async () => {
+        if (submitting) return;
 
-    const handleSubmit = () => {
-        if (!category.trim()) {
-            Alert.alert(
-                "Required",
-                "Please select a complaint category.",
-            );
+        if (!selectedCategoryId) {
+            Alert.alert("Required", "Please select a complaint category.");
             return;
         }
 
-        if (!description.trim()) {
-            Alert.alert(
-                "Required",
-                "Please enter a description.",
-            );
+        if (!complain.trim()) {
+            Alert.alert("Required", "Please describe your complaint.");
             return;
         }
 
-        const complaintData = {
-            category,
-            description: description.trim(),
-            photos,
-        };
+        try {
+            setSubmitting(true);
 
-        console.log(
-            "Complaint:",
-            complaintData,
-        );
+            const formData: any = new FormData();
+            formData.append("complaicategoryId", String(selectedCategoryId));
+            formData.append("complain", complain.trim());
 
-        Alert.alert(
-            "Complaint Submitted",
-            "Your complaint has been submitted successfully.",
-            [
-                {
-                    text: "OK",
-                    onPress: () => navigation.navigate("ComplaintHistory"),
-                },
-            ],
-        );
+            images.forEach((img) => {
+                formData.append("images", {
+                    uri: img.uri,
+                    name: img.name,
+                    type: img.type,
+                });
+            });
+
+            const response = await complaintService.createComplaint(formData);
+
+            if (response.data && response.data.status) {
+                Alert.alert(
+                    "Success",
+                    "Your complaint has been submitted successfully.",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () =>
+                                navigation.navigate("ComplaintHistory"),
+                        },
+                    ]
+                );
+            } else {
+                Alert.alert(
+                    "Error",
+                    response.data?.message ||
+                    "Failed to submit complaint. Please try again."
+                );
+            }
+        } catch (error) {
+            console.log("failed to create complaint: ", error);
+            Alert.alert(
+                "Error",
+                "Failed to submit complaint. Please try again."
+            );
+        } finally {
+            setSubmitting(false);
+        }
     };
+
+    if (loadingCategories) {
+        return (
+            <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+                <CustomHeader
+                    title="Report a Complaint"
+                    titleColor="black"
+                    showBackButton={true}
+                    navigation={navigation}
+                />
+                <View
+                    style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <LoadingPage message="Loading..." fullScreen={false} />
+                </View>
+            </View>
+        );
+    }
 
     return (
-        <View
-            style={{
-                flex: 1,
-                backgroundColor: "#FFFFFF",
-            }}
+        <KeyboardAvoidingView
+            style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-            {/* ================================================= */}
-            {/* HEADER */}
-            {/* ================================================= */}
-
             <CustomHeader
                 title="Report a Complaint"
                 titleColor="black"
@@ -164,9 +219,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{
-                    paddingHorizontal: 13,
-                    paddingTop: 8,
-                    paddingBottom: 100,
+                    paddingHorizontal: 16,
+                    paddingTop: 12,
+                    paddingBottom: 120,
                 }}
             >
                 {/* ================================================= */}
@@ -261,7 +316,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                                 fontWeight: "500",
                             }}
                         >
-                            {category || "Select Category"}
+                            {selectedCategoryName || "Select Category"}
                         </Text>
 
                         <Ionicons
@@ -309,13 +364,17 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                                 overflow: "hidden",
                             }}
                         >
-                            {categories.map((item) => (
+                            {categories.map((cat) => (
                                 <TouchableOpacity
-                                    key={item}
+                                    key={cat.id}
                                     activeOpacity={0.7}
                                     onPress={() => {
-                                        setCategory(item);
+                                        setSelectedCategoryId(cat.id);
+                                        setSelectedCategoryName(
+                                            cat.categoryEnglish
+                                        );
                                         setCategoryOpen(false);
+
                                     }}
                                     style={{
                                         minHeight: 43,
@@ -331,12 +390,14 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                                             fontSize: 14,
                                             color: "#111",
                                             fontWeight:
-                                                category === item
+                                                cat.id ===
+                                                    selectedCategoryId
+
                                                     ? "500"
                                                     : "400",
                                         }}
                                     >
-                                        {item}
+                                        {cat.categoryEnglish}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
@@ -372,8 +433,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                     }}
                 >
                     <TextInput
-                        value={description}
-                        onChangeText={setDescription}
+                        value={complain}
+                        onChangeText={setComplain}
                         multiline
                         textAlignVertical="top"
                         placeholder="Please describe your issue in detail.."
@@ -418,93 +479,100 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                 {/* ================================================= */}
 
                 <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
+
+                    showsVerticalScrollIndicator={false}
                     contentContainerStyle={{
-                        paddingRight: 5,
+                        paddingBottom: 10,
                     }}
                 >
-                    {photos.length < 6 && (
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={handleAddPhoto}
-                            style={{
-                                width: 100,
-                                height: 100,
-                                borderRadius: 15,
-                                borderWidth: 1,
-                                borderStyle: "dashed",
-                                borderColor: "#D7DCE1",
-                                backgroundColor: "#F9FAFB",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                marginRight: 7,
-                            }}
-                        >
-                            <FontAwesome6
-                                name="camera"
-                                solid
-                                size={27}
-                                color="#000"
-                            />
-
-                            <Text
-                                style={{
-                                    fontSize: 12,
-                                    color: "#747990",
-                                    marginTop: 5,
-                                }}
-                            >
-                                Add Photo
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {photos.map((uri, index) => (
-                        <View
-                            key={`${uri}-${index}`}
-                            style={{
-                                width: 100,
-                                height: 100,
-                                borderRadius: 15,
-                                overflow: "hidden",
-                                marginRight: 7,
-                            }}
-                        >
-                            <Image
-                                source={{ uri }}
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                }}
-                                resizeMode="cover"
-                            />
-
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 10
+                        }}
+                    >
+                        {images.length < 6 && (
                             <TouchableOpacity
-                                onPress={() =>
-                                    handleRemovePhoto(index)
-                                }
+                                activeOpacity={0.8}
+                                onPress={pickImage}
                                 style={{
-                                    position: "absolute",
-                                    top: 5,
-                                    right: 5,
-                                    width: 22,
-                                    height: 22,
-                                    borderRadius: 11,
-                                    backgroundColor:
-                                        "rgba(0,0,0,0.65)",
+                                    width: 110,
+                                    height: 110,
+                                    borderRadius: 15,
+                                    borderWidth: 1,
+                                    borderStyle: "dashed",
+                                    borderColor: "#D7DCE1",
+                                    backgroundColor: "#F9FAFB",
                                     justifyContent: "center",
                                     alignItems: "center",
                                 }}
                             >
-                                <Ionicons
-                                    name="close"
-                                    size={14}
-                                    color="#FFF"
+                                <FontAwesome6
+                                    name="camera"
+                                    solid
+                                    size={27}
+                                    color="#000"
                                 />
+
+                                <Text
+                                    style={{
+                                        fontSize: 12,
+                                        color: "#747990",
+                                        marginTop: 5,
+                                    }}
+                                >
+                                    Add Photo
+                                </Text>
                             </TouchableOpacity>
-                        </View>
-                    ))}
+                        )}
+
+                        {images.map((img, index) => (
+                            <View
+                                key={index}
+                                style={{
+                                    width: 110,
+                                    height: 110,
+                                    borderRadius: 15,
+                                    overflow: "hidden",
+                                    // marginRight: 7,
+                                }}
+                            >
+                                <Image
+                                    source={{ uri: img.uri }}
+                                    style={{
+                                        width: "100%",
+                                        height: "100%",
+                                    }}
+                                    resizeMode="cover"
+                                />
+
+                                <TouchableOpacity
+                                    onPress={() =>
+                                        removeImage(index)
+                                    }
+                                    style={{
+                                        position: "absolute",
+                                        top: 5,
+                                        right: 5,
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 11,
+                                        backgroundColor:
+                                            "rgba(0,0,0,0.65)",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <Ionicons
+                                        name="close"
+                                        size={14}
+                                        color="#FFF"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </View>
                 </ScrollView>
             </ScrollView>
 
@@ -563,19 +631,24 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                         elevation: 4,
                     }}
                 >
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
+                    {submitting ? (
+                        <ActivityIndicator color="white" size="small" />
+                    ) : (
+                        <Text
+                            style={{
+                                color: "#FFFFFF",
 
-                            fontSize: 14,
-                            fontWeight: "800",
-                        }}
-                    >
-                        Submit Complaint
-                    </Text>
+                                fontSize: 14,
+                                fontWeight: "800",
+                            }}
+                        >
+                            Submit Complaint
+                        </Text>
+                    )}
+
                 </TouchableOpacity>
             </View>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 
