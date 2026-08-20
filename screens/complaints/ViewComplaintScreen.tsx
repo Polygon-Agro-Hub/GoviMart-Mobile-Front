@@ -1,51 +1,159 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
     ScrollView,
     Image,
+    ActivityIndicator,
+    Alert,
     TouchableOpacity,
     StyleSheet,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RouteProp } from "@react-navigation/native";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import LoadingPage from "@/component/common/LoadingPage";
+import complaintService from "@/services/complaint/complaint.service";
 
 type ViewComplaintNavigationProp = StackNavigationProp<
     RootStackParamList,
     "ViewComplaint"
 >;
 
+type ViewComplaintRouteProp = RouteProp<RootStackParamList, "ViewComplaint">;
+
 interface ViewComplaintProps {
     navigation: ViewComplaintNavigationProp;
+    route: ViewComplaintRouteProp;
 }
 
-interface ComplaintData {
+interface ComplaintDetail {
     id: number;
-    category: string;
-    description: string;
-    sentAt: string;
-    photos: string[];
+    refId: string;
+    categoryEnglish?: string;
+    complain: string;
+    reply?: string | null;
+    status: string;
+    replyBy?: string | null;
+    replyTime?: string | null;
+    createdAt: string;
+    images?: { id: number; image: string }[];
 }
+
+const STATUS_COLORS: Record<string, string> = {
+    Pending: "#FF9518",
+    Resolved: "#16A34A",
+    Rejected: "#DC2626",
+};
+
+const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+
+    return date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    });
+};
+
+const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    });
+};
 
 const ViewComplaint: React.FC<ViewComplaintProps> = ({
     navigation,
+    route,
 }) => {
-    const complaint: ComplaintData = {
-        id: 123,
-        category: "Payment Failed",
-        description:
-            "I was charged for the order but the payment failed and the order was not placed. Please check and refund my money.",
-        sentAt: "At 11:00AM on July 2, 2026",
-        photos: [
-            "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=300",
-            "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=301",
-            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300",
-            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300",
-            "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300",
-        ],
-    };
+    const complaintId = route.params?.id;
+    const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!complaintId) {
+            setLoading(false);
+            setComplaint(null);
+            return;
+        }
+
+        const fetchDetails = async () => {
+            try {
+                setLoading(true);
+                const response = await complaintService.getComplaintDetails(
+                    Number(complaintId)
+                );
+                if (response.data && response.data.status && response.data.data) {
+                    setComplaint(response.data.data);
+                    console.log("fetched Conplaint details: ", response.data.data)
+                } else {
+                    setComplaint(null);
+                }
+            } catch (error) {
+                console.log("failed to fetch complaint details: ", error);
+                Alert.alert("Error", "Failed to load complaint details.");
+                setComplaint(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDetails();
+    }, [complaintId]);
+
+    if (loading) {
+        return (
+            <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+                <CustomHeader
+                    title="View Complaint"
+                    titleColor="black"
+                    showBackButton={true}
+                    navigation={navigation}
+                />
+                <View
+                    style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <LoadingPage message="Loading..." fullScreen={false} />
+                </View>
+            </View>
+        );
+    }
+
+    if (!complaint) {
+        return (
+            <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+                <CustomHeader
+                    title="View Complaint"
+                    titleColor="black"
+                    showBackButton={true}
+                    navigation={navigation}
+                />
+                <View
+                    style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        paddingHorizontal: 30,
+                    }}
+                >
+                    <Text style={{ fontSize: 14, color: "#555" }}>
+                        Complaint not found.
+                    </Text>
+                </View>
+            </View>
+        );
+    }
+
+    const statusColor = STATUS_COLORS[complaint.status] || "#6B7280";
 
     return (
         <View style={styles.container}>
@@ -73,11 +181,11 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                         </Text>
 
                         <Text style={styles.value}>
-                            {complaint.id}
+                            {complaint.refId}
                         </Text>
 
                         <Text style={styles.date}>
-                            Sent : {complaint.sentAt}
+                            Sent : {formatDate(complaint.createdAt)}
                         </Text>
                     </View>
 
@@ -89,7 +197,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                         </Text>
 
                         <Text style={styles.value}>
-                            {complaint.category}
+                            {complaint.categoryEnglish || "Complaint"}
                         </Text>
                     </View>
 
@@ -101,7 +209,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                         </Text>
 
                         <Text style={styles.description}>
-                            {complaint.description}
+                            {complaint.complain}
                         </Text>
                     </View>
 
@@ -117,7 +225,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                         ]}
                     >
                         <Text style={styles.label}>
-                            Photos ({complaint.photos.length})
+                            Photos ({complaint.images?.length})
                         </Text>
 
                         <ScrollView
@@ -127,7 +235,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                                 paddingTop: 8,
                             }}
                         >
-                            {complaint.photos.map(
+                            {complaint.images?.map(
                                 (photo, index) => (
                                     <TouchableOpacity
                                         key={`${photo}-${index}`}
@@ -135,7 +243,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                                         style={styles.photoWrapper}
                                     >
                                         <Image
-                                            source={{ uri: photo }}
+                                            source={{ uri: photo.image }}
                                             style={styles.photo}
                                             resizeMode="cover"
                                         />
@@ -184,7 +292,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                             </Text>
 
                             <Text style={styles.timelineDate}>
-                                At 10:00AM on July 2, 2026.
+                                At {formatTime(complaint.createdAt)} on {formatDate(complaint.createdAt)}
                             </Text>
                         </View>
                     </View>
@@ -215,10 +323,6 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                             <Text style={styles.timelineDescription}>
                                 We are reviewing your complaint.
                             </Text>
-
-                            <Text style={styles.timelineDate}>
-                                At 13:00AM on July 2, 2026.
-                            </Text>
                         </View>
                     </View>
 
@@ -236,28 +340,24 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({
                             style={[
                                 styles.timelineIcon,
                                 {
-                                    backgroundColor: "#F0F1F4",
+                                    backgroundColor: complaint.status == "Closed" ? "#000000" : "#F0F1F4",
                                 },
                             ]}
                         >
                             <Ionicons
                                 name="chatbubble-ellipses"
                                 size={16}
-                                color="#000000"
+                                color={complaint.status == "Closed" ? "#F0F1F4" : "#000000"}
                             />
                         </View>
 
                         <View style={styles.timelineContent}>
                             <Text style={styles.timelineTitle}>
-                                Pending Resolution
+                                {complaint.status == "Closed" ? "Complaint Closed." : "Pending Resolution"}
                             </Text>
 
                             <Text style={styles.timelineDescription}>
-                                Our team will get back to you soon.
-                            </Text>
-
-                            <Text style={styles.timelineDate}>
-                                At 12:00AM on July 2, 2026.
+                                {complaint.status == "Closed" ? "Please view the reply from our team for more details." : "Our team will get back to you soon."}Our team will get back to you soon.
                             </Text>
                         </View>
                     </View>

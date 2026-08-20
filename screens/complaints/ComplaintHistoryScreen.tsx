@@ -1,16 +1,23 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
     View,
     Text,
     TouchableOpacity,
     ScrollView,
-    StyleSheet,
+    Alert,
+    Image,
     Modal,
+    StyleSheet,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { useFocusEffect } from "@react-navigation/native";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import LoadingPage from "@/component/common/LoadingPage";
+import complaintService from "@/services/complaint/complaint.service";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 type ComplaintHistoryNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -23,178 +30,256 @@ interface ComplaintHistoryProps {
 
 interface Complaint {
     id: number;
-    category: string;
-    sentAt: string;
-    status: "Waiting" | "Closed";
-    canReply: boolean;
+    refId: string;
+    categoryEnglish?: string;
+    complain: string;
+    reply?: string | null;
+    status: string;
+    replyBy?: string | null;
+    replyTime?: string | null;
+    createdAt: string;
+    images?: { id: number; image: string }[];
+    userId: number
 }
+
+const STATUS_COLORS: Record<string, string> = {
+    Pending: "#FF9518",
+    Resolved: "#16A34A",
+    Rejected: "#DC2626",
+};
 
 const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({
     navigation,
 }) => {
-    const complaints: Complaint[] = [
-        {
-            id: 1,
-            category: "Finance Issue",
-            sentAt: "At 11:00AM on July 2, 2026",
-            status: "Waiting",
-            canReply: false,
-        },
-        {
-            id: 2,
-            category: "Finance Issue",
-            sentAt: "At 11:00AM on July 2, 2026",
-            status: "Closed",
-            canReply: true,
-        },
-    ];
-    const complaint = {
-        id: 123,
-        userName: "Nalin Dies",
-        category: "Payment Failed",
-        description:
-            "I was charged for the order but the payment failed and the order was not placed. Please check and refund my money.",
-        sentAt: "At 11:00AM on July 2, 2026",
+    const user = useSelector(
+        (state: RootState) => state.auth.userProfile
+    );
 
-        reply: {
-            message: ` 
-We understand that pricing is influenced
-by market trends and company policies,
-but we urge [Company Name] to
-consider reviewing the current pricing
-structure. Offering more equitable
-compensation would not only support
-farmers' livelihoods but also ensure the
-continued supply of top-quality crops to
-your company. An investment in fair
-pricing today would cultivate loyalty
-and sustainability that benefits both
-sides for the long term.`,
-            date: "2024/09/08",
-        },
-    };
+    const [complaints, setComplaints] = useState<Complaint[]>([]);
     const [modalVisible, setModalVisible] = useState<boolean>(false);
+    const [selectedComplaint, setSelectedComplaint] = useState<Complaint>()
 
-    const handleViewComplaint = (complaint: Complaint) => {
-        console.log("View Complaint:", complaint);
+    const [loading, setLoading] = useState(true);
 
-        navigation.navigate("ViewComplaint");
+    useFocusEffect(
+        useCallback(() => {
+            const fetchComplaints = async () => {
+                try {
+                    setLoading(true);
+                    const response =
+                        await complaintService.getMyComplaints();
+                    if (
+                        response.data &&
+                        response.data.status &&
+                        response.data.data
+                    ) {
+                        setComplaints(response.data.data);
+                    } else {
+                        setComplaints([]);
+                    }
+                } catch (error) {
+                    console.log("failed to fetch complaints: ", error);
+                    setComplaints([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchComplaints();
+        }, [])
+    );
+
+    const handleView = (id: number) => {
+        navigation.navigate("ViewComplaint", { id });
     };
-
     const handleReply = (complaint: Complaint) => {
+        setSelectedComplaint(complaint)
         console.log("Reply:", complaint);
         setModalVisible(true);
-        // navigation.navigate("ComplaintReply", {
-        //   complaintId: complaint.id,
-        // });
+    };
+
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+
+        return date.toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+        });
     };
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
+        <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
             <CustomHeader
-                title="Complaint History"
+                title="My Complaints"
                 titleColor="black"
                 showBackButton={true}
                 navigation={navigation}
             />
 
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
-            >
-                {complaints.map((complaint) => (
-                    <View
-                        key={complaint.id}
-                        style={styles.complaintCard}
+            {loading ? (
+                <View
+                    style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <LoadingPage message="Loading Complaints..." fullScreen={false} />
+                </View>
+            ) : complaints.length === 0 ? (
+                <View
+                    style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        paddingHorizontal: 30,
+                    }}
+                >
+                    <FontAwesome6
+                        name="clipboard-list"
+                        size={46}
+                        color="#C7CDD4"
+                    />
+                    <Text
+                        style={{
+                            marginTop: 14,
+                            fontSize: 15,
+                            fontWeight: "700",
+                            color: "#111",
+                        }}
                     >
-                        {/* Complaint ID */}
-                        <Text style={styles.complaintId}>
-                            #[Complaint ID]
+                        No complaints yet
+                    </Text>
+                    <Text
+                        style={{
+                            marginTop: 6,
+                            fontSize: 13,
+                            color: "#7B7F91",
+                            textAlign: "center",
+                        }}
+                    >
+                        You haven't submitted any complaints. Tap below to
+                        report an issue.
+                    </Text>
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => navigation.navigate("ReportComplaint")}
+                        style={{
+                            marginTop: 18,
+                            backgroundColor: "#000",
+                            paddingVertical: 12,
+                            paddingHorizontal: 24,
+                            borderRadius: 26,
+                        }}
+                    >
+                        <Text
+                            style={{
+                                color: "#FFFFFF",
+                                fontSize: 14,
+                                fontWeight: "700",
+                            }}
+                        >
+                            Report a Complaint
                         </Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.scrollContent}
+                >
+                    {complaints.map((complaint) => (
+                        <View
+                            key={complaint.id}
+                            style={styles.complaintCard}
+                        >
+                            {/* Complaint ID */}
+                            <Text style={styles.complaintId}>
+                                #{complaint.refId}
+                            </Text>
 
-                        {/* Category */}
-                        <Text style={styles.category}>
-                            {complaint.category}
-                        </Text>
+                            {/* Category */}
+                            <Text style={styles.category}>
+                                {complaint.categoryEnglish}
+                            </Text>
 
-                        {/* Sent Date */}
-                        <Text style={styles.sentDate}>
-                            Sent : {complaint.sentAt}
-                        </Text>
+                            {/* Sent Date */}
+                            <Text style={styles.sentDate}>
+                                Sent : {formatDate(complaint.createdAt)}
+                            </Text>
 
-                        {/* Bottom Actions */}
-                        <View style={styles.actionsRow}>
-                            {/* Status */}
-                            {complaint.status === "Waiting" ? (
-                                <View style={styles.waitingBadge}>
-                                    <Ionicons
-                                        name="hourglass"
-                                        size={12}
-                                        color="#111"
-                                    />
+                            {/* Bottom Actions */}
+                            <View style={styles.actionsRow}>
+                                {/* Status */}
+                                {!(complaint.status == "Closed") ? (
+                                    <View style={styles.waitingBadge}>
+                                        <Ionicons
+                                            name="hourglass"
+                                            size={12}
+                                            color="#111"
+                                        />
 
-                                    <Text style={styles.waitingText}>
-                                        Waiting..
+                                        <Text style={styles.waitingText}>
+                                            Waiting..
+                                        </Text>
+                                    </View>
+                                ) : (
+                                    <View style={{ ...styles.closedBadge, marginRight: 6 }}>
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={13}
+                                            color="#000"
+                                        />
+
+                                        <Text style={styles.closedText}>
+                                            Closed
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* View Complaint */}
+                                <TouchableOpacity
+                                    activeOpacity={0.8}
+                                    onPress={() =>
+                                        handleView(complaint.id)
+                                    }
+                                    style={styles.blackButton}
+                                >
+                                    <Text style={styles.buttonText}>
+                                        View Complaint
                                     </Text>
-                                </View>
-                            ) : (
-                                <View style={styles.closedBadge}>
-                                    <Ionicons
-                                        name="checkmark-circle"
-                                        size={13}
-                                        color="#000"
-                                    />
+                                </TouchableOpacity>
 
-                                    <Text style={styles.closedText}>
-                                        Closed
-                                    </Text>
-                                </View>
-                            )}
-
-                            {/* View Complaint */}
-                            <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={() =>
-                                    handleViewComplaint(complaint)
-                                }
-                                style={styles.blackButton}
-                            >
-                                <Text style={styles.buttonText}>
-                                    View Complaint
-                                </Text>
-                            </TouchableOpacity>
-
-                            {/* View Reply */}
-                            <TouchableOpacity
-                                activeOpacity={
-                                    complaint.canReply ? 0.8 : 1
-                                }
-                                disabled={!complaint.canReply}
-                                onPress={() =>
-                                    handleReply(complaint)
-                                }
-                                style={[
-                                    styles.replyButton,
-                                    !complaint.canReply &&
-                                    styles.disabledReplyButton,
-                                ]}
-                            >
-                                <Text
+                                {/* View Reply */}
+                                <TouchableOpacity
+                                    activeOpacity={
+                                        complaint.reply ? 0.8 : 1
+                                    }
+                                    disabled={!complaint.reply}
+                                    onPress={() =>
+                                        handleReply(complaint)
+                                    }
                                     style={[
-                                        styles.replyText,
-                                        !complaint.canReply &&
-                                        styles.disabledReplyText,
+                                        styles.replyButton,
+                                        !complaint.reply &&
+                                        styles.disabledReplyButton,
                                     ]}
                                 >
-                                    View Reply
-                                </Text>
-                            </TouchableOpacity>
+                                    <Text
+                                        style={[
+                                            styles.replyText,
+                                            !complaint.reply &&
+                                            styles.disabledReplyText,
+                                        ]}
+                                    >
+                                        View Reply
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
-                ))}
-            </ScrollView>
-            {/* REPLY MODAL */}
+                    ))}
+                </ScrollView>
+            )}
 
             <Modal
                 visible={modalVisible}
@@ -233,7 +318,7 @@ sides for the long term.`,
                         }}
                     >
                         <Text style={styles.replyTextInModal}>
-                            Dear {complaint.userName},
+                            Dear {user?.firstName}{" "}{user?.lastName},
                         </Text>
 
                         <Text style={styles.replyTextInModal}>
@@ -241,8 +326,8 @@ sides for the long term.`,
                             complaint has been resolved.
                         </Text>
 
-                        <Text style={styles.replyTextInModal}>
-                            {complaint.reply.message}
+                        <Text style={{fontWeight: 600,...styles.replyTextInModal}}>
+                            {selectedComplaint?.reply!}
                         </Text>
 
                         <Text style={styles.replyTextInModal}>
@@ -255,15 +340,15 @@ sides for the long term.`,
                         <Text style={styles.replyTextInModal}>
                             Sincerely,{"\n"}
                             Polygon Customer Support Team{"\n"}
-                            {complaint.reply.date}
+                            {formatDate(selectedComplaint?.replyTime!)}
                         </Text>
                     </ScrollView>
                 </View>
             </Modal>
+
         </View>
     );
 };
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -351,7 +436,7 @@ const styles = StyleSheet.create({
 
         borderRadius: 5,
 
-        backgroundColor: "#DFFFF0",
+        backgroundColor: "#E3FFEA",
 
         flexDirection: "row",
         alignItems: "center",
@@ -488,5 +573,4 @@ const styles = StyleSheet.create({
         fontWeight: "500",
     },
 });
-
 export default ComplaintHistory;

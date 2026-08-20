@@ -1,8 +1,8 @@
 export const ENDPOINTS = {
-  //  Edit this with your real enpoint names
+  //  Edit this with your enpoint urls
   AUTH: {
-    SIGN_UP: "api/auth/signup", //this is real
-    LOGIN: "api/auth/login", //this is real
+    SIGN_UP: "api/auth/signup",
+    LOGIN: "api/auth/login",
     LOGOUT: "/api/auth/logout",
     UPDATE_PASSWORD: "api/auth/update-password",
   },
@@ -18,9 +18,13 @@ export const ENDPOINTS = {
     SEND_PHONE_CHANGE_OTP: "api/customer/send-phone-change-otp",
     VERIFY_PHONE_CHANGE_OTP: "api/customer/verify-phone-change-otp",
     RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
+  },
+
+  COMPLAINT: {
+    GET_CATEGORIES: "api/complaint/categories",
+    CREATE_COMPLAINT: "api/complaint/create-complain",
+    GET_MY_COMPLAINTS: "api/complaint/my-complaints",
+    GET_COMPLAINT_DETAILS: "api/complaint/complain",
   }
 
-  // BANNER: {
-  //   GET_ALL: "/api/banner/list",
-  // },
 };
