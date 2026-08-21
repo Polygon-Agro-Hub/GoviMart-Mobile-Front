@@ -20,8 +20,8 @@ type Props = StackScreenProps<RootStackParamList, "ViewProduct">;
 const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
     const { product } = route.params;
 
-    const [unit, setUnit] = useState<"kg" | "g">("g");
-    const [quantity, setQuantity] = useState(500);
+    const [unit, setUnit] = useState((product?.unitType!).toLowerCase());
+    const [quantity, setQuantity] = useState(Number(product?.startValue));
     const [toastVisible, setToastVisible] = useState(false);
     const [toastMessage, setToastMessage] = useState("");
 
@@ -143,7 +143,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
                 <View className="items-center mt-16 mb-16">
                     <Image
-                        source={{ uri: product.image }}
+                        source={{ uri: product!.image }}
                         resizeMode="contain"
                         style={{
                             width: "100%",
@@ -180,7 +180,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
                             fontWeight: 500
                         }}
                     >
-                        {product.name}
+                        {product?.displayName}
                     </Text>
 
                     {/* Unit Switch */}
@@ -269,7 +269,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
                             color: "#000",
                         }}
                     >
-                        {product.price}
+                        {"Rs. "+product?.normalPrice}
                     </Text>
 
                     {/* Savings */}
@@ -322,10 +322,10 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
             />
 
             <ProductBottomCart
-                minimumValue={500}
+                minimumValue={Number(product?.startValue!)}
                 step={100}
                 quantity={quantity}
-                unit={unit}
+                unit={unit as any}
                 onIncrease={increaseQty}
                 onDecrease={decreaseQty}
                 onAddToCart={onAddToCart}

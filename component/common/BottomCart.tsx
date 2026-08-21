@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 interface Props {
     minimumValue: number;
     quantity: number;
-    unit?: "g" | "kg";
+    unit?: any;
     step?: number
     onIncrease: () => void;
     onDecrease: () => void;
@@ -190,8 +190,8 @@ const ProductBottomCart: React.FC<Props> = ({
                     color: "#000",
                 }}
             >
-               {quantity}
-    {unit ? ` ${unit}` : ""}
+                {quantity}
+                {unit ? ` ${unit}` : ""}
             </Text>
 
             {/* Plus */}
