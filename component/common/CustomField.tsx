@@ -46,14 +46,14 @@ export const InputField = ({
     return (
         <View
             style={{
-                marginBottom: error ? -1 : 12,
+                marginBottom: error ? 6 : 12,
             }}
         >
             <View
                 style={{
                     height: 67,
-                    borderWidth: 1,
-                    borderColor: "#D9DEE5",
+                    borderWidth: error ? 1.5 : 1,
+                    borderColor: error ? "#FF3B30" : "#D9DEE5",
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
@@ -190,9 +190,7 @@ export const DropdownField = ({
                 style={{
                     height: 67,
                     borderWidth: highlighted ? 2 : 1,
-                    borderColor: highlighted
-                        ? "#0788FF"
-                        : "#D9DEE5",
+                    borderColor: error ? "#FF3B30" : (highlighted ? "#0788FF" : "#D9DEE5"),
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
