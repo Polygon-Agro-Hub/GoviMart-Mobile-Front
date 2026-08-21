@@ -1,3 +1,5 @@
+import { ProductType } from "@/screens/home/HomeScreen";
+
 export type RootStackParamList = {
   Splash: undefined;
   ChooseAuth: undefined;
@@ -20,14 +22,7 @@ export type RootStackParamList = {
   ExcludeListSummery: { customerId: number; name?: string; title?: string; phoneNumber?: string; cusId?: string; id?: number } | undefined;
   Profile: undefined;
   ViewProduct: {
-    product: {
-      id: number;
-      name: string;
-      image: string;
-      price: string;
-      weight: string;
-      isNew?: boolean;
-    };
+    product: ProductType | undefined;
   };
   ViewPackage: {
     itemPackage: {

@@ -25,6 +25,13 @@ export const ENDPOINTS = {
     CREATE_COMPLAINT: "api/complaint/create-complain",
     GET_MY_COMPLAINTS: "api/complaint/my-complaints",
     GET_COMPLAINT_DETAILS: "api/complaint/complain",
+  },
+
+  PRODUCT: {
+    GET_ALL_PRODUCTS: "api/product/all-product",
+    GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
+    GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
+    GET_BANNERS: "api/product/slides"
   }
 
 };
