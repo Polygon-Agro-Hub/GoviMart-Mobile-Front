@@ -50,6 +50,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     const [titleError, setTitleError] = useState("");
     const [mobileNumberError, setMobileNumberError] = useState("");
     const [emailError, setEmailError] = useState("");
+    const [companyMobileError, setCompanyMobileError] = useState("");
     const [updating, setUpdating] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [originalMobileCode, setOriginalMobileCode] = useState("");
@@ -112,18 +113,37 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         if (updating) return;
 
         setFirstNameError("");
+        setLastNameError("");
         setMobileNumberError("");
         setEmailError("");
+        setTitleError("");
+        setCodeError("");
+        setCompanyMobileError("");
 
         let hasError = false;
 
+        if (!title.trim()) {
+            setTitleError("Title is required");
+            hasError = true;
+        }
+
         if (!firstName.trim()) {
-            setFirstNameError("Required");
+            setFirstNameError("First name is required");
+            hasError = true;
+        }
+
+        if (!lastName.trim()) {
+            setLastNameError("Last name is required");
+            hasError = true;
+        }
+
+        if (!mobileCode.trim()) {
+            setCodeError("Code is required");
             hasError = true;
         }
 
         if (!mobileNumber.trim()) {
-            setMobileNumberError("Required");
+            setMobileNumberError("Mobile number is required");
             hasError = true;
         } else if (!/^\d{9}$/.test(mobileNumber)) {
             setMobileNumberError("Invalid phone number");
@@ -131,12 +151,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         }
 
         if (!email.trim()) {
-            setEmailError("Required");
+            setEmailError("Email is required");
             hasError = true;
         } else if (
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
         ) {
             setEmailError("Invalid email address");
+            hasError = true;
+        }
+
+        if (compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile)) {
+            setCompanyMobileError("Invalid phone number");
             hasError = true;
         }
 
@@ -610,13 +635,13 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 value={compnayMobile}
                                 onChangeText={(text) => {
                                     setCompanyMobile(text)
-                                    // if (mobileNumberError) {
-                                    //     setMobileNumberError("")
-                                    // }
+                                    if (companyMobileError) {
+                                        setCompanyMobileError("")
+                                    }
                                 }}
                                 keyboardType="phone-pad"
                                 maxLength={9}
-                            // error={mobileNumberError}
+                                error={companyMobileError}
                             />
                         </View>
                     </View>

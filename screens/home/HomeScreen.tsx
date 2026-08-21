@@ -19,6 +19,7 @@ import axios from "axios";
 import { environment } from "@/environment/environment";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
+import productService from "@/services/product/product.service";
 
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -37,18 +38,46 @@ interface Category {
   active: boolean;
 }
 
-interface Product {
+// interface Product {
+//   id: number;
+//   displayName: string;
+//   weight: string;
+//   subTotal: string;
+//   image: string;
+//   isNew: boolean;
+//   type?: string
+// }
+
+export interface PackageType {
+  type: "package";
   id: number;
-  name: string;
-  weight: string;
-  price: string;
+  displayName: string;
+  subTotal: string;
   image: string;
-  isNew: boolean;
 }
+
+export interface ProductType {
+  type: "product";
+  id: number
+  category: string
+  changeby?: string
+  cropNameEnglish: string
+  cropNameSinhala?: string
+  cropNameTamil?: string
+  discountedPrice?: number
+  tags?: string
+  unitType?: string
+  displayName: string
+  image: string
+  normalPrice: string
+  startValue?: string
+  varietyNameEnglish?: string
+}
+type ShopItem = ProductType | PackageType;
 
 const CATEGORIES: Category[] = [
   {
-    id: "packages",
+    id: "Packages",
     name: "Packages",
     image: "https://cdn-icons-png.flaticon.com/512/2956/2956820.png",
     circleBg: "#FFE4E6",
@@ -57,7 +86,7 @@ const CATEGORIES: Category[] = [
     active: false
   },
   {
-    id: "veggies",
+    id: "Vegetables",
     name: "Veggies",
     image: "https://cdn-icons-png.flaticon.com/512/2909/2909848.png",
     circleBg: "#FFFFFF",
@@ -66,7 +95,7 @@ const CATEGORIES: Category[] = [
     active: true
   },
   {
-    id: "fruits",
+    id: "Fruits",
     name: "Fruits",
     image: "https://cdn-icons-png.flaticon.com/512/415/415733.png",
     circleBg: "#FFE4E6",
@@ -75,7 +104,7 @@ const CATEGORIES: Category[] = [
     active: false
   },
   {
-    id: "cereal",
+    id: "Cereals",
     name: "Cereal",
     image: "https://cdn-icons-png.flaticon.com/512/2674/2674486.png",
     circleBg: "#FEF9C3",
@@ -84,7 +113,7 @@ const CATEGORIES: Category[] = [
     active: false
   },
   {
-    id: "spices",
+    id: "Spices",
     name: "Spices",
     image: "https://cdn-icons-png.flaticon.com/512/8106/8106571.png",
     circleBg: "#FFEDD5",
@@ -94,69 +123,17 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-const PRODUCTS: Product[] = [
-  {
-    id: 1,
-    name: "Cantaloup",
-    weight: "500 g",
-    price: "Rs. 800.00",
-    image: "https://cdn-icons-png.flaticon.com/512/4156/4156827.png",
-    isNew: true,
-  },
-  {
-    id: 2,
-    name: "Green Cornet",
-    weight: "500 g",
-    price: "Rs. 1,200.00",
-    image: "https://cdn-icons-png.flaticon.com/512/1135/1135534.png",
-    isNew: false,
-  },
-  {
-    id: 3,
-    name: "Lettuce",
-    weight: "100 g",
-    price: "Rs. 800.00",
-    image: "https://cdn-icons-png.flaticon.com/512/1143/1143828.png",
-    isNew: false,
-  },
-  {
-    id: 4,
-    name: "Luffa",
-    weight: "500 g",
-    price: "Rs. 1,200.00",
-    image: "https://cdn-icons-png.flaticon.com/512/3014/3014502.png",
-    isNew: false,
-  },
-  {
-    id: 5,
-    name: "Okra",
-    weight: "100 g",
-    price: "Rs. 800.00",
-    image: "https://cdn-icons-png.flaticon.com/512/4056/4056860.png",
-    isNew: false,
-  },
-  {
-    id: 6,
-    name: "Pumpkin",
-    weight: "500 g",
-    price: "Rs. 1,200.00",
-    image: "https://cdn-icons-png.flaticon.com/512/1041/1041355.png",
-    isNew: false,
-  },
-];
-
-
-
 const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [bannerSlides, setBannerSlides] = useState<{ id: number; image: string; details: string }[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("veggies");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("Packages");
   const [activeProducts, setActiveProducts] = useState<{ [id: number]: { quantity: number; unit: "g" | "kg" } }>({});
+  const [shopItems, setShopItems] = useState<ShopItem[]>([])
 
-  // Fetch dynamic banners from backend
+  // initial fetching
   useEffect(() => {
     const fetchBanners = async () => {
       try {
-        const response = await axios.get(`${environment.API_BASE_URL}api/home/slides`);
+        const response = await productService.getBanners();
         if (response.data && response.data.status) {
           const fetchedSlides = response.data.slides || [];
           // Filter for Retail marketplace slides
@@ -165,28 +142,67 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         }
       } catch (err) {
         console.error("Failed to load banner slides from backend:", err);
-        // Fallback to static mock banners
-        setBannerSlides([
-          {
-            id: 114,
-            image: "https://pub-79ee03a4a23e4dbbb70c7d799d3cb786.r2.dev/marketplacebanners/image/279a2be8-3a9b-4b4c-ad2b-883e757b1fe6.png",
-            details: "New Banner -She",
-          },
-          {
-            id: 109,
-            image: "https://pub-79ee03a4a23e4dbbb70c7d799d3cb786.r2.dev/marketplacebanners/image/d58e9ee6-085b-4c2d-b5b7-5fd0a0dff956.png",
-            details: "Banner2",
-          },
-          {
-            id: 108,
-            image: "https://pub-79ee03a4a23e4dbbb70c7d799d3cb786.r2.dev/marketplacebanners/image/e9f2e884-c168-41e4-9d6c-9205028f5560.png",
-            details: "demo",
-          },
-        ]);
       }
     };
+
+    const fetchPackages = async () => {
+      try {
+        const response = await productService.getAllPackages();
+        if (response.data && response.data.status) {
+          const packages = response.data?.product.map((item: any) => ({
+            ...item,
+            type: "package",
+          }));
+          setShopItems(packages)
+        }
+
+      }
+      catch (error) {
+        console.error("Failed to load packages from backend:", error);
+      }
+    }
     fetchBanners();
+    fetchPackages();
   }, []);
+
+  const getSelectedCategoryProducts = async (categoryId: string) => {
+    try {
+      setSelectedCategoryId(categoryId)
+      // Packages
+      if (categoryId === "Packages") {
+        const response = await productService.getAllPackages();
+
+        if (response.data?.status) {
+          const packages = response.data?.product.map((item: any) => ({
+            ...item,
+            type: "package",
+          }));
+
+          setShopItems(packages);
+        }
+
+        return;
+      }
+
+      // Normal product category
+      const response =
+        await productService.getProductsByCategory(categoryId);
+
+      if (response.data?.status) {
+        const products = response.data.products.map(
+          (item: any) => ({
+            ...item,
+            type: "product",
+          })
+        );
+
+        setShopItems(products);
+      }
+    }
+    catch (error) {
+      console.error("Failed to load selected category products from backend:", error);
+    }
+  }
 
 
   const samplePackage = {// Using this package as a sample for navigation
@@ -206,9 +222,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   }
 
   // Chunk products into rows of 2 for grid layout
-  const productRows: Product[][] = [];
-  for (let i = 0; i < PRODUCTS.length; i += 2) {
-    productRows.push(PRODUCTS.slice(i, i + 2));
+  const itemRows: ShopItem[][] = [];
+  for (let i = 0; i < shopItems?.length; i += 2) {
+    itemRows.push(shopItems?.slice(i, i + 2));
   }
 
   const handleProfileNavigation = () => {
@@ -276,7 +292,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 <TouchableOpacity
                   key={category.id}
                   activeOpacity={0.9}
-                  onPress={() => setSelectedCategoryId(category.id)}
+                  onPress={() => getSelectedCategoryProducts(category.id)}
                   style={{
                     width: 76,
                     height: 98,
@@ -330,7 +346,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
         {/* Product Grid */}
         <View className="mt-8 px-4">
-          {productRows.map((row, rowIndex) => (
+          {itemRows.map((row, rowIndex) => (
             <View key={rowIndex} className="flex-row justify-between mb-4">
               {row.map((product) => {
                 const cartItem = activeProducts[product.id];
@@ -394,14 +410,24 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     key={product.id}
                     activeOpacity={0.9}
                     className="flex-1"
-                    onPress={() =>
-                      navigation.navigate("ViewProduct", {
-                        product,
-                      })
+                    onPress={() => {
+                      if (product.type === "package") {
+                        // navigation.navigate("ViewPackage", {
+                        //   itemPackage: product,
+                        // });
+                        console.log("Need to navigate view package.")
+                      } else {
+                        navigation.navigate("ViewProduct", {
+                          product: product,
+                        });
+                      }
+                    }
+
+
                     }
                   >
                     <View
-                      key={product.id}
+                      key={product.id!}
                       className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
                       style={{
                         borderTopLeftRadius: 100,
@@ -413,7 +439,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       {/* Circular Product Image Container */}
                       <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
                         <Image
-                          source={{ uri: product.image }}
+                          source={{ uri: product?.image! }}
                           className="w-12 h-12"
                           resizeMode="contain"
                         />
@@ -421,17 +447,22 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
                       {/* Product Details */}
                       <Text className="text-black font-bold text-sm mt-1 text-center" numberOfLines={1}>
-                        {product.name}
+                        {product?.displayName!}
                       </Text>
 
                       {!cartItem ? (
                         <>
-                          <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                            {product.weight}
-                          </Text>
-                          <Text className="text-black font-extrabold text-sm mt-1 text-center">
-                            {product.price}
-                          </Text>
+                          {product.type == "product" &&<Text className="   text-gray-400 text-[11px] mt-0.5 text-center">
+                            {product.type == "product" && product?.startValue! +" " +(product.unitType!).toLowerCase()}
+                          </Text>}
+                          {product.type == "package" &&<Text className="text-black font-extrabold text-sm mt-1 text-center">
+                            {product.type == "package" && "Rs. " + product?.subTotal!}
+                          </Text>}
+                          {product.type == "product" &&
+                            <Text className="text-black font-extrabold text-sm mt-1 text-center">
+                              {product.type == "product" && "Rs. " + product.normalPrice}
+                            </Text>
+                          }
 
                           {/* Add Button */}
                           <TouchableOpacity
@@ -517,7 +548,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
                           {/* Price */}
                           <Text className="text-black font-extrabold text-sm mt-3 text-center">
-                            {product.price}
+                            {product.type == "package" ? "Rs. " + product?.subTotal! : "Rs. " + product?.normalPrice!}
                           </Text>
                         </>
                       )}
