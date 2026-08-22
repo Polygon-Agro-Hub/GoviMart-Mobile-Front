@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -123,16 +124,134 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+const { width } = Dimensions.get("window");
+
+const BannerSkeleton = () => {
+  const pulseAnim = React.useRef(new Animated.Value(0.3)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
+  return (
+    <View className="mx-6 mt-4">
+      <Animated.View
+        style={{
+          width: width - 48,
+          height: 160,
+          borderRadius: 20,
+          backgroundColor: "#E5E5EA",
+          opacity: pulseAnim,
+        }}
+      />
+      <View className="flex-row justify-center items-center gap-1.5 mt-3">
+        {[1, 2, 3].map((_, index) => (
+          <View
+            key={index}
+            className="w-1.5 h-1.5 rounded-full bg-[#E5E5EA]"
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const ProductCardSkeleton = ({ pulseAnim }: { pulseAnim: Animated.Value }) => {
+  return (
+    <View
+      className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
+      style={{
+        borderTopLeftRadius: 100,
+        borderTopRightRadius: 100,
+        borderBottomLeftRadius: 18,
+        borderBottomRightRadius: 18,
+      }}
+    >
+      <Animated.View
+        style={{ opacity: pulseAnim }}
+        className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100"
+      >
+        <View className="w-12 h-12 rounded-full bg-[#E5E5EA]" />
+      </Animated.View>
+
+      <Animated.View
+        style={{ opacity: pulseAnim }}
+        className="w-20 h-3.5 bg-[#E5E5EA] rounded mt-3"
+      />
+
+      <Animated.View
+        style={{ opacity: pulseAnim }}
+        className="w-14 h-3 bg-[#E5E5EA] rounded mt-2"
+      />
+
+      <Animated.View
+        style={{ opacity: pulseAnim }}
+        className="w-10 h-10 rounded-full bg-[#E5E5EA] absolute -bottom-5"
+      />
+    </View>
+  );
+};
+
+const ProductGridSkeleton = () => {
+  const pulseAnim = React.useRef(new Animated.Value(0.3)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
+  return (
+    <View className="mt-8 px-4">
+      <View className="flex-row justify-between mb-4">
+        <ProductCardSkeleton pulseAnim={pulseAnim} />
+        <ProductCardSkeleton pulseAnim={pulseAnim} />
+      </View>
+      <View className="flex-row justify-between mb-4">
+        <ProductCardSkeleton pulseAnim={pulseAnim} />
+        <ProductCardSkeleton pulseAnim={pulseAnim} />
+      </View>
+    </View>
+  );
+};
+
 const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [bannerSlides, setBannerSlides] = useState<{ id: number; image: string; details: string }[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("Packages");
   const [activeProducts, setActiveProducts] = useState<{ [id: number]: { quantity: number; unit: "g" | "kg" } }>({});
-  const [shopItems, setShopItems] = useState<ShopItem[]>([])
+  const [shopItems, setShopItems] = useState<ShopItem[]>([]);
+  const [loadingBanners, setLoadingBanners] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   // initial fetching
   useEffect(() => {
     const fetchBanners = async () => {
       try {
+        setLoadingBanners(true);
         const response = await productService.getBanners();
         if (response.data && response.data.status) {
           const fetchedSlides = response.data.slides || [];
@@ -142,32 +261,36 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         }
       } catch (err) {
         console.error("Failed to load banner slides from backend:", err);
+      } finally {
+        setLoadingBanners(false);
       }
     };
 
     const fetchPackages = async () => {
       try {
+        setLoadingProducts(true);
         const response = await productService.getAllPackages();
         if (response.data && response.data.status) {
           const packages = response.data?.product.map((item: any) => ({
             ...item,
             type: "package",
           }));
-          setShopItems(packages)
+          setShopItems(packages);
         }
-
-      }
-      catch (error) {
+      } catch (error) {
         console.error("Failed to load packages from backend:", error);
+      } finally {
+        setLoadingProducts(false);
       }
-    }
+    };
     fetchBanners();
     fetchPackages();
   }, []);
 
   const getSelectedCategoryProducts = async (categoryId: string) => {
     try {
-      setSelectedCategoryId(categoryId)
+      setSelectedCategoryId(categoryId);
+      setLoadingProducts(true);
       // Packages
       if (categoryId === "Packages") {
         const response = await productService.getAllPackages();
@@ -180,7 +303,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
           setShopItems(packages);
         }
-
+        setLoadingProducts(false);
         return;
       }
 
@@ -198,28 +321,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
         setShopItems(products);
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error("Failed to load selected category products from backend:", error);
+    } finally {
+      setLoadingProducts(false);
     }
-  }
+  };
 
-
-  const samplePackage = {// Using this package as a sample for navigation
-    id: 1,
-    name: "Veggie Pack",
-    image:
-      "https://cdn-icons-png.flaticon.com/512/1135/1135534.png",
-    price: 1200,
-    packageItems: [
-      { itemName: "Herbs", quantity: 10 },
-      { itemName: "Up Country Fruits", quantity: 4 },
-      { itemName: "Up Country Vegetables", quantity: 10 },
-      { itemName: "Low Country Fruits", quantity: 2 },
-      { itemName: "Low Country Vegetables", quantity: 3 },
-      { itemName: "Yams", quantity: 2 },
-    ],
-  }
 
   // Chunk products into rows of 2 for grid layout
   const itemRows: ShopItem[][] = [];
@@ -229,12 +337,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleProfileNavigation = () => {
     navigation.navigate("Profile");
-  };
-
-  const handleViewPackageNavigation = () => {
-    navigation.navigate("ViewPackage", {
-      itemPackage: samplePackage,
-    });
   };
 
   const handleMyCartNavigation = () => {
@@ -254,7 +356,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         <HomeHeader onPressProfile={handleProfileNavigation} />
 
         {/* Dynamic Image Slides (Banners) */}
-        <HomeBannerSlider bannerSlides={bannerSlides} />
+        {loadingBanners ? (
+          <BannerSkeleton />
+        ) : (
+          <HomeBannerSlider bannerSlides={bannerSlides} />
+        )}
 
         {/* Search Bar */}
         <View
@@ -345,8 +451,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         </View>
 
         {/* Product Grid */}
-        <View className="mt-8 px-4">
-          {itemRows.map((row, rowIndex) => (
+        {loadingProducts ? (
+          <ProductGridSkeleton />
+        ) : (
+          <View className="mt-8 px-4">
+            {itemRows.map((row, rowIndex) => (
             <View key={rowIndex} className="flex-row justify-between mb-4">
               {row.map((product) => {
                 const cartItem = activeProducts[product.id];
@@ -412,19 +521,18 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     className="flex-1"
                     onPress={() => {
                       if (product.type === "package") {
-                        // navigation.navigate("ViewPackage", {
-                        //   itemPackage: product,
-                        // });
-                        console.log("Need to navigate view package.")
+                        navigation.navigate("ViewPackage", {
+                          packageId: product.id,
+                          packageName: product.displayName,
+                          image: product.image,
+                          price: parseFloat(product.subTotal),
+                        });
                       } else {
                         navigation.navigate("ViewProduct", {
                           product: product,
                         });
                       }
-                    }
-
-
-                    }
+                    }}
                   >
                     <View
                       key={product.id!}
@@ -558,7 +666,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
               })}
             </View>
           ))}
-        </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Floating Bottom Navigation Bar */}

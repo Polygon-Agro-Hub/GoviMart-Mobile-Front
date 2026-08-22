@@ -25,17 +25,11 @@ export type RootStackParamList = {
     product: ProductType | undefined;
   };
   ViewPackage: {
-    itemPackage: {
-      id: number;
-      name: string;
-      image: string;
-      price: number;
-      packageItems: {
-        itemName: string;
-        quantity: number;
-      }[];
-    };
-  }
+    packageId: number;
+    packageName: string;
+    image: string;
+    price: number;
+  };
   MyCart: undefined;
   PackageConfirmation: undefined;
   SavedAddresses: undefined;

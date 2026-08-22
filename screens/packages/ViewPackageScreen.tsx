@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
@@ -7,6 +7,8 @@ import {
     SafeAreaView,
     StatusBar,
     ScrollView,
+    ActivityIndicator,
+    Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -15,12 +17,16 @@ import BottomCart from "@/component/common/BottomCart";
 
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
+import productService from "@/services/product/product.service";
 
 
 type Props = StackScreenProps<RootStackParamList, "ViewPackage">;
 
 const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
-    const { itemPackage } = route.params;
+    const { packageId, packageName, image, price } = route.params;
+
+    const [packageItems, setPackageItems] = useState<{ itemName: string; quantity: number }[]>([]);
+    const [loading, setLoading] = useState(true);
 
     const [unit, setUnit] = useState<"kg" | "g">("g");
     const [quantity, setQuantity] = useState(1);
@@ -28,6 +34,28 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     const [toastMessage, setToastMessage] = useState("");
 
     const [viewCartVisible, setViewCartVisible] = useState(false);
+
+    useEffect(() => {
+        const fetchDetails = async () => {
+            try {
+                setLoading(true);
+                const response = await productService.getPackageDetails(packageId);
+                if (response.data && response.data.status) {
+                    const items = response.data.packageItems.map((item: any) => ({
+                        itemName: item.displayName || item.itemName || "",
+                        quantity: item.quantity,
+                    }));
+                    setPackageItems(items);
+                }
+            } catch (error) {
+                console.error("failed to fetch package details: ", error);
+                Alert.alert("Error", "Failed to load package details.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDetails();
+    }, [packageId]);
 
     const increaseQty = () => {
         setQuantity((prev) => prev + 1);
@@ -73,10 +101,18 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
     // let samplePackages  = packages[1]
 
-    const totalItems = itemPackage.packageItems.reduce(
+    const totalItems = packageItems.reduce(
         (total, item) => total + item.quantity,
         0
     );
+
+    if (loading) {
+        return (
+            <SafeAreaView className="flex-1 bg-[#FCEFD9] items-center justify-center">
+                <ActivityIndicator size="large" color="#000" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <View className="flex-1 bg-[#FCEFD9]">
@@ -112,7 +148,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
 
                 <View className="items-center mt-10 mb-10">
                     <Image
-                        source={{ uri: itemPackage.image }}
+                        source={{ uri: image }}
                         resizeMode="contain"
                         style={{
                             width: "100%",
@@ -153,7 +189,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                             marginBottom: 10,
                         }}
                     >
-                        {itemPackage.name}
+                        {packageName}
                     </Text>
 
                     {/* Price */}
@@ -165,7 +201,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                             marginBottom: 6,
                         }}
                     >
-                        {itemPackage.price.toLocaleString("en-US", {
+                        {price.toLocaleString("en-US", {
                             style: "currency",
                             currency: "LKR",
                         })}
@@ -194,7 +230,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                      
 
                     {/* Package Items */}
-                    {itemPackage.packageItems.map((item, index) => (
+                    {packageItems.map((item, index) => (
                         <View
                             key={index}
                             style={{
@@ -204,7 +240,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 paddingVertical: 14,
                                 paddingHorizontal: 15,
                                 borderBottomWidth:
-                                    index === itemPackage.packageItems.length - 1 ? 0 : 1,
+                                    index === packageItems.length - 1 ? 0 : 1,
                                 borderBottomColor: "#E5E7EB",
                             }}
                         >
