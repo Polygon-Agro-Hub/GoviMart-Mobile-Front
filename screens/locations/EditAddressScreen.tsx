@@ -13,7 +13,7 @@ import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
-import { InputField } from "@/component/common/CustomField";
+import { InputField, DropdownField } from "@/component/common/CustomField";
 import { RouteProp } from "@react-navigation/native";
 import LoadingPage from "@/component/common/LoadingPage";
 import customerService from "@/services/customer/customer.service";
@@ -30,192 +30,6 @@ interface EditAddressProps {
     navigation: EditAddressNavigationProp;
     route: EditAddressRouteProp;
 }
-
-// DROPDOWN
-const DropdownField = ({
-    icon,
-    label,
-    value,
-    open,
-    setOpen,
-    options,
-    onSelect,
-    highlighted = false,
-}: {
-    icon: keyof typeof Ionicons.glyphMap | any;
-    label: string;
-    value: string;
-    open: boolean;
-    setOpen: (value: boolean) => void;
-    options: string[];
-    onSelect: (value: string) => void;
-    highlighted?: boolean;
-}) => {
-    return (
-        <View
-            style={{
-                marginBottom: 12,
-                zIndex: open ? 100 : 1,
-            }}
-        >
-            <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setOpen(!open)}
-                style={{
-                    height: 58,
-
-                    borderWidth: highlighted ? 2 : 1,
-                    borderColor: highlighted
-                        ? "#0788FF"
-                        : "#D9DEE5",
-
-                    borderRadius: 30,
-
-                    flexDirection: "row",
-                    alignItems: "center",
-
-                    paddingHorizontal: 11,
-
-                    backgroundColor: "#FFFFFF",
-                }}
-            >
-                {/* Icon */}
-
-                <View
-                    style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-
-                        backgroundColor: "#000",
-
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <FontAwesome6
-                        name={icon}
-                        solid
-                        size={17}
-                        color="#FFFFFF"
-                    />
-                </View>
-
-                {/* Content */}
-
-                <View
-                    style={{
-                        flex: 1,
-                        marginLeft: 10,
-                        justifyContent: "center",
-                    }}
-                >
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            color: "#555",
-                            lineHeight: 16,
-                            marginBottom: 4,
-                        }}
-                    >
-                        {label}
-                    </Text>
-
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            lineHeight: 18,
-                            color: "#111",
-                            fontWeight: "500",
-                        }}
-                    >
-                        {value}
-                    </Text>
-                </View>
-
-                {/* Arrow */}
-
-                <Ionicons
-                    name={
-                        open
-                            ? "chevron-up"
-                            : "chevron-down"
-                    }
-                    size={19}
-                    color="#111"
-                />
-            </TouchableOpacity>
-
-            {/* Dropdown Options */}
-
-            {open && (
-                <View
-                    style={{
-                        position: "absolute",
-
-                        top: 62,
-                        left: 0,
-                        right: 0,
-
-                        backgroundColor: "#FFFFFF",
-
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: "#E1E4E8",
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 3,
-                        },
-                        shadowOpacity: 0.12,
-                        shadowRadius: 6,
-
-                        elevation: 7,
-
-                        overflow: "hidden",
-                    }}
-                >
-                    {options.map((option) => (
-                        <TouchableOpacity
-                            key={option}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                                onSelect(option);
-                                setOpen(false);
-                            }}
-                            style={{
-                                minHeight: 44,
-                                paddingHorizontal: 16,
-                                justifyContent: "center",
-
-                                borderBottomWidth: 1,
-                                borderBottomColor: "#F1F1F1",
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    color:
-                                        option === value
-                                            ? "#000"
-                                            : "#555",
-
-                                    fontWeight:
-                                        option === value
-                                            ? "700"
-                                            : "400",
-                                }}
-                            >
-                                {option}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
-        </View>
-    );
-};
 
 const EditAddress: React.FC<EditAddressProps> = ({
     navigation,
@@ -246,28 +60,69 @@ const EditAddress: React.FC<EditAddressProps> = ({
     const [saveAddressOpen, setSaveAddressOpen] = useState(false);
     const [updating, setUpdating] = useState(false);
 
+    const [saveAddressAsError, setSaveAddressAsError] = useState("");
+    const [titleError, setTitleError] = useState("");
+    const [firstNameError, setFirstNameError] = useState("");
+    const [mobileNumber1Error, setMobileNumber1Error] = useState("");
+    const [mobileNumber2Error, setMobileNumber2Error] = useState("");
+    const [buildingTypeError, setBuildingTypeError] = useState("");
+    const [buildingNoError, setBuildingNoError] = useState("");
+    const [streetNameError, setStreetNameError] = useState("");
+    const [cityError, setCityError] = useState("");
+
+    const handleSaveAddressAsChange = (value: string) => {
+        setSaveAddressAs(value);
+        if (saveAddressAsError) setSaveAddressAsError("");
+    };
+
+    const handleTitleChange = (value: string) => {
+        setTitle(value);
+        if (titleError) setTitleError("");
+    };
+
     const handleFirstNameChange = (text: string) => {
-        setFirstName(text);
+        // Alphabetic characters and spaces only
+        const cleaned = text.replace(
+            /[^A-Za-z ]/g,
+            "",
+        );
+        setFirstName(cleaned);
+        if (firstNameError) setFirstNameError("");
     };
 
     const handleMobileNumber1Change = (text: string) => {
         // Allow numbers only
         const cleanedText = text.replace(/[^0-9]/g, "");
         setMobileNumber1(cleanedText);
+        if (mobileNumber1Error) setMobileNumber1Error("");
     };
 
     const handleMobileNumber2Change = (text: string) => {
         // Allow numbers only
         const cleanedText = text.replace(/[^0-9]/g, "");
         setMobileNumber2(cleanedText);
+        if (mobileNumber2Error) setMobileNumber2Error("");
+    };
+
+    const handleBuildingTypeChange = (value: string) => {
+        setBuildingType(value);
+        if (buildingTypeError) setBuildingTypeError("");
+        setBuildingNoError("");
     };
 
     const handleBuildingNoChange = (text: string) => {
         setBuildingNo(text);
+        if (buildingNoError) setBuildingNoError("");
     };
 
     const handleStreetNameChange = (text: string) => {
         setStreetName(text);
+        if (streetNameError) setStreetNameError("");
+    };
+
+    const handleCityChange = (value: string) => {
+        setCity(value);
+        if (cityError) setCityError("");
     };
 
     const titleOptions = ["Mr", "Mrs", "Ms", "Miss"];
@@ -293,52 +148,64 @@ const EditAddress: React.FC<EditAddressProps> = ({
     ];
 
     const handleUpdateAddress = async () => {
+        setSaveAddressAsError("");
+        setTitleError("");
+        setFirstNameError("");
+        setMobileNumber1Error("");
+        setMobileNumber2Error("");
+        setBuildingTypeError("");
+        setBuildingNoError("");
+        setStreetNameError("");
+        setCityError("");
+
+        let hasError = false;
+
         if (!saveAddressAs.trim()) {
-            Alert.alert(
-                "Required",
-                "Save Address As is required."
-            );
-            return;
+            setSaveAddressAsError("Save Address As is required.");
+            hasError = true;
+        }
+
+        if (!title.trim()) {
+            setTitleError("Title is required.");
+            hasError = true;
         }
 
         if (!firstName.trim()) {
-            Alert.alert(
-                "Required",
-                "First Name is required."
-            );
-            return;
+            setFirstNameError("Billing Name is required.");
+            hasError = true;
         }
 
         if (!mobileNumber1.trim()) {
-            Alert.alert(
-                "Required",
-                "Mobile Number 1 is required."
-            );
-            return;
+            setMobileNumber1Error("Mobile Number 1 is required.");
+            hasError = true;
+        } else if (!/^\d{9}$/.test(mobileNumber1)) {
+            setMobileNumber1Error("Invalid phone number. Must be 9 digits.");
+            hasError = true;
+        }
+
+        if (mobileNumber2.trim() && !/^\d{9}$/.test(mobileNumber2)) {
+            setMobileNumber2Error("Invalid phone number. Must be 9 digits.");
+            hasError = true;
+        }
+
+        if (!buildingType.trim()) {
+            setBuildingTypeError("Building Type is required.");
+            hasError = true;
         }
 
         if (!buildingNo.trim()) {
-            Alert.alert(
-                "Required",
-                "Building / House No is required."
-            );
-            return;
+            setBuildingNoError("Building / House No is required.");
+            hasError = true;
         }
 
         if (!streetName.trim()) {
-            Alert.alert(
-                "Required",
-                "Street Name is required."
-            );
-            return;
+            setStreetNameError("Street Name is required.");
+            hasError = true;
         }
 
         if (!city.trim()) {
-            Alert.alert(
-                "Required",
-                "Your City is required."
-            );
-            return;
+            setCityError("Your City is required.");
+            hasError = true;
         }
 
         if (!addressParam.id) {
@@ -346,6 +213,10 @@ const EditAddress: React.FC<EditAddressProps> = ({
                 "Error",
                 "Invalid address. Please try again."
             );
+            return;
+        }
+
+        if (hasError) {
             return;
         }
 
@@ -443,7 +314,8 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         open={saveAddressOpen}
                         setOpen={setSaveAddressOpen}
                         options={saveAddressOptions}
-                        onSelect={setSaveAddressAs}
+                        onSelect={handleSaveAddressAsChange}
+                        error={saveAddressAsError}
                     />
 
                     {/* TITLE + FIRST NAME */}
@@ -463,7 +335,8 @@ const EditAddress: React.FC<EditAddressProps> = ({
                                 open={titleOpen}
                                 setOpen={setTitleOpen}
                                 options={titleOptions}
-                                onSelect={setTitle}
+                                onSelect={handleTitleChange}
+                                error={titleError}
                             />
                         </View>
 
@@ -475,6 +348,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                                 value={firstName!}
                                 onChangeText={handleFirstNameChange}
                                 isIconThemeDark={true}
+                                error={firstNameError}
                             />
                         </View>
                     </View>
@@ -488,6 +362,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         onChangeText={handleMobileNumber1Change}
                         keyboardType="phone-pad"
                         maxLength={10}
+                        error={mobileNumber1Error}
                     />
 
                     {/* MOBILE 2 */}
@@ -500,6 +375,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         keyboardType="phone-pad"
                         placeholder="07XXXXXXXX"
                         maxLength={10}
+                        error={mobileNumber2Error}
                     />
 
                     {/* BUILDING TYPE */}
@@ -511,17 +387,55 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         open={buildingTypeOpen}
                         setOpen={setBuildingTypeOpen}
                         options={buildingTypes}
-                        onSelect={setBuildingType}
+                        onSelect={handleBuildingTypeChange}
+                        error={buildingTypeError}
                     />
 
-                    {/* HOUSE NO */}
+                    {/* BUILDING DETAILS */}
 
-                    <InputField
-                        icon="building"
-                        label="Building / House No"
-                        value={buildingNo}
-                        onChangeText={setBuildingNo}
-                    />
+                    {buildingType === "Apartment" && (
+                        <>
+                            <InputField
+                                icon="road"
+                                label="Apartment / Building No"
+                                value={buildingNo}
+                                onChangeText={handleBuildingNoChange}
+                                placeholder="Type Here"
+                                error={buildingNoError}
+                            />
+                            <InputField
+                                icon="road"
+                                label="Apartment / Building Name"
+                                value={buildingName}
+                                onChangeText={setBuildingName}
+                                placeholder="e.g 14/B"
+                            />
+                            <InputField
+                                icon="road"
+                                label="Flat / Unit Number"
+                                value={unitNo}
+                                onChangeText={setUnitNo}
+                                placeholder="Type Here"
+                            />
+                            <InputField
+                                icon="road"
+                                label="Floor Number"
+                                value={floorNo}
+                                onChangeText={setFloorNo}
+                                placeholder="e.g. 3rd Floor"
+                            />
+                        </>
+                    )}
+
+                    {buildingType === "House" && (
+                        <InputField
+                            icon="building"
+                            label="Building / House No"
+                            value={buildingNo}
+                            onChangeText={handleBuildingNoChange}
+                            error={buildingNoError}
+                        />
+                    )}
 
                     {/* STREET */}
 
@@ -529,7 +443,8 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         icon="road"
                         label="Street Name"
                         value={streetName}
-                        onChangeText={setStreetName}
+                        onChangeText={handleStreetNameChange}
+                        error={streetNameError}
                     />
 
                     {/* CITY */}
@@ -541,7 +456,8 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         open={cityOpen}
                         setOpen={setCityOpen}
                         options={cityOptions}
-                        onSelect={setCity}
+                        onSelect={handleCityChange}
+                        error={cityError}
                     />
 
                     {/* GEO LOCATION */}

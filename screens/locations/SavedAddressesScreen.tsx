@@ -54,7 +54,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
     const [addresses, setAddresses] = useState<Address[]>([]);
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
-    
+
     useFocusEffect(
         useCallback(() => {
             const fetchingSavedAddresses = async () => {
@@ -123,7 +123,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
     const handleView = (address: Address) => {
         console.log("View address:", address);
-        navigation.navigate("ViewLocation",{latitude: Number(address.raw!.latitude), longitude:  Number(address.raw!.longitude)})
+        navigation.navigate("ViewLocation", { latitude: Number(address.raw!.latitude), longitude: Number(address.raw!.longitude), title: address.title });
     };
 
     const handleEdit = (address: Address) => {

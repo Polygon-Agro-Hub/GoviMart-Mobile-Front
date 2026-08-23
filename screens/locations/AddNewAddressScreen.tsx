@@ -56,6 +56,16 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
     ];
     const cityOptions = ["Colombo", "Ampara", "Walpola", "Matale", "Badulla"]
 
+    const [saveAddressAsError, setSaveAddressAsError] = useState("");
+    const [titleError, setTitleError] = useState("");
+    const [billingNameError, setBillingNameError] = useState("");
+    const [mobileNumber1Error, setMobileNumber1Error] = useState("");
+    const [mobileNumber2Error, setMobileNumber2Error] = useState("");
+    const [buildingTypeError, setBuildingTypeError] = useState("");
+    const [buildingNoError, setBuildingNoError] = useState("");
+    const [streetNameError, setStreetNameError] = useState("");
+    const [cityError, setCityError] = useState("");
+
     useFocusEffect(
         useCallback(() => {
             const getSelectedLocation = async () => {
@@ -91,6 +101,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
 
     const handleSaveAddressAs = (text: string) => {
         setSaveAddressAs(text);
+        if (saveAddressAsError) setSaveAddressAsError("");
     };
 
     const handleBillingName = (text: string) => {
@@ -101,6 +112,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
         );
 
         setBillingName(cleaned);
+        if (billingNameError) setBillingNameError("");
     };
 
     const handleMobileNumber1 = (text: string) => {
@@ -110,6 +122,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
         );
 
         setMobileNumber1(cleaned);
+        if (mobileNumber1Error) setMobileNumber1Error("");
     };
 
     const handleMobileNumber2 = (text: string) => {
@@ -119,53 +132,101 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
         );
 
         setMobileNumber2(cleaned);
+        if (mobileNumber2Error) setMobileNumber2Error("");
     };
-    const handleStreetName = (text: string) => {
-        setStreetName(text)
-    }
-    const handleBuildingNo = (text: string) => {
-        setBuildingNo(text)
-    }
 
-    const handleCity = (text: string) => {
-        setCity(text)
-    }
+    const handleStreetName = (text: string) => {
+        setStreetName(text);
+        if (streetNameError) setStreetNameError("");
+    };
+
+    const handleBuildingNo = (text: string) => {
+        setBuildingNo(text);
+        if (buildingNoError) setBuildingNoError("");
+    };
+
+    const handleSelectTitle = (value: string) => {
+        setTitle(value);
+        if (titleError) setTitleError("");
+    };
+
+    const handleSelectBuildingType = (value: string) => {
+        setBuildingType(value);
+        if (buildingTypeError) setBuildingTypeError("");
+        setBuildingNoError("");
+    };
+
+    const handleSelectCity = (value: string) => {
+        setCity(value);
+        if (cityError) setCityError("");
+    };
 
 
     // SAVE BUTTON
 
 
     const handleSaveAddress = async () => {
+        setSaveAddressAsError("");
+        setTitleError("");
+        setBillingNameError("");
+        setMobileNumber1Error("");
+        setMobileNumber2Error("");
+        setBuildingTypeError("");
+        setBuildingNoError("");
+        setStreetNameError("");
+        setCityError("");
+
+        let hasError = false;
 
         if (!saveAddressAs.trim()) {
-            Alert.alert(
-                "Required",
-                "Save Address As is required.",
-            );
-            return;
+            setSaveAddressAsError("Save Address As is required.");
+            hasError = true;
+        }
+
+        if (!title.trim()) {
+            setTitleError("Title is required.");
+            hasError = true;
         }
 
         if (!billingName.trim()) {
-            Alert.alert(
-                "Required",
-                "Billing Name is required.",
-            );
-            return;
+            setBillingNameError("Billing Name is required.");
+            hasError = true;
         }
 
         if (!mobileNumber1.trim()) {
-            Alert.alert(
-                "Required",
-                "Mobile Number 1 is required.",
-            );
-            return;
+            setMobileNumber1Error("Mobile Number 1 is required.");
+            hasError = true;
+        } else if (!/^\d{9}$/.test(mobileNumber1)) {
+            setMobileNumber1Error("Invalid phone number. Must be 9 digits.");
+            hasError = true;
+        }
+
+        if (mobileNumber2.trim() && !/^\d{9}$/.test(mobileNumber2)) {
+            setMobileNumber2Error("Invalid phone number. Must be 9 digits.");
+            hasError = true;
         }
 
         if (!buildingType.trim()) {
-            Alert.alert(
-                "Required",
-                "Building Type is required.",
-            );
+            setBuildingTypeError("Building Type is required.");
+            hasError = true;
+        }
+
+        if (!buildingNo.trim()) {
+            setBuildingNoError("Building / House No is required.");
+            hasError = true;
+        }
+
+        if (!streetName.trim()) {
+            setStreetNameError("Street Name is required.");
+            hasError = true;
+        }
+
+        if (!city.trim()) {
+            setCityError("Your City is required.");
+            hasError = true;
+        }
+
+        if (hasError) {
             return;
         }
 
@@ -262,10 +323,16 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
     };
 
     const setBackgroundColor = () => {
-        if (saveAddressAs &&
-            billingName &&
-            mobileNumber1 &&
-            buildingType ) {
+        if (
+            saveAddressAs.trim() &&
+            title.trim() &&
+            billingName.trim() &&
+            mobileNumber1.trim() &&
+            buildingType.trim() &&
+            buildingNo.trim() &&
+            streetName.trim() &&
+            city.trim()
+        ) {
             return "black"
         }
         else { return "#8FA1AA" }
@@ -317,6 +384,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         value={saveAddressAs}
                         onChangeText={handleSaveAddressAs}
                         placeholder="(e.g.: Home , Work..)"
+                        error={saveAddressAsError}
                     />
 
                     {/* TITLE + BILLING NAME */}
@@ -340,7 +408,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                                 open={titleOpen}
                                 setOpen={setTitleOpen}
                                 options={titleOptions}
-                                onSelect={setTitle}
+                                onSelect={handleSelectTitle}
+                                error={titleError}
                             />
                         </View>
 
@@ -357,6 +426,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                                 value={billingName}
                                 onChangeText={handleBillingName}
                                 placeholder="Type Here"
+                                error={billingNameError}
                             />
                         </View>
                     </View>
@@ -372,6 +442,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         placeholder="7XXXXXXXX"
                         keyboardType="phone-pad"
                         maxLength={10}
+                        error={mobileNumber1Error}
                     />
 
 
@@ -386,6 +457,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         placeholder="7XXXXXXXX"
                         keyboardType="phone-pad"
                         maxLength={10}
+                        error={mobileNumber2Error}
                     />
 
                     {/* BUILDING TYPE */}
@@ -396,7 +468,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         open={buildingTypeOpen}
                         setOpen={setBuildingTypeOpen}
                         options={buildingTypes}
-                        onSelect={setBuildingType}
+                        onSelect={handleSelectBuildingType}
+                        error={buildingTypeError}
                     />
                     {/*type == apartment => specific fileds*/}
 
@@ -405,8 +478,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                             icon="road"
                             label="Apartment / Building No"
                             value={buildingNo}
-                            onChangeText={setBuildingNo}
+                            onChangeText={handleBuildingNo}
                             placeholder="Type Here"
+                            error={buildingNoError}
                         />
                         <InputField
                             icon="road"
@@ -437,6 +511,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                             value={buildingNo}
                             onChangeText={handleBuildingNo}
                             placeholder="e.g 14/B"
+                            error={buildingNoError}
                         />}
                     <InputField
                         icon="road"
@@ -444,6 +519,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         value={streetName}
                         onChangeText={handleStreetName}
                         placeholder="Type Here"
+                        error={streetNameError}
                     />
                     <DropdownField
                         icon="mountain-city"
@@ -452,7 +528,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({
                         open={cityOpen}
                         setOpen={setCityOpen}
                         options={cityOptions}
-                        onSelect={setCity}
+                        onSelect={handleSelectCity}
+                        error={cityError}
                     />
 
                     {/* GEO LOCATION */}

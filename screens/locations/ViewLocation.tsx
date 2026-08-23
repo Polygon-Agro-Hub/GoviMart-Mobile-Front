@@ -32,7 +32,7 @@ const ViewLocation: React.FC<Props> = ({
     navigation,
     route,
 }) => {
-    const { latitude, longitude } = route.params;
+    const { latitude, longitude, title } = route.params;
 
     return (
         <View
@@ -47,8 +47,7 @@ const ViewLocation: React.FC<Props> = ({
             />
 
             {/* Header */}
-            {/* replace navigation props address name */}
-            <CustomHeader title="Home address 1 " showBackButton navigation={navigation} />
+            <CustomHeader title={title} showBackButton navigation={navigation} />
 
 
             {/* Map */}

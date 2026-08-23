@@ -5,7 +5,7 @@ export type RootStackParamList = {
   ChooseAuth: undefined;
   DeliveryLocation: undefined;
   Login: undefined;
-  UpdatePassword: { customerId?: number; name?: string; number?: string, redirectTo?: keyof RootStackParamList ; } | undefined;
+  UpdatePassword: { customerId?: number; name?: string; number?: string, redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   Home: undefined;
   SignUpOTP: {
@@ -41,12 +41,12 @@ export type RootStackParamList = {
   MyAccount: undefined;
   DeleteAccount: undefined;
   Notification: undefined;
-  PaymentMethod: {total: number;};
+  PaymentMethod: { total: number; };
   OrderDeliveryMethod: undefined;
   OrderConfirmed: undefined
   SetLocation: undefined;
   ChoosePickupCentre: undefined;
   OrderHistory: undefined;
   OrderDetails: undefined;
-  ViewLocation: {latitude: number, longitude: number};
+  ViewLocation: { latitude: number, longitude: number, title: string };
 };
