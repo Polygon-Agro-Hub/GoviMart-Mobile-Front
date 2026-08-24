@@ -32,6 +32,13 @@ export const ENDPOINTS = {
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
     GET_BANNERS: "api/product/slides"
+  },
+
+  ORDER: {
+    GET_ORDER_HISTORY: "api/order/order-history",
+    GET_ORDER_BY_ID: "api/order/:orderId",
+    GET_ORDER_PACKAGES: "api/order/packages/:orderId",
+    GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId"
   }
 
 };
