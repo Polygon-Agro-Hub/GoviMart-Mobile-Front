@@ -5,6 +5,7 @@ import {
     TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Feather from '@expo/vector-icons/Feather';
 
 type BottomScreen =
     | "Home"
@@ -74,11 +75,11 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                             : "transparent",
                 }}
             >
-                <Ionicons
+                <Feather
                     name={
                         activeScreen === "Home"
                             ? "home"
-                            : "home-outline"
+                            : "home"
                     }
                     size={18}
                     color="#FFFFFF"

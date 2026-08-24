@@ -47,6 +47,6 @@ export type RootStackParamList = {
   SetLocation: undefined;
   ChoosePickupCentre: undefined;
   OrderHistory: undefined;
-  OrderDetails: undefined;
+  OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number, longitude: number, title: string };
 };

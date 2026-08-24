@@ -20,7 +20,7 @@ import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
 
 import { Provider } from "react-redux";
-import { store } from "../store";
+import { store } from "../src/store";
 import ViewProduct from "@/screens/products/ViewProductScreen";
 import ViewPackage from "@/screens/packages/ViewPackageScreen";
 import MyCart from "@/screens/cart/MyCartScreen";
