@@ -18,6 +18,8 @@ import CustomHeader from "@/component/common/CustomHeader";
 import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import customerService from "@/services/customer/customer.service";
+import authService from "@/services/auth/auth.service";
+
 
 type ProfileNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -75,18 +77,27 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem("userToken");
-              await AsyncStorage.removeItem("userProfile");
-              await AsyncStorage.removeItem("userLoginTime");
-
-              dispatch(logoutSuccess());
-
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "ChooseAuth" }],
+              // Call backend logout API to expire/clear token
+              await authService.logout().catch((err) => {
+                console.log("Server logout failed, proceeding with local logout:", err);
               });
             } catch (e) {
-              console.error("Logout error:", e);
+              console.log("Logout API call error:", e);
+            } finally {
+              try {
+                await AsyncStorage.removeItem("userToken");
+                await AsyncStorage.removeItem("userProfile");
+                await AsyncStorage.removeItem("userLoginTime");
+
+                dispatch(logoutSuccess());
+
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "ChooseAuth" }],
+                });
+              } catch (e) {
+                console.error("Logout error:", e);
+              }
             }
           },
         },

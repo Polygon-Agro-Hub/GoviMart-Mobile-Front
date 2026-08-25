@@ -2,7 +2,6 @@ export const ENDPOINTS = {
   AUTH: {
     SIGN_UP: "api/auth/signup",
     LOGIN: "api/auth/login",
-    // NOTE: No server-side logout route currently exists; logout is handled client-side by clearing session tokens.
     LOGOUT: "api/auth/logout",
     UPDATE_PASSWORD: "api/auth/update-password",
   },
