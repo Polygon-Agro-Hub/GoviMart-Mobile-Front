@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,22 +6,21 @@ import {
   TextInput,
   ScrollView,
   TouchableOpacity,
-  StatusBar,
   Dimensions,
   Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "@/types/types";
+import { RootStackParamList, ProductType, PackageType, ShopItem } from "@/types/types";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import HomeHeader from "@/component/home/HomeHeader";
-import axios from "axios";
-import { environment } from "@/environment/environment";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import productService from "@/services/product/product.service";
 
+// Re-export for backward compatibility with any screens importing ProductType from here
+export type { ProductType, PackageType } from "@/types/types";
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -39,44 +38,8 @@ interface Category {
   active: boolean;
 }
 
-// interface Product {
-//   id: number;
-//   displayName: string;
-//   weight: string;
-//   subTotal: string;
-//   image: string;
-//   isNew: boolean;
-//   type?: string
-// }
-
-export interface PackageType {
-  type: "package";
-  id: number;
-  displayName: string;
-  subTotal: string;
-  image: string;
-}
-
-export interface ProductType {
-  type: "product";
-  id: number
-  category: string
-  changeby?: string
-  cropNameEnglish: string
-  cropNameSinhala?: string
-  cropNameTamil?: string
-  discountedPrice?: number
-  tags?: string
-  unitType?: string
-  displayName: string
-  image: string
-  normalPrice: string
-  startValue?: string
-  varietyNameEnglish?: string
-}
-type ShopItem = ProductType | PackageType;
-
 const CATEGORIES: Category[] = [
+
   {
     id: "Packages",
     name: "Packages",
@@ -335,17 +298,69 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     itemRows.push(shopItems?.slice(i, i + 2));
   }
 
-  const handleProfileNavigation = () => {
+  const handleProfileNavigation = useCallback(() => {
     navigation.navigate("Profile");
-  };
+  }, [navigation]);
 
-  const handleMyCartNavigation = () => {
+  const handleMyCartNavigation = useCallback(() => {
     navigation.navigate("MyCart");
-  };
+  }, [navigation]);
+
+  const handleToggleUnit = useCallback((productId: number, unit: "g" | "kg") => {
+    setActiveProducts(prev => ({
+      ...prev,
+      [productId]: {
+        unit,
+        quantity: unit === "g" ? 500 : 1,
+      },
+    }));
+  }, []);
+
+  const handleIncrement = useCallback((productId: number) => {
+    setActiveProducts(prev => {
+      const item = prev[productId];
+      if (!item) return prev;
+      const step = item.unit === "g" ? 100 : 0.5;
+      return {
+        ...prev,
+        [productId]: {
+          ...item,
+          quantity: Number((item.quantity + step).toFixed(1)),
+        },
+      };
+    });
+  }, []);
+
+  const handleDecrement = useCallback((productId: number) => {
+    setActiveProducts(prev => {
+      const item = prev[productId];
+      if (!item) return prev;
+      const step = item.unit === "g" ? 100 : 0.5;
+      const nextQty = item.quantity - step;
+      if (nextQty <= 0) {
+        const updated = { ...prev };
+        delete updated[productId];
+        return updated;
+      }
+      return {
+        ...prev,
+        [productId]: {
+          ...item,
+          quantity: Number(nextQty.toFixed(1)),
+        },
+      };
+    });
+  }, []);
+
+  const handleAddProduct = useCallback((productId: number) => {
+    setActiveProducts(prev => ({
+      ...prev,
+      [productId]: { quantity: 500, unit: "g" },
+    }));
+  }, []);
 
   return (
     <View className="flex-1 bg-white">
-      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -460,60 +475,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
               {row.map((product) => {
                 const cartItem = activeProducts[product.id];
 
-                // Switcher toggle
-                const toggleUnit = (unit: "g" | "kg") => {
-                  setActiveProducts(prev => ({
-                    ...prev,
-                    [product.id]: {
-                      unit,
-                      quantity: unit === "g" ? 500 : 1
-                    }
-                  }));
-                };
-
-                const handleIncrement = () => {
-                  setActiveProducts(prev => {
-                    const item = prev[product.id];
-                    if (!item) return prev;
-                    const step = item.unit === "g" ? 100 : 0.5;
-                    return {
-                      ...prev,
-                      [product.id]: {
-                        ...item,
-                        quantity: Number((item.quantity + step).toFixed(1))
-                      }
-                    };
-                  });
-                };
-
-                const handleDecrement = () => {
-                  setActiveProducts(prev => {
-                    const item = prev[product.id];
-                    if (!item) return prev;
-                    const step = item.unit === "g" ? 100 : 0.5;
-                    const nextQty = item.quantity - step;
-                    if (nextQty <= 0) {
-                      const updated = { ...prev };
-                      delete updated[product.id];
-                      return updated;
-                    }
-                    return {
-                      ...prev,
-                      [product.id]: {
-                        ...item,
-                        quantity: Number(nextQty.toFixed(1))
-                      }
-                    };
-                  });
-                };
-
-                const handleAddProduct = () => {
-                  setActiveProducts(prev => ({
-                    ...prev,
-                    [product.id]: { quantity: 500, unit: "g" }
-                  }));
-                };
-
                 return (
                   <TouchableOpacity
                     key={product.id}
@@ -575,7 +536,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           {/* Add Button */}
                           <TouchableOpacity
                             activeOpacity={0.8}
-                            onPress={handleAddProduct}
+                            onPress={() => handleAddProduct(product.id)}
                             className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
                             style={{
                               shadowColor: "#000",
@@ -595,7 +556,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* kg button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={() => toggleUnit("kg")}
+                              onPress={() => handleToggleUnit(product.id, "kg")}
                               style={{
                                 backgroundColor: cartItem.unit === "kg" ? "#FF9114" : "#FFC179",
                                 width: 36,
@@ -614,7 +575,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* g button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={() => toggleUnit("g")}
+                              onPress={() => handleToggleUnit(product.id, "g")}
                               style={{
                                 backgroundColor: cartItem.unit === "g" ? "#FF9114" : "#FFC179",
                                 width: 36,
@@ -633,7 +594,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* Minus Button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={handleDecrement}
+                              onPress={() => handleDecrement(product.id)}
                               className="w-6 h-6 rounded-full bg-black items-center justify-center"
                             >
                               <Ionicons name="remove" size={14} color="#FFFFFF" />
@@ -647,7 +608,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* Plus Button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={handleIncrement}
+                              onPress={() => handleIncrement(product.id)}
                               className="w-6 h-6 rounded-full bg-black items-center justify-center"
                             >
                               <Ionicons name="add" size={14} color="#FFFFFF" />

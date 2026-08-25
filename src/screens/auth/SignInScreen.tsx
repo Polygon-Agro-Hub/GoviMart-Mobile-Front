@@ -3,10 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator,
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
-import { environment } from "@/environment/environment";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
-import axios from "axios";
 import { useDispatch } from "react-redux";
 import { loginSuccess, setRememberMeDetails } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
@@ -42,24 +40,23 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
 
+  // Load remembered identifier (email/phone) only — password is never persisted
   useEffect(() => {
     const loadRemembered = async () => {
       try {
-        const storedEmail = await AsyncStorage.getItem("rememberedEmail");
-        const storedPassword = await AsyncStorage.getItem("rememberedPassword");
-        if (storedEmail && storedPassword) {
-          setIdentifier(storedEmail);
-          setPassword(storedPassword);
+        const storedIdentifier = await AsyncStorage.getItem("rememberedIdentifier");
+        if (storedIdentifier) {
+          setIdentifier(storedIdentifier);
           setRememberMe(true);
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { email: storedEmail, password: storedPassword },
+              rememberedDetails: { identifier: storedIdentifier },
             })
           );
         }
       } catch (e) {
-        console.error("Failed to load remembered details:", e);
+        console.error("Failed to load remembered identifier:", e);
       }
     };
     loadRemembered();
@@ -95,19 +92,17 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         // Dispatch login to Redux
         dispatch(loginSuccess({ token, userProfile, loginTime }));
 
-        // Handle Remember Me details
+        // Handle Remember Me — store only the identifier, never the password
         if (rememberMe) {
-          await AsyncStorage.setItem("rememberedEmail", identifier.trim());
-          await AsyncStorage.setItem("rememberedPassword", password.trim());
+          await AsyncStorage.setItem("rememberedIdentifier", identifier.trim());
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { email: identifier.trim(), password: password.trim() },
+              rememberedDetails: { identifier: identifier.trim() },
             })
           );
         } else {
-          await AsyncStorage.removeItem("rememberedEmail");
-          await AsyncStorage.removeItem("rememberedPassword");
+          await AsyncStorage.removeItem("rememberedIdentifier");
           dispatch(
             setRememberMeDetails({
               rememberMe: false,
@@ -259,7 +254,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
             {/* Redirect / Register Section */}
             <View className="items-center mt-6">
-              <Text className="text-sm text-[#6B6B6B]">Don’t have an account?</Text>
+              <Text className="text-sm text-[#6B6B6B]">Don't have an account?</Text>
               <TouchableOpacity 
                 onPress={() => navigation.navigate("ChooseAuth")} 
                 className="mt-1"

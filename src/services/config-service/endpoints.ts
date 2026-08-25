@@ -1,9 +1,9 @@
 export const ENDPOINTS = {
-  //  Edit this with your enpoint urls
   AUTH: {
     SIGN_UP: "api/auth/signup",
     LOGIN: "api/auth/login",
-    LOGOUT: "/api/auth/logout",
+    // NOTE: No server-side logout route currently exists; logout is handled client-side by clearing session tokens.
+    LOGOUT: "api/auth/logout",
     UPDATE_PASSWORD: "api/auth/update-password",
   },
 
@@ -31,14 +31,13 @@ export const ENDPOINTS = {
     GET_ALL_PRODUCTS: "api/product/all-product",
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
-    GET_BANNERS: "api/product/slides"
+    GET_BANNERS: "api/product/slides",
   },
 
   ORDER: {
     GET_ORDER_HISTORY: "api/order/order-history",
     GET_ORDER_BY_ID: "api/order/:orderId",
     GET_ORDER_PACKAGES: "api/order/packages/:orderId",
-    GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId"
-  }
-
+    GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
+  },
 };

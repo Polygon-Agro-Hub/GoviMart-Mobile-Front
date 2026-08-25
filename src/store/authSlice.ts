@@ -13,8 +13,7 @@ interface UserProfile {
 }
 
 interface RememberedDetails {
-  email?: string;
-  password?: string;
+  identifier?: string;
 }
 
 interface AuthState {
