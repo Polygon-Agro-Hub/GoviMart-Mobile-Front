@@ -12,6 +12,10 @@ class AuthService {
     return apiClient.post(ENDPOINTS.AUTH.LOGOUT);
   }
 
+  refreshToken(token: string) {
+    return apiClient.post(ENDPOINTS.AUTH.REFRESH_TOKEN, { refreshToken: token });
+  }
+
   signUp(data: SignUpPayload) {
     return apiClient.post(ENDPOINTS.AUTH.SIGN_UP, data);
   }

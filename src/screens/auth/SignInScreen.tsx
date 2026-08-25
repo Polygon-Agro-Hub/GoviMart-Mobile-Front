@@ -8,6 +8,8 @@ import Checkbox from "expo-checkbox";
 import { useDispatch } from "react-redux";
 import { loginSuccess, setRememberMeDetails } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
+import * as SecureStore from "expo-secure-store";
+
 
 type LoginNavigationProp = StackNavigationProp<RootStackParamList, "Login">;
 
@@ -40,23 +42,30 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
 
-  // Load remembered identifier (email/phone) only — password is never persisted
+  // Load remembered identifier and encrypted password if remember me is enabled
   useEffect(() => {
     const loadRemembered = async () => {
       try {
-        const storedIdentifier = await AsyncStorage.getItem("rememberedIdentifier");
-        if (storedIdentifier) {
-          setIdentifier(storedIdentifier);
+        const isRemembered = await AsyncStorage.getItem("rememberMeEnabled");
+        if (isRemembered === "true") {
+          const storedIdentifier = await AsyncStorage.getItem("rememberedIdentifier");
+          const storedPassword = await SecureStore.getItemAsync("rememberedPassword");
+          if (storedIdentifier) {
+            setIdentifier(storedIdentifier);
+          }
+          if (storedPassword) {
+            setPassword(storedPassword);
+          }
           setRememberMe(true);
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { identifier: storedIdentifier },
+              rememberedDetails: { identifier: storedIdentifier || "" },
             })
           );
         }
       } catch (e) {
-        console.error("Failed to load remembered identifier:", e);
+        console.error("Failed to load remembered credentials:", e);
       }
     };
     loadRemembered();
@@ -71,7 +80,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
          identifier: identifier.trim(), password: password.trim()
          });
       if (response.data && response.data.success) {
-        const { token, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType, isDashUser, isPswUpdated } = response.data.data;
+        const { token, refreshToken, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType, isDashUser, isPswUpdated } = response.data.data;
         const loginTime = Date.now();
 
         // Save session details to AsyncStorage
@@ -92,9 +101,14 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         // Dispatch login to Redux
         dispatch(loginSuccess({ token, userProfile, loginTime }));
 
-        // Handle Remember Me — store only the identifier, never the password
+        // Handle Remember Me — store identifier, refreshToken and encrypted password
         if (rememberMe) {
+          await AsyncStorage.setItem("rememberMeEnabled", "true");
           await AsyncStorage.setItem("rememberedIdentifier", identifier.trim());
+          if (refreshToken) {
+            await AsyncStorage.setItem("userRefreshToken", refreshToken);
+          }
+          await SecureStore.setItemAsync("rememberedPassword", password.trim());
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
@@ -102,7 +116,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             })
           );
         } else {
+          await AsyncStorage.removeItem("rememberMeEnabled");
           await AsyncStorage.removeItem("rememberedIdentifier");
+          await AsyncStorage.removeItem("userRefreshToken");
+          await SecureStore.deleteItemAsync("rememberedPassword");
           dispatch(
             setRememberMeDetails({
               rememberMe: false,

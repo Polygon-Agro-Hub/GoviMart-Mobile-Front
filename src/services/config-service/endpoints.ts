@@ -4,6 +4,7 @@ export const ENDPOINTS = {
     LOGIN: "api/auth/login",
     LOGOUT: "api/auth/logout",
     UPDATE_PASSWORD: "api/auth/update-password",
+    REFRESH_TOKEN: "api/auth/refresh-token",
   },
 
   CUSTOMER: {

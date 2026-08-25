@@ -6,6 +6,7 @@ import { RootStackParamList } from "@/types/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/store/authSlice";
+import authService from "@/services/auth/auth.service";
 
 const logo = require("@/assets/images/public/polygon-logo.png");
 
@@ -18,11 +19,13 @@ const Splash: React.FC = () => {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
+        const isRemembered = await AsyncStorage.getItem("rememberMeEnabled");
         const token = await AsyncStorage.getItem("userToken");
         const profileStr = await AsyncStorage.getItem("userProfile");
         const loginTimeStr = await AsyncStorage.getItem("userLoginTime");
 
-        if (token && profileStr && loginTimeStr) {
+        // Only auto-login if the user clicked "Remember Me"
+        if (isRemembered === "true" && token && profileStr && loginTimeStr) {
           const loginTime = parseInt(loginTimeStr, 10);
           const currentTime = Date.now();
           const elapsed = currentTime - loginTime;
@@ -34,6 +37,30 @@ const Splash: React.FC = () => {
             dispatch(loginSuccess({ token, userProfile, loginTime }));
             navigation.replace("Home");
             return;
+          } else {
+            // Access token expired, attempt to refresh it silently using the Refresh Token
+            const refreshToken = await AsyncStorage.getItem("userRefreshToken");
+            if (refreshToken) {
+              try {
+                const response = await authService.refreshToken(refreshToken);
+                if (response.data && response.data.success) {
+                  const newToken = response.data.data.token;
+                  const newLoginTime = Date.now();
+                  const userProfile = JSON.parse(profileStr);
+
+                  // Update storage with the new access token and time
+                  await AsyncStorage.setItem("userToken", newToken);
+                  await AsyncStorage.setItem("userLoginTime", newLoginTime.toString());
+
+                  // Preload to Redux store and navigate to Home
+                  dispatch(loginSuccess({ token: newToken, userProfile, loginTime: newLoginTime }));
+                  navigation.replace("Home");
+                  return;
+                }
+              } catch (refreshError) {
+                console.warn("Silent token refresh failed, user must sign in:", refreshError);
+              }
+            }
           }
         }
       } catch (e) {
