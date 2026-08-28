@@ -4,11 +4,11 @@
     "slug": "govi-mart",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/public/app-icon-android.png",
+    "icon": "./src/assets/images/public/app-icon-android.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/public/app-icon-android.png",
+      "image": "./src/assets/images/public/app-icon-android.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/public/app-icon-android.png",
+        "foregroundImage": "./src/assets/images/public/app-icon-android.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -39,7 +39,7 @@
       ]
     },
     "ios": {
-      "icon": "./assets/images/public/app-icon-android.png",
+      "icon": "./src/assets/images/public/app-icon-android.png",
       "bundleIdentifier": "com.polygonagro.Polygon",
       "buildNumber": "1",
       "supportsTablet": false,
@@ -55,7 +55,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/images/public/app-icon-android.png"
+      "favicon": "./src/assets/images/public/app-icon-android.png"
     },
     "plugins": [
       [
@@ -65,12 +65,14 @@
             "deploymentTarget": "15.1"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
         "projectId": "e682bc28-eec2-4eaf-8a73-636dc70b6cda"
-      }
+      },
+      "shoutoutApiKey": "$SHOUTOUT_API_KEY"
     }
   }
 }
