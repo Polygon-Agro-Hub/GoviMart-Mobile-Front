@@ -456,166 +456,172 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         ) : (
           <View className="mt-8 px-4">
             {itemRows.map((row, rowIndex) => (
-            <View key={rowIndex} className="flex-row justify-between mb-4">
-              {row.map((product) => {
-                const cartItem = cartProducts.find((p) => p.id === product.id);
+              <View key={rowIndex} className="flex-row justify-between mb-4">
+                {row.map((product) => {
+                  const cartItem = cartProducts.find((p) => p.id === product.id);
 
-                return (
-                  <TouchableOpacity
-                    key={product.id}
-                    activeOpacity={0.9}
-                    className="flex-1"
-                    onPress={() => {
-                      if (product.type === "package") {
-                        navigation.navigate("ViewPackage", {
-                          packageId: product.id,
-                          packageName: product.displayName,
-                          image: product.image,
-                          price: parseFloat(product.subTotal),
-                        });
-                      } else {
-                        navigation.navigate("ViewProduct", {
-                          product: product,
-                        });
-                      }
-                    }}
-                  >
-                    <View
-                      key={product.id!}
-                      className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
-                      style={{
-                        borderTopLeftRadius: 100,
-                        borderTopRightRadius: 100,
-                        borderBottomLeftRadius: 18,
-                        borderBottomRightRadius: 18,
+                  return (
+                    <TouchableOpacity
+                      key={product.id}
+                      activeOpacity={0.9}
+                      className="flex-1"
+                      onPress={() => {
+                        if (product.type === "package") {
+                          navigation.navigate("ViewPackage", {
+                            packageId: product.id,
+                            packageName: product.displayName,
+                            image: product.image,
+                            price: parseFloat(product.subTotal),
+                          });
+                        } else {
+                          navigation.navigate("ViewProduct", {
+                            product: product,
+                          });
+                        }
                       }}
                     >
-                      {/* Circular Product Image Container */}
-                      <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
-                        <Image
-                          source={{ uri: product?.image! }}
-                          className="w-12 h-12"
-                          resizeMode="contain"
-                        />
+                      <View
+                        key={product.id!}
+                        className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
+                        style={{
+                          borderTopLeftRadius: 100,
+                          borderTopRightRadius: 100,
+                          borderBottomLeftRadius: 18,
+                          borderBottomRightRadius: 18,
+                        }}
+                      >
+                        {(product.type == "product" && product.discount) &&
+                          <View style={{ position: "absolute", display: "flex", top: 15, left: 2, width: 35, height: 35, backgroundColor: "#F34261", borderRadius: 100, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 10, fontWeight: "600", textAlign: "center", alignItems: "center", color: "#FFF" }}>{product.discount + "%"}</Text>
+                          </View>}
+
+
+                        {/* Circular Product Image Container */}
+                        <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
+                          <Image
+                            source={{ uri: product?.image! }}
+                            className="w-12 h-12"
+                            resizeMode="contain"
+                          />
+                        </View>
+
+                        {/* Product Details */}
+                        <Text className="text-black font-bold text-sm mt-1 text-center" numberOfLines={1}>
+                          {product?.displayName!}
+                        </Text>
+
+                        {!cartItem ? (
+                          <>
+                            {product.type == "product" && <Text className="   text-gray-400 text-[11px] mt-0.5 text-center">
+                              {product.type == "product" && product?.startValue! + " " + (product.unitType!).toLowerCase()}
+                            </Text>}
+                            {product.type == "package" && <Text className="text-black font-extrabold text-sm mt-1 text-center">
+                              {product.type == "package" && "Rs. " + product?.subTotal!}
+                            </Text>}
+                            {product.type == "product" &&
+                              <Text className="text-black font-extrabold text-sm mt-1 text-center">
+                                {product.type == "product" && "Rs. " + product.normalPrice}
+                              </Text>
+                            }
+
+                            {/* Add Button */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => {
+                                if (product.type === "product") {
+                                  handleAddProduct(product as ProductType);
+                                }
+                              }}
+                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                              style={{
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 5,
+                              }}
+                            >
+                              <Ionicons name="add" size={20} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <>
+                            {/* Unit Switcher: kg vs g */}
+                            <View className="flex-row items-center justify-center mt-2 mb-1">
+                              {/* kg button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => handleToggleUnit(product.id, "kg")}
+                                style={{
+                                  backgroundColor: cartItem.unit === "kg" ? "#FF9114" : "#FFC179",
+                                  width: 36,
+                                  height: 22,
+                                  borderRadius: 11,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <Text className="text-white text-[11px] font-bold">kg</Text>
+                              </TouchableOpacity>
+
+                              {/* Arrow icon */}
+                              <Text className="text-black font-black text-xs mx-1.5">↔</Text>
+
+                              {/* g button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => handleToggleUnit(product.id, "g")}
+                                style={{
+                                  backgroundColor: cartItem.unit === "g" ? "#FF9114" : "#FFC179",
+                                  width: 36,
+                                  height: 22,
+                                  borderRadius: 11,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <Text className="text-white text-[11px] font-bold">g</Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Quantity Selector capsule */}
+                            <View className="flex-row items-center justify-between bg-white border border-[#E5E5EA] rounded-full px-1 py-1 w-full max-w-[124px] mt-1.5 shadow-sm">
+                              {/* Minus Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => handleDecrement(product.id)}
+                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              >
+                                <Ionicons name="remove" size={14} color="#FFFFFF" />
+                              </TouchableOpacity>
+
+                              {/* Qty value */}
+                              <Text className="text-black font-bold text-[11px]">
+                                {cartItem.weight} {cartItem.unit}
+                              </Text>
+
+                              {/* Plus Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => handleIncrement(product.id)}
+                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              >
+                                <Ionicons name="add" size={14} color="#FFFFFF" />
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Price */}
+                            <Text className="text-black font-extrabold text-sm mt-3 text-center">
+                              {product.type == "package" ? "Rs. " + product?.subTotal! : "Rs. " + product?.normalPrice!}
+                            </Text>
+                          </>
+                        )}
                       </View>
-
-                      {/* Product Details */}
-                      <Text className="text-black font-bold text-sm mt-1 text-center" numberOfLines={1}>
-                        {product?.displayName!}
-                      </Text>
-
-                      {!cartItem ? (
-                        <>
-                          {product.type == "product" &&<Text className="   text-gray-400 text-[11px] mt-0.5 text-center">
-                            {product.type == "product" && product?.startValue! +" " +(product.unitType!).toLowerCase()}
-                          </Text>}
-                          {product.type == "package" &&<Text className="text-black font-extrabold text-sm mt-1 text-center">
-                            {product.type == "package" && "Rs. " + product?.subTotal!}
-                          </Text>}
-                          {product.type == "product" &&
-                            <Text className="text-black font-extrabold text-sm mt-1 text-center">
-                              {product.type == "product" && "Rs. " + product.normalPrice}
-                            </Text>
-                          }
-
-                          {/* Add Button */}
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => {
-                              if (product.type === "product") {
-                                handleAddProduct(product as ProductType);
-                              }
-                            }}
-                            className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
-                            style={{
-                              shadowColor: "#000",
-                              shadowOffset: { width: 0, height: 4 },
-                              shadowOpacity: 0.3,
-                              shadowRadius: 4,
-                              elevation: 5,
-                            }}
-                          >
-                            <Ionicons name="add" size={20} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <>
-                          {/* Unit Switcher: kg vs g */}
-                          <View className="flex-row items-center justify-center mt-2 mb-1">
-                            {/* kg button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleToggleUnit(product.id, "kg")}
-                              style={{
-                                backgroundColor: cartItem.unit === "kg" ? "#FF9114" : "#FFC179",
-                                width: 36,
-                                height: 22,
-                                borderRadius: 11,
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <Text className="text-white text-[11px] font-bold">kg</Text>
-                            </TouchableOpacity>
-
-                            {/* Arrow icon */}
-                            <Text className="text-black font-black text-xs mx-1.5">↔</Text>
-
-                            {/* g button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleToggleUnit(product.id, "g")}
-                              style={{
-                                backgroundColor: cartItem.unit === "g" ? "#FF9114" : "#FFC179",
-                                width: 36,
-                                height: 22,
-                                borderRadius: 11,
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <Text className="text-white text-[11px] font-bold">g</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Quantity Selector capsule */}
-                          <View className="flex-row items-center justify-between bg-white border border-[#E5E5EA] rounded-full px-1 py-1 w-full max-w-[124px] mt-1.5 shadow-sm">
-                            {/* Minus Button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleDecrement(product.id)}
-                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                            >
-                              <Ionicons name="remove" size={14} color="#FFFFFF" />
-                            </TouchableOpacity>
-
-                            {/* Qty value */}
-                            <Text className="text-black font-bold text-[11px]">
-                              {cartItem.weight} {cartItem.unit}
-                            </Text>
-
-                            {/* Plus Button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleIncrement(product.id)}
-                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                            >
-                              <Ionicons name="add" size={14} color="#FFFFFF" />
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Price */}
-                          <Text className="text-black font-extrabold text-sm mt-3 text-center">
-                            {product.type == "package" ? "Rs. " + product?.subTotal! : "Rs. " + product?.normalPrice!}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ))}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         )}
       </ScrollView>
