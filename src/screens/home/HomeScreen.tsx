@@ -620,6 +620,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     </TouchableOpacity>
                   );
                 })}
+                {row.length === 1 && <View className="flex-1" />}
               </View>
             ))}
           </View>
