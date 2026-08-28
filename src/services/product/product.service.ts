@@ -4,7 +4,7 @@ import { ENDPOINTS } from "../config-service/endpoints";
 
 class ProductService {
     async getAllPackages() {
-        return apiClient.get(ENDPOINTS.PRODUCT.GET_ALL_PRODUCTS)
+        return apiClient.get(ENDPOINTS.PRODUCT.GET_ALL_PRODUCTS);
     }
     async getPackageDetails(packageId: number) {
         const url = ENDPOINTS.PRODUCT.GET_PACKAGE_DETAILS.replace(":packageId", String(packageId));
@@ -15,10 +15,16 @@ class ProductService {
             params: {
                 category: categoryNameId,
             },
-        })
+        });
     }
     async getBanners() {
-        return apiClient.get(ENDPOINTS.PRODUCT.GET_BANNERS)
+        return apiClient.get(ENDPOINTS.PRODUCT.GET_BANNERS);
+    }
+    async checkAvailability(productIds: number[], packageIds: number[]) {
+        return apiClient.post(ENDPOINTS.PRODUCT.CHECK_AVAILABILITY, {
+            productIds,
+            packageIds,
+        });
     }
 }
-export default new ProductService;
+export default new ProductService();

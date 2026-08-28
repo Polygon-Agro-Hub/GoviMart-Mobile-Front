@@ -1,228 +1,112 @@
-import React, { useState } from "react";
+import React, { useEffect, useCallback } from "react";
 import {
     View,
     Text,
     ScrollView,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "@/types/types";
+import { useFocusEffect } from "@react-navigation/native";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState } from "@/store";
+import {
+  increasePackageQuantity,
+  decreasePackageQuantity,
+  removePackage,
+  increaseProductWeight,
+  decreaseProductWeight,
+  removeProduct,
+  changeProductUnit,
+  updateAvailabilityMap,
+} from "@/store/cartSlice";
 import PackageCartCard from "@/component/my-cart/PackageCartCard";
 import ProductCartCard from "@/component/my-cart/ProductCartCard";
 import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
+import productService from "@/services/product/product.service";
+import { RootStackParamList } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
     RootStackParamList,
     "MyCart"
 >;
 
-interface PackageItem {
-    id: number;
-    name: string;
-    image: string;
-    price: number;
-    quantity: number;
-    totalItems: number;
-}
-
-interface ProductItem {
-    id: number;
-    name: string;
-    image: string;
-    price: number;
-    weight: number;
-    unit: "g" | "kg";
-    minimumWeight: number;
-    step: number;
-}
-
 interface Props {
     navigation: NavigationProp;
 }
 
 const MyCart: React.FC<Props> = ({ navigation }) => {
-    const [packages, setPackages] = useState<PackageItem[]>([
-        {
-            id: 1,
-            name: "Veggie Pack",
-            image:
-                "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800",
-            price: 1200,
-            quantity: 1,
-            totalItems: 10,
-        },
-    ]);
+    const dispatch = useDispatch();
+    const { packages, products } = useSelector((state: RootState) => state.cart);
 
-    const [products, setProducts] = useState<ProductItem[]>([
-        {
-            id: 1,
-            name: "Cantaloup",
-            image:
-                "https://images.unsplash.com/photo-1571575173700-afb9492e6a50?w=800",
-            price: 1200,
-            weight: 500,
-            unit: "g",
-            minimumWeight: 500,
-            step: 100,
-        },
+    // ─── CHECK AVAILABILITY FROM BACKEND ON FOCUS ─────────────────────────────
+    useFocusEffect(
+        useCallback(() => {
+            const checkItemAvailability = async () => {
+                const productIds = products.map((p) => p.id);
+                const packageIds = packages.map((p) => p.id);
 
-        {
-            id: 2,
-            name: "Sweet Potato",
-            image:
-                "https://images.unsplash.com/photo-1596097635121-14b63b7a0c19?w=800",
-            price: 600,
-            weight: 1,
-            unit: "kg",
-            minimumWeight: 1,
-            step: 1,
-        },
-    ]);
+                if (productIds.length === 0 && packageIds.length === 0) return;
 
-    const increaseWeight = (id: number) => {
-        setProducts((currentProducts) =>
-            currentProducts.map((product) => {
-
-                if (product.id !== id) {
-                    return product;
+                try {
+                    const response = await productService.checkAvailability(productIds, packageIds);
+                    if (response.data && response.data.status) {
+                        dispatch(
+                            updateAvailabilityMap({
+                                products: response.data.products || {},
+                                packages: response.data.packages || {},
+                            })
+                        );
+                    }
+                } catch (error) {
+                    console.error("Failed to check cart items availability:", error);
                 }
+            };
 
-                return {
-                    ...product,
-                    weight: product.weight + product.step!,
-                };
-            })
-        );
+            checkItemAvailability();
+        }, [dispatch, products.length, packages.length])
+    );
+
+    // ─── HANDLERS ─────────────────────────────────────────────────────────────
+    const increaseWeight = (id: number) => {
+        dispatch(increaseProductWeight(id));
     };
 
     const decreaseWeight = (id: number) => {
-        setProducts((currentProducts) =>
-            currentProducts.map((product) => {
-                if (product.id !== id) {
-                    return product;
-                }
-
-                const newWeight =
-                    product.weight - product.step!;
-
-                if (newWeight < product.minimumWeight) {
-                    return product;
-                }
-
-                return {
-                    ...product,
-                    weight: newWeight,
-                };
-            })
-        );
+        dispatch(decreaseProductWeight(id));
     };
 
     const deleteProduct = (id: number) => {
-        setProducts((currentProducts) =>
-            currentProducts.filter(
-                (product) => product.id !== id
-            )
-        );
+        dispatch(removeProduct(id));
     };
 
-    const productTotal = products.reduce(
-        (total, product) => {
-            const weightMultiplier =
-                product.unit === "kg"
-                    ? product.weight / product.minimumWeight
-                    : product.weight / product.minimumWeight;
-
-            return total + product.price * weightMultiplier;
-        },
-        0
-    );
-
-    const changeProductUnit = (
-        id: number,
-        newUnit: "g" | "kg"
-    ) => {
-        setProducts((currentProducts) =>
-            currentProducts.map((product) => {
-                if (product.id !== id) {
-                    return product;
-                }
-
-                // Already selected
-                if (product.unit === newUnit) {
-                    return product;
-                }
-
-                if (newUnit === "kg") {
-                    // g → kg
-                    return {
-                        ...product,
-                        weight: product.weight / 1000,
-                        minimumWeight:
-                            product.minimumWeight / 1000,
-                        step: product.step / 1000,
-                        unit: "kg",
-                    };
-                }
-
-                // kg → g
-                return {
-                    ...product,
-                    weight: product.weight * 1000,
-                    minimumWeight:
-                        product.minimumWeight * 1000,
-                    step: product.step * 1000,
-                    unit: "g",
-                };
-            })
-        );
+    const changeProductUnitHandler = (id: number, newUnit: "g" | "kg") => {
+        dispatch(changeProductUnit({ id, newUnit }));
     };
+
     const increasePackage = (id: number) => {
-        setPackages((currentPackages) =>
-            currentPackages.map((pkg) => {
-                if (pkg.id !== id) {
-                    return pkg;
-                }
-
-                return {
-                    ...pkg,
-                    quantity: pkg.quantity + 1,
-                };
-            })
-        );
+        dispatch(increasePackageQuantity(id));
     };
 
     const decreasePackage = (id: number) => {
-        setPackages((currentPackages) =>
-            currentPackages.map((pkg) => {
-                if (pkg.id !== id) {
-                    return pkg;
-                }
-
-                if (pkg.quantity <= 1) {
-                    return pkg;
-                }
-
-                return {
-                    ...pkg,
-                    quantity: pkg.quantity - 1,
-                };
-            })
-        );
+        dispatch(decreasePackageQuantity(id));
     };
 
     const deletePackage = (id: number) => {
-        setPackages((currentPackages) =>
-            currentPackages.filter(
-                (pkg) => pkg.id !== id
-            )
-        );
+        dispatch(removePackage(id));
     };
 
-    const packageTotal = packages.reduce(
-        (total, pkg) =>
-            total + pkg.price * pkg.quantity,
-        0
-    );
+    // ─── TOTAL CALCULATIONS (Excludes unavailable items) ─────────────────────
+    const productTotal = products.reduce((total, product) => {
+        if (product.isUnavailable) return total;
+        const weightMultiplier = product.weight / product.minimumWeight;
+        return total + product.price * weightMultiplier;
+    }, 0);
+
+    const packageTotal = packages.reduce((total, pkg) => {
+        if (pkg.isUnavailable) return total;
+        return total + pkg.price * pkg.quantity;
+    }, 0);
+
     return (
         <View
             style={{
@@ -231,7 +115,6 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             }}
         >
             {/* Header */}
-
             <CustomHeader
                 title="My Cart"
                 titleColor="black"
@@ -248,67 +131,66 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                     }}
                 >
                     {/* Package Section */}
-                    {packages.length > 0 && <>
-                        <Text
-                            style={{
-                                fontSize: 15,
-                                fontWeight: "700",
-                                marginBottom: 12,
-                                marginTop: 6,
-                            }}
-                        >
-                            Packages ({packages.length.toString().padStart(2, "0")})
-                        </Text>
+                    {packages.length > 0 && (
+                        <>
+                            <Text
+                                style={{
+                                    fontSize: 15,
+                                    fontWeight: "700",
+                                    marginBottom: 12,
+                                    marginTop: 6,
+                                }}
+                            >
+                                Packages ({packages.length.toString().padStart(2, "0")})
+                            </Text>
 
-                        {packages.map((item) => (
-                            <PackageCartCard
-                                key={item.id}
-                                item={item}
-                                onIncrease={increasePackage}
-                                onDecrease={decreasePackage}
-                                onDelete={deletePackage}
-                            />
-                        ))}
-                    </>}
+                            {packages.map((item) => (
+                                <PackageCartCard
+                                    key={item.id}
+                                    item={item}
+                                    onIncrease={increasePackage}
+                                    onDecrease={decreasePackage}
+                                    onDelete={deletePackage}
+                                />
+                            ))}
+                        </>
+                    )}
 
                     {/* Product Section */}
-                    {products.length > 0 && <>
-                        <Text
-                            style={{
-                                fontSize: 15,
-                                fontWeight: "700",
-                                marginTop: 24,
-                                marginBottom: 12,
-                            }}
-                        >
-                            Ala Carte Items ({products.length.toString().padStart(2, "0")})
-                        </Text>
+                    {products.length > 0 && (
+                        <>
+                            <Text
+                                style={{
+                                    fontSize: 15,
+                                    fontWeight: "700",
+                                    marginTop: 24,
+                                    marginBottom: 12,
+                                }}
+                            >
+                                Ala Carte Items ({products.length.toString().padStart(2, "0")})
+                            </Text>
 
-                        {products.map((item) => (
-                            <ProductCartCard
-                                key={item.id}
-                                item={item}
-                                onIncrease={increaseWeight}
-                                onDecrease={decreaseWeight}
-                                onDelete={deleteProduct}
-                                onChangeUnit={changeProductUnit}
-                            />
-                        ))}
-                    </>}
+                            {products.map((item) => (
+                                <ProductCartCard
+                                    key={item.id}
+                                    item={item}
+                                    onIncrease={increaseWeight}
+                                    onDecrease={decreaseWeight}
+                                    onDelete={deleteProduct}
+                                    onChangeUnit={changeProductUnitHandler}
+                                />
+                            ))}
+                        </>
+                    )}
                 </ScrollView>
             </View>
 
-            {/* Part 3 */}
-
+            {/* Order Summary */}
             <OrderSummary
                 packageTotal={packageTotal}
                 productTotal={productTotal}
                 discount={100}
-                // onCheckout={() => navigation.navigate("PaymentMethod", {total:800})}
-                // onCheckout={() => navigation.navigate("OrderDeliveryMethod")}
                 onCheckout={() => navigation.navigate("OrderHistory")}
-                // onCheckout={() => navigation.navigate("SetLocation")}
-                       
             />
         </View>
     );

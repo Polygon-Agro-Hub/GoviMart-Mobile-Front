@@ -14,6 +14,7 @@ interface PackageItem {
     price: number;
     quantity: number;
     totalItems: number;
+    isUnavailable?: boolean;
 }
 
 interface Props {
@@ -31,12 +32,16 @@ const PackageCartCard: React.FC<Props> = ({
     onDelete,
 }) => {
     const isMinimum = item.quantity <= 1;
+    const isUnavailable = !!item.isUnavailable;
 
     const formatPrice = (value: number) =>
         value.toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
+
+    const activeColor = isUnavailable ? "#FF383C" : "#111";
+    const borderColor = isUnavailable ? "#FF383C" : "#E9E9E9";
 
     return (
         <View
@@ -45,10 +50,8 @@ const PackageCartCard: React.FC<Props> = ({
                 borderRadius: 20,
                 padding: 20,
                 marginBottom: 14,
-
-                borderWidth: 1,
-                borderColor: "#E9E9E9",
-
+                borderWidth: 1.5,
+                borderColor: borderColor,
                 shadowColor: "#000",
                 shadowOpacity: 0.05,
                 shadowRadius: 6,
@@ -60,7 +63,6 @@ const PackageCartCard: React.FC<Props> = ({
             }}
         >
             {/* TOP */}
-
             <View
                 style={{
                     flexDirection: "row",
@@ -68,7 +70,6 @@ const PackageCartCard: React.FC<Props> = ({
                 }}
             >
                 {/* Package Image */}
-
                 <Image
                     source={{ uri: item.image }}
                     style={{
@@ -79,7 +80,6 @@ const PackageCartCard: React.FC<Props> = ({
                 />
 
                 {/* Package Details */}
-
                 <View
                     style={{
                         flex: 1,
@@ -90,7 +90,7 @@ const PackageCartCard: React.FC<Props> = ({
                         style={{
                             fontSize: 17,
                             fontWeight: "600",
-                            color: "#111",
+                            color: activeColor,
                         }}
                     >
                         {item.name}
@@ -101,7 +101,7 @@ const PackageCartCard: React.FC<Props> = ({
                             marginTop: 4,
                             fontSize: 17,
                             fontWeight: "700",
-                            color: "#111",
+                            color: activeColor,
                         }}
                     >
                         Rs. {formatPrice(item.price)}
@@ -109,7 +109,6 @@ const PackageCartCard: React.FC<Props> = ({
                 </View>
 
                 {/* DELETE */}
-
                 <TouchableOpacity
                     onPress={() => onDelete(item.id)}
                     activeOpacity={0.8}
@@ -120,6 +119,8 @@ const PackageCartCard: React.FC<Props> = ({
                         backgroundColor: "#FFF",
                         justifyContent: "center",
                         alignItems: "center",
+                        borderWidth: isUnavailable ? 1 : 0,
+                        borderColor: isUnavailable ? "#FF383C" : "transparent",
                         shadowColor: "#000",
                         shadowOpacity: 0.08,
                         shadowRadius: 4,
@@ -133,20 +134,24 @@ const PackageCartCard: React.FC<Props> = ({
                     <FontAwesome6
                         name="trash"
                         size={17}
-                        color="#000"
+                        color={isUnavailable ? "#FF383C" : "#000"}
                     />
                 </TouchableOpacity>
             </View>
 
             {/* DIVIDER */}
-
             <View className="flex-row items-center my-4">
                 <View className="flex-1 h-[1px] overflow-hidden">
                     <View className="flex-row">
                         {Array.from({ length: 100 }).map((_, index) => (
                             <View
                                 key={index}
-                                className="w-1 h-[1px] bg-[#D9D9D9] mr-1"
+                                style={{
+                                    width: 4,
+                                    height: 1,
+                                    backgroundColor: isUnavailable ? "#FF383C" : "#D9D9D9",
+                                    marginRight: 4,
+                                }}
                             />
                         ))}
                     </View>
@@ -154,122 +159,126 @@ const PackageCartCard: React.FC<Props> = ({
             </View>
 
             {/* BOTTOM */}
-
-            <View
-                style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                }}
-            >
-                {/* TOTAL ITEMS */}
-
-                <Text
+            {isUnavailable ? (
+                <View
                     style={{
-                        fontSize: 14,
-                        color: "#777",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
                     }}
                 >
-                    Total Items:{" "}
                     <Text
                         style={{
-                            color: "#111",
+                            fontSize: 14,
                             fontWeight: "600",
+                            color: "#FF383C",
                         }}
                     >
-                        {item.totalItems}
+                        Qty : <Text style={{ fontWeight: "700" }}>{item.quantity}</Text>
                     </Text>
-                </Text>
 
-                <View style={{ flex: 1 }} />
+                    <Text
+                        style={{
+                            fontSize: 14,
+                            fontWeight: "600",
+                            color: "#FF383C",
+                        }}
+                    >
+                        No longer available
+                    </Text>
+                </View>
+            ) : (
+                <View
+                    style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                    }}
+                >
+                    {/* TOTAL ITEMS */}
+                    <Text
+                        style={{
+                            fontSize: 14,
+                            color: "#777",
+                        }}
+                    >
+                        Total Items:{" "}
+                        <Text
+                            style={{
+                                color: "#111",
+                                fontWeight: "600",
+                            }}
+                        >
+                            {item.totalItems}
+                        </Text>
+                    </Text>
 
-                {/* MINUS */}
+                    <View style={{ flex: 1 }} />
 
-                {!isMinimum ? (
+                    {/* MINUS */}
+                    {!isMinimum ? (
+                        <TouchableOpacity
+                            disabled={isMinimum}
+                            onPress={() => onDecrease(item.id)}
+                            activeOpacity={0.8}
+                            style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                justifyContent: "center",
+                                alignItems: "center",
+                                backgroundColor: isMinimum ? "#D9D9D9" : "#000",
+                            }}
+                        >
+                            <Ionicons name="remove" size={16} color="#FFF" />
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            disabled={isMinimum}
+                            onPress={() => onDecrease(item.id)}
+                            activeOpacity={0.8}
+                            style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 16,
+                                justifyContent: "center",
+                                alignItems: "center",
+                                backgroundColor: isMinimum ? "#D9D9D9" : "#000",
+                            }}
+                        >
+                            <FontAwesome6 name="trash" size={17} color="#FFF" />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* QUANTITY */}
+                    <Text
+                        style={{
+                            minWidth: 48,
+                            textAlign: "center",
+                            fontSize: 15,
+                            fontWeight: "700",
+                            color: "#111",
+                        }}
+                    >
+                        {item.quantity}
+                    </Text>
+
+                    {/* PLUS */}
                     <TouchableOpacity
-                        disabled={isMinimum}
-                        onPress={() => onDecrease(item.id)}
+                        onPress={() => onIncrease(item.id)}
                         activeOpacity={0.8}
                         style={{
                             width: 32,
-                        height: 32,
-                        borderRadius: 16,
-
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        backgroundColor: isMinimum
-                            ? "#D9D9D9"
-                            : "#000",
-                    }}
-                >
-                    <Ionicons
-                        name="remove"
-                        size={16}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>)
-                :
-                <TouchableOpacity
-                        disabled={isMinimum}
-                        onPress={() => onDecrease(item.id)}
-                        activeOpacity={0.8}
-                        style={{
-                            width: 30,
-                        height: 30,
-                        borderRadius: 16,
-
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        backgroundColor: isMinimum
-                            ? "#D9D9D9"
-                            : "#000",
-                    }}
-                >
-                    <FontAwesome6
-                        name="trash"
-                        size={17}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>}
-
-                {/* QUANTITY */}
-
-                <Text
-                    style={{
-                        minWidth: 48,
-                        textAlign: "center",
-                        fontSize: 15,
-                        fontWeight: "700",
-                        color: "#111",
-                    }}
-                >
-                    {item.quantity}
-                </Text>
-
-                {/* PLUS */}
-
-                <TouchableOpacity
-                    onPress={() => onIncrease(item.id)}
-                    activeOpacity={0.8}
-                    style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-
-                        backgroundColor: "#000",
-
-                        justifyContent: "center",
-                        alignItems: "center",
-                    }}
-                >
-                    <Ionicons
-                        name="add"
-                        size={18}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>
-            </View>
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: "#000",
+                            justifyContent: "center",
+                            alignItems: "center",
+                        }}
+                    >
+                        <Ionicons name="add" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 };

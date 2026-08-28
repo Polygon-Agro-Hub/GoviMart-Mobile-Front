@@ -5,42 +5,37 @@ import { Ionicons } from "@expo/vector-icons";
 interface Props {
     visible: boolean;
     itemCount: number;
-    //   onPress: () => void;
+    onPress?: () => void;
 }
 
 const ViewCartPopup = ({
     visible,
     itemCount,
-    //   onPress,
+    onPress,
 }: Props) => {
     if (!visible) return null;
 
     return (
         <TouchableOpacity
             activeOpacity={0.9}
-            //   onPress={onPress}
+            onPress={onPress}
             style={{
                 position: "absolute",
                 bottom: 96,
                 alignSelf: "center",
-
-
                 alignItems: "center",
-
                 zIndex: 999,
             }}
         >
             {/* Black Section */}
-
             <View
                 style={{
                     flexDirection: "row",
                     backgroundColor: "black",
                     borderRadius: 999,
-                    opacity: 0.8,
+                    opacity: 0.9,
                     paddingHorizontal: 16,
                     paddingVertical: 10,
-
                     justifyContent: "center",
                 }}
             >
@@ -92,10 +87,6 @@ const ViewCartPopup = ({
                     />
                 </View>
             </View>
-
-
-
-
         </TouchableOpacity>
     );
 };

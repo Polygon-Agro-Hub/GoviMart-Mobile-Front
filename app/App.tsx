@@ -20,7 +20,8 @@ import { navigationRef } from "../navigationRef";
 import { GlobalAlert } from "@/component/common/AlertModal";
 
 import { Provider } from "react-redux";
-import { store } from "../src/store";
+import { PersistGate } from "redux-persist/integration/react";
+import { store, persistor } from "../src/store";
 import ViewProduct from "@/screens/products/ViewProductScreen";
 import ViewPackage from "@/screens/packages/ViewPackageScreen";
 import MyCart from "@/screens/cart/MyCartScreen";
@@ -93,9 +94,11 @@ function AppContent() {
 export default function App() {
   return (
     <Provider store={store}>
-      <SafeAreaProvider>
-        <AppContent />
-      </SafeAreaProvider>
+      <PersistGate loading={null} persistor={persistor}>
+        <SafeAreaProvider>
+          <AppContent />
+        </SafeAreaProvider>
+      </PersistGate>
     </Provider>
   );
 }

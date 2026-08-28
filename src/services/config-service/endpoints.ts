@@ -32,6 +32,7 @@ export const ENDPOINTS = {
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
     GET_BANNERS: "api/product/slides",
+    CHECK_AVAILABILITY: "api/product/check-availability",
   },
 
   ORDER: {

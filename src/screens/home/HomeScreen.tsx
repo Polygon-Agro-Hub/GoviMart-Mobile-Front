@@ -12,8 +12,20 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList, ProductType, PackageType, ShopItem } from "@/types/types";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
+import {
+  addProduct,
+  removeProduct,
+  increaseProductWeight,
+  decreaseProductWeight,
+  changeProductUnit,
+  addPackage,
+  removePackage,
+  increasePackageQuantity,
+  decreasePackageQuantity,
+} from "@/store/cartSlice";
+
 import HomeHeader from "@/component/home/HomeHeader";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
@@ -203,9 +215,11 @@ const ProductGridSkeleton = () => {
 };
 
 const Home: React.FC<HomeProps> = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const cartProducts = useSelector((state: RootState) => state.cart.products);
+
   const [bannerSlides, setBannerSlides] = useState<{ id: number; image: string; details: string }[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("Packages");
-  const [activeProducts, setActiveProducts] = useState<{ [id: number]: { quantity: number; unit: "g" | "kg" } }>({});
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -218,7 +232,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         const response = await productService.getBanners();
         if (response.data && response.data.status) {
           const fetchedSlides = response.data.slides || [];
-          // Filter for Retail marketplace slides
           const retailSlides = fetchedSlides.filter((slide: any) => slide.type === "Retail");
           setBannerSlides(retailSlides);
         }
@@ -254,25 +267,20 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     try {
       setSelectedCategoryId(categoryId);
       setLoadingProducts(true);
-      // Packages
       if (categoryId === "Packages") {
         const response = await productService.getAllPackages();
-
         if (response.data?.status) {
           const packages = response.data?.product.map((item: any) => ({
             ...item,
             type: "package",
           }));
-
           setShopItems(packages);
         }
         setLoadingProducts(false);
         return;
       }
 
-      // Normal product category
-      const response =
-        await productService.getProductsByCategory(categoryId);
+      const response = await productService.getProductsByCategory(categoryId);
 
       if (response.data?.status) {
         const products = response.data.products.map(
@@ -281,7 +289,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             type: "product",
           })
         );
-
         setShopItems(products);
       }
     } catch (error) {
@@ -291,8 +298,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     }
   };
 
-
-  // Chunk products into rows of 2 for grid layout
   const itemRows: ShopItem[][] = [];
   for (let i = 0; i < shopItems?.length; i += 2) {
     itemRows.push(shopItems?.slice(i, i + 2));
@@ -307,57 +312,37 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   }, [navigation]);
 
   const handleToggleUnit = useCallback((productId: number, unit: "g" | "kg") => {
-    setActiveProducts(prev => ({
-      ...prev,
-      [productId]: {
-        unit,
-        quantity: unit === "g" ? 500 : 1,
-      },
-    }));
-  }, []);
+    dispatch(changeProductUnit({ id: productId, newUnit: unit }));
+  }, [dispatch]);
 
   const handleIncrement = useCallback((productId: number) => {
-    setActiveProducts(prev => {
-      const item = prev[productId];
-      if (!item) return prev;
-      const step = item.unit === "g" ? 100 : 0.5;
-      return {
-        ...prev,
-        [productId]: {
-          ...item,
-          quantity: Number((item.quantity + step).toFixed(1)),
-        },
-      };
-    });
-  }, []);
+    dispatch(increaseProductWeight(productId));
+  }, [dispatch]);
 
   const handleDecrement = useCallback((productId: number) => {
-    setActiveProducts(prev => {
-      const item = prev[productId];
-      if (!item) return prev;
-      const step = item.unit === "g" ? 100 : 0.5;
-      const nextQty = item.quantity - step;
-      if (nextQty <= 0) {
-        const updated = { ...prev };
-        delete updated[productId];
-        return updated;
-      }
-      return {
-        ...prev,
-        [productId]: {
-          ...item,
-          quantity: Number(nextQty.toFixed(1)),
-        },
-      };
-    });
-  }, []);
+    const existing = cartProducts.find((p) => p.id === productId);
+    if (existing && existing.weight <= existing.minimumWeight) {
+      dispatch(removeProduct(productId));
+    } else {
+      dispatch(decreaseProductWeight(productId));
+    }
+  }, [dispatch, cartProducts]);
 
-  const handleAddProduct = useCallback((productId: number) => {
-    setActiveProducts(prev => ({
-      ...prev,
-      [productId]: { quantity: 500, unit: "g" },
-    }));
-  }, []);
+  const handleAddProduct = useCallback((product: ProductType) => {
+    dispatch(
+      addProduct({
+        id: product.id,
+        name: product.displayName,
+        image: product.image,
+        price: parseFloat(product.normalPrice) || 0,
+        weight: 500,
+        unit: "g",
+        minimumWeight: 500,
+        step: 100,
+      })
+    );
+  }, [dispatch]);
+
 
   return (
     <View className="flex-1 bg-white">
@@ -473,7 +458,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             {itemRows.map((row, rowIndex) => (
             <View key={rowIndex} className="flex-row justify-between mb-4">
               {row.map((product) => {
-                const cartItem = activeProducts[product.id];
+                const cartItem = cartProducts.find((p) => p.id === product.id);
 
                 return (
                   <TouchableOpacity
@@ -536,7 +521,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           {/* Add Button */}
                           <TouchableOpacity
                             activeOpacity={0.8}
-                            onPress={() => handleAddProduct(product.id)}
+                            onPress={() => {
+                              if (product.type === "product") {
+                                handleAddProduct(product as ProductType);
+                              }
+                            }}
                             className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
                             style={{
                               shadowColor: "#000",
@@ -602,7 +591,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
                             {/* Qty value */}
                             <Text className="text-black font-bold text-[11px]">
-                              {cartItem.quantity} {cartItem.unit}
+                              {cartItem.weight} {cartItem.unit}
                             </Text>
 
                             {/* Plus Button */}
