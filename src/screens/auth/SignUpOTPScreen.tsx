@@ -45,19 +45,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const accountDetails = route.params?.accountDetails || null;
   const formattedPhone = `${phoneCode} ${phoneNumber}`;
 
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    return () => {
-      keyboardDidShowListener.remove();
-    };
-  }, []);
+
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -248,6 +236,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.select({ ios: 80, android: 50 })}
       className="flex-1 bg-white"
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
@@ -264,7 +253,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",
-          paddingBottom: 80,
+          paddingBottom: 120,
         }}
         className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
@@ -377,30 +366,28 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               </TouchableOpacity>
             )}
           </View>
- 
-          {/* Action Buttons */}
-          <View className="mt-12 w-full">
-            {/* Verify Button (Always shown) */}
-            <TouchableOpacity
-              onPress={handleVerify}
-              disabled={isVerifying || isResending}
-              activeOpacity={0.8}
-              className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-            >
-              <Text className="text-white text-base font-bold">
-                {isVerifying ? "Verifying..." : "Verify"}
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </ScrollView>
 
-      {/* Bottom Line Image decoration */}
-      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 64 }}>
-        <Image
-          source={require("@/assets/images/auth/bottom-line.webp")}
-          style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-        />
+      {/* Action Buttons */}
+      <View className="px-6 pb-0 pt-2 bg-white">
+        {/* Verify Button (Always shown) */}
+        <TouchableOpacity
+          onPress={handleVerify}
+          disabled={isVerifying || isResending}
+          activeOpacity={0.8}
+          className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+        >
+          <Text className="text-white text-base font-bold">
+            {isVerifying ? "Verifying..." : "Verify"}
+          </Text>
+        </TouchableOpacity>
+        <View className="h-14 mt-6" style={{ marginLeft: -16, marginRight: -16 }}>
+          <Image
+            source={require("@/assets/images/auth/bottom-line.webp")}
+            style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+          />
+        </View>
       </View>
     </KeyboardAvoidingView>
   );

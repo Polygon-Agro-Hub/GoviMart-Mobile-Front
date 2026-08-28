@@ -54,20 +54,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [tab, setTab] = useState<"home" | "business">("home");
 
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    return () => {
-      keyboardDidShowListener.remove();
-    };
-  }, []);
-
   // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
@@ -114,9 +100,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     const newErrors: Record<string, string> = {};
 
     if (!title) newErrors.title = "Title is required";
-    if (!firstName.trim()) newErrors.firstName = "First name is required";
-    if (!lastName.trim()) newErrors.lastName = "Last name is required";
-    
+    if (!firstName.trim()) {
+      newErrors.firstName = "First name is required";
+    } else if (!/^[a-zA-Z\s]+$/.test(firstName.trim())) {
+      newErrors.firstName = "First name must contain only letters";
+    }
+
+    if (!lastName.trim()) {
+      newErrors.lastName = "Last name is required";
+    } else if (!/^[a-zA-Z\s]+$/.test(lastName.trim())) {
+      newErrors.lastName = "Last name must contain only letters";
+    }
+
     // User Mobile Phone Validate (Separated)
     if (!phoneCode) {
       newErrors.phoneCode = "Country code is required";
@@ -134,13 +129,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
     if (!nic.trim()) {
       newErrors.nic = "NIC Number is required";
-    } else if (!/^[0-9]{9}[vVxX]$/.test(nic.trim()) && !/^[0-9]{12}$/.test(nic.trim())) {
+    } else if (!/^[0-9]{9}[vV]$/.test(nic.trim()) && !/^[0-9]{12}$/.test(nic.trim())) {
       newErrors.nic = "Invalid NIC format";
     }
 
     if (tab === "business") {
       if (!companyName.trim()) newErrors.companyName = "Company name is required";
-      
+
       // Company Mobile Phone Validate (Separated)
       if (!companyPhoneCode) {
         newErrors.companyPhoneCode = "Country code is required";
@@ -249,9 +244,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     <TouchableOpacity
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
-      className={`px-5 py-3.5 flex-row justify-between items-center ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row justify-between items-center ${!isLast ? "border-b border-gray-100" : ""
+        }`}
     >
       <View className="flex-row items-center gap-x-3">
         <Image
@@ -272,6 +266,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.select({ ios: 100, android: 80 })}
       className="flex-1 bg-white"
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
@@ -302,9 +297,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "home" ? "font-bold text-black" : "font-semibold text-gray-400"
-              }`}
+              className={`text-sm ${tab === "home" ? "font-bold text-black" : "font-semibold text-gray-400"
+                }`}
             >
               I’m Buying for Home
             </Text>
@@ -328,9 +322,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "business" ? "font-bold text-black" : "font-semibold text-gray-400"
-              }`}
+              className={`text-sm ${tab === "business" ? "font-bold text-black" : "font-semibold text-gray-400"
+                }`}
             >
               I’m Buying for Business
             </Text>
@@ -343,7 +336,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         className="flex-1 px-4 mt-6"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", paddingBottom: 50 }}
       >
         <View className="gap-y-4 flex-1">
           {/* Title & First Name Row */}
@@ -353,13 +346,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <TouchableOpacity
                 onPress={() => setIsTitleModalOpen(true)}
                 activeOpacity={0.8}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
-                  errors.title ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-                }`}
+                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${errors.title ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                  }`}
               >
                 <View className="flex-row items-center gap-x-2">
                   <FontAwesome6 name="user-large" size={14} color="black" />
-                  <Text className="text-sm font-semibold text-black">
+                  <Text className="text-sm text-black">
                     {title || "Title"}
                   </Text>
                 </View>
@@ -368,7 +360,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {errors.title && (
                 <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                   <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">{errors.title}</Text>
+                  <Text className="text-red-500 text-xs">{errors.title}</Text>
                 </View>
               )}
             </View>
@@ -376,23 +368,22 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             {/* First Name Input */}
             <View className="flex-1">
               <View
-                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                  errors.firstName ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-                }`}
+                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.firstName ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                  }`}
               >
                 <FontAwesome6 name="user-large" size={14} color="black" />
                 <TextInput
                   placeholder="First Name"
                   placeholderTextColor="#000000"
                   value={firstName}
-                  onChangeText={setFirstName}
-                  className="flex-1 text-sm text-black font-semibold p-0"
+                  onChangeText={(text) => setFirstName(text.replace(/[^a-zA-Z\s]/g, ""))}
+                  className="flex-1 text-sm text-black p-0"
                 />
               </View>
               {errors.firstName && (
                 <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                   <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">{errors.firstName}</Text>
+                  <Text className="text-red-500 text-xs">{errors.firstName}</Text>
                 </View>
               )}
             </View>
@@ -401,23 +392,22 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Last Name Input */}
           <View>
             <View
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.lastName ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.lastName ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                }`}
             >
               <FontAwesome6 name="user-large" size={14} color="black" />
               <TextInput
                 placeholder="Last Name"
                 placeholderTextColor="#000000"
                 value={lastName}
-                onChangeText={setLastName}
-                className="flex-1 text-sm text-black font-semibold p-0"
+                onChangeText={(text) => setLastName(text.replace(/[^a-zA-Z\s]/g, ""))}
+                className="flex-1 text-sm text-black p-0"
               />
             </View>
             {errors.lastName && (
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs font-semibold">{errors.lastName}</Text>
+                <Text className="text-red-500 text-xs">{errors.lastName}</Text>
               </View>
             )}
           </View>
@@ -430,9 +420,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 <TouchableOpacity
                   onPress={() => setIsPhoneCodeModalOpen(true)}
                   activeOpacity={0.8}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                    errors.phoneCode ? "border-red-500 bg-red-50/10" : "border-black"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.phoneCode ? "border-red-500 bg-red-50/10" : "border-black"
+                    }`}
                 >
                   <View className="flex-row items-center gap-x-2">
                     {phoneCode ? (
@@ -441,12 +430,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                           source={{ uri: getFlagUrl(countries.find(c => c.dialCode === phoneCode)?.code || "LK") }}
                           style={{ width: 22, height: 16, borderRadius: 2 }}
                         />
-                        <Text className="text-sm font-semibold text-black">{phoneCode}</Text>
+                        <Text className="text-sm text-black">{phoneCode}</Text>
                       </>
                     ) : (
                       <>
                         <FontAwesome name="flag" size={14} color="black" />
-                        <Text className="text-sm font-semibold text-black">Code</Text>
+                        <Text className="text-sm text-black">Code</Text>
                       </>
                     )}
                   </View>
@@ -455,7 +444,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 {errors.phoneCode && (
                   <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                     <MaterialIcons name="error" size={12} color="#E02424" />
-                    <Text className="text-red-500 text-xs font-semibold">{errors.phoneCode}</Text>
+                    <Text className="text-red-500 text-xs">{errors.phoneCode}</Text>
                   </View>
                 )}
               </View>
@@ -463,9 +452,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {/* Mobile Number Input */}
               <View className="flex-1">
                 <View
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.phoneNumber ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.phoneNumber ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                    }`}
                 >
                   <FontAwesome5 name="phone-alt" size={14} color="black" />
                   <TextInput
@@ -474,13 +462,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     keyboardType="number-pad"
                     value={phoneNumber}
                     onChangeText={setPhoneNumber}
-                    className="flex-1 text-sm text-black font-semibold p-0"
+                    className="flex-1 text-sm text-black p-0"
                   />
                 </View>
                 {errors.phoneNumber && (
                   <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                     <MaterialIcons name="error" size={12} color="#E02424" />
-                    <Text className="text-red-500 text-xs font-semibold">{errors.phoneNumber}</Text>
+                    <Text className="text-red-500 text-xs">{errors.phoneNumber}</Text>
                   </View>
                 )}
               </View>
@@ -490,7 +478,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             {phoneCode !== "" && phoneCode !== "+94" && (
               <View className="bg-[#FFF5E9] p-3 rounded-2xl flex-row items-center gap-x-3 mt-2 border-0">
                 <FontAwesome6 name="circle-info" size={16} color="#FF9114" />
-                <Text className="text-xs font-semibold text-[#FF9114] flex-1 leading-relaxed">
+                <Text className="text-xs text-[#FF9114] flex-1 leading-relaxed">
                   Delivery is limited to Sri Lankan addresses. Overseas customers may place orders for recipients in Sri Lanka.
                 </Text>
               </View>
@@ -500,9 +488,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Email Address Input */}
           <View>
             <View
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.email ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.email ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                }`}
             >
               <Entypo name="mail" size={16} color="black" />
               <TextInput
@@ -512,13 +499,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
-                className="flex-1 text-sm text-black font-semibold p-0"
+                className="flex-1 text-sm text-black p-0"
               />
             </View>
             {errors.email && (
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs font-semibold">{errors.email}</Text>
+                <Text className="text-red-500 text-xs">{errors.email}</Text>
               </View>
             )}
           </View>
@@ -526,9 +513,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* NIC Number Input */}
           <View>
             <View
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.nic ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.nic ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                }`}
             >
               <FontAwesome name="id-card" size={16} color="black" />
               <TextInput
@@ -537,13 +523,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 autoCapitalize="characters"
                 value={nic}
                 onChangeText={setNic}
-                className="flex-1 text-sm text-black font-semibold p-0"
+                className="flex-1 text-sm text-black p-0"
               />
             </View>
             {errors.nic && (
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs font-semibold">{errors.nic}</Text>
+                <Text className="text-red-500 text-xs">{errors.nic}</Text>
               </View>
             )}
           </View>
@@ -554,9 +540,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {/* Company Name */}
               <View>
                 <View
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.companyName ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyName ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                    }`}
                 >
                   <FontAwesome name="building" size={16} color="black" />
                   <TextInput
@@ -564,13 +549,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     placeholderTextColor="#000000"
                     value={companyName}
                     onChangeText={setCompanyName}
-                    className="flex-1 text-sm text-black font-semibold p-0"
+                    className="flex-1 text-sm text-black p-0"
                   />
                 </View>
                 {errors.companyName && (
                   <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                     <MaterialIcons name="error" size={12} color="#E02424" />
-                    <Text className="text-red-500 text-xs font-semibold">{errors.companyName}</Text>
+                    <Text className="text-red-500 text-xs">{errors.companyName}</Text>
                   </View>
                 )}
               </View>
@@ -583,9 +568,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     <TouchableOpacity
                       onPress={() => setIsCompanyPhoneCodeModalOpen(true)}
                       activeOpacity={0.8}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                        errors.companyPhoneCode ? "border-red-500 bg-red-50/10" : "border-black"
-                      }`}
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.companyPhoneCode ? "border-red-500 bg-red-50/10" : "border-black"
+                        }`}
                     >
                       <View className="flex-row items-center gap-x-2">
                         {companyPhoneCode ? (
@@ -594,12 +578,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                               source={{ uri: getFlagUrl(countries.find(c => c.dialCode === companyPhoneCode)?.code || "LK") }}
                               style={{ width: 22, height: 16, borderRadius: 2 }}
                             />
-                            <Text className="text-sm font-semibold text-black">{companyPhoneCode}</Text>
+                            <Text className="text-sm text-black">{companyPhoneCode}</Text>
                           </>
                         ) : (
                           <>
                             <FontAwesome name="flag" size={14} color="black" />
-                            <Text className="text-sm font-semibold text-black">Code</Text>
+                            <Text className="text-sm text-black">Code</Text>
                           </>
                         )}
                       </View>
@@ -608,7 +592,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     {errors.companyPhoneCode && (
                       <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                         <MaterialIcons name="error" size={12} color="#E02424" />
-                        <Text className="text-red-500 text-xs font-semibold">{errors.companyPhoneCode}</Text>
+                        <Text className="text-red-500 text-xs">{errors.companyPhoneCode}</Text>
                       </View>
                     )}
                   </View>
@@ -616,9 +600,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   {/* Company Number Input */}
                   <View className="flex-1">
                     <View
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                        errors.companyNumber ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-                      }`}
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyNumber ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                        }`}
                     >
                       <FontAwesome5 name="phone-alt" size={14} color="black" />
                       <TextInput
@@ -627,13 +610,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         keyboardType="number-pad"
                         value={companyNumber}
                         onChangeText={setCompanyNumber}
-                        className="flex-1 text-sm text-black font-semibold p-0"
+                        className="flex-1 text-sm text-black p-0"
                       />
                     </View>
                     {errors.companyNumber && (
                       <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                         <MaterialIcons name="error" size={12} color="#E02424" />
-                        <Text className="text-red-500 text-xs font-semibold">{errors.companyNumber}</Text>
+                        <Text className="text-red-500 text-xs">{errors.companyNumber}</Text>
                       </View>
                     )}
                   </View>
@@ -655,9 +638,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Password Input */}
           <View>
             <View
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.password ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.password ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -666,7 +648,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
-                className="flex-1 text-sm text-black font-semibold p-0"
+                className="flex-1 text-sm text-black p-0"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <FontAwesome5 name={showPassword ? "eye-slash" : "eye"} size={16} color="black" />
@@ -675,13 +657,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             {errors.password && (
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs font-semibold">{errors.password}</Text>
+                <Text className="text-red-500 text-xs">{errors.password}</Text>
               </View>
             )}
           </View>
 
           {/* Password Requirement Box */}
-          <View className="bg-gray-100 rounded-2xl p-4 flex-row items-center gap-x-3">
+          <View className="bg-[#F3F3F3] rounded-xl p-4 flex-row items-center gap-x-3">
             <View className="w-10 h-10 rounded-full bg-black items-center justify-center">
               <FontAwesome6 name="shield-halved" size={18} color="white" />
             </View>
@@ -700,9 +682,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Confirm Password Input */}
           <View>
             <View
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.confirmPassword ? "border-red-500 bg-red-50/10" : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.confirmPassword ? "border-red-500 bg-red-50/10" : "border-black bg-white"
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -711,7 +692,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                className="flex-1 text-sm text-black font-semibold p-0"
+                className="flex-1 text-sm text-black p-0"
               />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
                 <FontAwesome5 name={showConfirmPassword ? "eye-slash" : "eye"} size={16} color="black" />
@@ -720,7 +701,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             {errors.confirmPassword && (
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs font-semibold">{errors.confirmPassword}</Text>
+                <Text className="text-red-500 text-xs">{errors.confirmPassword}</Text>
               </View>
             )}
           </View>
@@ -734,9 +715,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 className="flex-row items-start gap-x-3 mt-2 px-1"
               >
                 <View
-                  className={`w-5 h-5 rounded border items-center justify-center ${
-                    agreeToTerms ? "bg-black border-black" : "border-black bg-white"
-                  }`}
+                  className={`w-5 h-5 rounded border items-center justify-center ${agreeToTerms ? "bg-black border-black" : "border-black bg-white"
+                    }`}
                 >
                   {agreeToTerms && (
                     <Ionicons name="checkmark" size={14} color="white" />
@@ -751,52 +731,64 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {errors.agreeToTerms && (
                 <View className="flex-row items-center gap-x-1 mt-2 ml-3">
                   <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">{errors.agreeToTerms}</Text>
+                  <Text className="text-red-500 text-xs">{errors.agreeToTerms}</Text>
                 </View>
               )}
             </View>
           )}
 
-          {/* Sign Up Button */}
-          <TouchableOpacity
-            onPress={handleSignUp}
-            disabled={isLoading}
-            activeOpacity={0.8}
-            className="bg-black rounded-full items-center justify-center mt-4 shadow-sm h-[50px]"
-          >
-            <Text className="text-white text-base font-bold">
-              {isLoading ? "Signing up..." : "Sign up"}
-            </Text>
-          </TouchableOpacity>
-
-
-
-          {/* Sign In Redirect Link */}
-          <View className="flex-row items-center justify-center mt-3">
-            <Text className="text-xs text-gray-500">
-              Already have an account?{" "}
-            </Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => navigation.navigate("Login")}
-            >
-              <Text className="text-xs font-bold text-[#0085FF] underline">
-                Sign in
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Bottom Line Image decoration */}
-        <View className="h-16 mt-6" style={{ marginLeft: -16, marginRight: -16 }}>
-          <Image
-            source={require("@/assets/images/auth/bottom-line.webp")}
-            style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-          />
         </View>
       </ScrollView>
 
-   
+      {/* Action Button Section */}
+      <View className="px-4 pb-0 pt-2 bg-white">
+        {/* Sign Up Button */}
+        <TouchableOpacity
+          onPress={handleSignUp}
+          disabled={isLoading}
+          activeOpacity={0.8}
+          className="bg-black rounded-full items-center justify-center mt-4 shadow-sm h-[50px]"
+          style={{
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+            elevation: 5,
+          }}
+        >
+          <Text className="text-white text-base font-bold">
+            {isLoading ? "Signing up..." : "Sign up"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Sign In Redirect Link */}
+        <View className="flex-row items-center justify-center mt-3">
+          <Text className="text-xs text-gray-500">
+            Already have an account?{" "}
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate("Login")}
+          >
+            <Text className="text-xs font-bold text-[#0085FF] underline">
+              Sign in
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Bottom Line Image decoration */}
+      <View className="h-14" style={{ marginLeft: -16, marginRight: -16 }}>
+        <Image
+          source={require("@/assets/images/auth/bottom-line.webp")}
+          style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+        />
+      </View>
+
+
 
       {/* Title GlobalSearchModal */}
       <GlobalSearchModal
