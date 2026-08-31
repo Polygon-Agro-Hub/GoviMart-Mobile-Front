@@ -375,25 +375,6 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
     }
   };
 
-  const handleNavigateIfNoCropsSelected = () => {
-    if (
-      selectedIncludeCrops.length === 0 &&
-      selectedExcludeCrops.length === 0
-    ) {
-      const currentData = getCurrentCustomerData();
-      navigation.navigate("ExcludeListSummery", {
-        customerId: Number(customerId),
-        name: currentData.name,
-        title: currentData.title,
-        phoneNumber: currentData.number,
-        cusId: currentData.customerId,
-        id: Number(currentData.id) || undefined,
-      });
-    } else {
-      handlesubmitexcludelist();
-    }
-  };
-
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
       setSearchQuery("");
@@ -543,7 +524,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       {!isKeyboardVisible && (
         <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
           <TouchableOpacity
-            onPress={handleNavigateIfNoCropsSelected}
+            onPress={handlesubmitexcludelist}
             disabled={loading}
             activeOpacity={0.8}
             className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"

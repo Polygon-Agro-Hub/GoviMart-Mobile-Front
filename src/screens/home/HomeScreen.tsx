@@ -8,9 +8,13 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  BackHandler,
+  ToastAndroid,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList, ProductType, PackageType, ShopItem } from "@/types/types";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
@@ -223,6 +227,40 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
+
+  // Ref to track "press back again to exit" state without re-rendering
+  const backPressedOnce = useRef(false);
+
+  // System back button handling: Home is the root/landing screen, so a bare
+  // back press here should not just fall through to exiting immediately.
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (backPressedOnce.current) {
+          BackHandler.exitApp();
+          return true;
+        }
+
+        backPressedOnce.current = true;
+        if (Platform.OS === "android") {
+          ToastAndroid.show("Press back again to exit", ToastAndroid.SHORT);
+        }
+
+        setTimeout(() => {
+          backPressedOnce.current = false;
+        }, 2000);
+
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [])
+  );
 
   // initial fetching
   useEffect(() => {

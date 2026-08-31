@@ -258,7 +258,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+   
 
       {/* Fixed Bottom Lottie (city.json) */}
       <View className="w-full h-[180px]">
@@ -270,6 +270,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
           resizeMode="cover"
         />
       </View>
+         </ScrollView>
 
       {/* Cities GlobalSearchModal */}
       <GlobalSearchModal

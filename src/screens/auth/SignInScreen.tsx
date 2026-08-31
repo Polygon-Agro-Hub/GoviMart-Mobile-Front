@@ -1,15 +1,30 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Dimensions,
+  BackHandler,
+} from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { FontAwesome6,  Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import { useDispatch } from "react-redux";
 import { loginSuccess, setRememberMeDetails } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
 import * as SecureStore from "expo-secure-store";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.4;
 
 type LoginNavigationProp = StackNavigationProp<RootStackParamList, "Login">;
 
@@ -28,14 +43,34 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
 
+  // Disable Android hardware back button on this screen
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // returning true marks the event as handled, blocking default back behavior
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+
+      return () => subscription.remove();
+    }, []),
+  );
+
   // Load remembered identifier and encrypted password if remember me is enabled
   useEffect(() => {
     const loadRemembered = async () => {
       try {
         const isRemembered = await AsyncStorage.getItem("rememberMeEnabled");
         if (isRemembered === "true") {
-          const storedIdentifier = await AsyncStorage.getItem("rememberedIdentifier");
-          const storedPassword = await SecureStore.getItemAsync("rememberedPassword");
+          const storedIdentifier = await AsyncStorage.getItem(
+            "rememberedIdentifier",
+          );
+          const storedPassword =
+            await SecureStore.getItemAsync("rememberedPassword");
           if (storedIdentifier) {
             setIdentifier(storedIdentifier);
           }
@@ -47,7 +82,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             setRememberMeDetails({
               rememberMe: true,
               rememberedDetails: { identifier: storedIdentifier || "" },
-            })
+            }),
           );
         }
       } catch (e) {
@@ -63,10 +98,23 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     setLoading(true);
     try {
       const response = await authService.login({
-         identifier: identifier.trim(), password: password.trim()
-         });
+        identifier: identifier.trim(),
+        password: password.trim(),
+      });
       if (response.data && response.data.success) {
-        const { token, refreshToken, firstName, lastName, email, phoneNumber, image, firstTimeUser, buyerType, isDashUser, isPswUpdated } = response.data.data;
+        const {
+          token,
+          refreshToken,
+          firstName,
+          lastName,
+          email,
+          phoneNumber,
+          image,
+          firstTimeUser,
+          buyerType,
+          isDashUser,
+          isPswUpdated,
+        } = response.data.data;
         const loginTime = Date.now();
 
         // Save session details to AsyncStorage
@@ -99,7 +147,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             setRememberMeDetails({
               rememberMe: true,
               rememberedDetails: { identifier: identifier.trim() },
-            })
+            }),
           );
         } else {
           await AsyncStorage.removeItem("rememberMeEnabled");
@@ -110,7 +158,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             setRememberMeDetails({
               rememberMe: false,
               rememberedDetails: null,
-            })
+            }),
           );
         }
 
@@ -123,7 +171,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
                   number: phoneNumber,
-                  redirectTo:"ExcludeListAdd"
+                  redirectTo: "ExcludeListAdd",
                 });
               } else if (buyerType === "Retail" && firstTimeUser === 0) {
                 navigation.navigate("ExcludeListAdd", {
@@ -134,15 +182,21 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               } else {
                 navigation.navigate("Home");
               }
-            }
-          }
+            },
+          },
         ]);
       } else {
-        Alert.alert("Login Failed", response.data.message || "An error occurred during login.");
+        Alert.alert(
+          "Login Failed",
+          response.data.message || "An error occurred during login.",
+        );
       }
     } catch (error: any) {
       console.error("Login error:", error);
-      const errorMsg = error.response?.data?.message || error.message || "Failed to connect to server.";
+      const errorMsg =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to connect to server.";
       Alert.alert("Login Error", errorMsg);
     } finally {
       setLoading(false);
@@ -151,27 +205,30 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
   return (
     <View className="flex-1 bg-white">
-      {/* Top half section: sign-in image */}
-      <View className="w-full h-[40%]">
-        <Image
-          source={require("@/assets/images/auth/sign-in.webp")}
-          className="w-full h-full"
-          resizeMode="cover"
-        />
-      </View>
-
-      {/* Bottom section: White container overlapping the image with rounded top-right */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.select({ ios: 80, android: 50 })}
-        className="flex-1 bg-white mt-[-40px] rounded-tr-[60px] overflow-hidden"
+      <KeyboardAwareScrollView
+        innerRef={(ref) => (scrollViewRef.current = ref)}
+        className="flex-1 "
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={0}
+        extraHeight={0}
+        keyboardOpeningTime={0}
+        contentContainerStyle={{ paddingBottom: 20 }}
       >
-        <ScrollView 
-          ref={scrollViewRef}
-          className="flex-1 px-6 pt-6"
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingBottom: 120 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        {/* Top image section: now scrolls with the rest of the content */}
+        <View style={{ width: "100%", height: IMAGE_HEIGHT }}>
+          <Image
+            source={require("@/assets/images/auth/sign-in.webp")}
+            className="w-full h-full"
+            resizeMode="cover"
+          />
+        </View>
+
+        {/* White container overlapping the image with rounded top-right */}
+        <View
+          className="flex-1 bg-white mt-[-40px] rounded-tr-[60px] px-6 pt-6"
+          style={{ justifyContent: "center" }}
         >
           {/* Logo centered */}
           <View className="items-center mb-6">
@@ -191,7 +248,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             <View>
               <View className="w-full h-[50px] bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5">
                 <View className="mr-3">
-                  <MaterialIcons name="email" size={20} color="black" />
+                  <FontAwesome5 name="user-alt" size={20} color="black" />
                 </View>
                 <TextInput
                   value={identifier}
@@ -220,8 +277,15 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   autoCapitalize="none"
                   className="flex-1 text-sm text-black font-semibold p-0"
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="pl-2">
-                  <Ionicons name={showPassword ? "eye" : "eye-off"} size={20} color="black" />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  className="pl-2"
+                >
+                  <Ionicons
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={20}
+                    color="black"
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -236,32 +300,37 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 color={rememberMe ? "#094EE8" : undefined}
                 className="w-5 h-5 rounded-md"
               />
-              <Text className="text-sm font-semibold text-[#777A7D] ml-2">Remember me</Text>
+              <Text className="text-sm font-semibold text-[#777A7D] ml-2">
+                Remember me
+              </Text>
             </View>
             <TouchableOpacity activeOpacity={0.7}>
-              <Text className="text-sm font-bold text-[#094EE8]">Forgot Password?</Text>
+              <Text className="text-sm font-bold text-[#094EE8]">
+                Forgot Password?
+              </Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
 
-        {/* Action Button Section */}
-        <View className="px-6 pb-6 pt-2 bg-white">
           {/* Sign In Button */}
-          <TouchableOpacity 
-            className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
+          <TouchableOpacity
+            className={`w-full h-[50px] rounded-full items-center justify-center flex-row mt-8 ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
             activeOpacity={isValid ? 0.8 : 1}
             onPress={handleSignIn}
             disabled={loading || !isValid}
           >
-            {loading && <ActivityIndicator color="white" size="small" className="mr-2" />}
+            {loading && (
+              <ActivityIndicator color="white" size="small" className="mr-2" />
+            )}
             <Text className="text-white text-base font-bold">Sign in</Text>
           </TouchableOpacity>
 
           {/* Redirect / Register Section */}
           <View className="items-center mt-4">
-            <Text className="text-sm text-[#6B6B6B]">Don't have an account?</Text>
-            <TouchableOpacity 
-              onPress={() => navigation.navigate("ChooseAuth")} 
+            <Text className="text-sm text-[#6B6B6B]">
+              Don't have an account?
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("ChooseAuth")}
               className="mt-1"
               activeOpacity={0.7}
             >
@@ -271,7 +340,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 };
