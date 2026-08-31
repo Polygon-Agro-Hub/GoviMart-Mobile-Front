@@ -51,6 +51,9 @@ export type RootStackParamList = {
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
+  ReviewPackage: undefined;
+  SetQauntity: undefined;
+  OrderCancelConfirmation: undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -179,3 +182,34 @@ export interface VerifyPhoneChangePayload {
   signupToken: string;
   accountDetails?: UpdateUserDetailsPayload | null;
 }
+
+//___________Review Package screen types________________
+export type PackageSummary = {
+    id: string;
+    name: string;
+    icon: string; // emoji placeholder — swap for an <Image> when you have assets
+    qty: number;
+    unitPrice: number;
+};
+ 
+export type ReviewProduct = {
+    id: string;
+    category: string; // e.g. "Up Country Fruit (1)"
+    name: string;
+    icon: string;
+    price: number;
+    quantity: number;
+    unit: "kg" | "g";
+    step: number;
+    excludedWarning?: string;
+};
+ 
+export type PackageReview = {
+    id: string;
+    no: number;
+    name: string;
+    products: ReviewProduct[];
+    originalPackagePrice: number;
+    serviceFee: number;
+    packingFee: number;
+};
