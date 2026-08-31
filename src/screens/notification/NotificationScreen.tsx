@@ -126,7 +126,7 @@ const Notifications: React.FC<NotificationProps> = ({navigation}) => {
         );
 
         // Navigate to relevant screen here if required.
-        // navigation.navigate(...)
+        navigation.navigate("ReviewPackage")
     };
 
     // GROUP NOTIFICATIONS
