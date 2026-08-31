@@ -28,8 +28,11 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     const { packageId, packageName, image, price } = route.params;
     const dispatch = useDispatch();
     const existingPackage = useSelector((state: RootState) =>
-        state.cart.packages.find((p) => p.id === packageId)
+        state.cart.packages.find((p) => String(p.id) === String(packageId))
     );
+    const cartProducts = useSelector((state: RootState) => state.cart.products);
+    const cartPackages = useSelector((state: RootState) => state.cart.packages);
+    const totalCartItems = cartProducts.length + cartPackages.length;
 
     const [packageItems, setPackageItems] = useState<{ itemName: string; quantity: number }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -209,7 +212,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                             marginBottom: 6,
                         }}
                     >
-                        {price.toLocaleString("en-US", {
+                        {(price * quantity).toLocaleString("en-US", {
                             style: "currency",
                             currency: "LKR",
                         })}
@@ -281,8 +284,8 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
             />
 
             <ViewCartPopup
-                visible={viewCartVisible}
-                itemCount={quantity}
+                visible={viewCartVisible && totalCartItems > 0}
+                itemCount={totalCartItems}
                 onPress={() => navigation.navigate("MyCart")}
             />
 
@@ -290,6 +293,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 minimumValue={1}
                 step={1}
                 quantity={quantity}
+                initialIsAdded={!!existingPackage}
                 onIncrease={increaseQty}
                 onDecrease={decreaseQty}
                 onAddToCart={onAddToCart}

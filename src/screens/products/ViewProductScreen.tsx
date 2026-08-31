@@ -14,86 +14,128 @@ import { RootStackParamList } from "@/types/types";
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
 import ProductBottomCart from "@/component/common/BottomCart";
+import { useDispatch } from "react-redux";
+import { addProduct, removeProduct } from "@/store/cartSlice";
+import { AppDispatch } from "@/store";
 
 type Props = StackScreenProps<RootStackParamList, "ViewProduct">;
 
 const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
     const { product } = route.params;
 
-    const [unit, setUnit] = useState((product?.unitType!).toLowerCase());
-    const [quantity, setQuantity] = useState(Number(product?.startValue));
+    const dispatch = useDispatch<AppDispatch>();
+
+    // Product base values (always in the product's native unitType, e.g. "g")
+    const baseUnit = (product?.unitType || "g").toLowerCase(); // "g" or "kg"
+    const baseValue = Number(product?.startValue) || 1;       // e.g. 500 (in baseUnit)
+    const basePrice = Number(product?.normalPrice) || 0;
+
+    const [unit, setUnit] = useState(baseUnit);
+    const [quantity, setQuantity] = useState(baseValue);
     const [toastVisible, setToastVisible] = useState(false);
     const [toastMessage, setToastMessage] = useState("");
 
     const [viewCartVisible, setViewCartVisible] = useState(false);
 
+    // Minimum quantity in the currently selected unit
+    const minQuantity = unit === baseUnit
+        ? baseValue
+        : unit === "kg"
+            ? Number((baseValue / 1000).toFixed(1))   // g→kg: 500g = 0.5kg
+            : Math.round(baseValue * 1000);            // kg→g: 0.5kg = 500g
+
+    // Step size in the currently selected unit
+    const stepSize = unit === "g" ? 100 : 0.5;
+
+    // Normalize quantity to base unit before calculating price
+    // e.g. if baseUnit="g" and unit="kg": 0.5kg × 1000 = 500g
+    const quantityInBaseUnit = unit === baseUnit
+        ? quantity
+        : unit === "kg"
+            ? quantity * 1000   // kg → g
+            : quantity / 1000;  // g  → kg
+
+    // Dynamic price: scales with quantity
+    const dynamicPrice = (quantityInBaseUnit / baseValue) * basePrice;
+    const formattedPrice = "Rs. " + dynamicPrice.toLocaleString("en-LK", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+
+    const comPrice = product?.comPrice != null ? Number(product.comPrice) : null;
+    const discountedPrice = product?.discountedPrice != null ? Number(product.discountedPrice) : null;
+
+    // Savings per base unit: comPrice - discountedPrice (or fallback if comPrice is compared against normalPrice or discount against normalPrice)
+    const savingPerBaseUnit =
+        comPrice != null && discountedPrice != null && comPrice > discountedPrice
+            ? comPrice - discountedPrice
+            : comPrice != null && basePrice > 0 && comPrice > basePrice
+            ? comPrice - basePrice
+            : discountedPrice != null && basePrice > discountedPrice
+            ? basePrice - discountedPrice
+            : null;
+
+    // Discount saving scaled with quantity (in base unit)
+    const discountSaving = savingPerBaseUnit != null && savingPerBaseUnit > 0
+        ? (savingPerBaseUnit / baseValue) * quantityInBaseUnit
+        : null;
+
     const increaseQty = () => {
-        if (unit === "g") {
-            setQuantity((prev) => prev + 100);
-        } else {
-            setQuantity((prev) => Number((prev + 0.5).toFixed(1)));
-        }
+        setQuantity((prev) => Number((prev + stepSize).toFixed(1)));
     };
 
     const decreaseQty = () => {
-        if (unit === "g") {
-            if (quantity > 100) setQuantity((prev) => prev - 100);
-        } else {
-            if (quantity > 0.5)
-                setQuantity((prev) => Number((prev - 0.5).toFixed(1)));
-        }
+        if (quantity > minQuantity)
+            setQuantity((prev) => Number((prev - stepSize).toFixed(1)));
     };
 
     const changeUnit = (value: "kg" | "g") => {
         setUnit(value);
-
-        if (value === "g") {
-            setQuantity(500);
+        // Reset to minimum in the new unit
+        if (value === baseUnit) {
+            setQuantity(baseValue);
+        } else if (value === "kg") {
+            setQuantity(Number((baseValue / 1000).toFixed(1)));  // 500g → 0.5kg
         } else {
-            setQuantity(1);
+            setQuantity(Math.round(baseValue * 1000));            // 0.5kg → 500g
         }
     };
 
-    const onAddToCart = async () => {
-        // API
 
-        console.log("Added");
+    const onAddToCart = () => {
+        dispatch(
+            addProduct({
+                id: product!.id,
+                name: product!.displayName,
+                image: product!.image,
+                price: Number(product!.normalPrice),
+                weight: quantity,
+                unit: unit as "g" | "kg",
+                minimumWeight: minQuantity,
+                step: stepSize,
+            })
+        );
         showCartMessage("Added to Cart");
-
-        //   setTopToast("Added to Cart");
-
-        //   setBottomToast(true);
-
-        //   setTimeout(() => {
-        //     setBottomToast(false);
-        //   }, 3000);
     };
 
-    const onUpdateCart = async () => {
-        // API
-
-        console.log("Updated");
-
-        //   setTopToast("Cart Updated");
-
-        //   setBottomToast(true);
-
-        //   setTimeout(() => {
-        //     setBottomToast(false);
-        //   }, 3000);
+    const onUpdateCart = () => {
+        dispatch(
+            addProduct({
+                id: product!.id,
+                name: product!.displayName,
+                image: product!.image,
+                price: Number(product!.normalPrice),
+                weight: quantity,
+                unit: unit as "g" | "kg",
+                minimumWeight: minQuantity,
+                step: stepSize,
+            })
+        );
         showCartMessage("Cart Updated");
-
     };
 
-    const onRemoveFromCart = async () => {
-        // API
-
-        console.log("Removed");
-
-        //   setTopToast("Removed from Cart");
-
-        //   setBottomToast(false);
-
+    const onRemoveFromCart = () => {
+        dispatch(removeProduct(product!.id));
         showCartMessage("Removed from Cart");
         setViewCartVisible(false);
     };
@@ -265,65 +307,70 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
                     <Text
                         style={{
                             fontSize: 30,
-                            fontWeight: 700,
+                            fontWeight: "700",
                             color: "#000",
                         }}
                     >
-                        {"Rs. "+product?.normalPrice}
+                        {formattedPrice}
                     </Text>
 
-                    {/* Savings */}
-
-                    <View
-                        style={{
-                            backgroundColor: "#F3FFE4",
-                            marginTop: 16,
-                            borderRadius: 12,
-                            padding: 14,
-                            flexDirection: "row",
-                        }}
-                    >
-                        <Ionicons
-                            name="heart"
-                            color="#000"
-                            size={18}
-                            style={{ marginTop: 2 }}
-                        />
-
-                        <Text
+                    {/* Savings — only shown when product has a discount */}
+                    {discountSaving != null && (
+                        <View
                             style={{
-                                flex: 1,
-                                marginLeft: 10,
-                                fontSize: 14,
-                                color: "#222",
+                                backgroundColor: "#F3FFE4",
+                                marginTop: 16,
+                                borderRadius: 12,
+                                padding: 14,
+                                flexDirection: "row",
                             }}
                         >
-                            You save{" "}
-                            <Text style={{ fontWeight: "bold" }}>
-                                Rs.50.00
-                            </Text>{" "}
-                            shopping within us than the marketplace.
-                        </Text>
-                    </View>
+                            <Ionicons
+                                name="heart"
+                                color="#000"
+                                size={18}
+                                style={{ marginTop: 2 }}
+                            />
+
+                            <Text
+                                style={{
+                                    flex: 1,
+                                    marginLeft: 10,
+                                    fontSize: 14,
+                                    color: "#222",
+                                }}
+                            >
+                                You save{" "}
+                                <Text style={{ fontWeight: "bold" }}>
+                                    Rs.{discountSaving.toLocaleString("en-LK", {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                    })}
+                                </Text>{" "}
+                                shopping within us than the marketplace.
+                            </Text>
+                        </View>
+                    )}
 
                 </View>
             </ScrollView>
 
-            {/* Bottom Cart */}
+            {/* Toast — shown at top over the image */}
             <CartToast
                 visible={toastVisible}
                 message={toastMessage}
             />
 
+            {/* View Cart popup — floats above bottom bar */}
             <ViewCartPopup
                 visible={viewCartVisible}
                 itemCount={1}
-            // onPress={() => navigation.navigate("Cart")}
+                onPress={() => navigation.navigate("MyCart")}
             />
 
             <ProductBottomCart
-                minimumValue={Number(product?.startValue!)}
-                step={100}
+                minimumValue={minQuantity}
+                step={stepSize}
                 quantity={quantity}
                 unit={unit as any}
                 onIncrease={increaseQty}

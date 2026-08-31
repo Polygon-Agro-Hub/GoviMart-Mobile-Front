@@ -61,6 +61,7 @@ export interface PackageType {
   displayName: string;
   subTotal: string;
   image: string;
+  totalItems?: number;
 }
 
 export interface ProductType {
@@ -73,6 +74,7 @@ export interface ProductType {
   cropNameTamil?: string;
   discountedPrice?: number;
   discount?: number;
+  comPrice?: number | string;
   tags?: string;
   unitType?: string;
   displayName: string;
