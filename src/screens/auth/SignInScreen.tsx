@@ -26,20 +26,6 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
 
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    return () => {
-      keyboardDidShowListener.remove();
-    };
-  }, []);
-
   const isValid = identifier.trim() !== "" && password.trim() !== "";
 
   // Load remembered identifier and encrypted password if remember me is enabled
@@ -177,12 +163,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
       {/* Bottom section: White container overlapping the image with rounded top-right */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.select({ ios: 80, android: 50 })}
         className="flex-1 bg-white mt-[-40px] rounded-tr-[60px] overflow-hidden"
       >
         <ScrollView 
           ref={scrollViewRef}
           className="flex-1 px-6 pt-6"
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingBottom: 32 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -255,35 +242,35 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               <Text className="text-sm font-bold text-[#094EE8]">Forgot Password?</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Action Button Section */}
-          <View className="mt-8">
-            {/* Sign In Button */}
-            <TouchableOpacity 
-              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
-              activeOpacity={isValid ? 0.8 : 1}
-              onPress={handleSignIn}
-              disabled={loading || !isValid}
-            >
-              {loading && <ActivityIndicator color="white" size="small" className="mr-2" />}
-              <Text className="text-white text-base font-bold">Sign in</Text>
-            </TouchableOpacity>
-
-            {/* Redirect / Register Section */}
-            <View className="items-center mt-6">
-              <Text className="text-sm text-[#6B6B6B]">Don't have an account?</Text>
-              <TouchableOpacity 
-                onPress={() => navigation.navigate("ChooseAuth")} 
-                className="mt-1"
-                activeOpacity={0.7}
-              >
-                <Text className="text-sm font-bold text-[#094EE8] underline">
-                  Create Account
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </ScrollView>
+
+        {/* Action Button Section */}
+        <View className="px-6 pb-6 pt-2 bg-white">
+          {/* Sign In Button */}
+          <TouchableOpacity 
+            className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
+            activeOpacity={isValid ? 0.8 : 1}
+            onPress={handleSignIn}
+            disabled={loading || !isValid}
+          >
+            {loading && <ActivityIndicator color="white" size="small" className="mr-2" />}
+            <Text className="text-white text-base font-bold">Sign in</Text>
+          </TouchableOpacity>
+
+          {/* Redirect / Register Section */}
+          <View className="items-center mt-4">
+            <Text className="text-sm text-[#6B6B6B]">Don't have an account?</Text>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate("ChooseAuth")} 
+              className="mt-1"
+              activeOpacity={0.7}
+            >
+              <Text className="text-sm font-bold text-[#094EE8] underline">
+                Create Account
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );

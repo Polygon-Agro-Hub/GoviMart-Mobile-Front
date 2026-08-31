@@ -72,6 +72,7 @@ export interface ProductType {
   cropNameSinhala?: string;
   cropNameTamil?: string;
   discountedPrice?: number;
+  discount?: number;
   tags?: string;
   unitType?: string;
   displayName: string;

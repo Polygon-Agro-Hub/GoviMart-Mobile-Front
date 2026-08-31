@@ -130,10 +130,16 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         if (!firstName.trim()) {
             setFirstNameError("First name is required");
             hasError = true;
+        } else if (!/^[a-zA-Z\s]+$/.test(firstName.trim())) {
+            setFirstNameError("First name must contain only letters");
+            hasError = true;
         }
 
         if (!lastName.trim()) {
             setLastNameError("Last name is required");
+            hasError = true;
+        } else if (!/^[a-zA-Z\s]+$/.test(lastName.trim())) {
+            setLastNameError("Last name must contain only letters");
             hasError = true;
         }
 
@@ -477,7 +483,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                                 label="First Name"
                                 value={firstName}
                                 onChangeText={(text) => {
-                                    setFirstName(text);
+                                    setFirstName(text.replace(/[^a-zA-Z\s]/g, ""));
 
                                     // Optional: remove error while typing
                                     if (firstNameError) {
@@ -501,7 +507,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                             label="Last Name"
                             value={lastName}
                             onChangeText={(text) => {
-                                setLastName(text)
+                                setLastName(text.replace(/[^a-zA-Z\s]/g, ""))
                                 if (lastNameError) {
                                     setLastNameError("")
                                 }

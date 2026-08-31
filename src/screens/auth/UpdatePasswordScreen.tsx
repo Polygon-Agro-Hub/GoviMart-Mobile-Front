@@ -51,19 +51,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    return () => {
-      keyboardDidShowListener.remove();
-    };
-  }, []);
+
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -177,6 +165,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.select({ ios: 100, android: 80 })}
       className="flex-1 bg-white"
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
@@ -196,7 +185,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
-          paddingBottom: 24,
+          paddingBottom: 120,
         }}
       >
         <View className="flex-1 justify-start">
@@ -385,24 +374,27 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
           </View>
         </View>
 
+        </ScrollView>
+
         {/* Update Password Submission Button */}
-        <TouchableOpacity
-          onPress={handleUpdatePassword}
-          disabled={loading || !isValid}
-          activeOpacity={isValid ? 0.8 : 1}
-          className={`rounded-full items-center justify-center mt-8 h-[50px] shadow-sm ${
-            isValid ? "bg-black" : "bg-[#7F919C]"
-          }`}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" size="small" />
-          ) : (
-            <Text className="text-white text-base font-bold">
-              Update Password
-            </Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+        <View className="px-6 pb-6 pt-2 bg-white">
+          <TouchableOpacity
+            onPress={handleUpdatePassword}
+            disabled={loading || !isValid}
+            activeOpacity={isValid ? 0.8 : 1}
+            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
+              isValid ? "bg-black" : "bg-[#7F919C]"
+            }`}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text className="text-white text-base font-bold">
+                Update Password
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
       {/* Alert Modal */}
       <AlertModal
