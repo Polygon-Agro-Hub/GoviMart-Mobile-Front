@@ -43,8 +43,9 @@ import OrderHistory from "@/screens/order/OrderHistoryScreen";
 import OrderDetails from "@/screens/order/OrderDetailsScreen";
 import ViewLocation from "@/screens/locations/ViewLocation";
 import ReviewPackage from "@/screens/packages/ReviewPackageScreen";
-import ChangeProductQuantity from "@/screens/packages/SetQuantityProductScreen";
+import ChangeProductQuantity from "@/screens/products/SetQuantityProductScreen";
 import OrderCancelConfirmation from "@/screens/order/OrderCancelConfirmedScreen";
+import ReplaceProduct from "@/screens/products/ReplaceProductScreen";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -87,8 +88,9 @@ function AppContent() {
             <Stack.Screen name="OrderDetails" component={OrderDetails} />
             <Stack.Screen name="ViewLocation" component={ViewLocation} />
             <Stack.Screen name="ReviewPackage" component={ReviewPackage} />
-            <Stack.Screen name="SetQauntity" component={ChangeProductQuantity} /> 
+            <Stack.Screen name="SetQauntity" component={ChangeProductQuantity} />
             <Stack.Screen name="OrderCancelConfirmation" component={OrderCancelConfirmation} />
+            <Stack.Screen name="ReplaceProduct" component={ReplaceProduct} />
           </Stack.Navigator>
         </NavigationContainer>
         <GlobalAlert />
