@@ -283,6 +283,12 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
 
                   <TouchableOpacity
                     activeOpacity={0.85}
+                    onPress={() => {
+                      navigation.navigate("PaymentScreen", {
+                        amount: Math.abs(creditBalance),
+                        title: "Payment Summery",
+                      });
+                    }}
                     style={{
                       paddingVertical: 12,
                       marginTop: 10,

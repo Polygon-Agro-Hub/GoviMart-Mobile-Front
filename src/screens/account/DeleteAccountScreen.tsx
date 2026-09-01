@@ -9,7 +9,7 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
-import { FontAwesome6, Ionicons } from "@expo/vector-icons";
+import { FontAwesome6} from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../../types/types";
@@ -111,11 +111,10 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
   };
 
   const handleClearNegativeCredit = () => {
-    Alert.alert(
-      "Negative Credit Balance",
-      `Your account has an outstanding negative credit balance of Rs. ${Math.abs(creditBalance).toFixed(2)}. Please contact support or make a payment to clear the balance.`,
-      [{ text: "OK" }],
-    );
+    navigation.navigate("PaymentScreen", {
+      amount: Math.abs(creditBalance),
+      title: "Payment Summery",
+    });
   };
 
   return (
