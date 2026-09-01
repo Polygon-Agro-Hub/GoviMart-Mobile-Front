@@ -54,6 +54,7 @@ export type RootStackParamList = {
   ReviewPackage: undefined;
   SetQauntity: undefined;
   OrderCancelConfirmation: undefined;
+  ReplaceProduct: { product: ProductType; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
