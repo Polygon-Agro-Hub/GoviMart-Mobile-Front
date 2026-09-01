@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import LottieView from "lottie-react-native";
 
 interface NoDataFoundProps {
   message?: string;
@@ -13,7 +14,12 @@ const NoDataFound: React.FC<NoDataFoundProps> = ({
 }) => {
   return (
     <View style={[styles.container, containerStyle]}>
-      <Ionicons name="search-outline" size={80} color="#6C3CD1" />
+     <LottieView
+        source={require("@/assets/json/public/no-data.json")}
+        style={{ width: 150, height: 150 }}
+        autoPlay
+        loop
+      />
       <View style={styles.textWrapper}>
         <Text style={styles.messageText}>{message}</Text>
       </View>
@@ -28,7 +34,6 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   textWrapper: {
-    marginTop: 15,
     backgroundColor: "transparent",
   },
   messageText: {

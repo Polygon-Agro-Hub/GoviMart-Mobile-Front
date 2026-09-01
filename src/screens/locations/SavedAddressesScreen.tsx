@@ -13,6 +13,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import customerService from "@/services/customer/customer.service";
 import { useFocusEffect } from "@react-navigation/native";
+import NoDataFound from "@/component/common/NoDataFound";
 
 type SavedAddressesNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -48,6 +49,23 @@ const formatAddress = (item: any) => {
     return parts.filter(p => p !== null && p !== undefined && String(p).trim() !== "").join(", ");
 };
 
+const formatPhoneNumber = (phone?: string) => {
+    if (!phone) return "";
+    const p = String(phone).trim();
+    if (!p || p === "null" || p === "undefined") return "";
+    if (p.startsWith("+") || p.startsWith("0")) return p;
+    return `0${p}`;
+};
+
+const formatPhone = (item: any) => {
+    const phones: string[] = [];
+    const p1 = formatPhoneNumber(item.phone1);
+    if (p1) phones.push(p1);
+    const p2 = formatPhoneNumber(item.phone2);
+    if (p2) phones.push(p2);
+    return phones.length > 0 ? phones.join(", ") : "No Phone Provided";
+};
+
 const SavedAddresses: React.FC<SavedAddressesProps> = ({
     navigation,
 }) => {
@@ -70,7 +88,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                             title: item.saveAs || "Address",
                             name: item.fullName ? `${item.title ? item.title + '. ' : ''}${item.fullName}` : "No Name Provided",
                             address: formatAddress(item),
-                            phone: item.phone1 ? `${item.phonecode1 || ''}${item.phone1}` : "No Phone Provided",
+                            phone: formatPhone(item),
                             buildingType: item.buildingType,
                             raw: item,
                         }));
@@ -225,7 +243,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                             <Text
                                 style={{
                                     fontSize: 14,
-                                    color: "#555A72",
+                                    color: "#494A65",
                                     marginTop: 2,
                                 }}
                             >
@@ -509,10 +527,12 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                         ))
                     ) : (
                         <View>
-                            <Text style={{ alignSelf: "center", justifyContent: "center", marginTop: 200 }}>
-                                No saved addresses found
+                            <Text style={{ alignSelf: "center", justifyContent: "center", marginTop: "20%" }}>
+                                
+                                    <NoDataFound message={"No saved addresses found"} />
                             </Text>
                         </View>
+       
                     )}
                 </ScrollView>
             )}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -14,9 +14,11 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { InputField, DropdownField } from "@/component/common/CustomField";
-import { RouteProp } from "@react-navigation/native";
+import GlobalSearchModal from "@/component/common/GlobalSearchModal";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import LoadingPage from "@/component/common/LoadingPage";
 import customerService from "@/services/customer/customer.service";
+import authService from "@/services/auth/auth.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type EditAddressNavigationProp = StackNavigationProp<
@@ -29,6 +31,14 @@ type EditAddressRouteProp = RouteProp<RootStackParamList, "EditAddress">;
 interface EditAddressProps {
     navigation: EditAddressNavigationProp;
     route: EditAddressRouteProp;
+}
+
+interface CityResult {
+    id: number;
+    city: string;
+    district: string;
+    province: string;
+    isAvailable: boolean;
 }
 
 const EditAddress: React.FC<EditAddressProps> = ({
@@ -56,9 +66,60 @@ const EditAddress: React.FC<EditAddressProps> = ({
 
     const [titleOpen, setTitleOpen] = useState(false);
     const [buildingTypeOpen, setBuildingTypeOpen] = useState(false);
-    const [cityOpen, setCityOpen] = useState(false);
+    const [cityModalOpen, setCityModalOpen] = useState(false);
+    const [allCities, setAllCities] = useState<CityResult[]>([]);
     const [saveAddressOpen, setSaveAddressOpen] = useState(false);
     const [updating, setUpdating] = useState(false);
+
+    useEffect(() => {
+        const loadCities = async () => {
+            try {
+                const response = await authService.getCities();
+                if (
+                    response.data &&
+                    response.data.status &&
+                    Array.isArray(response.data.data)
+                ) {
+                    const mapped = response.data.data.map((item: any) => ({
+                        id: item.id,
+                        city: item.city,
+                        district: item.district || "",
+                        province: item.province || "",
+                        isAvailable:
+                            item.isAvailable === 1 || item.isAvailable === true,
+                    }));
+                    setAllCities(mapped);
+                }
+            } catch (err) {
+                console.error("Error loading cities in EditAddress:", err);
+            }
+        };
+        loadCities();
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            const getSelectedLocation = async () => {
+                try {
+                    const storedLatitude = await AsyncStorage.getItem(
+                        "selectedLatitude"
+                    );
+                    const storedLongitude = await AsyncStorage.getItem(
+                        "selectedLongitude"
+                    );
+
+                    if (storedLatitude && storedLongitude) {
+                        setLatitude(Number(storedLatitude));
+                        setLongitude(Number(storedLongitude));
+                    }
+                } catch (error) {
+                    console.error("Error getting location in EditAddress:", error);
+                }
+            };
+
+            getSelectedLocation();
+        }, [])
+    );
 
     const [saveAddressAsError, setSaveAddressAsError] = useState("");
     const [titleError, setTitleError] = useState("");
@@ -110,6 +171,127 @@ const EditAddress: React.FC<EditAddressProps> = ({
         setBuildingNoError("");
     };
 
+    const cityModalData = allCities.map((item) => ({
+        label: item.city,
+        value: item.city,
+        district: item.district,
+        province: item.province,
+        isAvailable: item.isAvailable,
+    }));
+
+    const renderCityItem = (
+        item: any,
+        isSelected: boolean,
+        index: number,
+        isLast: boolean,
+        onPress: (value: string) => void,
+    ) => (
+        <TouchableOpacity
+            key={item.value}
+            className={`px-5 py-3.5 flex-row items-center justify-between ${
+                !isLast ? "border-b border-gray-100" : ""
+            }`}
+            onPress={() => {
+                if (!item.isAvailable) {
+                    Alert.alert(
+                        "Coming Soon",
+                        `Delivery is not available in ${item.label} yet, but we’re working on it and coming to your area soon!`,
+                    );
+                    return;
+                }
+                onPress(item.value);
+            }}
+            activeOpacity={0.7}
+        >
+            <View>
+                <Text className="text-base font-semibold text-gray-800">
+                    {item.label}
+                </Text>
+                {item.district ? (
+                    <Text className="text-xs text-gray-400 mt-0.5">
+                        {item.district}
+                    </Text>
+                ) : null}
+            </View>
+            <View className="flex-row items-center gap-x-2">
+                <Text
+                    className={`text-xs font-bold ${
+                        item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
+                    }`}
+                >
+                    {item.isAvailable ? "Available" : "Coming soon"}
+                </Text>
+                {isSelected && (
+                    <Ionicons name="checkmark" size={20} color="#21202B" />
+                )}
+            </View>
+        </TouchableOpacity>
+    );
+
+    const renderCityField = () => (
+        <View style={{ marginBottom: cityError ? 4 : 12 }}>
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setCityModalOpen(true)}
+                style={{
+                    height: 58,
+                    borderWidth: 1,
+                    borderColor: cityError ? "#FF3B30" : "#D9DEE4",
+                    borderRadius: 29,
+                    paddingHorizontal: 20,
+                    justifyContent: "center",
+                    backgroundColor: "#FFFFFF",
+                }}
+            >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <FontAwesome6
+                        name="mountain-city"
+                        size={16}
+                        color="#000000"
+                        style={{ marginRight: 12 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                        <Text
+                            style={{
+                                fontSize: 10,
+                                color: "#888888",
+                                marginBottom: 2,
+                            }}
+                        >
+                            Your City
+                        </Text>
+                        <Text
+                            style={{
+                                fontSize: 13,
+                                color: city ? "#000000" : "#A0A0A0",
+                                fontWeight: "500",
+                            }}
+                        >
+                            {city || "Select From Here"}
+                        </Text>
+                    </View>
+                    <Ionicons
+                        name="chevron-down"
+                        size={18}
+                        color="#000000"
+                    />
+                </View>
+            </TouchableOpacity>
+            {cityError ? (
+                <Text
+                    style={{
+                        color: "#FF3B30",
+                        fontSize: 11,
+                        marginLeft: 20,
+                        marginTop: 4,
+                    }}
+                >
+                    {cityError}
+                </Text>
+            ) : null}
+        </View>
+    );
+
     const handleBuildingNoChange = (text: string) => {
         setBuildingNo(text);
         if (buildingNoError) setBuildingNoError("");
@@ -120,24 +302,11 @@ const EditAddress: React.FC<EditAddressProps> = ({
         if (streetNameError) setStreetNameError("");
     };
 
-    const handleCityChange = (value: string) => {
-        setCity(value);
-        if (cityError) setCityError("");
-    };
-
-    const titleOptions = ["Mr", "Mrs", "Ms", "Miss"];
+    const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
 
     const buildingTypes = [
         "House",
         "Apartment",
-    ];
-
-    const cityOptions = [
-        "Minuwangoda",
-        "Gampaha",
-        "Negombo",
-        "Colombo",
-        "Homagama",
     ];
 
     const saveAddressOptions = [
@@ -424,48 +593,43 @@ const EditAddress: React.FC<EditAddressProps> = ({
                                 onChangeText={setFloorNo}
                                 placeholder="e.g. 3rd Floor"
                             />
+                            <InputField
+                                icon="road"
+                                label="Street Name"
+                                value={streetName}
+                                onChangeText={handleStreetNameChange}
+                                error={streetNameError}
+                            />
+                            {renderCityField()}
                         </>
                     )}
 
                     {buildingType === "House" && (
-                        <InputField
-                            icon="building"
-                            label="Building / House No"
-                            value={buildingNo}
-                            onChangeText={handleBuildingNoChange}
-                            error={buildingNoError}
-                        />
+                        <>
+                            <InputField
+                                icon="building"
+                                label="Building / House No"
+                                value={buildingNo}
+                                onChangeText={handleBuildingNoChange}
+                                error={buildingNoError}
+                            />
+                            <InputField
+                                icon="road"
+                                label="Street Name"
+                                value={streetName}
+                                onChangeText={handleStreetNameChange}
+                                error={streetNameError}
+                            />
+                            {renderCityField()}
+                        </>
                     )}
-
-                    {/* STREET */}
-
-                    <InputField
-                        icon="road"
-                        label="Street Name"
-                        value={streetName}
-                        onChangeText={handleStreetNameChange}
-                        error={streetNameError}
-                    />
-
-                    {/* CITY */}
-
-                    <DropdownField
-                        icon="mountain-city"
-                        label="Your City"
-                        value={city}
-                        open={cityOpen}
-                        setOpen={setCityOpen}
-                        options={cityOptions}
-                        onSelect={handleCityChange}
-                        error={cityError}
-                    />
 
                     {/* GEO LOCATION */}
 
                     <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={() => {
-                            console.log("Edit geo location");
+                            navigation.navigate("SetLocation");
                         }}
                         style={{
                             height: 58,
@@ -639,6 +803,26 @@ const EditAddress: React.FC<EditAddressProps> = ({
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* CITY SEARCH MODAL */}
+            <GlobalSearchModal
+                visible={cityModalOpen}
+                onClose={() => setCityModalOpen(false)}
+                title="Select Your City"
+                data={cityModalData}
+                selectedItems={city ? [city] : []}
+                onSelect={(items) => {
+                    if (items && items[0]) {
+                        setCity(items[0]);
+                        if (cityError) setCityError("");
+                    }
+                }}
+                searchPlaceholder="Search city..."
+                noResultsText="No cities found"
+                multiSelect={false}
+                searchKeys={["label", "district", "province"]}
+                renderItem={renderCityItem}
+            />
         </View>
     );
 };

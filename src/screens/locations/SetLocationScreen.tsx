@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -28,12 +28,12 @@ interface Props {
 }
 
 const SetLocation: React.FC<Props> = ({ navigation }) => {
-    // Initial location
+    // Default fallback location (Sri Lanka center)
     const initialRegion: Region = {
-        latitude: 9.455,
-        longitude: 80.0,
-        latitudeDelta: 0.12,
-        longitudeDelta: 0.12,
+        latitude: 6.9271,
+        longitude: 79.8612,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
     };
 
     const [selectedLocation, setSelectedLocation] = useState({
@@ -41,78 +41,103 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
         longitude: initialRegion.longitude,
     });
 
-    const [region, setRegion] =
-        useState<Region>(initialRegion);
+    const [region, setRegion] = useState<Region>(initialRegion);
+    const [loadingLocation, setLoadingLocation] = useState(false);
 
-    const [loadingLocation, setLoadingLocation] =
-        useState(false);
-
-    // MAP PRESS
-    const handleMapPress = (event: MapPressEvent) => {
-        const { latitude, longitude } =
-            event.nativeEvent.coordinate;
-
-        setSelectedLocation({
-            latitude,
-            longitude,
-        });
-    };
-
-    // CURRENT LOCATION
-    const handleCurrentLocation = async () => {
+    // Fetch user location
+    const fetchLocation = async (showAlertOnError = false) => {
         try {
             setLoadingLocation(true);
 
-            const { status } =
-                await Location.requestForegroundPermissionsAsync();
-
-            if (status !== "granted") {
-                Alert.alert(
-                    "Location Permission",
-                    "Please allow location permission to use your current location."
-                );
-
+            const hasServices = await Location.hasServicesEnabledAsync();
+            if (!hasServices) {
+                if (showAlertOnError) {
+                    Alert.alert(
+                        "Location Services Disabled",
+                        "Please enable GPS / Location services on your device to fetch your location."
+                    );
+                }
                 return;
             }
 
-            const location =
-                await Location.getCurrentPositionAsync({
-                    accuracy:
-                        Location.Accuracy.High,
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== "granted") {
+                if (showAlertOnError) {
+                    Alert.alert(
+                        "Location Permission Required",
+                        "Please allow location permission in your device settings to detect your current location."
+                    );
+                }
+                return;
+            }
+
+            // Try fast last known location first
+            let location = await Location.getLastKnownPositionAsync({});
+            if (!location) {
+                location = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
                 });
+            }
 
-            const latitude =
-                location.coords.latitude;
-
-            const longitude =
-                location.coords.longitude;
-
-            const newRegion: Region = {
-                latitude,
-                longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-            };
-
-            setSelectedLocation({
-                latitude,
-                longitude,
-            });
-
-            setRegion(newRegion);
+            if (location && location.coords) {
+                const { latitude, longitude } = location.coords;
+                const newRegion: Region = {
+                    latitude,
+                    longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                };
+                setSelectedLocation({ latitude, longitude });
+                setRegion(newRegion);
+            }
         } catch (error) {
-            console.error(
-                "Current location error:",
-                error
-            );
-
-            Alert.alert(
-                "Location Error",
-                "Unable to get your current location."
-            );
+            console.error("Current location error:", error);
+            if (showAlertOnError) {
+                Alert.alert(
+                    "Location Error",
+                    "Unable to get your current location. Please make sure GPS is enabled or tap directly on the map."
+                );
+            }
         } finally {
             setLoadingLocation(false);
         }
+    };
+
+    // Auto-fetch on mount or load previously selected
+    useEffect(() => {
+        const initLocation = async () => {
+            try {
+                const storedLat = await AsyncStorage.getItem("selectedLatitude");
+                const storedLng = await AsyncStorage.getItem("selectedLongitude");
+                if (storedLat && storedLng) {
+                    const lat = Number(storedLat);
+                    const lng = Number(storedLng);
+                    setSelectedLocation({ latitude: lat, longitude: lng });
+                    setRegion({
+                        latitude: lat,
+                        longitude: lng,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                    });
+                } else {
+                    fetchLocation(false);
+                }
+            } catch {
+                fetchLocation(false);
+            }
+        };
+        initLocation();
+    }, []);
+
+    // MAP PRESS
+    const handleMapPress = (event: MapPressEvent) => {
+        const { latitude, longitude } = event.nativeEvent.coordinate;
+        setSelectedLocation({ latitude, longitude });
+    };
+
+    // CURRENT LOCATION BUTTON
+    const handleCurrentLocation = () => {
+        fetchLocation(true);
     };
 
     // CONFIRM

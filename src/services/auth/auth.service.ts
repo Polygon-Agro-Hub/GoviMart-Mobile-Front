@@ -24,6 +24,12 @@ class AuthService {
     const headers = await getAuthHeader();
     return apiClient.post(ENDPOINTS.AUTH.UPDATE_PASSWORD, data, { headers });
   }
+
+  getCities(q?: string) {
+    return apiClient.get(ENDPOINTS.AUTH.GET_CITIES, {
+      params: q ? { q } : undefined,
+    });
+  }
 }
 
 export default new AuthService();
