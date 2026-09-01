@@ -14,7 +14,7 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome6,  Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import { useDispatch } from "react-redux";
@@ -43,11 +43,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
 
-  // Disable Android hardware back button on this screen
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        // returning true marks the event as handled, blocking default back behavior
         return true;
       };
 
@@ -60,7 +58,6 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     }, []),
   );
 
-  // Load remembered identifier and encrypted password if remember me is enabled
   useEffect(() => {
     const loadRemembered = async () => {
       try {
@@ -117,7 +114,6 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         } = response.data.data;
         const loginTime = Date.now();
 
-        // Save session details to AsyncStorage
         await AsyncStorage.setItem("userLoginTime", loginTime.toString());
         await AsyncStorage.setItem("userToken", token);
         const userProfile = {
@@ -132,10 +128,8 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         };
         await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
 
-        // Dispatch login to Redux
         dispatch(loginSuccess({ token, userProfile, loginTime }));
 
-        // Handle Remember Me — store identifier, refreshToken and encrypted password
         if (rememberMe) {
           await AsyncStorage.setItem("rememberMeEnabled", "true");
           await AsyncStorage.setItem("rememberedIdentifier", identifier.trim());
@@ -173,7 +167,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   number: phoneNumber,
                   redirectTo: "ExcludeListAdd",
                 });
-              } else if (buyerType === "Retail" && firstTimeUser === 0) {
+              } else if (firstTimeUser === 0) {
                 navigation.navigate("ExcludeListAdd", {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,

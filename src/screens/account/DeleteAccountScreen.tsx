@@ -18,6 +18,7 @@ import customerService from "@/services/customer/customer.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { logoutSuccess } from "@/store/authSlice";
+import { clearCart } from "@/store/cartSlice";
 
 type DeleteAccountNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -63,6 +64,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({
                             await AsyncStorage.removeItem("userProfile");
                             await AsyncStorage.removeItem("userLoginTime");
 
+                            dispatch(clearCart());
                             dispatch(logoutSuccess());
 
                             navigation.reset({

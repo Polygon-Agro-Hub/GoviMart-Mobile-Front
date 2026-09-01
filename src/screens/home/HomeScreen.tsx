@@ -45,7 +45,6 @@ import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
 import productService from "@/services/product/product.service";
 
-// Re-export for backward compatibility with any screens importing ProductType from here
 export type { ProductType, PackageType } from "@/types/types";
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -63,10 +62,6 @@ interface Category {
   active: boolean;
 }
 
-// Snapshot of a cart item's state captured the moment it was added.
-// Used to render the COLLAPSED card so it always shows "first add" data,
-// never the live, possibly-updated Redux state. Cleared when the item is
-// fully removed from the cart (qty/weight hits zero).
 interface AddTimeSnapshot {
   weight?: number;
   unit?: "g" | "kg";
@@ -257,6 +252,12 @@ const ProductGridSkeleton = () => {
 
 const Home: React.FC<HomeProps> = ({ navigation }) => {
   const dispatch = useDispatch();
+  const userProfile = useSelector(
+    (state: RootState) => (state as RootState & { auth: any }).auth.userProfile,
+  );
+  const buyerType = userProfile?.buyerType || "Retail";
+  const isRetail = buyerType.toLowerCase() === "retail";
+
   const cartProducts = useSelector(
     (state: RootState) =>
       (state as RootState & { cart: CartState }).cart.products,
@@ -267,11 +268,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   );
   const totalCartItems = cartProducts.length + cartPackages.length;
 
+  const visibleCategories = isRetail
+    ? CATEGORIES
+    : CATEGORIES.filter((category) => category.id !== "Packages");
+
   const [bannerSlides, setBannerSlides] = useState<
     { id: number; image: string; details: string }[]
   >([]);
-  const [selectedCategoryId, setSelectedCategoryId] =
-    useState<string>("Packages");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
+    isRetail ? "Packages" : "Vegetables",
+  );
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -280,15 +286,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [toastMessage, setToastMessage] = useState("");
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Tracks which single cart card (product OR package) is currently shown
-  // "expanded" with full qty/unit controls. Adding or resuming an item sets
-  // this id, which causes every other card to fall back to its collapsed view.
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
 
-  // Frozen "first time added" view data for each cart item, keyed by id.
-  // Captured once at add-time and NOT updated by later +/- taps. This is
-  // what the COLLAPSED card reads from, so it always shows the original
-  // add values until the user taps back in to see/edit the live state.
   const [addTimeSnapshots, setAddTimeSnapshots] = useState<
     Record<number, AddTimeSnapshot>
   >({});
@@ -310,11 +309,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       maximumFractionDigits: 2,
     });
 
-  // Ref to track "press back again to exit" state without re-rendering
   const backPressedOnce = useRef(false);
 
-  // System back button handling: Home is the root/landing screen, so a bare
-  // back press here should not just fall through to exiting immediately.
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
@@ -344,82 +340,113 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     }, []),
   );
 
-  // initial fetching
-  useEffect(() => {
-    const fetchBanners = async () => {
-      try {
-        setLoadingBanners(true);
-        const response = await productService.getBanners();
-        if (response.data && response.data.status) {
-          const fetchedSlides = response.data.slides || [];
-          const retailSlides = fetchedSlides.filter(
-            (slide: any) => slide.type === "Retail",
-          );
-          setBannerSlides(retailSlides);
-        }
-      } catch (err) {
-        console.error("Failed to load banner slides from backend:", err);
-      } finally {
-        setLoadingBanners(false);
+  const fetchBanners = async () => {
+    try {
+      setLoadingBanners(true);
+      const response = await productService.getBanners();
+      if (response.data && response.data.status) {
+        const fetchedSlides = response.data.slides || [];
+        const matchingSlides = fetchedSlides.filter(
+          (slide: any) => slide.type?.toLowerCase() === buyerType.toLowerCase(),
+        );
+        setBannerSlides(
+          matchingSlides.length > 0 ? matchingSlides : fetchedSlides,
+        );
       }
-    };
+    } catch (err) {
+      console.error("Failed to load banner slides from backend:", err);
+    } finally {
+      setLoadingBanners(false);
+    }
+  };
 
-    const fetchPackages = async () => {
-      try {
-        setLoadingProducts(true);
-        const response = await productService.getAllPackages();
-        if (response.data && response.data.status) {
-          const packages = response.data?.product.map((item: any) => ({
-            ...item,
-            type: "package",
-          }));
-          setShopItems(packages);
-        }
-      } catch (error) {
-        console.error("Failed to load packages from backend:", error);
-      } finally {
-        setLoadingProducts(false);
+  const fetchPackages = async () => {
+    if (!isRetail) {
+      setShopItems([]);
+      return;
+    }
+    try {
+      setLoadingProducts(true);
+      const response = await productService.getAllPackages(buyerType);
+      if (response.data && response.data.status) {
+        const packages = (response.data?.product || []).map((item: any) => ({
+          ...item,
+          type: "package",
+        }));
+        setShopItems(packages);
+      } else {
+        setShopItems([]);
       }
-    };
-    fetchBanners();
-    fetchPackages();
-  }, []);
+    } catch (error) {
+      console.error("Failed to load packages from backend:", error);
+      setShopItems([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
 
-  const getSelectedCategoryProducts = async (categoryId: string) => {
+  const getSelectedCategoryProducts = async (
+    categoryId: string,
+    currentBuyerType = buyerType,
+  ) => {
     try {
       setSelectedCategoryId(categoryId);
       setLoadingProducts(true);
       if (categoryId === "Packages") {
-        const response = await productService.getAllPackages();
+        if (!isRetail) {
+          setShopItems([]);
+          setLoadingProducts(false);
+          return;
+        }
+        const response = await productService.getAllPackages(currentBuyerType);
         if (response.data?.status) {
-          const packages = response.data?.product.map((item: any) => ({
+          const packages = (response.data?.product || []).map((item: any) => ({
             ...item,
             type: "package",
           }));
           setShopItems(packages);
+        } else {
+          setShopItems([]);
         }
         setLoadingProducts(false);
         return;
       }
 
-      const response = await productService.getProductsByCategory(categoryId);
+      const response = await productService.getProductsByCategory(
+        categoryId,
+        currentBuyerType,
+      );
 
       if (response.data?.status) {
-        const products = response.data.products.map((item: any) => ({
+        const products = (response.data.products || []).map((item: any) => ({
           ...item,
           type: "product",
         }));
         setShopItems(products);
+      } else {
+        setShopItems([]);
       }
     } catch (error) {
       console.error(
         "Failed to load selected category products from backend:",
         error,
       );
+      setShopItems([]);
     } finally {
       setLoadingProducts(false);
     }
   };
+
+  useEffect(() => {
+    fetchBanners();
+    if (isRetail) {
+      setSelectedCategoryId("Packages");
+      fetchPackages();
+    } else {
+      setSelectedCategoryId("Vegetables");
+      getSelectedCategoryProducts("Vegetables", buyerType);
+    }
+  }, [buyerType, isRetail]);
 
   const itemRows: ShopItem[][] = [];
   for (let i = 0; i < shopItems?.length; i += 2) {
@@ -457,8 +484,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       );
       if (existing && existing.weight <= existing.minimumWeight) {
         dispatch(removeProduct(productId));
-        // Item is gone from the cart entirely — clear its frozen snapshot
-        // so a future re-add starts fresh instead of showing stale data.
+
         setAddTimeSnapshots((prev) => {
           const next = { ...prev };
           delete next[productId];
@@ -475,36 +501,57 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleAddProduct = useCallback(
     (product: ProductType) => {
-      const startVal = parseFloat(product.startValue ?? "500") || 500;
-      const unitVal = (product.unitType || "g").toLowerCase() as "g" | "kg";
-      const basePrice = parseFloat(product.normalPrice) || 0;
+      const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
+      const unitType = (product.unitType || "g").toLowerCase() as "g" | "kg";
+
+      let initialUnit: "g" | "kg" = unitType;
+      let initialWeight = rawStartValue;
+      if (unitType === "kg" && rawStartValue < 1) {
+        initialUnit = "g";
+        initialWeight = Math.round(rawStartValue * 1000);
+      }
+
+      const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
+      const discountedPerUnit =
+        product.discountedPrice != null
+          ? parseFloat(String(product.discountedPrice))
+          : null;
+
+      const hasDiscount =
+        discountedPerUnit != null &&
+        discountedPerUnit > 0 &&
+        discountedPerUnit < normalPerUnit;
+
+      const effectiveUnitPrice = hasDiscount
+        ? discountedPerUnit
+        : normalPerUnit;
+      const startEffectivePrice = effectiveUnitPrice * rawStartValue;
+
+      const step =
+        initialUnit === "kg" ? 0.5 : initialWeight >= 500 ? 500 : 100;
 
       dispatch(
         addProduct({
           id: product.id,
           name: product.displayName,
           image: product.image,
-          price: basePrice,
-          weight: startVal,
-          unit: unitVal,
-          minimumWeight: startVal,
-          step: unitVal === "kg" ? 0.5 : startVal >= 500 ? 500 : 100,
+          price: startEffectivePrice,
+          weight: initialWeight,
+          unit: initialUnit,
+          minimumWeight: initialWeight,
+          step: step,
         }),
       );
 
-      // Freeze the "first time added" values. This is what will show on
-      // the card once it collapses (e.g. because another item gets added
-      // next), regardless of any qty/unit edits made afterwards.
       setAddTimeSnapshots((prev) => ({
         ...prev,
         [product.id]: {
-          weight: startVal,
-          unit: unitVal,
-          price: basePrice,
+          weight: initialWeight,
+          unit: initialUnit,
+          price: startEffectivePrice,
         },
       }));
 
-      // Expand the newly-added item; any previously expanded card collapses.
       setExpandedItemId(product.id);
       showToast("Added to Cart");
     },
@@ -526,13 +573,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         }),
       );
 
-      // Freeze the "first time added" values for the collapsed view.
       setAddTimeSnapshots((prev) => ({
         ...prev,
         [pkg.id]: { quantity: 1, price },
       }));
 
-      // Expand the newly-added package; any previously expanded card collapses.
       setExpandedItemId(pkg.id);
       showToast("Added to Cart");
     },
@@ -554,8 +599,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       );
       if (existing && existing.quantity <= 1) {
         dispatch(removePackage(packageId));
-        // Item is gone from the cart entirely — clear its frozen snapshot
-        // so a future re-add starts fresh instead of showing stale data.
+
         setAddTimeSnapshots((prev) => {
           const next = { ...prev };
           delete next[packageId];
@@ -620,7 +664,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
             className="flex-row"
           >
-            {CATEGORIES.map((category) => {
+            {visibleCategories.map((category) => {
               const isActive = category.id === selectedCategoryId;
               return (
                 <TouchableOpacity
@@ -689,6 +733,12 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         {/* Product Grid */}
         {loadingProducts ? (
           <ProductGridSkeleton />
+        ) : itemRows.length === 0 ? (
+          <View className="items-center justify-center py-16 px-6">
+            <Text className="text-gray-500 font-medium text-center text-base">
+              No products found in this category
+            </Text>
+          </View>
         ) : (
           <View className="mt-8 px-4">
             {itemRows.map((row, rowIndex) => (
@@ -710,10 +760,46 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isExpanded = product.id === expandedItemId;
                   const snapshot = addTimeSnapshots[product.id];
 
-                  // Pricing calculations
+                  const rawStartValue = isProduct
+                    ? parseFloat(String(product.startValue ?? "1")) || 1
+                    : 1;
+                  const rawUnitType = isProduct
+                    ? (product.unitType || "g").toLowerCase()
+                    : "g";
+
+                  const displayWeightText = isProduct
+                    ? rawUnitType === "kg" && rawStartValue < 1
+                      ? `${Math.round(rawStartValue * 1000)} g`
+                      : `${rawStartValue} ${rawUnitType}`
+                    : "";
+
+                  const normalPerUnit = isProduct
+                    ? parseFloat(String(product.normalPrice)) || 0
+                    : 0;
+                  const discountedPerUnit =
+                    isProduct && product.discountedPrice != null
+                      ? parseFloat(String(product.discountedPrice))
+                      : null;
+
+                  const hasDiscount =
+                    isProduct &&
+                    discountedPerUnit != null &&
+                    discountedPerUnit > 0 &&
+                    discountedPerUnit < normalPerUnit;
+
+                  const startNormalPrice = isProduct
+                    ? normalPerUnit * rawStartValue
+                    : 0;
+                  const startDiscountedPrice =
+                    isProduct && discountedPerUnit != null
+                      ? discountedPerUnit * rawStartValue
+                      : startNormalPrice;
+
                   const basePrice = isProduct
-                    ? parseFloat(product.normalPrice) || 0
-                    : parseFloat(product.subTotal) || 0;
+                    ? hasDiscount
+                      ? startDiscountedPrice
+                      : startNormalPrice
+                    : parseFloat(String(product.subTotal)) || 0;
 
                   const currentWeightInG = cartItem
                     ? cartItem.unit === "kg"
@@ -767,7 +853,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           borderBottomRightRadius: 18,
                         }}
                       >
-                        {isProduct && product.discount && (
+                        {isProduct && hasDiscount && product.discount && (
                           <View
                             style={{
                               position: "absolute",
@@ -822,17 +908,12 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {isProduct && !cartItem && (
                           <>
                             <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                              {product?.startValue!}{" "}
-                              {(product.unitType || "g").toLowerCase()}
+                              {displayWeightText}
                             </Text>
 
-                            {product.discount && (
+                            {hasDiscount && (
                               <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
-                                Rs.{" "}
-                                {formatPrice(
-                                  basePrice *
-                                    (1 + (product.discount ?? 0) / 100),
-                                )}
+                                Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
@@ -976,22 +1057,23 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         )}
 
                         {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
-                        {/* Shows the FROZEN add-time snapshot, not live cartItem data. */}
                         {isProduct && cartItem && !isExpanded && (
                           <>
                             <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                              {snapshot?.weight ?? cartItem.weight}{" "}
-                              {snapshot?.unit ?? cartItem.unit}
+                              {displayWeightText}
                             </Text>
+
+                            {hasDiscount && (
+                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                                Rs. {formatPrice(startNormalPrice)}
+                              </Text>
+                            )}
 
                             <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
-                              Rs.{" "}
-                              {formatPrice(
-                                snapshot?.price ?? calculatedProductPrice,
-                              )}
+                              Rs. {formatPrice(basePrice)}
                             </Text>
 
-                            {/* Checkmark Button — tap to re-expand this card and see live data */}
+                            {/* Plus Button — tap to re-expand this card and see live controls */}
                             <TouchableOpacity
                               activeOpacity={0.8}
                               onPress={(e) => {
@@ -1007,11 +1089,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                 elevation: 5,
                               }}
                             >
-                              <Ionicons
-                                name="add"
-                                size={20}
-                                color="#FFFFFF"
-                              />
+                              <Ionicons name="add" size={22} color="#FFFFFF" />
                             </TouchableOpacity>
                           </>
                         )}
@@ -1133,11 +1211,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                 elevation: 5,
                               }}
                             >
-                              <Ionicons
-                                name="checkmark"
-                                size={20}
-                                color="#FFFFFF"
-                              />
+                              <Ionicons name="add" size={20} color="#FFFFFF" />
                             </TouchableOpacity>
                           </>
                         )}
