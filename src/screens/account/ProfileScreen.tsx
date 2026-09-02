@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { RootState } from "@/store";
 import { logoutSuccess } from "@/store/authSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6 } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
@@ -35,24 +36,26 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const [isCreditBalanceLoading, setIsCreditBalanceLoading] =
     useState<boolean>(true);
 
-  useEffect(() => {
-    const fetchAcccountDetails = async () => {
-      try {
-        setIsCreditBalanceLoading(true);
-        const response = await customerService.getAccountDetails();
-        if (response.data) {
-          const { creditBalance } = response.data.data;
-          setCreditBalance(Number(creditBalance!));
-        }
-        console.log("acc details fetchihng success: ", response.data.data);
-      } catch (error) {
-        console.log("error fetching acc details: ", error);
-      } finally {
-        setIsCreditBalanceLoading(false);
+  const fetchAcccountDetails = async () => {
+    try {
+      setIsCreditBalanceLoading(true);
+      const response = await customerService.getAccountDetails();
+      if (response.data && response.data.data) {
+        const { creditBalance } = response.data.data;
+        setCreditBalance(Number(creditBalance || 0));
       }
-    };
-    fetchAcccountDetails();
-  }, []);
+    } catch (error) {
+      console.log("error fetching acc details: ", error);
+    } finally {
+      setIsCreditBalanceLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAcccountDetails();
+    }, [])
+  );
 
   const handleLogout = async () => {
     Alert.alert("Confirm Logout", "Are you sure you want to log out?", [

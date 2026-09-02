@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Platform } from "react-native";
 
 interface Props {
     packageTotal: number;
@@ -25,42 +25,38 @@ const OrderSummary: React.FC<Props> = ({
     return (
         <View
             style={{
-                position: "absolute",
-                bottom: 0,
-                left: 0,
-                right: 0,
-
                 backgroundColor: "#FFF",
-
                 borderTopLeftRadius: 28,
                 borderTopRightRadius: 28,
-
-                paddingHorizontal: 18,
-                paddingTop: 20,
-                paddingBottom: 28,
-
+                paddingHorizontal: 20,
+                paddingTop: 22,
+                paddingBottom: Platform.OS === "ios" ? 34 : 28,
+                marginTop: 20,
+                marginBottom: -8,
                 shadowColor: "#000",
                 shadowOpacity: 0.12,
                 shadowRadius: 8,
                 shadowOffset: {
                     width: 0,
-                    height: -2,
+                    height: -3,
                 },
                 elevation: 15,
             }}
         >
-            {/* Package */}
+            {/* For Packages */}
             <View
                 style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: 16,
+                    alignItems: "center",
+                    paddingVertical: 2,
                 }}
             >
                 <Text
                     style={{
-                        fontSize: 15,
-                        color: "#7C7C7C",
+                        fontSize: 16,
+                        fontWeight: "400",
+                        color: "#000000",
                     }}
                 >
                     For Packages
@@ -68,27 +64,38 @@ const OrderSummary: React.FC<Props> = ({
 
                 <Text
                     style={{
-                        fontSize: 15,
-                        fontWeight: "500",
-                        color: "#000",
+                        fontSize: 16,
+                        fontWeight: "600",
+                        color: "#000000",
                     }}
                 >
                     Rs. {formatPrice(packageTotal)}
                 </Text>
             </View>
 
-            {/* Products */}
+            {/* HR line 1 */}
+            <View
+                style={{
+                    height: 1,
+                    backgroundColor: "#E1E7EE",
+                    marginVertical: 14,
+                }}
+            />
+
+            {/* Ala Carte Items */}
             <View
                 style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: 16,
+                    alignItems: "center",
+                    paddingVertical: 2,
                 }}
             >
                 <Text
                     style={{
-                        fontSize: 15,
-                        color: "#7C7C7C",
+                        fontSize: 16,
+                        fontWeight: "400",
+                        color: "#000000",
                     }}
                 >
                     Ala Carte Items
@@ -96,27 +103,38 @@ const OrderSummary: React.FC<Props> = ({
 
                 <Text
                     style={{
-                        fontSize: 15,
-                        fontWeight: "500",
-                        color: "#000",
+                        fontSize: 16,
+                        fontWeight: "600",
+                        color: "#000000",
                     }}
                 >
                     Rs. {formatPrice(productTotal)}
                 </Text>
             </View>
 
+            {/* HR line 2 */}
+            <View
+                style={{
+                    height: 1,
+                    backgroundColor: "#E1E7EE",
+                    marginVertical: 14,
+                }}
+            />
+
             {/* Discount */}
             <View
                 style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: 16,
+                    alignItems: "center",
+                    paddingVertical: 2,
                 }}
             >
                 <Text
                     style={{
-                        fontSize: 15,
-                        color: "#7C7C7C",
+                        fontSize: 16,
+                        fontWeight: "400",
+                        color: "#000000",
                     }}
                 >
                     Discount
@@ -124,21 +142,21 @@ const OrderSummary: React.FC<Props> = ({
 
                 <Text
                     style={{
-                        fontSize: 15,
-                        fontWeight: "500",
-                        color: "#000",
+                        fontSize: 16,
+                        fontWeight: "600",
+                        color: "#000000",
                     }}
                 >
-                    - Rs. {formatPrice(discount)}
+                    {discount > 0 ? `- Rs. ${formatPrice(discount)}` : "- Rs. 0.00"}
                 </Text>
             </View>
 
-            {/* Divider */}
+            {/* HR line 3 */}
             <View
                 style={{
                     height: 1,
-                    backgroundColor: "#ECECEC",
-                    marginBottom: 18,
+                    backgroundColor: "#E1E7EE",
+                    marginVertical: 14,
                 }}
             />
 
@@ -147,14 +165,16 @@ const OrderSummary: React.FC<Props> = ({
                 style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: 24,
+                    alignItems: "center",
+                    paddingVertical: 2,
+                    marginBottom: 20,
                 }}
             >
                 <Text
                     style={{
                         fontSize: 18,
                         fontWeight: "700",
-                        color: "#000",
+                        color: "#000000",
                     }}
                 >
                     Total
@@ -164,39 +184,37 @@ const OrderSummary: React.FC<Props> = ({
                     style={{
                         fontSize: 18,
                         fontWeight: "700",
-                        color: "#000",
+                        color: "#000000",
                     }}
                 >
                     Rs. {formatPrice(total)}
                 </Text>
             </View>
 
-            {/* Checkout */}
+            {/* Proceed to Checkout Button */}
             <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={onCheckout}
                 style={{
-                    height: 56,
+                    height: 54,
                     backgroundColor: "#000",
                     borderRadius: 30,
-
                     justifyContent: "center",
                     alignItems: "center",
-
                     shadowColor: "#000",
-                    shadowOpacity: 0.18,
+                    shadowOpacity: 0.15,
                     shadowRadius: 6,
                     shadowOffset: {
                         width: 0,
                         height: 3,
                     },
-                    elevation: 6,
+                    elevation: 5,
                 }}
             >
                 <Text
                     style={{
                         color: "#FFF",
-                        fontSize: 17,
+                        fontSize: 16,
                         fontWeight: "700",
                     }}
                 >

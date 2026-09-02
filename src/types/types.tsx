@@ -1,5 +1,53 @@
 // ─── Navigation Route Params ─────────────────────────────────────────────────
 
+export interface CheckoutDetails {
+  deliveryMethod: "home" | "pickup";
+  title?: string;
+  fullName?: string;
+  phoneCode1?: string;
+  phone1?: string;
+  phoneCode2?: string;
+  phone2?: string;
+  // Home delivery fields
+  buildingType?: "house" | "apartment";
+  cityName?: string;
+  companycenterId?: number;
+  houseNo?: string;
+  street?: string;
+  buildingNo?: string;
+  buildingName?: string;
+  flatNumber?: string;
+  floorNumber?: string;
+  saveAs?: string;
+  // Pickup fields
+  centerId?: number;
+  centreName?: string;
+  // Schedule fields
+  scheduleType?: string;
+  deliveryDate?: string;
+  timeSlot?: string;
+  // Geo
+  geoLatitude?: number;
+  geoLongitude?: number;
+  // Coupon
+  isCoupon?: boolean;
+  couponValue?: number;
+  couponType?: string;
+}
+
+export interface OrderContext {
+  cartId?: number;
+  grandTotal: number;
+  packageTotal: number;
+  productTotal: number;
+  discount: number;
+  deliveryCharge?: number;
+  isFinalizeImdt?: number;
+  deliveryMethod?: "home" | "pickup";
+  checkoutDetails?: CheckoutDetails;
+  paymentMethod?: "cash" | "card";
+}
+
 export type RootStackParamList = {
   Splash: undefined;
   ChooseAuth: undefined;
@@ -32,8 +80,7 @@ export type RootStackParamList = {
     price: number;
   };
   MyCart: undefined;
-  // TODO: Register PackageConfirmation in navigator when ready
-  PackageConfirmation: undefined;
+  PackageConfirmation: { orderContext?: OrderContext } | undefined;
   SavedAddresses: undefined;
   EditAddress: { address: SavedAddress };
   AddNewAddress: undefined;
@@ -43,12 +90,14 @@ export type RootStackParamList = {
   MyAccount: undefined;
   DeleteAccount: undefined;
   Notification: undefined;
-  PaymentMethod: { total: number; };
-  PaymentScreen: { amount?: number; title?: string } | undefined;
-  OrderDeliveryMethod: undefined;
-  OrderConfirmed: undefined;
+  CheckoutScreen: { orderContext: OrderContext };
+  ScheduleOrder: { orderContext: OrderContext };
+  PaymentMethod: { total: number; orderContext?: OrderContext };
+  PaymentScreen: { amount?: number; title?: string; orderContext?: OrderContext } | undefined;
+  OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
+  OrderConfirmed: { orderId?: string | number; invoiceNumber?: string; total?: number } | undefined;
   SetLocation: undefined;
-  ChoosePickupCentre: undefined;
+  ChoosePickupCentre: { orderContext?: OrderContext } | undefined;
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };

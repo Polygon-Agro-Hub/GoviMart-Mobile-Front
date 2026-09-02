@@ -1,189 +1,365 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  KeyboardAvoidingView,
+  SafeAreaView,
   Platform,
   Image,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
   "PackageConfirmation"
 >;
+
+type PackageConfirmationRouteProp = RouteProp<
+  RootStackParamList,
+  "PackageConfirmation"
+>;
+
 interface Props {
   navigation: NavigationProp;
+  route: PackageConfirmationRouteProp;
 }
-const PackageConfirmation: React.FC<Props> = ({ navigation }) => {
+
+const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
+  const [selectedOption, setSelectedOption] = useState<number>(0); // 0 = Finalize Immediately, 1 = Review
+  const orderContext = route.params?.orderContext;
+
+  const handleContinue = () => {
+    navigation.navigate("OrderDeliveryMethod", {
+      orderContext: {
+        ...(orderContext as any),
+        isFinalizeImdt: selectedOption === 0 ? 1 : 0,
+      },
+    });
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.select({ ios: 60, android: 0 })}
-      className="flex-1 bg-white"
-    >
-      {/* Header */}
-      <View className="px-5 pt-4">
-        <TouchableOpacity className="w-9 h-9 rounded-full bg-gray-200 items-center justify-center">
-          <MaterialIcons name="arrow-back" size={22} color="#000" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      {/* ─── TOP HEADER: CLOSE BUTTON ON RIGHT ───────────────────────────── */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: 8,
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => navigation.goBack()}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: "#000000",
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 3,
+            elevation: 3,
+          }}
+        >
+          <Ionicons name="close" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
+      {/* ─── SCROLLABLE CONTENT ─────────────────────────────────────────── */}
       <ScrollView
-        className="flex-1 px-5"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{
+          paddingBottom: 24,
+        }}
       >
-        {/* Title row */}
-        <View className="flex-row items-center mt-2 mb-5">
-          <View className="w-15 h-15 items-center justify-center mr-3">
-            <Image
-              source={require("@/assets/images/order/vegetable-basket.webp")}
-              className="w-14 h-14"
-              resizeMode="contain"
-            />
-          </View>
+        {/* Title row with vegetable basket */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 20,
+            marginTop: 8,
+            marginBottom: 26,
+          }}
+        >
+          <Image
+            source={require("@/assets/images/order/vegetable-basket.webp")}
+            style={{ width: 68, height: 68, marginRight: 14 }}
+            resizeMode="contain"
+          />
 
-          <Text className="flex-1 text-lg font-bold text-gray-900 leading-6">
-            How would you like us to handle the order's package items?
-          </Text>
-        </View>
-
-        {/* Option 1 */}
-        <View className="rounded-2xl p-4 mb-4 border bg-[#F7F1FF] border-[#B186EF]">
-          <View className="flex-row items-start">
-            {/* Selected Radio */}
-            <View className="w-5 h-5 rounded-full border-2 border-[#3E206D] items-center justify-center mt-1 mr-3">
-              <View className="w-2.5 h-2.5 rounded-full bg-[#3E206D]" />
-            </View>
-
-            <View className="flex-1">
-              <View className="flex-row items-center mb-2">
-                <View className="w-10 h-10 items-center justify-center mr-2">
-                  <Image
-                    source={require("@/assets/images/order/finalize-immediately.webp")}
-                    className="w-10 h-10"
-                    resizeMode="contain"
-                  />
-                </View>
-
-                <Text className="text-base font-bold text-[#431289]">
-                  Finalize Immediately
-                </Text>
-              </View>
-
-              <View className="self-start bg-violet-200 rounded-full px-3 py-1 mb-2">
-                <Text className="text-xs font-semibold text-violet-800">
-                  Card Payment Required
-                </Text>
-              </View>
-
-              <Text className="text-sm text-[#484A4C] leading-5">
-                Want to secure the delivery slot now? Confirm the order right
-                away and we'll prepare it using the standard package items
-                assigned for selected delivery date. Please note that once
-                confirmed, this order cannot be changed or canceled.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Option 2 */}
-        <View className="rounded-2xl p-4 mb-4 border bg-white border-gray-200">
-          <View className="flex-row items-start">
-            {/* Unselected Radio */}
-            <View className="w-5 h-5 rounded-full border-2 border-gray-300 items-center justify-center mt-1 mr-3" />
-
-            <View className="flex-1">
-              <View className="flex-row items-center mb-2">
-                <View className="w-10 h-10 items-center justify-center mr-2">
-                  <Image
-                    source={require("@/assets/images/order/review.webp")}
-                    className="w-10 h-10"
-                    resizeMode="contain"
-                  />
-                </View>
-
-                <Text className="flex-1 text-base font-bold text-gray-900">
-                  Review and confirm before delivery
-                </Text>
-              </View>
-
-              <Text className="text-sm text-[#484A4C] leading-5 mb-3">
-                Two days before the delivery, the customer will receive an
-                in-app notification with the exact produce and quantities.
-                Confirm the order between 8:00 AM and 6:00 PM to finalize it
-                for dispatch.
-              </Text>
-            </View>
-          </View>
-
-          {/* Warning */}
-          <View className="bg-[#FFF9F5] border border-[#EE7719] rounded-xl p-3 flex-row mt-3">
-            <MaterialIcons
-              name="warning-amber"
-              size={16}
-              color="#F97316"
-              style={{ marginRight: 6, marginTop: 1 }}
-            />
-
-            <Text className="flex-1 text-xs text-[#EE7719] leading-4">
-              This facility is available on a first-come, first-served basis
-              and is limited to a certain number of customers. If we do not
-              receive your customer's confirmation on time and all slots for
-              the preferred delivery date are filled, we will be unable to
-              process this order. Your customer may check again later for any
-              available slots.
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "800",
+                color: "#111111",
+                lineHeight: 22,
+              }}
+            >
+              How would you like us to handle the order’s package items?
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#666A7D",
+                marginTop: 4,
+              }}
+            >
+              Choose an option that suits you best.
             </Text>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Continue Button */}
-      <View className="px-10 pb-6 pt-2 items-center">
-        <View
+        {/* ─── OPTION 1: Finalize Immediately ─────────────────────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setSelectedOption(0)}
           style={{
-            width: "68%",
-            borderRadius: 999,
-            shadowColor: "#000000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: selectedOption === 0 ? "#C9D5E2" : "#EBF0F5",
+            backgroundColor: "#FFFFFF",
+            padding: 16,
+            marginHorizontal: 20,
+            marginBottom: 16,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
             shadowRadius: 4,
-            elevation: 5,
+            elevation: 1,
           }}
         >
-          <TouchableOpacity
-            activeOpacity={0.85}
+          {/* Header Row */}
+          <View
             style={{
-              borderRadius: 999,
-              overflow: "hidden",
-              height: 50,
+              flexDirection: "row",
+              alignItems: "center",
             }}
           >
-            <LinearGradient
-              colors={["#6839CF", "#874DDB"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+            {/* Card Icon */}
+            <View
               style={{
-                flex: 1,
-                borderRadius: 999,
+                width: 44,
+                height: 36,
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 10,
+              }}
+            >
+              <Image
+                source={require("@/assets/images/order/finalize-immediately.webp")}
+                style={{ width: 44, height: 34 }}
+                resizeMode="contain"
+              />
+            </View>
+
+            {/* Title & Badge */}
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "800",
+                  color: "#111111",
+                }}
+              >
+                Finalize Immediately
+              </Text>
+              <View
+                style={{
+                  alignSelf: "flex-start",
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  marginTop: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: "#1F2937",
+                  }}
+                >
+                  Card Payment Required
+                </Text>
+              </View>
+            </View>
+
+            {/* Click dot on right side with check icon */}
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: selectedOption === 0 ? "#000000" : "#FFFFFF",
+                borderWidth: selectedOption === 0 ? 0 : 2,
+                borderColor: "#000000",
                 justifyContent: "center",
                 alignItems: "center",
               }}
             >
-              <Text className="text-white text-base font-bold">
-                Continue
+              {selectedOption === 0 && (
+                <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+              )}
+            </View>
+          </View>
+
+          {/* Description */}
+          <Text
+            style={{
+              fontSize: 12,
+              lineHeight: 18,
+              color: "#55596D",
+              marginTop: 12,
+            }}
+          >
+            Want to secure the delivery slot now? Confirm the order right away
+            and we’ll prepare it using the standard package items assigned for
+            the selected delivery date. Please note that once confirmed, this
+            order cannot be changed or cancelled.
+          </Text>
+        </TouchableOpacity>
+
+        {/* ─── OPTION 2: Review and confirm before delivery ───────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setSelectedOption(1)}
+          style={{
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: selectedOption === 1 ? "#C9D5E2" : "#EBF0F5",
+            backgroundColor: "#FFFFFF",
+            padding: 16,
+            marginHorizontal: 20,
+            marginBottom: 16,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 4,
+            elevation: 1,
+          }}
+        >
+          {/* Header Row */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            {/* Calendar/Review Icon */}
+            <View
+              style={{
+                width: 44,
+                height: 36,
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 10,
+              }}
+            >
+              <Image
+                source={require("@/assets/images/order/review.webp")}
+                style={{ width: 38, height: 38 }}
+                resizeMode="contain"
+              />
+            </View>
+
+            {/* Title */}
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "800",
+                  color: "#111111",
+                }}
+              >
+                Review and confirm before delivery
               </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+            </View>
+
+            {/* Click dot on right side with check icon */}
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: selectedOption === 1 ? "#000000" : "#FFFFFF",
+                borderWidth: selectedOption === 1 ? 0 : 2,
+                borderColor: "#000000",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {selectedOption === 1 && (
+                <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+              )}
+            </View>
+          </View>
+
+          {/* Description */}
+          <Text
+            style={{
+              fontSize: 12,
+              lineHeight: 18,
+              color: "#55596D",
+              marginTop: 12,
+            }}
+          >
+            Two days before the delivery, the customer will receive an in-app
+            notification with the exact produce and quantities.{"\n"}
+            Confirm the order between 8:00AM and 6:00PM to finalize it for
+            dispatch.
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* ─── CONFIRM & CONTINUE BUTTON ──────────────────────────────────── */}
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingBottom: Platform.OS === "ios" ? 28 : 20,
+          paddingTop: 12,
+          backgroundColor: "#FFFFFF",
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={handleContinue}
+          style={{
+            height: 52,
+            backgroundColor: "#000000",
+            borderRadius: 26,
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+            elevation: 4,
+          }}
+        >
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 16,
+              fontWeight: "700",
+            }}
+          >
+            Confirm & Continue
+          </Text>
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 

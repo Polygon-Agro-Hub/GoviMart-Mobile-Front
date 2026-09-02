@@ -11,31 +11,62 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 
+import { RouteProp } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
+import { clearCart } from "@/store/cartSlice";
+
 type OrderConfirmedNavigationProp = StackNavigationProp<
+    RootStackParamList,
+    "OrderConfirmed"
+>;
+
+type OrderConfirmedRouteProp = RouteProp<
     RootStackParamList,
     "OrderConfirmed"
 >;
 
 interface Props {
     navigation: OrderConfirmedNavigationProp;
+    route: OrderConfirmedRouteProp;
 }
 
-const OrderConfirmed: React.FC<Props> = ({ navigation }) => {
+const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
+    const dispatch = useDispatch();
+
+    React.useEffect(() => {
+        dispatch(clearCart());
+    }, [dispatch]);
+
+    const invoiceNo = route.params?.invoiceNumber || "INV-PENDING";
+    const passedTotal = route.params?.total;
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    });
+    const formattedTime = now.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
     const order = {
-        invoiceNumber: "Invoice Number",
-        orderDate: "August 02, 2026",
-        orderTime: "11:00AM",
-        scheduleDate: "August 05, 2026",
-        scheduleTime: "08:00AM - 12:00PM",
-        itemsTotal: 600,
-        discount: 20,
-        deliveryFee: 300,
+        invoiceNumber: invoiceNo,
+        orderDate: formattedDate,
+        orderTime: formattedTime,
+        scheduleDate: "As Scheduled",
+        scheduleTime: "Standard Slot",
+        itemsTotal: passedTotal || 600,
+        discount: 0,
+        deliveryFee: 0,
     };
 
-    const total =
+    const total = passedTotal !== undefined ? passedTotal : (
         order.itemsTotal -
         order.discount +
-        order.deliveryFee;
+        order.deliveryFee
+    );
 
     const formatAmount = (amount: number) =>
         amount.toLocaleString("en-US", {

@@ -32,7 +32,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         {showBackButton && navigation && (
           <TouchableOpacity
             onPress={onBackPress ?? (() => navigation.goBack())}
-            className={`w-12 h-12 rounded-full items-center justify-center shadow-sm border ${
+            className={`w-14 h-14 rounded-full items-center justify-center shadow-sm border ${
               dark ? "bg-[#1F1F1F] border-gray-800" : "bg-white border-gray-200"
             }`}
             activeOpacity={0.7}

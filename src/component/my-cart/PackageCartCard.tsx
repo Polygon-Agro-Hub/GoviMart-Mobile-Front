@@ -140,9 +140,16 @@ const PackageCartCard: React.FC<Props> = ({
             </View>
 
             {/* DIVIDER */}
-            <View className="flex-row items-center my-4">
-                <View className="flex-1 h-[1px] overflow-hidden">
-                    <View className="flex-row">
+            <View
+                style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginVertical: 16,
+                    marginHorizontal: -20,
+                }}
+            >
+                <View style={{ flex: 1, height: 1, overflow: "hidden" }}>
+                    <View style={{ flexDirection: "row" }}>
                         {Array.from({ length: 100 }).map((_, index) => (
                             <View
                                 key={index}
