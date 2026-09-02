@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     View,
     Text,
     TouchableOpacity,
-    Image,
     ScrollView,
     ActivityIndicator,
 } from "react-native";
@@ -14,6 +13,7 @@ import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../types/types";
 import orderService from "@/services/order/order.service";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
+import CustomHeader from "@/component/common/CustomHeader";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 
@@ -84,10 +84,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                         mapImage: `https://maps.googleapis.com/maps/api/staticmap?center=${item.latitude || 6.9271},${item.longitude || 79.8612}&zoom=14&size=600x400&maptype=roadmap`,
                     }));
                     setPickupCentres(mapped);
-                    if (mapped.length > 0) {
-                        setSelectedCity(mapped[0].name);
-                        setSelectedCentre(mapped[0]);
-                    }
+                    // Keep unselected by default so user sees "Select Your City"
                 }
             } catch (error) {
                 console.error("Error fetching pickup centres:", error);
@@ -98,23 +95,6 @@ const ChoosePickupCentre: React.FC<Props> = ({
 
         fetchCenters();
     }, []);
-
-    const cities = pickupCentres.map((c) => c.name);
-
-    const handleSelectCity = (cityName: string) => {
-        setSelectedCity(cityName);
-        setCityOpen(false);
-
-        const centre = pickupCentres.find(
-            (item) => item.name === cityName
-        );
-
-        if (centre) {
-            setSelectedCentre(centre);
-        } else {
-            setSelectedCentre(null);
-        }
-    };
 
     const handleConfirm = () => {
         if (!selectedCentre) return;
@@ -139,8 +119,6 @@ const ChoosePickupCentre: React.FC<Props> = ({
                     deliveryMethod: "pickup",
                     centerId: selectedCentre.id,
                     centreName: selectedCentre.name,
-                    cityName: selectedCentre.city,
-                    title: userProfile?.title || "Mr",
                     fullName: userFullName || undefined,
                     phone1: userProfile?.phoneNumber || undefined,
                     phoneCode1: "+94",
@@ -156,188 +134,90 @@ const ChoosePickupCentre: React.FC<Props> = ({
                 backgroundColor: "#FFFFFF",
             }}
         >
-            {/* ================================================= */}
-            {/* HEADER */}
-            {/* ================================================= */}
+            {/* ─── CUSTOM HEADER ─────────────────────────────────────────────── */}
+            <CustomHeader
+                title="Choose Pickup Centre"
+                titleColor="#0F172A"
+                showBackButton={true}
+                navigation={navigation}
+            />
 
-            <View
-                style={{
-                    height: 60,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
-                }}
-            >
-                {/* Back Button */}
-
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() =>
-                        navigation.goBack()
-                    }
-                    style={{
-                        position: "absolute",
-                        left: 17,
-
-                        width: 42,
-                        height: 42,
-
-                        borderRadius: 21,
-
-                        backgroundColor: "#FFFFFF",
-
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 1,
-                        },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 4,
-
-                        elevation: 2,
-                    }}
-                >
-                    <Ionicons
-                        name="chevron-back"
-                        size={24}
-                        color="#000"
-                    />
-                </TouchableOpacity>
-
-                <Text
-                    style={{
-                        fontSize: 16,
-                        fontWeight: "600",
-                        color: "#111111",
-                    }}
-                >
-                    Choose Pickup Centre
-                </Text>
-            </View>
-
-            {/* ================================================= */}
-            {/* CONTENT */}
-            {/* ================================================= */}
-
+            {/* ─── SCROLLABLE CONTENT ────────────────────────────────────────── */}
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                    paddingHorizontal: 18,
+                    paddingHorizontal: 16,
+                    paddingTop: 6,
                     paddingBottom: 120,
                 }}
             >
                 {/* Description */}
-
                 <Text
                     style={{
                         textAlign: "center",
                         fontSize: 14,
-                        lineHeight: 19,
-                        color: "#666875",
-                        marginTop: 7,
-                        marginBottom: 24,
-                        paddingHorizontal: 20,
+                        lineHeight: 20,
+                        color: "#64748B",
+                        marginBottom: 20,
+                        paddingHorizontal: 16,
                     }}
                 >
-                    Select a centre to pick up your order
-                    {"\n"}
-                    on the delivery date.
+                    Select a centre to pick up your order{"\n"}on the delivery date.
                 </Text>
 
-                {/* ================================================= */}
-                {/* CITY LABEL */}
-                {/* ================================================= */}
-
+                {/* City Dropdown Label */}
                 <Text
                     style={{
-                        fontSize: 12,
-                        color: "#555555",
-                        fontWeight: "500",
-                        marginBottom: 7,
+                        fontSize: 13,
+                        color: "#475569",
+                        fontWeight: "600",
+                        marginBottom: 8,
                     }}
                 >
                     Select Pickup Centre
                 </Text>
 
-                {/* ================================================= */}
-                {/* CITY DROPDOWN */}
-                {/* ================================================= */}
-
-                <View
+                {/* City Dropdown Button */}
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setCityOpen(true)}
                     style={{
-                        position: "relative",
-                        zIndex: 100,
+                        height: 50,
+                        borderWidth: 1.5,
+                        borderColor: "#FF8A00",
+                        borderRadius: 25,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 16,
+                        backgroundColor: "#FFFFFF",
                     }}
                 >
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() =>
-                            setCityOpen(!cityOpen)
-                        }
+                    <Ionicons
+                        name="location-sharp"
+                        size={20}
+                        color="#000000"
+                    />
+
+                    <Text
                         style={{
-                            height: 48,
-
-                            borderWidth: 1,
-                            borderColor:
-                                selectedCentre
-                                    ? "#FF8500"
-                                    : "#FF8500",
-
-                            borderRadius: 25,
-
-                            flexDirection: "row",
-                            alignItems: "center",
-
-                            paddingHorizontal: 12,
+                            flex: 1,
+                            fontSize: 15,
+                            color: selectedCentre ? "#0F172A" : "#64748B",
+                            fontWeight: selectedCentre ? "700" : "500",
+                            marginLeft: 10,
                         }}
                     >
-                        {/* Location Icon */}
+                        {selectedCentre ? selectedCentre.name : "Select Your City"}
+                    </Text>
 
-                        <Ionicons
-                            name="location"
-                            size={20}
-                            color="#000"
-                        />
+                    <Ionicons
+                        name="chevron-down"
+                        size={20}
+                        color="#000000"
+                    />
+                </TouchableOpacity>
 
-                        <Text
-                            style={{
-                                flex: 1,
-                                fontSize: 14,
-                                color: selectedCity
-                                    ? "#111"
-                                    : "#444",
-                                fontWeight:
-                                    selectedCity
-                                        ? "600"
-                                        : "400",
-                                marginLeft: 9,
-                            }}
-                        >
-                            {selectedCentre
-                                ? selectedCentre.name
-                                : "Select Your City"}
-                        </Text>
-
-                        <Ionicons
-                            name={
-                                cityOpen
-                                    ? "chevron-up"
-                                    : "chevron-down"
-                            }
-                            size={21}
-                            color="#000"
-                        />
-                    </TouchableOpacity>
-                </View>
-
-                {/* ================================================= */}
-                {/* MAP (Streetview) */}
-                {/* ================================================= */}
-
+                {/* Map View Container */}
                 <View
                     style={{
                         height: 287,
@@ -347,7 +227,18 @@ const ChoosePickupCentre: React.FC<Props> = ({
                         backgroundColor: "#E7EEF0",
                     }}
                 >
-                    {selectedCentre ? (
+                    {loading ? (
+                        <View
+                            style={{
+                                flex: 1,
+                                justifyContent: "center",
+                                alignItems: "center",
+                                backgroundColor: "#DDF2F7",
+                            }}
+                        >
+                            <ActivityIndicator size="large" color="#FF8A00" />
+                        </View>
+                    ) : selectedCentre ? (
                         <>
                             <MapView
                                 key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
@@ -477,217 +368,94 @@ const ChoosePickupCentre: React.FC<Props> = ({
                     )}
                 </View>
 
-                {/* ================================================= */}
-                {/* CENTRE DETAILS */}
-                {/* ================================================= */}
-
+                {/* ─── CENTRE DETAILS / ADDRESS SECTION (Hidden if not selected) ─── */}
                 {selectedCentre && (
                     <View
                         style={{
                             marginTop: 18,
-
+                            backgroundColor: "#FFFFFF",
                             borderWidth: 1,
-                            borderColor: "#DCE2E8",
-
-                            borderRadius: 9,
-
-                            padding: 11,
-
+                            borderColor: "#E2E8F0",
+                            borderRadius: 16,
+                            padding: 16,
                             flexDirection: "row",
+                            alignItems: "center", // VERTICALLY CENTERED!
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.05,
+                            shadowRadius: 4,
+                            elevation: 2,
                         }}
                     >
-                        {/* Location Circle */}
-
+                        {/* Map Pin Icon Circle — Vertically Centered */}
                         <View
                             style={{
-                                width: 44,
-                                height: 44,
-
-                                borderRadius: 22,
-
-                                backgroundColor:
-                                    "#FFF4E7",
-
-                                justifyContent:
-                                    "center",
-                                alignItems:
-                                    "center",
-
-                                marginRight: 10,
-                                marginTop: 8,
+                                width: 48,
+                                height: 48,
+                                borderRadius: 24,
+                                backgroundColor: "#FFF4E8",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                marginRight: 14,
                             }}
                         >
                             <Ionicons
-                                name="location"
-                                size={22}
+                                name="location-sharp"
+                                size={24}
                                 color="#FF8A00"
                             />
                         </View>
 
                         {/* Details */}
-
-                        <View
-                            style={{
-                                flex: 1,
-                            }}
-                        >
+                        <View style={{ flex: 1 }}>
                             <Text
                                 style={{
-                                    textAlign:
-                                        "center",
                                     fontSize: 14,
-                                    fontWeight:
-                                        "700",
-                                    color: "#111",
+                                    fontWeight: "700",
+                                    color: "#0F172A",
                                     marginBottom: 5,
                                 }}
                             >
-                                {
-                                    selectedCentre.name
-                                }
+                                {selectedCentre.name}
                             </Text>
 
-                            <View
-                                style={{
-                                    flexDirection:
-                                        "row",
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        width: 54,
-                                        fontSize: 12,
-                                        color: "#60647A",
-                                    }}
-                                >
-                                    City :
-                                </Text>
+                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                                <Text style={{ color: "#494A65" }}>City : </Text>
+                                {selectedCentre.city || "N/A"}
+                            </Text>
 
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#333",
-                                    }}
-                                >
-                                    {
-                                        selectedCentre.city
-                                    }
-                                </Text>
-                            </View>
+                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                                <Text style={{ color: "#494A65" }}>District : </Text>
+                                {selectedCentre.district || "N/A"}
+                            </Text>
 
-                            <View
-                                style={{
-                                    flexDirection:
-                                        "row",
-                                    marginTop: 3,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        width: 54,
-                                        fontSize: 12,
-                                        color: "#60647A",
-                                    }}
-                                >
-                                    District :
-                                </Text>
+                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                                <Text style={{ color: "#494A65" }}>Province : </Text>
+                                {selectedCentre.province || "N/A"}
+                            </Text>
 
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#333",
-                                    }}
-                                >
-                                    {
-                                        selectedCentre.district
-                                    }
-                                </Text>
-                            </View>
-
-                            <View
-                                style={{
-                                    flexDirection:
-                                        "row",
-                                    marginTop: 3,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        width: 54,
-                                        fontSize: 12,
-                                        color: "#60647A",
-                                    }}
-                                >
-                                    Province :
-                                </Text>
-
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#333",
-                                    }}
-                                >
-                                    {
-                                        selectedCentre.province
-                                    }
-                                </Text>
-                            </View>
-
-                            <View
-                                style={{
-                                    flexDirection:
-                                        "row",
-                                    marginTop: 3,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        width: 54,
-                                        fontSize: 12,
-                                        color: "#60647A",
-                                    }}
-                                >
-                                    Country :
-                                </Text>
-
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#333",
-                                    }}
-                                >
-                                    {
-                                        selectedCentre.country
-                                    }
-                                </Text>
-                            </View>
+                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                                <Text style={{ color: "#494A65" }}>Country : </Text>
+                                {selectedCentre.country || "Sri Lanka"}
+                            </Text>
                         </View>
                     </View>
                 )}
             </ScrollView>
 
-            {/* ================================================= */}
-            {/* BOTTOM BUTTON */}
-            {/* ================================================= */}
-
+            {/* ─── BOTTOM CONFIRM BUTTON ─────────────────────────────────────── */}
             <View
                 style={{
                     position: "absolute",
-
                     bottom: 0,
                     left: 0,
                     right: 0,
-
-                    height: 91,
-
                     backgroundColor: "#FFFFFF",
-
                     borderTopLeftRadius: 18,
                     borderTopRightRadius: 18,
-
                     paddingHorizontal: 16,
-                    paddingTop: 13,
-
+                    paddingTop: 12,
+                    paddingBottom: 24,
                     shadowColor: "#000",
                     shadowOffset: {
                         width: 0,
@@ -695,49 +463,36 @@ const ChoosePickupCentre: React.FC<Props> = ({
                     },
                     shadowOpacity: 0.08,
                     shadowRadius: 5,
-
                     elevation: 10,
                 }}
             >
                 <TouchableOpacity
-                    activeOpacity={
-                        selectedCentre ? 0.8 : 1
-                    }
+                    activeOpacity={selectedCentre ? 0.85 : 1}
                     disabled={!selectedCentre}
                     onPress={handleConfirm}
                     style={{
-                        height: 49,
-
-                        borderRadius: 27,
-
+                        height: 52,
+                        borderRadius: 26,
                         backgroundColor:
                             selectedCentre
                                 ? "#000000"
-                                : "#8799A3",
-
-                        justifyContent:
-                            "center",
+                                : "#8799A3", // Matches disabled grey button in image
+                        justifyContent: "center",
                         alignItems: "center",
-
                         shadowColor: "#000",
                         shadowOffset: {
                             width: 0,
                             height: 3,
                         },
-                        shadowOpacity:
-                            selectedCentre
-                                ? 0.18
-                                : 0.08,
+                        shadowOpacity: selectedCentre ? 0.18 : 0.05,
                         shadowRadius: 4,
-
-                        elevation:
-                            selectedCentre ? 4 : 2,
+                        elevation: selectedCentre ? 4 : 1,
                     }}
                 >
                     <Text
                         style={{
                             color: "#FFFFFF",
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: "700",
                             letterSpacing: 0.3,
                         }}

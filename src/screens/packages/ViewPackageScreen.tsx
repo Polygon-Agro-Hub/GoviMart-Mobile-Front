@@ -20,6 +20,7 @@ import BottomCart from "@/component/common/BottomCart";
 
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
+import AuthPromptModal from "@/component/common/AuthPromptModal";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
 
@@ -39,6 +40,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     const [quantity, setQuantity] = useState(existingPackage ? existingPackage.quantity : 1);
     const [toastVisible, setToastVisible] = useState(false);
     const [toastMessage, setToastMessage] = useState("");
+    const [authModalVisible, setAuthModalVisible] = useState(false);
 
     const [viewCartVisible, setViewCartVisible] = useState(!!existingPackage);
 
@@ -85,6 +87,10 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     };
 
     const onAddToCart = async () => {
+        if (!token) {
+            setAuthModalVisible(true);
+            return;
+        }
         dispatch(
             addPackage({
                 id: packageId,
@@ -104,6 +110,10 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     };
 
     const onUpdateCart = async () => {
+        if (!token) {
+            setAuthModalVisible(true);
+            return;
+        }
         dispatch(
             setPackageQuantity({
                 id: packageId,
@@ -312,6 +322,14 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 onAddToCart={onAddToCart}
                 onUpdateCart={onUpdateCart}
                 onRemoveFromCart={onRemoveFromCart}
+            />
+
+            <AuthPromptModal
+                visible={authModalVisible}
+                onClose={() => setAuthModalVisible(false)}
+                navigation={navigation}
+                title="Sign In to Add Package"
+                subtitle="Please sign in or create an account to add packages to your cart and place orders."
             />
         </View>
     );
