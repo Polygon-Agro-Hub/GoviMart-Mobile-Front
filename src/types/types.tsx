@@ -44,6 +44,7 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   Notification: undefined;
   PaymentMethod: { total: number; };
+  PaymentScreen: { amount?: number; title?: string } | undefined;
   OrderDeliveryMethod: undefined;
   OrderConfirmed: undefined;
   SetLocation: undefined;

@@ -59,16 +59,13 @@ const getFlagUrl = (countryCode: string): string => {
   return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
 };
 
-// --- Name validation helpers (shared by input filter + validate()) ---
-// Allows letters, spaces, apostrophes, and hyphens (e.g. O'Brien, Anne-Marie).
-// Change to /^[a-zA-Z\s]*$/ if you want to disallow apostrophes/hyphens entirely.
 const NAME_ALLOWED_REGEX = /^[a-zA-Z\s'-]*$/;
 
 const sanitizeName = (text: string): string => {
   return text
-    .replace(/[^a-zA-Z\s'-]/g, "") // strip anything not a letter/space/apostrophe/hyphen
-    .replace(/^[\s'-]+/, "") // no leading space/apostrophe/hyphen
-    .replace(/\s{2,}/g, " "); // collapse repeated spaces
+    .replace(/[^a-zA-Z\s'-]/g, "")
+    .replace(/^[\s'-]+/, "")
+    .replace(/\s{2,}/g, " ");
 };
 
 const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {

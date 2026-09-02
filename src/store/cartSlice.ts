@@ -15,6 +15,7 @@ export interface ProductCartItem {
   name: string;
   image: string;
   price: number;
+  normalPrice?: number;
   weight: number;
   unit: "g" | "kg";
   minimumWeight: number;
@@ -40,11 +41,12 @@ const cartSlice = createSlice({
     addProduct: (state, action: PayloadAction<ProductCartItem>) => {
       const existingIndex = state.products.findIndex((p) => p.id === action.payload.id);
       if (existingIndex >= 0) {
-        // Update existing item weight
         state.products[existingIndex] = {
           ...state.products[existingIndex],
           weight: action.payload.weight,
           unit: action.payload.unit,
+          price: action.payload.price,
+          normalPrice: action.payload.normalPrice ?? state.products[existingIndex].normalPrice,
           isUnavailable: false,
         };
       } else {
@@ -76,13 +78,11 @@ const cartSlice = createSlice({
       const product = state.products.find((p) => p.id === action.payload.id);
       if (product && product.unit !== action.payload.newUnit) {
         if (action.payload.newUnit === "kg") {
-          // g → kg
           product.weight = product.weight / 1000;
           product.minimumWeight = product.minimumWeight / 1000;
           product.step = product.step / 1000;
           product.unit = "kg";
         } else {
-          // kg → g
           product.weight = product.weight * 1000;
           product.minimumWeight = product.minimumWeight * 1000;
           product.step = product.step * 1000;
@@ -126,6 +126,15 @@ const cartSlice = createSlice({
       state.packages = state.packages.filter((p) => p.id !== action.payload);
     },
 
+    // ─── BACKEND SYNC ACTIONS ──────────────────────────────────────────────────
+    setCartFromBackend: (
+      state,
+      action: PayloadAction<{ products: ProductCartItem[]; packages: PackageCartItem[] }>
+    ) => {
+      state.products = action.payload.products;
+      state.packages = action.payload.packages;
+    },
+
     // ─── AVAILABILITY SYNC ──────────────────────────────────────────────────────
     updateAvailabilityMap: (
       state,
@@ -167,6 +176,7 @@ export const {
   increasePackageQuantity,
   decreasePackageQuantity,
   removePackage,
+  setCartFromBackend,
   updateAvailabilityMap,
   clearCart,
 } = cartSlice.actions;

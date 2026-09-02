@@ -35,6 +35,7 @@ import MyAccount from "@/screens/account/EditMyAccountScreen";
 import DeleteAccount from "@/screens/account/DeleteAccountScreen";
 import Notifications from "@/screens/notification/NotificationScreen";
 import PaymentMethod from "@/screens/payment/PaymentMethodScreen";
+import PaymentScreen from "@/screens/payment/PaymentScreen";
 import OrderDeliveryMethod from "@/screens/locations/OrderDeliveryMethodScreen";
 import OrderConfirmed from "@/screens/order/OrderConfirmedScreen";
 import SetLocation from "@/screens/locations/SetLocationScreen";
@@ -80,6 +81,7 @@ function AppContent() {
             <Stack.Screen name="DeleteAccount" component={DeleteAccount} />
             <Stack.Screen name="Notification" component={Notifications} />
             <Stack.Screen name="PaymentMethod" component={PaymentMethod} />
+            <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
             <Stack.Screen name="OrderDeliveryMethod" component={OrderDeliveryMethod} />
             <Stack.Screen name="OrderConfirmed" component={OrderConfirmed} />
             <Stack.Screen name="SetLocation" component={SetLocation} />

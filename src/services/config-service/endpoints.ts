@@ -5,6 +5,7 @@ export const ENDPOINTS = {
     LOGOUT: "api/auth/logout",
     UPDATE_PASSWORD: "api/auth/update-password",
     REFRESH_TOKEN: "api/auth/refresh-token",
+    GET_CITIES: "api/auth/cities",
   },
 
   CUSTOMER: {
@@ -15,6 +16,7 @@ export const ENDPOINTS = {
     DELETE_ADDRESS: "api/customer/delete-address",
     UPDATE_USER_DETAILS: "api/customer/update-details",
     DELETE_ACCOUNT: "api/customer/delete-account",
+    GET_DELETE_ACCOUNT_STATUS: "api/customer/delete-account-status",
     SEND_PHONE_CHANGE_OTP: "api/customer/send-phone-change-otp",
     VERIFY_PHONE_CHANGE_OTP: "api/customer/verify-phone-change-otp",
     RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
@@ -33,6 +35,15 @@ export const ENDPOINTS = {
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
     GET_BANNERS: "api/product/slides",
     CHECK_AVAILABILITY: "api/product/check-availability",
+  },
+
+  CART: {
+    GET_USER_CART: "api/cart/user-cart",
+    ADD_UPDATE_PRODUCT: "api/cart/product",
+    ADD_UPDATE_PACKAGE: "api/cart/package",
+    REMOVE_PRODUCT: "api/cart/product/:productId",
+    REMOVE_PACKAGE: "api/cart/package/:packageId",
+    CLEAR_CART: "api/cart/clear",
   },
 
   ORDER: {

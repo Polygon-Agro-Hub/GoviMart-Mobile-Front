@@ -34,9 +34,22 @@ const ProductBottomCart: React.FC<Props> = ({
     const [isAdded, setIsAdded] = useState(initialIsAdded);
     const [hasChanges, setHasChanges] = useState(false);
 
+    const isFirstRender = React.useRef(true);
+
     useEffect(() => {
         setIsAdded(initialIsAdded);
+        setHasChanges(false);
     }, [initialIsAdded]);
+
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        if (isAdded) {
+            setHasChanges(true);
+        }
+    }, [unit]);
 
     const increase = () => {
         onIncrease();
