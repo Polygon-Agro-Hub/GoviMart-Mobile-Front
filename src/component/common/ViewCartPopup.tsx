@@ -37,6 +37,7 @@ const ViewCartPopup = ({
                     paddingHorizontal: 16,
                     paddingVertical: 10,
                     justifyContent: "center",
+                    alignItems: "center"
                 }}
             >
                 <View>

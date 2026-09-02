@@ -14,7 +14,7 @@ const OrderSummary: React.FC<Props> = ({
     discount,
     onCheckout,
 }) => {
-    const total = packageTotal + productTotal - discount;
+    const total = Math.max(0, packageTotal + productTotal - discount);
 
     const formatPrice = (value: number) =>
         value.toLocaleString("en-US", {
@@ -50,7 +50,6 @@ const OrderSummary: React.FC<Props> = ({
             }}
         >
             {/* Package */}
-
             <View
                 style={{
                     flexDirection: "row",
@@ -61,7 +60,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#0000",
+                        color: "#7C7C7C",
                     }}
                 >
                     For Packages
@@ -71,6 +70,7 @@ const OrderSummary: React.FC<Props> = ({
                     style={{
                         fontSize: 15,
                         fontWeight: "500",
+                        color: "#000",
                     }}
                 >
                     Rs. {formatPrice(packageTotal)}
@@ -78,7 +78,6 @@ const OrderSummary: React.FC<Props> = ({
             </View>
 
             {/* Products */}
-
             <View
                 style={{
                     flexDirection: "row",
@@ -89,7 +88,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#0000",
+                        color: "#7C7C7C",
                     }}
                 >
                     Ala Carte Items
@@ -99,6 +98,7 @@ const OrderSummary: React.FC<Props> = ({
                     style={{
                         fontSize: 15,
                         fontWeight: "500",
+                        color: "#000",
                     }}
                 >
                     Rs. {formatPrice(productTotal)}
@@ -106,7 +106,6 @@ const OrderSummary: React.FC<Props> = ({
             </View>
 
             {/* Discount */}
-
             <View
                 style={{
                     flexDirection: "row",
@@ -117,7 +116,7 @@ const OrderSummary: React.FC<Props> = ({
                 <Text
                     style={{
                         fontSize: 15,
-                        color: "#0000",
+                        color: "#7C7C7C",
                     }}
                 >
                     Discount
@@ -127,6 +126,7 @@ const OrderSummary: React.FC<Props> = ({
                     style={{
                         fontSize: 15,
                         fontWeight: "500",
+                        color: "#000",
                     }}
                 >
                     - Rs. {formatPrice(discount)}
@@ -134,7 +134,6 @@ const OrderSummary: React.FC<Props> = ({
             </View>
 
             {/* Divider */}
-
             <View
                 style={{
                     height: 1,
@@ -144,7 +143,6 @@ const OrderSummary: React.FC<Props> = ({
             />
 
             {/* Total */}
-
             <View
                 style={{
                     flexDirection: "row",
@@ -156,6 +154,7 @@ const OrderSummary: React.FC<Props> = ({
                     style={{
                         fontSize: 18,
                         fontWeight: "700",
+                        color: "#000",
                     }}
                 >
                     Total
@@ -165,6 +164,7 @@ const OrderSummary: React.FC<Props> = ({
                     style={{
                         fontSize: 18,
                         fontWeight: "700",
+                        color: "#000",
                     }}
                 >
                     Rs. {formatPrice(total)}
@@ -172,7 +172,6 @@ const OrderSummary: React.FC<Props> = ({
             </View>
 
             {/* Checkout */}
-
             <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={onCheckout}
