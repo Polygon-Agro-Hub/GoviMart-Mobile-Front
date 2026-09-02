@@ -13,6 +13,8 @@ import { RootStackParamList } from "@/types/types";
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
 import ProductBottomCart from "@/component/common/BottomCart";
+import AuthPromptModal from "@/component/common/AuthPromptModal";
+import cartService from "@/services/cart/cart.service";
 import { useSelector, useDispatch } from "react-redux";
 import {
   addProduct,
@@ -28,6 +30,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   const { product } = route.params;
 
   const dispatch = useDispatch<AppDispatch>();
+  const token = useSelector((state: RootState) => state.auth.token);
   const cartProducts = useSelector(
     (state: RootState) =>
       (state as RootState & { cart: CartState }).cart.products,
@@ -79,6 +82,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   const [toastMessage, setToastMessage] = useState("");
 
   const [viewCartVisible, setViewCartVisible] = useState(false);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
 
   const minQuantity =
     unit === "kg"
@@ -152,6 +156,10 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const onAddToCart = () => {
+    if (!token) {
+      setAuthModalVisible(true);
+      return;
+    }
     dispatch(
       addProduct({
         id: product!.id,
@@ -164,10 +172,19 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         step: stepSize,
       }),
     );
+    if (token) {
+      cartService.syncCartProduct(product!.id, quantity, unit).catch((err) =>
+        console.error("Cart DB sync product error:", err)
+      );
+    }
     showCartMessage("Added to Cart");
   };
 
   const onUpdateCart = () => {
+    if (!token) {
+      setAuthModalVisible(true);
+      return;
+    }
     dispatch(
       addProduct({
         id: product!.id,
@@ -180,11 +197,21 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         step: stepSize,
       }),
     );
+    if (token) {
+      cartService.syncCartProduct(product!.id, quantity, unit).catch((err) =>
+        console.error("Cart DB sync product error:", err)
+      );
+    }
     showCartMessage("Cart Updated");
   };
 
   const onRemoveFromCart = () => {
     dispatch(removeProduct(product!.id));
+    if (token) {
+      cartService.removeCartProduct(product!.id).catch((err) =>
+        console.error("Cart DB remove product error:", err)
+      );
+    }
     showCartMessage("Removed from Cart");
     setViewCartVisible(false);
   };
@@ -416,6 +443,14 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         onAddToCart={onAddToCart}
         onUpdateCart={onUpdateCart}
         onRemoveFromCart={onRemoveFromCart}
+      />
+
+      <AuthPromptModal
+        visible={authModalVisible}
+        onClose={() => setAuthModalVisible(false)}
+        navigation={navigation}
+        title="Sign In to Add Product"
+        subtitle="Please sign in or create an account to add fresh items to your cart and place orders."
       />
     </View>
   );

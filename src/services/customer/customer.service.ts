@@ -67,6 +67,15 @@ class CustomerService {
     const headers = await getAuthHeader();
     return apiClient.post(ENDPOINTS.CUSTOMER.RESEND_PHONE_CHANGE_OTP, data, { headers });
   }
+
+  async updateCreditBalance(creditBalance: number) {
+    const headers = await getAuthHeader();
+    return apiClient.put(
+      ENDPOINTS.CUSTOMER.UPDATE_CREDIT_BALANCE,
+      { creditBalance },
+      { headers }
+    );
+  }
 }
 
 export default new CustomerService();

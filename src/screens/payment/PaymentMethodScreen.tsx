@@ -1,16 +1,24 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
     TouchableOpacity,
-    ScrollView
+    ScrollView,
+    ActivityIndicator,
+    Alert,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { PaymentOptionCard } from "@/component/payment/PaymentOptionCard";
+import customerService from "@/services/customer/customer.service";
+import orderService from "@/services/order/order.service";
+import { clearCart } from "@/store/cartSlice";
+import CouponModal from "@/component/coupon/CouponModal";
+import AppliedCouponCard from "@/component/coupon/AppliedCouponCard";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -33,22 +41,48 @@ const PaymentMethod: React.FC<Props> = ({
     navigation,
     route,
 }) => {
-    /*
-     * You can get the total from route params.
-     * Example:
-     *
-     * navigation.navigate("PaymentMethod", {
-     *     total: 880,
-     * });
-     */
+    const dispatch = useDispatch();
+    const orderContext = route.params?.orderContext;
 
-    const totalAmount = Number(route.params?.total || 880);
+    // ─── COUPON STATE ─────────────────────────────────────────────────────────
+    const [couponModalVisible, setCouponModalVisible] = useState(false);
+    const [appliedCoupon, setAppliedCoupon] = useState<{
+        code: string;
+        type: string;
+        discount: number;
+        isFreeDelivery: boolean;
+    } | null>(null);
 
-    // Example credit balance
-    const creditBalance = 300;
+    // Initial base totals from order context
+    const baseTotal = Number(route.params?.total || orderContext?.grandTotal || 880);
+    const initialDeliveryCharge = orderContext?.deliveryCharge || 0;
 
+    // Adjustments based on coupon
+    const effectiveDeliveryCharge = appliedCoupon?.isFreeDelivery ? 0 : initialDeliveryCharge;
+    const deliveryFeeDiscount = appliedCoupon?.isFreeDelivery ? initialDeliveryCharge : 0;
+    const couponDiscountAmount = appliedCoupon?.isFreeDelivery ? 0 : (appliedCoupon?.discount || 0);
+
+    const totalAmount = Math.max(0, baseTotal - couponDiscountAmount - deliveryFeeDiscount);
+
+    const [creditBalance, setCreditBalance] = useState<number>(0);
     const [paymentMethod, setPaymentMethod] = useState<PaymentType>("cash");
     const [useCredit, setUseCredit] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        const fetchBalance = async () => {
+            try {
+                const response = await customerService.getAccountDetails();
+                if (response.data && response.data.data) {
+                    const bal = parseFloat(response.data.data.creditBalance || 0);
+                    setCreditBalance(Math.max(0, bal));
+                }
+            } catch (err) {
+                console.log("Error loading credit balance:", err);
+            }
+        };
+        fetchBalance();
+    }, []);
 
     // FORMAT MONEY
     const formatAmount = (amount: number) => {
@@ -80,17 +114,81 @@ const PaymentMethod: React.FC<Props> = ({
     };
 
     // CONFIRM
-    const handleConfirm = () => {
-        console.log("Payment Method:", paymentMethod);
-        navigation.navigate("OrderConfirmed")
-        /*
-         * API / next navigation here
-         *
-         * navigation.navigate("OrderSummary", {
-         *     paymentMethod,
-         *     total: totalAmount,
-         * });
-         */
+    const handleConfirm = async () => {
+        const totalDiscountApplied = (orderContext?.discount || 0) + couponDiscountAmount + deliveryFeeDiscount;
+        const couponVal = appliedCoupon ? (appliedCoupon.isFreeDelivery ? initialDeliveryCharge : appliedCoupon.discount) : 0;
+
+        if (paymentMethod === "card") {
+            navigation.navigate("PaymentScreen", {
+                amount: paymentAmount,
+                title: "Payment Summary",
+                orderContext: {
+                    ...(orderContext as any),
+                    grandTotal: totalAmount,
+                    deliveryCharge: effectiveDeliveryCharge,
+                    discount: totalDiscountApplied,
+                    paymentMethod: "card",
+                    checkoutDetails: {
+                        ...(orderContext?.checkoutDetails || {}),
+                        isCoupon: Boolean(appliedCoupon),
+                        couponValue: couponVal,
+                        couponType: appliedCoupon?.type || null,
+                        couponCode: appliedCoupon?.code || null,
+                    },
+                },
+            });
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            const payload = {
+                cartId: orderContext?.cartId || 0,
+                paymentMethod: "cash",
+                grandTotal: totalAmount,
+                discountAmount: totalDiscountApplied,
+                deliveryCharge: effectiveDeliveryCharge,
+                creditPaid: creditUsed,
+                moneyPaid: paymentAmount,
+                isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+                checkoutDetails: {
+                    ...(orderContext?.checkoutDetails || {
+                        deliveryMethod: orderContext?.deliveryMethod || "home",
+                    }),
+                    isCoupon: Boolean(appliedCoupon),
+                    couponValue: couponVal,
+                    couponType: appliedCoupon?.type || null,
+                    couponCode: appliedCoupon?.code || null,
+                },
+            };
+
+            const response = await orderService.createOrder(payload);
+            if (response.data && response.data.status && response.data.data) {
+                dispatch(clearCart());
+                navigation.navigate("OrderConfirmed", {
+                    orderId: response.data.data.orderId,
+                    invoiceNumber: response.data.data.invoiceNumber,
+                    total: response.data.data.total,
+                });
+            } else {
+                Alert.alert("Order Failed", response.data.message || "Failed to create order. Please try again.");
+            }
+        } catch (error: any) {
+            const errorData = error?.response?.data;
+            const errorMsg = errorData?.message || (Array.isArray(errorData?.details) ? errorData.details.join("; ") : null) || error?.message || "Failed to place order. Please try again.";
+            console.error("Order error in PaymentMethodScreen:", errorMsg, errorData);
+            if (errorData?.code === "ITEMS_UNAVAILABLE") {
+                Alert.alert(
+                    "Items Unavailable",
+                    "Some items in your cart are no longer available. Please review your cart.",
+                    [{ text: "OK", onPress: () => navigation.navigate("MyCart") }]
+                );
+            } else {
+                Alert.alert("Order Failed", errorMsg);
+            }
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -111,6 +209,76 @@ const PaymentMethod: React.FC<Props> = ({
                     paddingBottom: 180,
                 }}
             >
+                {/* ─── APPLY COUPON CARD ────────────────────────────────────────── */}
+                {appliedCoupon ? (
+                    <AppliedCouponCard
+                        code={appliedCoupon.code}
+                        type={appliedCoupon.type}
+                        discount={appliedCoupon.discount}
+                        isFreeDelivery={appliedCoupon.isFreeDelivery}
+                        deliveryCharge={initialDeliveryCharge}
+                        onRemove={() => setAppliedCoupon(null)}
+                    />
+                ) : (
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setCouponModalVisible(true)}
+                        style={{
+                            marginHorizontal: 15,
+                            marginTop: 14,
+                            marginBottom: 6,
+                            borderRadius: 20,
+                            borderWidth: 1.5,
+                            borderColor: "#B186EF",
+                            borderStyle: "dashed",
+                            backgroundColor: "#FCFAFD",
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            flexDirection: "row",
+                            alignItems: "center",
+                        }}
+                    >
+                        {/* Left Purple Icon */}
+                        <View
+                            style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 14,
+                                backgroundColor: "#5B18AD",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                marginRight: 14,
+                            }}
+                        >
+                            <FontAwesome6 name="ticket" size={20} color="#FFFFFF" />
+                        </View>
+
+                        {/* Text Details */}
+                        <View style={{ flex: 1 }}>
+                            <Text
+                                style={{
+                                    fontSize: 15,
+                                    fontWeight: "800",
+                                    color: "#111111",
+                                }}
+                            >
+                                Apply Coupon
+                            </Text>
+                            <Text
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6B7280",
+                                    marginTop: 2,
+                                    fontWeight: "400",
+                                }}
+                            >
+                                Get discount on your order.
+                            </Text>
+                        </View>
+
+                        <Ionicons name="chevron-forward" size={20} color="#111111" />
+                    </TouchableOpacity>
+                )}
 
                 {/* DESCRIPTION */}
                 <Text
@@ -161,7 +329,7 @@ const PaymentMethod: React.FC<Props> = ({
                             flex: 1,
                             marginLeft: 8,
                             fontSize: 14,
-                            color: "#0000",
+                            color: "#111111",
                         }}
                     >
                         Total Amount
@@ -235,7 +403,7 @@ const PaymentMethod: React.FC<Props> = ({
                                 paddingVertical: 2,
                             }}
                         >
-                            <View style={{ flexDirection: "row", gap: "5", alignItems: "center" }}>
+                            <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
                                 <FontAwesome6 name={useCredit ? "check" : "star"}
                                     solid
                                     size={10}
@@ -357,7 +525,7 @@ const PaymentMethod: React.FC<Props> = ({
                                             color:
                                                 useCredit
                                                     ? "#FF9114"
-                                                    : "#0000",
+                                                    : "#111111",
 
                                             fontWeight: "800",
                                         }}
@@ -561,7 +729,7 @@ const PaymentMethod: React.FC<Props> = ({
                             style={{
                                 fontSize: 13,
                                 fontWeight: "600",
-                                color: "#00000",
+                                color: "#111111",
                             }}
                         >
                             Rs.{" "}
@@ -569,6 +737,46 @@ const PaymentMethod: React.FC<Props> = ({
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
                             })}
+                        </Text>
+                    </View>
+                )}
+
+                {/* Coupon discount (if applied) */}
+                {appliedCoupon && (
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginBottom: 8,
+                        }}
+                    >
+                        <FontAwesome6
+                            name="ticket"
+                            solid
+                            size={14}
+                            color="#5B18AD"
+                        />
+                        <Text
+                            style={{
+                                flex: 1,
+                                fontSize: 13,
+                                color: "#5B18AD",
+                                marginLeft: 6,
+                                fontWeight: "600",
+                            }}
+                        >
+                            Coupon ({appliedCoupon.code})
+                        </Text>
+                        <Text
+                            style={{
+                                fontSize: 13,
+                                fontWeight: "700",
+                                color: "#5B18AD",
+                            }}
+                        >
+                            {appliedCoupon.isFreeDelivery
+                                ? "Free Delivery"
+                                : `- Rs. ${formatAmount(appliedCoupon.discount)}`}
                         </Text>
                     </View>
                 )}
@@ -663,7 +871,8 @@ const PaymentMethod: React.FC<Props> = ({
                 {/* Confirm Button */}
 
                 <TouchableOpacity
-                    activeOpacity={0.85}
+                    activeOpacity={submitting ? 1 : 0.85}
+                    disabled={submitting}
                     onPress={handleConfirm}
                     style={{
                         height: 48,
@@ -686,17 +895,33 @@ const PaymentMethod: React.FC<Props> = ({
                         elevation: 5,
                     }}
                 >
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
-                            fontSize: 15,
-                            fontWeight: "800",
-                        }}
-                    >
-                        Confirm Payment Method
-                    </Text>
+                    {submitting ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                        <Text
+                            style={{
+                                color: "#FFFFFF",
+                                fontSize: 15,
+                                fontWeight: "800",
+                            }}
+                        >
+                            Confirm Payment Method
+                        </Text>
+                    )}
                 </TouchableOpacity>
             </View>
+
+            {/* ─── COUPON MODAL ──────────────────────────────────────────────── */}
+            <CouponModal
+                visible={couponModalVisible}
+                onClose={() => setCouponModalVisible(false)}
+                onApplyCoupon={(couponResult) => {
+                    setAppliedCoupon(couponResult);
+                }}
+                deliveryMethod={orderContext?.deliveryMethod || "home"}
+                cartTotal={(orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)}
+                cartId={orderContext?.cartId}
+            />
         </View>
     );
 };

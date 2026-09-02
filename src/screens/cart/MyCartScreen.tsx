@@ -1,8 +1,9 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
     View,
     Text,
     ScrollView,
+    Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -23,9 +24,10 @@ import PackageCartCard from "@/component/my-cart/PackageCartCard";
 import ProductCartCard from "@/component/my-cart/ProductCartCard";
 import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
+import AuthPromptModal from "@/component/common/AuthPromptModal";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
-import { RootStackParamList } from "@/types/types";
+import { RootStackParamList, OrderContext } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -40,37 +42,41 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const dispatch = useDispatch();
     const token = useSelector((state: RootState) => state.auth.token);
     const { packages, products } = useSelector((state: RootState) => state.cart);
+    const [cartId, setCartId] = useState<number | null>(null);
+    const [authModalVisible, setAuthModalVisible] = useState(false);
 
     // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ON FOCUS ─────────────────────
     useFocusEffect(
         useCallback(() => {
             const syncAndCheckCart = async () => {
                 try {
-                    // Step 1: If authenticated, sync DB cart into Redux
                     if (token) {
+                        // For logged-in users, getUserCart() is the single source of truth.
+                        // It queries the DB and already provides real-time isUnavailable flags for both products and packages.
                         const dbCartRes = await cartService.getUserCart();
                         if (dbCartRes.data && dbCartRes.data.status && dbCartRes.data.data) {
+                            if (dbCartRes.data.data.cartId) {
+                                setCartId(dbCartRes.data.data.cartId);
+                            }
                             const dbProducts = dbCartRes.data.data.products || [];
                             const dbPackages = dbCartRes.data.data.packages || [];
-                            if (dbProducts.length > 0 || dbPackages.length > 0) {
-                                dispatch(setCartFromBackend({ products: dbProducts, packages: dbPackages }));
-                            }
+                            dispatch(setCartFromBackend({ products: dbProducts, packages: dbPackages }));
                         }
-                    }
+                    } else {
+                        // For guest / unauthenticated users, check availability of local Redux items
+                        const productIds = products.map((p) => p.id);
+                        const packageIds = packages.map((p) => p.id);
 
-                    // Step 2: Check availability for all cart items
-                    const productIds = products.map((p) => p.id);
-                    const packageIds = packages.map((p) => p.id);
-
-                    if (productIds.length > 0 || packageIds.length > 0) {
-                        const response = await productService.checkAvailability(productIds, packageIds);
-                        if (response.data && response.data.status) {
-                            dispatch(
-                                updateAvailabilityMap({
-                                    products: response.data.products || {},
-                                    packages: response.data.packages || {},
-                                })
-                            );
+                        if (productIds.length > 0 || packageIds.length > 0) {
+                            const response = await productService.checkAvailability(productIds, packageIds);
+                            if (response.data && response.data.status) {
+                                dispatch(
+                                    updateAvailabilityMap({
+                                        products: response.data.products || {},
+                                        packages: response.data.packages || {},
+                                    })
+                                );
+                            }
                         }
                     }
                 } catch (error) {
@@ -79,7 +85,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             };
 
             syncAndCheckCart();
-        }, [dispatch, token, products.length, packages.length])
+        }, [dispatch, token])
     );
 
     // ─── HANDLERS ─────────────────────────────────────────────────────────────
@@ -172,6 +178,39 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         return total + (product.normalPrice - product.price) * weightMultiplier;
     }, 0);
 
+    const handleCheckout = () => {
+        if (!token) {
+            setAuthModalVisible(true);
+            return;
+        }
+
+        if (packages.length === 0 && products.length === 0) {
+            Alert.alert("Empty Cart", "Your cart is empty. Please add items to proceed.");
+            return;
+        }
+
+        const hasUnavailable = packages.some((p) => p.isUnavailable) || products.some((p) => p.isUnavailable);
+        if (hasUnavailable) {
+            Alert.alert("Unavailable Items", "Some items in your cart are currently unavailable. Please remove them before proceeding.");
+            return;
+        }
+
+        const grandTotal = Math.max(0, packageTotal + productTotal - totalDiscount);
+        const orderContext: OrderContext = {
+            cartId: cartId || undefined,
+            grandTotal,
+            packageTotal,
+            productTotal,
+            discount: totalDiscount,
+        };
+
+        if (packages.length > 0) {
+            navigation.navigate("PackageConfirmation", { orderContext });
+        } else {
+            navigation.navigate("OrderDeliveryMethod", { orderContext });
+        }
+    };
+
     return (
         <View
             style={{
@@ -187,14 +226,15 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 navigation={navigation}
             />
 
-            <View style={{ flex: 1 }}>
-                <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{
-                        paddingHorizontal: 14,
-                        paddingBottom: 300,
-                    }}
-                >
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                    flexGrow: 1,
+                    justifyContent: "space-between",
+                }}
+            >
+                {/* Cart Items */}
+                <View style={{ flex: 1, paddingHorizontal: 16 }}>
                     {/* Package Section */}
                     {packages.length > 0 && (
                         <>
@@ -228,7 +268,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                                 style={{
                                     fontSize: 15,
                                     fontWeight: "700",
-                                    marginTop: 24,
+                                    marginTop: packages.length > 0 ? 20 : 6,
                                     marginBottom: 12,
                                 }}
                             >
@@ -247,15 +287,31 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                             ))}
                         </>
                     )}
-                </ScrollView>
-            </View>
 
-            {/* Order Summary */}
-            <OrderSummary
-                packageTotal={packageTotal}
-                productTotal={productTotal}
-                discount={totalDiscount}
-                onCheckout={() => navigation.navigate("OrderHistory")}
+                    {packages.length === 0 && products.length === 0 && (
+                        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 60 }}>
+                            <Text style={{ fontSize: 16, color: "#64748B", fontWeight: "500" }}>
+                                Your cart is empty
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* Order Summary — displays at bottom if low data, or scrolls naturally if many items */}
+                <OrderSummary
+                    packageTotal={packageTotal}
+                    productTotal={productTotal}
+                    discount={totalDiscount}
+                    onCheckout={handleCheckout}
+                />
+            </ScrollView>
+
+            <AuthPromptModal
+                visible={authModalVisible}
+                onClose={() => setAuthModalVisible(false)}
+                navigation={navigation}
+                title="Sign In to Checkout"
+                subtitle="Please sign in or create an account to proceed to delivery selection and complete your order."
             />
         </View>
     );

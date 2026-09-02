@@ -614,6 +614,12 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         }),
       );
 
+      if (userToken) {
+        cartService.syncCartPackage(pkg.id, 1).catch((err) =>
+          console.error("Cart DB sync package error:", err)
+        );
+      }
+
       setAddTimeSnapshots((prev) => ({
         ...prev,
         [pkg.id]: { quantity: 1, price },
@@ -622,15 +628,22 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       setExpandedItemId(pkg.id);
       showToast("Added to Cart");
     },
-    [dispatch, showToast],
+    [dispatch, showToast, userToken],
   );
 
   const handleIncrementPackage = useCallback(
     (packageId: number) => {
       dispatch(increasePackageQuantity(packageId));
+      const existing = cartPackages.find((p: PackageCartItem) => p.id === packageId);
+      const newQty = (existing?.quantity || 1) + 1;
+      if (userToken) {
+        cartService.syncCartPackage(packageId, newQty).catch((err) =>
+          console.error("Cart DB sync package increment error:", err)
+        );
+      }
       showToast("Cart Updated");
     },
-    [dispatch, showToast],
+    [dispatch, cartPackages, showToast, userToken],
   );
 
   const handleDecrementPackage = useCallback(
@@ -640,6 +653,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       );
       if (existing && existing.quantity <= 1) {
         dispatch(removePackage(packageId));
+        if (userToken) {
+          cartService.removeCartPackage(packageId).catch((err) =>
+            console.error("Cart DB remove package error:", err)
+          );
+        }
 
         setAddTimeSnapshots((prev) => {
           const next = { ...prev };
@@ -649,10 +667,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         showToast("Removed from cart");
       } else {
         dispatch(decreasePackageQuantity(packageId));
+        const newQty = (existing?.quantity || 1) - 1;
+        if (userToken) {
+          cartService.syncCartPackage(packageId, newQty).catch((err) =>
+            console.error("Cart DB sync package decrement error:", err)
+          );
+        }
         showToast("Cart Updated");
       }
     },
-    [dispatch, cartPackages, showToast],
+    [dispatch, cartPackages, showToast, userToken],
   );
 
   return (
@@ -929,10 +953,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           correct here — unlike the local category icons
                           above, these are NOT bundler-relative paths.
                         */}
-                        <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
+                        <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
                           <Image
                             source={{ uri: product?.image! }}
-                            className="w-12 h-12"
+                            className="w-20 h-20"
                             resizeMode="contain"
                           />
                         </View>
