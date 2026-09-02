@@ -31,6 +31,8 @@ interface Order {
     deliveryDate: string;
     timeSlot: string;
     total: number;
+    rawOrderDate?: string;
+    rawScheduleDate?: string;
 }
 
 const OrderHistory: React.FC<Props> = ({ navigation }) => {
@@ -40,12 +42,11 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
 
     const [appliedFilter, setAppliedFilter] = useState(false);
     const [datePickerVisible, setDatePickerVisible] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
     const filterOptions = [
         "Ordered Date",
-        "Delivery Date",
-        "Completed Date",
+        "Scheduled Date",
     ];
 
     const [orders, setOrders] = useState<Order[]>([]);
@@ -92,9 +93,11 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 status: bo.processStatus || 'Pending',
                                 orderDate: formatOrderDate(bo.createdAt),
                                 invoiceNumber: bo.invoiceNo || 'N/A',
-                                deliveryDate: formatDeliveryDate(bo.scheduleDate),
-                                timeSlot: bo.scheduleTime || 'N/A',
+                                deliveryDate: formatDeliveryDate(bo.scheduleDate || bo.sheduleDate),
+                                timeSlot: bo.scheduleTime || bo.sheduleTime || 'N/A',
                                 total: totalVal,
+                                rawOrderDate: bo.createdAt,
+                                rawScheduleDate: bo.scheduleDate || bo.sheduleDate,
                             };
                         });
                         setOrders(mappedOrders);
@@ -119,12 +122,16 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         });
 
     const handleApplyFilter = () => {
+        if (!selectedDate) {
+            setDatePickerVisible(true);
+            return;
+        }
         setAppliedFilter(true);
+    };
 
-        console.log({
-            filter: selectedFilter,
-            date: selectedDate,
-        });
+    const handleClearFilter = () => {
+        setSelectedDate(null);
+        setAppliedFilter(false);
     };
 
     const handleViewDetails = (order: Order) => {
@@ -140,9 +147,13 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
     ) => {
         setDatePickerVisible(false);
 
+        if (event?.type === "dismissed") {
+            return;
+        }
+
         if (date) {
             setSelectedDate(date);
-            setAppliedFilter(false);
+            setAppliedFilter(true);
         }
     };
 
@@ -154,27 +165,60 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         return `${year}/${month}/${day}`;
     };
 
+    const isSameCalendarDate = (
+        dateVal: string | Date | undefined | null,
+        targetDate: Date
+    ): boolean => {
+        if (!dateVal || dateVal === "N/A") return false;
+
+        // 1. Check Date object conversion in device local timezone (handles UTC ISO strings like "2026-08-03T18:30:00.000Z")
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+            if (
+                d.getFullYear() === targetDate.getFullYear() &&
+                d.getMonth() === targetDate.getMonth() &&
+                d.getDate() === targetDate.getDate()
+            ) {
+                return true;
+            }
+        }
+
+        // 2. Also check direct literal match (for plain YYYY-MM-DD or YYYY/MM/DD)
+        if (typeof dateVal === "string") {
+            const match = dateVal.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+            if (match) {
+                const year = parseInt(match[1], 10);
+                const month = parseInt(match[2], 10) - 1;
+                const day = parseInt(match[3], 10);
+                if (
+                    targetDate.getFullYear() === year &&
+                    targetDate.getMonth() === month &&
+                    targetDate.getDate() === day
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
     const getFilteredOrders = () => {
-        if (!appliedFilter) return orders;
+        if (!appliedFilter || !selectedDate) return orders;
 
         return orders.filter((order) => {
-            let orderDateToCompare: Date;
             if (selectedFilter === "Ordered Date") {
-                orderDateToCompare = new Date(order.orderDate);
-            } else if (selectedFilter === "Delivery Date") {
-                orderDateToCompare = new Date(order.deliveryDate);
-            } else {
-                // "Completed Date"
-                orderDateToCompare = new Date(order.deliveryDate);
+                return (
+                    isSameCalendarDate(order.rawOrderDate, selectedDate) ||
+                    isSameCalendarDate(order.orderDate, selectedDate)
+                );
+            } else if (selectedFilter === "Scheduled Date") {
+                return (
+                    isSameCalendarDate(order.rawScheduleDate, selectedDate) ||
+                    isSameCalendarDate(order.deliveryDate, selectedDate)
+                );
             }
-
-            if (isNaN(orderDateToCompare.getTime())) return true;
-
-            return (
-                orderDateToCompare.getFullYear() === selectedDate.getFullYear() &&
-                orderDateToCompare.getMonth() === selectedDate.getMonth() &&
-                orderDateToCompare.getDate() === selectedDate.getDate()
-            );
+            return true;
         });
     };
 
@@ -224,14 +268,13 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                     {/* FILTER SECTION */}
                     <View
                         style={{
-                            backgroundColor: "#FFFFFF",
                             paddingHorizontal: 38,
-                            paddingTop: 4,
-                            paddingBottom: 16,
-                            zIndex: 20,
+                            paddingTop: 8,
+                            paddingBottom: 21,
                         }}
                     >
-                        {/* Dropdown Filter */}
+                        {/* Ordered Date Dropdown */}
+
                         <View
                             style={{
                                 position: "relative",
@@ -240,25 +283,39 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                         >
                             <TouchableOpacity
                                 activeOpacity={0.8}
-                                onPress={() => setDateFilterOpen(!dateFilterOpen)}
+                                onPress={() =>
+                                    setDateFilterOpen(
+                                        !dateFilterOpen
+                                    )
+                                }
                                 style={{
                                     height: 41,
+
                                     borderWidth: 1,
                                     borderColor: "#D7DDE4",
+
                                     borderRadius: 24,
+
                                     flexDirection: "row",
                                     alignItems: "center",
+
                                     paddingHorizontal: 7,
                                 }}
                             >
+                                {/* Icon */}
+
                                 <View
                                     style={{
                                         width: 27,
                                         height: 27,
+
                                         borderRadius: 14,
+
                                         backgroundColor: "#000000",
+
                                         justifyContent: "center",
                                         alignItems: "center",
+
                                         marginRight: 8,
                                     }}
                                 >
@@ -280,13 +337,18 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 </Text>
 
                                 <Ionicons
-                                    name={dateFilterOpen ? "chevron-up" : "chevron-down"}
+                                    name={
+                                        dateFilterOpen
+                                            ? "chevron-up"
+                                            : "chevron-down"
+                                    }
                                     size={17}
                                     color="#000000"
                                 />
                             </TouchableOpacity>
 
                             {/* Dropdown Options */}
+
                             {dateFilterOpen && (
                                 <View
                                     style={{
@@ -294,63 +356,103 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         top: 45,
                                         left: 0,
                                         right: 0,
-                                        backgroundColor: "#FFFFFF",
+
+                                        backgroundColor:
+                                            "#FFFFFF",
+
                                         borderWidth: 1,
-                                        borderColor: "#E0E3E8",
+                                        borderColor:
+                                            "#E0E3E8",
+
                                         borderRadius: 12,
+
                                         shadowColor: "#000",
-                                        shadowOffset: { width: 0, height: 3 },
+                                        shadowOffset: {
+                                            width: 0,
+                                            height: 3,
+                                        },
                                         shadowOpacity: 0.12,
                                         shadowRadius: 5,
+
                                         elevation: 6,
+
                                         overflow: "hidden",
                                     }}
                                 >
-                                    {filterOptions.map((option) => (
-                                        <TouchableOpacity
-                                            key={option}
-                                            activeOpacity={0.7}
-                                            onPress={() => {
-                                                setSelectedFilter(option);
-                                                setDateFilterOpen(false);
-                                                setAppliedFilter(false);
-                                            }}
-                                            style={{
-                                                height: 38,
-                                                justifyContent: "center",
-                                                paddingHorizontal: 14,
-                                                borderBottomWidth: 1,
-                                                borderBottomColor: "#F0F0F0",
-                                            }}
-                                        >
-                                            <Text
+                                    {filterOptions.map(
+                                        (option) => (
+                                            <TouchableOpacity
+                                                key={option}
+                                                activeOpacity={
+                                                    0.7
+                                                }
+                                                onPress={() => {
+                                                    setSelectedFilter(
+                                                        option
+                                                    );
+                                                    setDateFilterOpen(
+                                                        false
+                                                    );
+                                                }}
                                                 style={{
-                                                    fontSize: 12,
-                                                    color: selectedFilter === option ? "#000" : "#555",
-                                                    fontWeight: selectedFilter === option ? "700" : "400",
+                                                    height: 38,
+                                                    justifyContent:
+                                                        "center",
+                                                    paddingHorizontal: 14,
+
+                                                    borderBottomWidth: 1,
+                                                    borderBottomColor:
+                                                        "#F0F0F0",
                                                 }}
                                             >
-                                                {option}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                                <Text
+                                                    style={{
+                                                        fontSize: 12,
+                                                        color:
+                                                            selectedFilter ===
+                                                                option
+                                                                ? "#000"
+                                                                : "#555",
+                                                        fontWeight:
+                                                            selectedFilter ===
+                                                                option
+                                                                ? "700"
+                                                                : "400",
+                                                    }}
+                                                >
+                                                    {option}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )
+                                    )}
                                 </View>
                             )}
                         </View>
 
+                        {/* ================================================= */}
                         {/* DATE INPUT */}
+                        {/* ================================================= */}
+
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            onPress={() => setDatePickerVisible(!datePickerVisible)}
+                            onPress={() => {
+                                setDatePickerVisible(true);
+                            }}
                             style={{
                                 height: 41,
+
                                 marginTop: 9,
+
                                 borderWidth: 1,
                                 borderColor: "#D7DDE4",
+
                                 borderRadius: 24,
+
                                 backgroundColor: "#F2F2F6",
+
                                 flexDirection: "row",
                                 alignItems: "center",
+
                                 paddingHorizontal: 7,
                             }}
                         >
@@ -358,10 +460,14 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 style={{
                                     width: 27,
                                     height: 27,
+
                                     borderRadius: 14,
+
                                     backgroundColor: "#000000",
+
                                     justifyContent: "center",
                                     alignItems: "center",
+
                                     marginRight: 8,
                                 }}
                             >
@@ -375,31 +481,51 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                             <Text
                                 style={{
                                     fontSize: 12,
-                                    color: selectedDate ? "#222" : "#7B8090",
+                                    color: selectedDate
+                                        ? "#111111"
+                                        : "#8E8E93",
                                 }}
                             >
-                                {formatDate(selectedDate)}
+                                {selectedDate ? formatDate(selectedDate) : "YYYY/MM/DD"}
                             </Text>
                         </TouchableOpacity>
 
-                        {/* APPLY FILTER */}
+                        {/* APPLY / CLEAR FILTER BUTTON */}
                         <TouchableOpacity
                             activeOpacity={0.85}
-                            onPress={handleApplyFilter}
+                            onPress={appliedFilter ? handleClearFilter : handleApplyFilter}
                             style={{
                                 height: 42,
+
                                 marginTop: 15,
+
                                 borderRadius: 23,
+
                                 backgroundColor: "#000000",
+
+                                flexDirection: "row",
                                 justifyContent: "center",
                                 alignItems: "center",
+
                                 shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 3 },
+                                shadowOffset: {
+                                    width: 0,
+                                    height: 3,
+                                },
                                 shadowOpacity: 0.16,
                                 shadowRadius: 4,
+
                                 elevation: 4,
                             }}
                         >
+                            {appliedFilter && (
+                                <Ionicons
+                                    name="close"
+                                    size={16}
+                                    color="#FFFFFF"
+                                    style={{ marginRight: 6 }}
+                                />
+                            )}
                             <Text
                                 style={{
                                     color: "#FFFFFF",
@@ -407,7 +533,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                     fontWeight: "600",
                                 }}
                             >
-                                Apply Filter
+                                {appliedFilter ? "Clear Filter" : "Apply Filter"}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -420,8 +546,19 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                         }}
                     />
 
-                    {/* ORDER LIST / EMPTY STATE */}
-                    {getFilteredOrders().length === 0 ? (
+                    {/* ORDER LIST */}
+
+                    {loading ? (
+                        <View
+                            style={{
+                                flex: 1,
+                                justifyContent: "center",
+                                alignItems: "center",
+                            }}
+                        >
+                            <LoadingPage message="Loading Orders..." fullScreen={false} />
+                        </View>
+                    ) : getFilteredOrders().length === 0 ? (
                         <View
                             style={{
                                 flex: 1,
@@ -460,106 +597,274 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                     key={order.id}
                                     style={{
                                         minHeight: 139,
+
                                         borderWidth: 1,
                                         borderColor: "#E0E5EA",
+
                                         borderRadius: 20,
+
                                         backgroundColor: "#FFFFFF",
+
                                         marginBottom: 20,
+
                                         paddingHorizontal: 10,
                                         paddingTop: 9,
                                         paddingBottom: 8,
+
                                         shadowColor: "#000",
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.05,
+                                        shadowOffset: {
+                                            width: 0,
+                                            height: 2,
+                                        },
+                                        shadowOpacity: 0.08,
                                         shadowRadius: 4,
+
                                         elevation: 2,
                                     }}
                                 >
-                                    {/* Order Item Card Details */}
-                                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                                        <View style={{ flexDirection: "row", alignItems: "center" }}>
-                                            <View
-                                                style={{
-                                                    width: 32,
-                                                    height: 32,
-                                                    borderRadius: 16,
-                                                    backgroundColor: "#F2F4F7",
-                                                    justifyContent: "center",
-                                                    alignItems: "center",
-                                                    marginRight: 8,
-                                                }}
-                                            >
-                                                <Ionicons name="receipt" size={16} color="#111" />
-                                            </View>
-                                            <Text style={{ fontSize: 14, fontWeight: "700", color: "#111" }}>
-                                                Order #{order.id}
-                                            </Text>
-                                        </View>
+
+                                    {/* TOP ROW */}
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            justifyContent:
+                                                "space-between",
+                                        }}
+                                    >
+                                        {/* Status */}
 
                                         <View
                                             style={{
-                                                paddingHorizontal: 10,
-                                                paddingVertical: 4,
-                                                borderRadius: 12,
                                                 backgroundColor:
-                                                    order.status.toLowerCase() === "delivered" || order.status.toLowerCase() === "picked up"
-                                                        ? "#E6F4EA"
-                                                        : order.status.toLowerCase() === "cancelled"
-                                                        ? "#FCE8E6"
-                                                        : "#FEF7E0",
+                                                    "#F1F1F5",
+
+                                                borderRadius: 12,
+
+                                                paddingHorizontal: 6,
+                                                paddingVertical: 3,
+
+                                                flexDirection:
+                                                    "row",
+                                                alignItems:
+                                                    "center",
                                             }}
                                         >
+                                            <Ionicons
+                                                name="star"
+                                                size={8}
+                                                color="#111"
+                                            />
+
                                             <Text
                                                 style={{
-                                                    fontSize: 12,
-                                                    fontWeight: "700",
-                                                    color:
-                                                        order.status.toLowerCase() === "delivered" || order.status.toLowerCase() === "picked up"
-                                                            ? "#137333"
-                                                            : order.status.toLowerCase() === "cancelled"
-                                                            ? "#C5221F"
-                                                            : "#B06000",
+                                                    fontSize: 10,
+                                                    color: "#333",
+                                                    marginLeft: 3,
                                                 }}
                                             >
                                                 {order.status}
                                             </Text>
                                         </View>
-                                    </View>
 
-                                    <View style={{ height: 1, backgroundColor: "#F0F0F0", marginVertical: 8 }} />
+                                        {/* Order Date */}
 
-                                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                                        <Text style={{ fontSize: 12, color: "#666" }}>Order Date:</Text>
-                                        <Text style={{ fontSize: 12, fontWeight: "600", color: "#222" }}>{order.orderDate}</Text>
-                                    </View>
-
-                                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                                        <Text style={{ fontSize: 12, color: "#666" }}>Delivery Date:</Text>
-                                        <Text style={{ fontSize: 12, fontWeight: "600", color: "#222" }}>{order.deliveryDate}</Text>
-                                    </View>
-
-                                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                                        <Text style={{ fontSize: 12, color: "#666" }}>Total Amount:</Text>
-                                        <Text style={{ fontSize: 13, fontWeight: "800", color: "#000" }}>
-                                            Rs. {typeof order.total === "number" ? formatAmount(order.total) : order.total}
+                                        <Text
+                                            style={{
+                                                fontSize: 11,
+                                                color: "#565B70",
+                                            }}
+                                        >
+                                            {order.orderDate}
                                         </Text>
                                     </View>
 
-                                    <TouchableOpacity
-                                        activeOpacity={0.8}
-                                        onPress={() => handleViewDetails(order)}
+                                    {/* ORDER ID */}
+                                    <View
                                         style={{
-                                            height: 36,
-                                            borderRadius: 18,
-                                            backgroundColor: "#000",
-                                            justifyContent: "center",
-                                            alignItems: "center",
-                                            marginTop: 4,
+                                            marginTop: 9,
                                         }}
                                     >
-                                        <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "700" }}>
+                                        <Text
+                                            style={{
+                                                fontSize: 10,
+                                                color: "#747990",
+                                            }}
+                                        >
+                                            Order ID
+                                        </Text>
+
+                                        <Text
+                                            style={{
+                                                fontSize: 12,
+                                                color: "#111111",
+                                                fontWeight: "600",
+                                                marginTop: 2,
+                                            }}
+                                        >
+                                             #{order.invoiceNumber}
+                                        </Text>
+                                    </View>
+
+                                    {/* DELIVERY + TOTAL */}
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+
+                                            marginTop: 12,
+                                        }}
+                                    >
+                                        {/* Delivery Date */}
+
+                                        <View
+                                            style={{
+                                                flexDirection:
+                                                    "row",
+                                                alignItems:
+                                                    "center",
+
+                                                paddingRight: 8,
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="location"
+                                                size={13}
+                                                color="#000"
+                                            />
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#222",
+                                                    marginLeft: 4,
+                                                }}
+                                            >
+                                                {
+                                                    order.deliveryDate
+                                                }
+                                            </Text>
+                                        </View>
+
+                                        {/* Divider */}
+
+                                        <View
+                                            style={{
+                                                width: 1,
+                                                height: 22,
+                                                backgroundColor:
+                                                    "#E1E4E8",
+                                            }}
+                                        />
+
+                                        {/* Time */}
+
+                                        <View
+                                            style={{
+                                                flexDirection:
+                                                    "row",
+                                                alignItems:
+                                                    "center",
+
+                                                paddingHorizontal: 8,
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="time"
+                                                size={13}
+                                                color="#000"
+                                            />
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#222",
+                                                    marginLeft: 4,
+                                                }}
+                                            >
+                                                {order.timeSlot}
+                                            </Text>
+                                        </View>
+
+                                        {/* Divider */}
+
+                                        <View
+                                            style={{
+                                                width: 1,
+                                                height: 22,
+                                                backgroundColor:
+                                                    "#E1E4E8",
+                                            }}
+                                        />
+
+                                        {/* Total */}
+
+                                        <View
+                                            style={{
+                                                flex: 1,
+                                                paddingLeft: 8,
+                                            }}
+                                        >
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#747990",
+                                                }}
+                                            >
+                                                Total
+                                            </Text>
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 11,
+                                                    color: "#111",
+                                                    fontWeight:
+                                                        "700",
+                                                    marginTop: 1,
+                                                }}
+                                                numberOfLines={1}
+                                            >
+                                                {formatAmount(
+                                                    order.total
+                                                )}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* VIEW DETAILS */}
+                                    <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        onPress={() =>
+                                            handleViewDetails(
+                                                order
+                                            )
+                                        }
+                                        style={{
+                                            flexDirection:
+                                                "row",
+                                            alignItems:
+                                                "center",
+
+                                            marginTop: 9,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 10,
+                                                color: "#60647A",
+                                            }}
+                                        >
                                             View Details
                                         </Text>
+
+                                        <Ionicons
+                                            name="chevron-forward"
+                                            size={12}
+                                            color="#60647A"
+                                            style={{
+                                                marginLeft: 3,
+                                            }}
+                                        />
                                     </TouchableOpacity>
                                 </View>
                             ))}
@@ -571,7 +876,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             {/* DatePicker */}
             {datePickerVisible && (
                 <DateTimePicker
-                    value={selectedDate}
+                    value={selectedDate || new Date()}
                     mode="date"
                     display="default"
                     onChange={handleDateChange}

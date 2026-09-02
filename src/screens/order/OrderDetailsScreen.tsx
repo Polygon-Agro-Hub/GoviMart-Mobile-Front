@@ -119,6 +119,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 ]);
 
                 if (orderRes.data && orderRes.data.status) {
+                    // console.log("Fetched Order:", orderRes.data.order);
                     setOrder(orderRes.data.order);
                 }
 
@@ -163,6 +164,18 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
         fetchAllOrderDetails();
     }, [orderId]);
+    const STATUS_STAGES = [
+        "Ordered",
+        "Processing",
+        "Cancelled",
+        "Out For Delivery",
+        "Collected",
+        "On the Way",
+        "Hold",
+        "Delivered",
+        "Return",
+        "Return Received"
+    ];
 
     const getStatusItems = () => {
         const status = order?.processStatus || "Pending";
@@ -170,7 +183,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         const orderTime = formatStatusDate(order?.createdAt);
 
         const isActive = (stage: string) => {
-            const stages = ["Pending", "Confirmed", "Processing", "Collected", "Out For Delivery", "On the Way", "Delivered"];
+            const stages = STATUS_STAGES;
             const currentIdx = stages.indexOf(status);
             const stageIdx = stages.indexOf(stage);
 
@@ -187,31 +200,37 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             {
                 title: "Ordered",
                 date: orderTime || "Just now",
-                icon: "cart",
+                icon: "cart-shopping",
                 active: true,
             },
             {
                 title: "Processing",
                 date: isActive("Processing") ? updateTime : "",
-                icon: "sync",
+                icon: "box-open",
                 active: isActive("Processing"),
-            },
-            {
-                title: "Collected",
-                date: isActive("Collected") ? updateTime : "",
-                icon: "bag",
-                active: isActive("Collected"),
             },
             {
                 title: "Out For Delivery",
                 date: isActive("Out For Delivery") ? updateTime : "",
-                icon: "car",
+                icon: "dolly",
                 active: isActive("Out For Delivery"),
+            },
+            {
+                title: "Collected",
+                date: isActive("Collected") ? updateTime : "",
+                icon: "truck",
+                active: isActive("Collected"),
+            },
+            {
+                title: "Cancelled",
+                date: isActive("Cancelled") ? updateTime : "",
+                icon: "close",
+                active: isActive("Cancelled"),
             },
             {
                 title: "On the Way",
                 date: isActive("On the Way") ? updateTime : "",
-                icon: "navigate",
+                icon: "truck-fast",
                 active: isActive("On the Way"),
             },
             {
@@ -224,9 +243,22 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             {
                 title: "Delivered",
                 date: status === "Delivered" ? updateTime : "",
-                icon: "checkmark",
+                icon: "check",
                 active: status === "Delivered",
             },
+            {
+                title: "Return",
+                date: isActive("Return") ? updateTime : "",
+                icon: "arrows-rotate",
+                active: isActive("Return"),
+            },
+            {
+                title: "Return Received",
+                date: isActive("Return Received") ? updateTime : "",
+                icon: "arrows-rotate",
+                active: isActive("Return Received"),
+            },
+            
         ];
     };
 
@@ -290,7 +322,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                             marginTop: 3,
                         }}
                     >
-                        [{order?.invoiceNo || order?.invoiceNumber || order?.invNo || "N/A"}]
+                        #{order?.invoiceNo || order?.invoiceNumber || order?.invNo || "N/A"}
                     </Text>
 
                     <View
@@ -305,13 +337,18 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 flexDirection: "row",
                                 alignItems: "center",
                                 paddingRight: 7,
+                                
                             }}
                         >
-                            <Ionicons
-                                name="location"
-                                size={8}
-                                color="#000"
+                            <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+                            <FontAwesome6
+                                name="calendar"
+                                solid
+                                size={10}
+                                color="#FFFFFF"
+                            
                             />
+                            </View>
 
                             <Text
                                 style={{
@@ -338,11 +375,15 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 paddingHorizontal: 7,
                             }}
                         >
-                            <Ionicons
-                                name="time"
+                             <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+                            <FontAwesome6
+                                name="clock"
+                                solid
                                 size={8}
-                                color="#000"
+                                color="#FFFFFF"
+                            
                             />
+                            </View>
 
                             <Text
                                 style={{
@@ -446,11 +487,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                         marginBottom: 20,
                                     }}
                                 >
-                                    <Ionicons
+                                    <FontAwesome6
                                         name={
                                             status.icon as any
                                         }
-                                        size={7}
+                                        size={8}
                                         color="#FFF"
                                     />
                                 </View>
