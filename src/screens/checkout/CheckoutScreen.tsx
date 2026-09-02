@@ -8,7 +8,7 @@ import {
     ActivityIndicator,
     Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList, SavedAddress } from "@/types/types";
@@ -351,7 +351,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                     backgroundColor: "#FFFFFF",
                                     borderRadius: 16,
                                     borderWidth: 1,
-                                    borderColor: isSelected ? "#000000" : "#EBF0F5",
+                                    borderColor: "#E1E7EE",
                                     padding: 14,
                                     marginBottom: 14,
                                     shadowColor: "#000",
@@ -503,8 +503,8 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                         paddingTop: 4,
                                     }}
                                 >
-                                    <Ionicons
-                                        name="map-outline"
+                                    <FontAwesome6
+                                        name="map-location-dot"
                                         size={15}
                                         color="#111111"
                                         style={{ marginRight: 6 }}
