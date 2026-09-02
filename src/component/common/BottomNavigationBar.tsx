@@ -3,6 +3,7 @@ import {
     View,
     Text,
     TouchableOpacity,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Feather from '@expo/vector-icons/Feather';
@@ -10,22 +11,25 @@ import Feather from '@expo/vector-icons/Feather';
 type BottomScreen =
     | "Home"
     | "MyCart"
+    | "OrderHistory"
     | "Notification"
     | "Profile";
 
 interface BottomNavigationProps {
     activeScreen: BottomScreen;
-    navigation: any
+    navigation: any;
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
     activeScreen, navigation
 }) => {
+    const isOrdersActive = activeScreen === "OrderHistory" || activeScreen === "MyCart";
+
     return (
         <View
             style={{
                 position: "absolute",
-                bottom: 24,
+                bottom: Platform.OS === "ios" ? 10 : 24,
                 left: 24,
                 right: 24,
 
@@ -53,7 +57,6 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 zIndex: 20,
             }}
         >
-
             {/* HOME */}
             <TouchableOpacity
                 activeOpacity={0.9}
@@ -76,11 +79,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 }}
             >
                 <Feather
-                    name={
-                        activeScreen === "Home"
-                            ? "home"
-                            : "home"
-                    }
+                    name="home"
                     size={18}
                     color="#FFFFFF"
                 />
@@ -99,37 +98,29 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 )}
             </TouchableOpacity>
 
-            {/* CART */}
+            {/* ORDERS */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("MyCart")}
+                onPress={() => navigation.navigate("OrderHistory")}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
 
-                    paddingHorizontal:
-                        activeScreen === "MyCart" ? 16 : 10,
+                    paddingHorizontal: isOrdersActive ? 16 : 10,
 
                     paddingVertical: 9,
 
                     borderRadius: 25,
 
-                    backgroundColor:
-                        activeScreen === "MyCart"
-                            ? "#FFA07A"
-                            : "transparent",
+                    backgroundColor: isOrdersActive ? "#FFA07A" : "transparent",
                 }}
             >
                 <Ionicons
-                    name={
-                        activeScreen === "MyCart"
-                            ? "basket"
-                            : "basket-outline"
-                    }
+                    name={isOrdersActive ? "basket" : "basket-outline"}
                     size={22}
                     color="#FFFFFF"
                 />
-                {activeScreen === "MyCart" && (
+                {isOrdersActive && (
                     <Text
                         style={{
                             color: "#FFFFFF",
@@ -187,10 +178,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 )}
             </TouchableOpacity>
 
-            {/* ================================================= */}
             {/* PROFILE */}
-            {/* ================================================= */}
-
             <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate("Profile")}

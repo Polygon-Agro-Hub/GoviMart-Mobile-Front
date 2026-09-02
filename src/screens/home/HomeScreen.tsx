@@ -37,6 +37,8 @@ import {
   PackageCartItem,
   CartState,
 } from "@/store/cartSlice";
+import cartService from "@/services/cart/cart.service";
+
 
 import HomeHeader from "@/component/home/HomeHeader";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
@@ -252,6 +254,9 @@ const ProductGridSkeleton = () => {
 
 const Home: React.FC<HomeProps> = ({ navigation }) => {
   const dispatch = useDispatch();
+  const userToken = useSelector(
+    (state: RootState) => (state as RootState & { auth: any }).auth.token,
+  );
   const userProfile = useSelector(
     (state: RootState) => (state as RootState & { auth: any }).auth.userProfile,
   );
@@ -465,16 +470,34 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (productId: number, unit: "g" | "kg") => {
       dispatch(changeProductUnit({ id: productId, newUnit: unit }));
       showToast("Cart Updated");
+      if (userToken) {
+        const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+        if (item) {
+          const newWeight = unit === "kg" ? item.weight / 1000 : item.weight * 1000;
+          cartService.syncCartProduct(productId, newWeight, unit).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
+      }
     },
-    [dispatch, showToast],
+    [dispatch, showToast, userToken, cartProducts],
   );
 
   const handleIncrement = useCallback(
     (productId: number) => {
       dispatch(increaseProductWeight(productId));
       showToast("Cart Updated");
+      if (userToken) {
+        const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+        if (item) {
+          const newWeight = item.weight + item.step;
+          cartService.syncCartProduct(productId, newWeight, item.unit).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
+      }
     },
-    [dispatch, showToast],
+    [dispatch, showToast, userToken, cartProducts],
   );
 
   const handleDecrement = useCallback(
@@ -491,12 +514,23 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           return next;
         });
         showToast("Removed from cart");
+        if (userToken) {
+          cartService.removeCartProduct(productId).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
       } else {
         dispatch(decreaseProductWeight(productId));
         showToast("Cart Updated");
+        if (existing && userToken) {
+          const newWeight = Math.max(existing.minimumWeight, existing.weight - existing.step);
+          cartService.syncCartProduct(productId, newWeight, existing.unit).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
       }
     },
-    [dispatch, cartProducts, showToast],
+    [dispatch, cartProducts, showToast, userToken],
   );
 
   const handleAddProduct = useCallback(
@@ -536,12 +570,19 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           name: product.displayName,
           image: product.image,
           price: startEffectivePrice,
+          normalPrice: normalPerUnit * rawStartValue,
           weight: initialWeight,
           unit: initialUnit,
           minimumWeight: initialWeight,
           step: step,
         }),
       );
+
+      if (userToken) {
+        cartService.syncCartProduct(product.id, initialWeight, initialUnit).catch((err) =>
+          console.error("Cart DB sync error:", err)
+        );
+      }
 
       setAddTimeSnapshots((prev) => ({
         ...prev,
@@ -555,7 +596,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       setExpandedItemId(product.id);
       showToast("Added to Cart");
     },
-    [dispatch, showToast],
+    [dispatch, showToast, userToken],
   );
 
   const handleAddPackage = useCallback(

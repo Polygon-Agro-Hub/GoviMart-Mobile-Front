@@ -21,18 +21,17 @@ import BottomCart from "@/component/common/BottomCart";
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
 import productService from "@/services/product/product.service";
+import cartService from "@/services/cart/cart.service";
 
 type Props = StackScreenProps<RootStackParamList, "ViewPackage">;
 
 const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     const { packageId, packageName, image, price } = route.params;
     const dispatch = useDispatch();
+    const token = useSelector((state: RootState) => state.auth.token);
     const existingPackage = useSelector((state: RootState) =>
-        state.cart.packages.find((p) => String(p.id) === String(packageId))
+        state.cart.packages.find((p) => p.id === packageId)
     );
-    const cartProducts = useSelector((state: RootState) => state.cart.products);
-    const cartPackages = useSelector((state: RootState) => state.cart.packages);
-    const totalCartItems = cartProducts.length + cartPackages.length;
 
     const [packageItems, setPackageItems] = useState<{ itemName: string; quantity: number }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -96,6 +95,11 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 totalItems: totalItems,
             })
         );
+        if (token) {
+            cartService.syncCartPackage(packageId, quantity).catch((err) =>
+                console.error("DB cart sync error:", err)
+            );
+        }
         showCartMessage("Added to Cart");
     };
 
@@ -106,11 +110,21 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 quantity: quantity,
             })
         );
+        if (token) {
+            cartService.syncCartPackage(packageId, quantity).catch((err) =>
+                console.error("DB cart sync error:", err)
+            );
+        }
         showCartMessage("Cart Updated");
     };
 
     const onRemoveFromCart = async () => {
         dispatch(removePackage(packageId));
+        if (token) {
+            cartService.removeCartPackage(packageId).catch((err) =>
+                console.error("DB cart sync error:", err)
+            );
+        }
         showCartMessage("Removed from Cart");
         setViewCartVisible(false);
     };
@@ -212,7 +226,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                             marginBottom: 6,
                         }}
                     >
-                        {(price * quantity).toLocaleString("en-US", {
+                        {price.toLocaleString("en-US", {
                             style: "currency",
                             currency: "LKR",
                         })}
@@ -284,8 +298,8 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
             />
 
             <ViewCartPopup
-                visible={viewCartVisible && totalCartItems > 0}
-                itemCount={totalCartItems}
+                visible={viewCartVisible}
+                itemCount={quantity}
                 onPress={() => navigation.navigate("MyCart")}
             />
 
@@ -293,7 +307,6 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 minimumValue={1}
                 step={1}
                 quantity={quantity}
-                initialIsAdded={!!existingPackage}
                 onIncrease={increaseQty}
                 onDecrease={decreaseQty}
                 onAddToCart={onAddToCart}

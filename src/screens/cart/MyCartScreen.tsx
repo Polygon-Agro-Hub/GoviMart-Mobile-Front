@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useCallback } from "react";
 import {
     View,
     Text,
@@ -17,12 +17,14 @@ import {
   removeProduct,
   changeProductUnit,
   updateAvailabilityMap,
+  setCartFromBackend,
 } from "@/store/cartSlice";
 import PackageCartCard from "@/component/my-cart/PackageCartCard";
 import ProductCartCard from "@/component/my-cart/ProductCartCard";
 import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
 import productService from "@/services/product/product.service";
+import cartService from "@/services/cart/cart.service";
 import { RootStackParamList } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
@@ -36,75 +38,138 @@ interface Props {
 
 const MyCart: React.FC<Props> = ({ navigation }) => {
     const dispatch = useDispatch();
+    const token = useSelector((state: RootState) => state.auth.token);
     const { packages, products } = useSelector((state: RootState) => state.cart);
 
-    // ─── CHECK AVAILABILITY FROM BACKEND ON FOCUS ─────────────────────────────
+    // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ON FOCUS ─────────────────────
     useFocusEffect(
         useCallback(() => {
-            const checkItemAvailability = async () => {
-                const productIds = products.map((p) => p.id);
-                const packageIds = packages.map((p) => p.id);
-
-                if (productIds.length === 0 && packageIds.length === 0) return;
-
+            const syncAndCheckCart = async () => {
                 try {
-                    const response = await productService.checkAvailability(productIds, packageIds);
-                    if (response.data && response.data.status) {
-                        dispatch(
-                            updateAvailabilityMap({
-                                products: response.data.products || {},
-                                packages: response.data.packages || {},
-                            })
-                        );
+                    // Step 1: If authenticated, sync DB cart into Redux
+                    if (token) {
+                        const dbCartRes = await cartService.getUserCart();
+                        if (dbCartRes.data && dbCartRes.data.status && dbCartRes.data.data) {
+                            const dbProducts = dbCartRes.data.data.products || [];
+                            const dbPackages = dbCartRes.data.data.packages || [];
+                            if (dbProducts.length > 0 || dbPackages.length > 0) {
+                                dispatch(setCartFromBackend({ products: dbProducts, packages: dbPackages }));
+                            }
+                        }
+                    }
+
+                    // Step 2: Check availability for all cart items
+                    const productIds = products.map((p) => p.id);
+                    const packageIds = packages.map((p) => p.id);
+
+                    if (productIds.length > 0 || packageIds.length > 0) {
+                        const response = await productService.checkAvailability(productIds, packageIds);
+                        if (response.data && response.data.status) {
+                            dispatch(
+                                updateAvailabilityMap({
+                                    products: response.data.products || {},
+                                    packages: response.data.packages || {},
+                                })
+                            );
+                        }
                     }
                 } catch (error) {
-                    console.error("Failed to check cart items availability:", error);
+                    console.error("Cart sync/availability check error:", error);
                 }
             };
 
-            checkItemAvailability();
-        }, [dispatch, products.length, packages.length])
+            syncAndCheckCart();
+        }, [dispatch, token, products.length, packages.length])
     );
 
     // ─── HANDLERS ─────────────────────────────────────────────────────────────
     const increaseWeight = (id: number) => {
         dispatch(increaseProductWeight(id));
+        const item = products.find((p) => p.id === id);
+        if (item && token) {
+            const newWeight = item.weight + item.step;
+            cartService.syncCartProduct(id, newWeight, item.unit).catch((err) =>
+                console.error("Failed DB sync for increaseWeight:", err)
+            );
+        }
     };
 
     const decreaseWeight = (id: number) => {
         dispatch(decreaseProductWeight(id));
+        const item = products.find((p) => p.id === id);
+        if (item && token) {
+            const newWeight = Math.max(item.minimumWeight, item.weight - item.step);
+            cartService.syncCartProduct(id, newWeight, item.unit).catch((err) =>
+                console.error("Failed DB sync for decreaseWeight:", err)
+            );
+        }
     };
 
     const deleteProduct = (id: number) => {
         dispatch(removeProduct(id));
+        if (token) {
+            cartService.removeCartProduct(id).catch((err) =>
+                console.error("Failed DB sync for deleteProduct:", err)
+            );
+        }
     };
 
     const changeProductUnitHandler = (id: number, newUnit: "g" | "kg") => {
         dispatch(changeProductUnit({ id, newUnit }));
+        const item = products.find((p) => p.id === id);
+        if (item && token) {
+            const newWeight = newUnit === "kg" ? item.weight / 1000 : item.weight * 1000;
+            cartService.syncCartProduct(id, newWeight, newUnit).catch((err) =>
+                console.error("Failed DB sync for changeProductUnit:", err)
+            );
+        }
     };
 
     const increasePackage = (id: number) => {
         dispatch(increasePackageQuantity(id));
+        const pkg = packages.find((p) => p.id === id);
+        if (pkg && token) {
+            cartService.syncCartPackage(id, pkg.quantity + 1).catch((err) =>
+                console.error("Failed DB sync for increasePackage:", err)
+            );
+        }
     };
 
     const decreasePackage = (id: number) => {
         dispatch(decreasePackageQuantity(id));
+        const pkg = packages.find((p) => p.id === id);
+        if (pkg && token && pkg.quantity > 1) {
+            cartService.syncCartPackage(id, pkg.quantity - 1).catch((err) =>
+                console.error("Failed DB sync for decreasePackage:", err)
+            );
+        }
     };
 
     const deletePackage = (id: number) => {
         dispatch(removePackage(id));
+        if (token) {
+            cartService.removeCartPackage(id).catch((err) =>
+                console.error("Failed DB sync for deletePackage:", err)
+            );
+        }
     };
 
     // ─── TOTAL CALCULATIONS (Excludes unavailable items) ─────────────────────
     const productTotal = products.reduce((total, product) => {
         if (product.isUnavailable) return total;
-        const weightMultiplier = product.weight / product.minimumWeight;
+        const weightMultiplier = product.unit === "kg" ? product.weight : product.weight / 1000;
         return total + product.price * weightMultiplier;
     }, 0);
 
     const packageTotal = packages.reduce((total, pkg) => {
         if (pkg.isUnavailable) return total;
         return total + pkg.price * pkg.quantity;
+    }, 0);
+
+    const totalDiscount = products.reduce((total, product) => {
+        if (product.isUnavailable || !product.normalPrice || product.normalPrice <= product.price) return total;
+        const weightMultiplier = product.unit === "kg" ? product.weight : product.weight / 1000;
+        return total + (product.normalPrice - product.price) * weightMultiplier;
     }, 0);
 
     return (
@@ -189,7 +254,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             <OrderSummary
                 packageTotal={packageTotal}
                 productTotal={productTotal}
-                discount={100}
+                discount={totalDiscount}
                 onCheckout={() => navigation.navigate("OrderHistory")}
             />
         </View>

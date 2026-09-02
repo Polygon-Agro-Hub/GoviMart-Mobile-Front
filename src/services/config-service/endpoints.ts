@@ -37,6 +37,15 @@ export const ENDPOINTS = {
     CHECK_AVAILABILITY: "api/product/check-availability",
   },
 
+  CART: {
+    GET_USER_CART: "api/cart/user-cart",
+    ADD_UPDATE_PRODUCT: "api/cart/product",
+    ADD_UPDATE_PACKAGE: "api/cart/package",
+    REMOVE_PRODUCT: "api/cart/product/:productId",
+    REMOVE_PACKAGE: "api/cart/package/:packageId",
+    CLEAR_CART: "api/cart/clear",
+  },
+
   ORDER: {
     GET_ORDER_HISTORY: "api/order/order-history",
     GET_ORDER_BY_ID: "api/order/:orderId",
