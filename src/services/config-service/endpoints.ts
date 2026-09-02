@@ -51,5 +51,10 @@ export const ENDPOINTS = {
     GET_ORDER_BY_ID: "api/order/:orderId",
     GET_ORDER_PACKAGES: "api/order/packages/:orderId",
     GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
+    CREATE_ORDER: "api/order/create-order",
+    GET_PICKUP_CENTERS: "api/order/pickup-centers",
+    GET_DELIVERY_CITIES: "api/order/delivery-cities",
+    GET_COUPONS: "api/order/coupons",
+    CHECK_COUPON: "api/order/check-coupon",
   },
 };

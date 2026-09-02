@@ -22,6 +22,36 @@ class OrderService {
         const headers = await getAuthHeader();
         return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_ADDITIONAL_ITEMS.replace(":orderId", orderId), { headers });
     }
+
+    async createOrder(payload: any) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, { headers });
+    }
+
+    async getPickupCenters() {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_PICKUP_CENTERS, { headers });
+    }
+
+    async getDeliveryCities() {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_DELIVERY_CITIES, { headers });
+    }
+
+    async getAvailableCoupons() {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_COUPONS, { headers });
+    }
+
+    async checkCoupon(payload: {
+        coupon: string;
+        deliveryMethod: string;
+        cartTotal?: number;
+        cartId?: number;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CHECK_COUPON, payload, { headers });
+    }
 }
 
 export default new OrderService();

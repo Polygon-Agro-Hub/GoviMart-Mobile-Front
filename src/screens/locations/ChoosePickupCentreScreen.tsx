@@ -1,14 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
     TouchableOpacity,
     Image,
     ScrollView,
+    ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import MapView, { Marker } from "react-native-maps";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../types/types";
+import orderService from "@/services/order/order.service";
+import GlobalSearchModal from "@/component/common/GlobalSearchModal";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 type ChoosePickupCentreNavigationProp =
     StackNavigationProp<
@@ -16,8 +23,15 @@ type ChoosePickupCentreNavigationProp =
         "ChoosePickupCentre"
     >;
 
+type ChoosePickupCentreRouteProp =
+    RouteProp<
+        RootStackParamList,
+        "ChoosePickupCentre"
+    >;
+
 interface Props {
     navigation: ChoosePickupCentreNavigationProp;
+    route: ChoosePickupCentreRouteProp;
 }
 
 interface PickupCentre {
@@ -37,50 +51,62 @@ interface PickupCentre {
 
 const ChoosePickupCentre: React.FC<Props> = ({
     navigation,
+    route,
 }) => {
     const [cityOpen, setCityOpen] = useState(false);
     const [selectedCity, setSelectedCity] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [pickupCentres, setPickupCentres] = useState<PickupCentre[]>([]);
 
     const [selectedCentre, setSelectedCentre] =
         useState<PickupCentre | null>(null);
 
-    const cities = [
-        "Colombo 02",
-        "Colombo 03",
-        "Kandy",
-        "Gampaha",
-        "Negombo",
-    ];
+    const userProfile = useSelector((state: RootState) => state.auth.userProfile);
 
-    const pickupCentres: PickupCentre[] = [
-        {
-            id: 1,
-            name: "Colombo 02 Centre",
-            city: "Minuwangoda",
-            district: "Gampaha",
-            province: "Western",
-            country: "Sri Lanka",
-            status: "Open",
-            openingTime: "08:00 AM",
-            closingTime: "09:00 PM",
-            latitude: 6.9271,
-            longitude: 79.8612,
-            mapImage:
-                "https://maps.googleapis.com/maps/api/staticmap?center=6.9271,79.8612&zoom=14&size=600x400&maptype=roadmap",
-        },
-    ];
+    useEffect(() => {
+        const fetchCenters = async () => {
+            try {
+                setLoading(true);
+                const response = await orderService.getPickupCenters();
+                if (response.data && response.data.status && Array.isArray(response.data.data)) {
+                    const mapped: PickupCentre[] = response.data.data.map((item: any) => ({
+                        id: item.centerId || item.id,
+                        name: item.centerName || item.name || "Pickup Centre",
+                        city: item.city || "",
+                        district: item.district || "",
+                        province: item.province || "",
+                        country: item.country || "Sri Lanka",
+                        status: "Open",
+                        openingTime: "08:00 AM",
+                        closingTime: "09:00 PM",
+                        latitude: parseFloat(item.latitude) || 6.9271,
+                        longitude: parseFloat(item.longitude) || 79.8612,
+                        mapImage: `https://maps.googleapis.com/maps/api/staticmap?center=${item.latitude || 6.9271},${item.longitude || 79.8612}&zoom=14&size=600x400&maptype=roadmap`,
+                    }));
+                    setPickupCentres(mapped);
+                    if (mapped.length > 0) {
+                        setSelectedCity(mapped[0].name);
+                        setSelectedCentre(mapped[0]);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching pickup centres:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    const handleSelectCity = (city: string) => {
-        setSelectedCity(city);
+        fetchCenters();
+    }, []);
+
+    const cities = pickupCentres.map((c) => c.name);
+
+    const handleSelectCity = (cityName: string) => {
+        setSelectedCity(cityName);
         setCityOpen(false);
 
-        // Example:
-        // Find centre according to selected city.
         const centre = pickupCentres.find(
-            (item) =>
-                item.name.toLowerCase().includes(
-                    city.toLowerCase()
-                )
+            (item) => item.name === cityName
         );
 
         if (centre) {
@@ -93,18 +119,34 @@ const ChoosePickupCentre: React.FC<Props> = ({
     const handleConfirm = () => {
         if (!selectedCentre) return;
 
-        console.log(
-            "Selected Pickup Centre:",
-            selectedCentre
-        );
+        const currentContext = route.params?.orderContext || {
+            grandTotal: 0,
+            packageTotal: 0,
+            productTotal: 0,
+            discount: 0,
+        };
 
-        // Navigate / pass selected centre here
-        //
-        // navigation.navigate("NextScreen", {
-        //     pickupCentre: selectedCentre,
-        // });
+        const userFullName = userProfile
+            ? `${userProfile.firstName || ""} ${userProfile.lastName || ""}`.trim()
+            : "";
 
-        navigation.goBack();
+        navigation.navigate("ScheduleOrder", {
+            orderContext: {
+                ...currentContext,
+                deliveryMethod: "pickup",
+                checkoutDetails: {
+                    ...(currentContext.checkoutDetails || {}),
+                    deliveryMethod: "pickup",
+                    centerId: selectedCentre.id,
+                    centreName: selectedCentre.name,
+                    cityName: selectedCentre.city,
+                    title: userProfile?.title || "Mr",
+                    fullName: userFullName || undefined,
+                    phone1: userProfile?.phoneNumber || undefined,
+                    phoneCode1: "+94",
+                },
+            },
+        });
     };
 
     return (
@@ -290,172 +332,116 @@ const ChoosePickupCentre: React.FC<Props> = ({
                             color="#000"
                         />
                     </TouchableOpacity>
-
-                    {/* Dropdown */}
-
-                    {cityOpen && (
-                        <View
-                            style={{
-                                position: "absolute",
-                                top: 53,
-                                left: 0,
-                                right: 0,
-
-                                backgroundColor: "#FFFFFF",
-
-                                borderRadius: 14,
-
-                                borderWidth: 1,
-                                borderColor: "#E0E0E0",
-
-                                shadowColor: "#000",
-                                shadowOffset: {
-                                    width: 0,
-                                    height: 3,
-                                },
-                                shadowOpacity: 0.15,
-                                shadowRadius: 6,
-
-                                elevation: 7,
-
-                                overflow: "hidden",
-                            }}
-                        >
-                            {cities.map((city) => (
-                                <TouchableOpacity
-                                    key={city}
-                                    activeOpacity={0.7}
-                                    onPress={() =>
-                                        handleSelectCity(
-                                            city
-                                        )
-                                    }
-                                    style={{
-                                        height: 45,
-
-                                        paddingHorizontal: 15,
-
-                                        justifyContent:
-                                            "center",
-
-                                        borderBottomWidth: 1,
-                                        borderBottomColor:
-                                            "#F0F0F0",
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            fontSize: 13,
-                                            color:
-                                                "#222",
-                                            fontWeight:
-                                                selectedCity ===
-                                                    city
-                                                    ? "700"
-                                                    : "400",
-                                        }}
-                                    >
-                                        {city}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
                 </View>
 
                 {/* ================================================= */}
-                {/* MAP */}
+                {/* MAP (Streetview) */}
                 {/* ================================================= */}
 
                 <View
                     style={{
                         height: 287,
-
                         marginTop: 17,
-
                         borderRadius: 9,
-
                         overflow: "hidden",
-
                         backgroundColor: "#E7EEF0",
                     }}
                 >
                     {selectedCentre ? (
                         <>
-                            <Image
-                                source={{
-                                    uri: selectedCentre.mapImage,
-                                }}
+                            <MapView
+                                key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
                                 style={{
                                     width: "100%",
                                     height: "100%",
                                 }}
-                                resizeMode="cover"
-                            />
+                                mapType="standard"
+                                initialRegion={{
+                                    latitude: selectedCentre.latitude,
+                                    longitude: selectedCentre.longitude,
+                                    latitudeDelta: 0.012,
+                                    longitudeDelta: 0.012,
+                                }}
+                                region={{
+                                    latitude: selectedCentre.latitude,
+                                    longitude: selectedCentre.longitude,
+                                    latitudeDelta: 0.012,
+                                    longitudeDelta: 0.012,
+                                }}
+                                showsUserLocation={false}
+                                showsMyLocationButton={false}
+                                showsCompass={true}
+                                toolbarEnabled={false}
+                            >
+                                <Marker
+                                    coordinate={{
+                                        latitude: selectedCentre.latitude,
+                                        longitude: selectedCentre.longitude,
+                                    }}
+                                    title={selectedCentre.name}
+                                    description={`${selectedCentre.city}, ${selectedCentre.district}`}
+                                >
+                                    <View
+                                        style={{
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                        }}
+                                    >
+                                        <Ionicons
+                                            name="location-sharp"
+                                            size={36}
+                                            color="#FF0000"
+                                        />
+                                    </View>
+                                </Marker>
+                            </MapView>
 
-                            {/* Map centre popup */}
-
+                            {/* Map centre popup badge overlay */}
                             <View
                                 style={{
                                     position: "absolute",
-
-                                    top: 63,
-                                    left: 78,
-
-                                    backgroundColor:
-                                        "#FFFFFF",
-
+                                    top: 12,
+                                    left: 12,
+                                    right: 12,
+                                    backgroundColor: "#FFFFFF",
                                     borderRadius: 9,
-
-                                    paddingHorizontal: 10,
+                                    paddingHorizontal: 12,
                                     paddingVertical: 8,
-
-                                    shadowColor:
-                                        "#000",
+                                    shadowColor: "#000",
                                     shadowOffset: {
                                         width: 0,
                                         height: 2,
                                     },
-                                    shadowOpacity:
-                                        0.2,
+                                    shadowOpacity: 0.2,
                                     shadowRadius: 4,
-
                                     elevation: 5,
                                 }}
                             >
                                 <Text
                                     style={{
                                         fontSize: 12,
-                                        fontWeight:
-                                            "700",
+                                        fontWeight: "700",
                                         color: "#111",
                                     }}
                                 >
-                                    {
-                                        selectedCentre.name
-                                    }
+                                    {selectedCentre.name}
                                 </Text>
 
                                 <View
                                     style={{
-                                        flexDirection:
-                                            "row",
-                                        alignItems:
-                                            "center",
-                                        marginTop: 5,
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        marginTop: 4,
                                     }}
                                 >
                                     <Text
                                         style={{
                                             fontSize: 11,
                                             color: "#FF8500",
-                                            fontWeight:
-                                                "700",
+                                            fontWeight: "700",
                                         }}
                                     >
-                                        {
-                                            selectedCentre.status
-                                        }
+                                        {selectedCentre.status}
                                     </Text>
 
                                     <Text
@@ -465,74 +451,18 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                             marginLeft: 6,
                                         }}
                                     >
-                                        •{" "}
-                                        {
-                                            selectedCentre.openingTime
-                                        }{" "}
-                                        -{" "}
-                                        {
-                                            selectedCentre.closingTime
-                                        }
+                                        • {selectedCentre.openingTime} - {selectedCentre.closingTime}
                                     </Text>
                                 </View>
                             </View>
-
-                            {/* Marker */}
-
-                            <View
-                                style={{
-                                    position:
-                                        "absolute",
-
-                                    top: 130,
-                                    left: "53%",
-
-                                    width: 30,
-                                    height: 30,
-
-                                    justifyContent:
-                                        "center",
-                                    alignItems:
-                                        "center",
-                                }}
-                            >
-                                <Ionicons
-                                    name="location"
-                                    size={32}
-                                    color="#FF0000"
-                                />
-                            </View>
-
-                            {/* Google Maps label */}
-
-                            <Text
-                                style={{
-                                    position:
-                                        "absolute",
-
-                                    bottom: 6,
-                                    right: 8,
-
-                                    fontSize: 10,
-                                    color: "#777",
-
-                                    backgroundColor:
-                                        "rgba(255,255,255,0.7)",
-                                }}
-                            >
-                                Google Maps
-                            </Text>
                         </>
                     ) : (
                         <View
                             style={{
                                 flex: 1,
-                                justifyContent:
-                                    "center",
-                                alignItems:
-                                    "center",
-                                backgroundColor:
-                                    "#DDF2F7",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                backgroundColor: "#DDF2F7",
                             }}
                         >
                             <Text
@@ -541,8 +471,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                     fontSize: 12,
                                 }}
                             >
-                                Select a city to view
-                                pickup centre
+                                Select a city to view pickup centre
                             </Text>
                         </View>
                     )}
@@ -817,6 +746,32 @@ const ChoosePickupCentre: React.FC<Props> = ({
                     </Text>
                 </TouchableOpacity>
             </View>
+
+            {/* ─── GLOBAL SEARCH MODAL FOR PICKUP CENTRES ─────────────────────── */}
+            <GlobalSearchModal
+                visible={cityOpen}
+                onClose={() => setCityOpen(false)}
+                title="Select Pickup Centre"
+                searchPlaceholder="Search centre or city..."
+                data={pickupCentres.map((c) => ({
+                    label: `${c.name} (${c.city})`,
+                    value: String(c.id),
+                    city: c.city,
+                    name: c.name,
+                }))}
+                searchKeys={["label", "name", "city"]}
+                selectedItems={selectedCentre ? [String(selectedCentre.id)] : []}
+                onSelect={(selectedValues) => {
+                    if (selectedValues.length > 0) {
+                        const id = Number(selectedValues[0]);
+                        const centre = pickupCentres.find((c) => c.id === id);
+                        if (centre) {
+                            setSelectedCentre(centre);
+                            setSelectedCity(centre.name);
+                        }
+                    }
+                }}
+            />
         </View>
     );
 };

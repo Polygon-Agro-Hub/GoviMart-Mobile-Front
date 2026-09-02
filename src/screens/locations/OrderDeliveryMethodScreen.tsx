@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../types/types";
 import LottieView from "lottie-react-native";
 
@@ -17,27 +18,48 @@ type NavigationProp = StackNavigationProp<
     "OrderDeliveryMethod"
 >;
 
+type OrderDeliveryMethodRouteProp = RouteProp<
+    RootStackParamList,
+    "OrderDeliveryMethod"
+>;
+
 interface Props {
     navigation: NavigationProp;
+    route: OrderDeliveryMethodRouteProp;
 }
 
 type DeliveryMethod = "pickup" | "delivery";
 
 const OrderDeliveryMethod: React.FC<Props> = ({
     navigation,
+    route,
 }) => {
     const [deliveryMethod, setDeliveryMethod] =
         useState<DeliveryMethod>("pickup");
 
     const handleContinue = () => {
-        if (deliveryMethod === "pickup") {
-            console.log("Pick up from Centre");
-        } else {
-            console.log("Deliver to My Location");
-        }
+        const currentContext = route.params?.orderContext || {
+            grandTotal: 0,
+            packageTotal: 0,
+            productTotal: 0,
+            discount: 0,
+        };
 
-        // Example:
-        // navigation.navigate("PaymentMethod");
+        if (deliveryMethod === "pickup") {
+            navigation.navigate("ChoosePickupCentre", {
+                orderContext: {
+                    ...currentContext,
+                    deliveryMethod: "pickup",
+                },
+            });
+        } else {
+            navigation.navigate("CheckoutScreen", {
+                orderContext: {
+                    ...currentContext,
+                    deliveryMethod: "home",
+                },
+            });
+        }
     };
 
     return (
@@ -222,7 +244,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({
                         >
 
                             <LottieView
-                                        source={require("@/assets/json/delivery.json")}
+                                        source={require("@/assets/json/pickup.json")}
                                         autoPlay
                                         loop={false}
                                         style={{ width: 50, height: 50 }}
@@ -417,7 +439,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({
                         >
                          
                          <LottieView
-                                        source={require("@/assets/json/delivery-2.json")}
+                                        source={require("@/assets/json/delivery.json")}
                                         autoPlay
                                         loop={false}
                                         style={{ width: 50, height: 50,}}

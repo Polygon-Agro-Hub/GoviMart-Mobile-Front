@@ -1,8 +1,9 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
     View,
     Text,
     ScrollView,
+    Alert,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -25,7 +26,7 @@ import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
-import { RootStackParamList } from "@/types/types";
+import { RootStackParamList, OrderContext } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -40,6 +41,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const dispatch = useDispatch();
     const token = useSelector((state: RootState) => state.auth.token);
     const { packages, products } = useSelector((state: RootState) => state.cart);
+    const [cartId, setCartId] = useState<number | null>(null);
 
     // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ON FOCUS ─────────────────────
     useFocusEffect(
@@ -50,6 +52,9 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                     if (token) {
                         const dbCartRes = await cartService.getUserCart();
                         if (dbCartRes.data && dbCartRes.data.status && dbCartRes.data.data) {
+                            if (dbCartRes.data.data.cartId) {
+                                setCartId(dbCartRes.data.data.cartId);
+                            }
                             const dbProducts = dbCartRes.data.data.products || [];
                             const dbPackages = dbCartRes.data.data.packages || [];
                             if (dbProducts.length > 0 || dbPackages.length > 0) {
@@ -172,6 +177,34 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         return total + (product.normalPrice - product.price) * weightMultiplier;
     }, 0);
 
+    const handleCheckout = () => {
+        if (packages.length === 0 && products.length === 0) {
+            Alert.alert("Empty Cart", "Your cart is empty. Please add items to proceed.");
+            return;
+        }
+
+        const hasUnavailable = packages.some((p) => p.isUnavailable) || products.some((p) => p.isUnavailable);
+        if (hasUnavailable) {
+            Alert.alert("Unavailable Items", "Some items in your cart are currently unavailable. Please remove them before proceeding.");
+            return;
+        }
+
+        const grandTotal = Math.max(0, packageTotal + productTotal - totalDiscount);
+        const orderContext: OrderContext = {
+            cartId: cartId || undefined,
+            grandTotal,
+            packageTotal,
+            productTotal,
+            discount: totalDiscount,
+        };
+
+        if (packages.length > 0) {
+            navigation.navigate("PackageConfirmation", { orderContext });
+        } else {
+            navigation.navigate("OrderDeliveryMethod", { orderContext });
+        }
+    };
+
     return (
         <View
             style={{
@@ -255,7 +288,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 packageTotal={packageTotal}
                 productTotal={productTotal}
                 discount={totalDiscount}
-                onCheckout={() => navigation.navigate("OrderHistory")}
+                onCheckout={handleCheckout}
             />
         </View>
     );

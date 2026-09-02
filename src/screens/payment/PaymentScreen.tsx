@@ -7,13 +7,17 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
+import { useDispatch } from "react-redux";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import customerService from "@/services/customer/customer.service";
+import orderService from "@/services/order/order.service";
+import { clearCart } from "@/store/cartSlice";
 
 type PaymentScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -67,10 +71,63 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
-  const handleContinuePayment = () => {
-    // navigation.navigate("PaymentMethod", {
-    //   total: fullTotal,
-    // });
+  const dispatch = useDispatch();
+  const orderContext = route.params?.orderContext;
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleContinuePayment = async () => {
+    if (!orderContext) {
+      navigation.navigate("PaymentMethod", {
+        total: fullTotal,
+      });
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const payload = {
+        cartId: orderContext.cartId || 0,
+        paymentMethod: "card",
+        grandTotal: fullTotal,
+        discountAmount: orderContext.discount || 0,
+        deliveryCharge: orderContext.deliveryCharge || 0,
+        creditPaid: 0,
+        moneyPaid: fullTotal,
+        isFinalizeImdt: orderContext.isFinalizeImdt || 0,
+        checkoutDetails: {
+          ...(orderContext.checkoutDetails || {
+            deliveryMethod: orderContext.deliveryMethod || "home",
+          }),
+        },
+      };
+
+      const response = await orderService.createOrder(payload);
+      if (response.data && response.data.status && response.data.data) {
+        dispatch(clearCart());
+        navigation.navigate("OrderConfirmed", {
+          orderId: response.data.data.orderId,
+          invoiceNumber: response.data.data.invoiceNumber,
+          total: response.data.data.total,
+        });
+      } else {
+        Alert.alert("Order Failed", response.data.message || "Failed to create order.");
+      }
+    } catch (error: any) {
+      const errorData = error?.response?.data;
+      const errorMsg = errorData?.message || (Array.isArray(errorData?.details) ? errorData.details.join("; ") : null) || error?.message || "Failed to process card payment.";
+      console.error("Order error in PaymentScreen:", errorMsg, errorData);
+      if (errorData?.code === "ITEMS_UNAVAILABLE") {
+        Alert.alert(
+          "Items Unavailable",
+          "Some items in your cart are no longer available. Please review your cart.",
+          [{ text: "OK", onPress: () => navigation.navigate("MyCart") }]
+        );
+      } else {
+        Alert.alert("Order Failed", errorMsg);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -271,7 +328,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             }}
           >
             <TouchableOpacity
-              activeOpacity={0.85}
+              activeOpacity={submitting ? 1 : 0.85}
+              disabled={submitting}
               onPress={handleContinuePayment}
               style={{
                 height: 52,
@@ -286,15 +344,19 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 elevation: 4,
               }}
             >
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 15,
-                  fontWeight: "700",
-                }}
-              >
-                Continue to Payment
-              </Text>
+              {submitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 15,
+                    fontWeight: "700",
+                  }}
+                >
+                  Continue to Payment
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
