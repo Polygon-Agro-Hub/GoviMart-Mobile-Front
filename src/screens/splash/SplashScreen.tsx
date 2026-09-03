@@ -8,7 +8,7 @@ import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
 
-const logo = require("@/assets/images/public/app-icon-android.png");
+const logo = require("@/assets/images/public/polygon-logo.png");
 
 type SplashNavigationProp = StackNavigationProp<RootStackParamList, "Splash">;
 

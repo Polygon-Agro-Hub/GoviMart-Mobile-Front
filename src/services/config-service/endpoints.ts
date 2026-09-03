@@ -63,4 +63,11 @@ export const ENDPOINTS = {
   PAYMENT: {
     PAYHERE_INITIATE: "api/payment/payhere/initiate",
   },
+
+  NOTIFICATION: {
+    GET_ALL: "api/notification",
+    MARK_READ: "api/notification/:id/read",
+    MARK_ALL_READ: "api/notification/read-all",
+    SEED_DUMMY: "api/notification/seed-dummy",
+  },
 };
