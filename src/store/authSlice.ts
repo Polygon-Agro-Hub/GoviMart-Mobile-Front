@@ -61,6 +61,18 @@ const authSlice = createSlice({
         state.userProfile.firstTimeUser = action.payload.firstTimeUser;
       }
     },
+    updateUserProfileImage: (state, action: PayloadAction<{ image: string }>) => {
+      if (state.userProfile) {
+        state.userProfile.image = action.payload.image;
+      }
+    },
+    updateUserProfile: (state, action: PayloadAction<Partial<UserProfile>>) => {
+      if (state.userProfile) {
+        state.userProfile = { ...state.userProfile, ...action.payload };
+      } else {
+        state.userProfile = action.payload as UserProfile;
+      }
+    },
   },
 });
 
@@ -69,6 +81,8 @@ export const {
   logoutSuccess,
   setRememberMeDetails,
   updateUserProfileFlag,
+  updateUserProfileImage,
+  updateUserProfile,
 } = authSlice.actions;
 
 export default authSlice.reducer;

@@ -6,6 +6,8 @@ import {
     ScrollView,
     ActivityIndicator,
     Alert,
+    Image,
+    SafeAreaView,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -14,6 +16,7 @@ import { useDispatch } from "react-redux";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { PaymentOptionCard } from "@/component/payment/PaymentOptionCard";
+import OrderSummary from "@/component/common/OrderSummary";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
@@ -84,14 +87,6 @@ const PaymentMethod: React.FC<Props> = ({
         fetchBalance();
     }, []);
 
-    // FORMAT MONEY
-    const formatAmount = (amount: number) => {
-        return amount.toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        });
-    };
-
     const creditUsed = useCredit
         ? Math.min(creditBalance, totalAmount)
         : 0;
@@ -101,17 +96,6 @@ const PaymentMethod: React.FC<Props> = ({
     const paymentAmount = useCredit
         ? remainingAfterCredit
         : totalAmount;
-
-    // DISPLAY PAYMENT METHOD
-    const getPaymentLabel = () => {
-        if (paymentMethod === "cash") {
-            return "Pay with Cash";
-        }
-
-        if (paymentMethod === "card") {
-            return "Pay with Card";
-        }
-    };
 
     // CONFIRM
     const handleConfirm = async () => {
@@ -169,6 +153,12 @@ const PaymentMethod: React.FC<Props> = ({
                     orderId: response.data.data.orderId,
                     invoiceNumber: response.data.data.invoiceNumber,
                     total: response.data.data.total,
+                    orderContext: {
+                        ...(orderContext as any),
+                        grandTotal: totalAmount,
+                        deliveryCharge: effectiveDeliveryCharge,
+                        discount: totalDiscountApplied,
+                    },
                 });
             } else {
                 Alert.alert("Order Failed", response.data.message || "Failed to create order. Please try again.");
@@ -192,13 +182,12 @@ const PaymentMethod: React.FC<Props> = ({
     };
 
     return (
-        <View
+        <SafeAreaView
             style={{
                 flex: 1,
                 backgroundColor: "#FFFFFF",
             }}
         >
-
             {/* HEADER */}
             <CustomHeader title="Select Payment Method" navigation={navigation} showBackButton />
 
@@ -206,7 +195,7 @@ const PaymentMethod: React.FC<Props> = ({
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                    paddingBottom: 180,
+                    paddingBottom: 340,
                 }}
             >
                 {/* ─── APPLY COUPON CARD ────────────────────────────────────────── */}
@@ -228,37 +217,37 @@ const PaymentMethod: React.FC<Props> = ({
                             marginTop: 14,
                             marginBottom: 6,
                             borderRadius: 20,
-                            borderWidth: 1.5,
-                            borderColor: "#B186EF",
-                            borderStyle: "dashed",
-                            backgroundColor: "#FCFAFD",
+                            borderWidth: 1,
+                            borderColor: "#BAC2C7",
+                            backgroundColor: "#FFFFFF",
                             paddingHorizontal: 16,
                             paddingVertical: 14,
                             flexDirection: "row",
                             alignItems: "center",
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.04,
+                            shadowRadius: 3,
+                            elevation: 1,
                         }}
                     >
-                        {/* Left Purple Icon */}
-                        <View
+                        {/* Left Coupon Image */}
+                        <Image
+                            source={require("@/assets/images/order/coupon.webp")}
                             style={{
                                 width: 44,
                                 height: 44,
-                                borderRadius: 14,
-                                backgroundColor: "#5B18AD",
-                                justifyContent: "center",
-                                alignItems: "center",
+                                resizeMode: "contain",
                                 marginRight: 14,
                             }}
-                        >
-                            <FontAwesome6 name="ticket" size={20} color="#FFFFFF" />
-                        </View>
+                        />
 
                         {/* Text Details */}
                         <View style={{ flex: 1 }}>
                             <Text
                                 style={{
-                                    fontSize: 15,
-                                    fontWeight: "800",
+                                    fontSize: 16,
+                                    fontWeight: "700",
                                     color: "#111111",
                                 }}
                             >
@@ -266,7 +255,7 @@ const PaymentMethod: React.FC<Props> = ({
                             </Text>
                             <Text
                                 style={{
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     color: "#6B7280",
                                     marginTop: 2,
                                     fontWeight: "400",
@@ -284,67 +273,14 @@ const PaymentMethod: React.FC<Props> = ({
                 <Text
                     style={{
                         textAlign: "center",
-                        color: "#5F6280",
-                        fontSize: 12,
-                        marginTop: 12,
-                        marginBottom: 14,
+                        color: "#6B7280",
+                        fontSize: 13,
+                        marginTop: 14,
+                        marginBottom: 16,
                     }}
                 >
                     Choose how you want to pay for this order.
                 </Text>
-
-                {/* TOTAL AMOUNT */}
-                <View
-                    style={{
-                        height: 36,
-                        marginBottom: 15,
-                        backgroundColor: "#F2F2F6",
-                        marginHorizontal: 15,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingHorizontal: 8,
-                        borderTopLeftRadius: 19,
-                        borderTopRightRadius: 19
-                    }}
-                >
-                    <View
-                        style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 10,
-                            backgroundColor: "#000",
-                            justifyContent: "center",
-                            alignItems: "center",
-                        }}
-                    >
-                        <Ionicons
-                            name="wallet"
-                            size={12}
-                            color="#FFF"
-                        />
-                    </View>
-
-                    <Text
-                        style={{
-                            flex: 1,
-                            marginLeft: 8,
-                            fontSize: 14,
-                            color: "#111111",
-                        }}
-                    >
-                        Total Amount
-                    </Text>
-
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            fontWeight: "800",
-                            color: "#000",
-                        }}
-                    >
-                        Rs. {formatAmount(totalAmount)}
-                    </Text>
-                </View>
 
                 {/* CREDIT BALANCE */}
                 {creditBalance > 0 && (
@@ -353,65 +289,44 @@ const PaymentMethod: React.FC<Props> = ({
                         onPress={() => setUseCredit(!useCredit)}
                         style={{
                             marginHorizontal: 15,
-                            minHeight: 120,
-
-                            borderWidth: 1,
-                            borderColor:
-                                useCredit
-                                    ? "#FF9114"
-                                    : "#DDE3E9",
-
-                            borderRadius: 18,
-
-                            paddingHorizontal: 15,
-                            paddingVertical: 12,
-
-                            backgroundColor:
-                                useCredit
-                                    ? "#FFF4E8"
-                                    : "#FFFFFF",
-
+                            minHeight: 110,
+                            borderWidth: 1.5,
+                            borderColor: useCredit ? "#FF9114" : "#E1E7EE",
+                            borderRadius: 20,
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            backgroundColor: useCredit ? "#FFF4E8" : "#FFFFFF",
                             shadowColor: "#000",
-                            shadowOffset: {
-                                width: 0,
-                                height: 2,
-                            },
-                            shadowOpacity:
-                                useCredit
-                                    ? 0.08
-                                    : 0.04,
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: useCredit ? 0.08 : 0.04,
                             shadowRadius: 4,
                             elevation: 2,
+                            marginBottom: 14,
                         }}
                     >
-                        {/* Recommended */}
-
+                        {/* Badge */}
                         <View
                             style={{
                                 position: "absolute",
-                                top: 9,
-                                left: 55,
-
-                                backgroundColor:
-                                    useCredit
-                                        ? "#34C759"
-                                        : "#000",
-
-                                borderRadius: 3,
-
-                                paddingHorizontal: 5,
+                                top: 12,
+                                left: 60,
+                                backgroundColor: useCredit ? "#34C759" : "#000000",
+                                borderRadius: 4,
+                                paddingHorizontal: 6,
                                 paddingVertical: 2,
                             }}
                         >
-                            <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
-                                <FontAwesome6 name={useCredit ? "check" : "star"}
+                            <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
+                                <FontAwesome6
+                                    name={useCredit ? "check" : "star"}
                                     solid
                                     size={10}
-                                    color="#FFF" />
+                                    color="#FFF"
+                                />
                                 <Text
                                     style={{
                                         color: "#FFF",
-                                        fontSize: 9,
+                                        fontSize: 10,
                                         fontWeight: "600",
                                     }}
                                 >
@@ -421,7 +336,6 @@ const PaymentMethod: React.FC<Props> = ({
                         </View>
 
                         {/* Check */}
-
                         <View
                             style={{
                                 position: "absolute",
@@ -440,105 +354,82 @@ const PaymentMethod: React.FC<Props> = ({
                             {useCredit && (
                                 <Ionicons
                                     name="checkmark"
-                                    size={12}
+                                    size={14}
                                     color="#FFF"
                                 />
                             )}
                         </View>
 
                         {/* Content */}
-
                         <View
                             style={{
                                 flexDirection: "row",
-                                marginTop: 28,
+                                marginTop: 26,
                             }}
                         >
                             {/* Credit Icon */}
-
                             <View
                                 style={{
-                                    width: 33,
-                                    height: 33,
-                                    borderRadius: 99,
-
-                                    backgroundColor:
-                                        useCredit
-                                            ? "#FF9114"
-                                            : "#FF9114",
-
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 20,
+                                    backgroundColor: "#FF9114",
                                     justifyContent: "center",
                                     alignItems: "center",
-
-                                    marginRight: 10,
+                                    marginRight: 12,
                                 }}
                             >
                                 <FontAwesome6
                                     name="wallet"
                                     solid
-                                    size={16}
+                                    size={18}
                                     color="#FFF"
                                 />
                             </View>
 
                             {/* Content */}
-
-                            <View
-                                style={{
-                                    flex: 1,
-                                }}
-                            >
+                            <View style={{ flex: 1, paddingRight: 20 }}>
                                 <Text
                                     style={{
-                                        fontSize: 13,
-                                        fontWeight: "800",
-                                        color: "#111",
+                                        fontSize: 15,
+                                        fontWeight: "700",
+                                        color: "#111111",
                                     }}
                                 >
                                     Use Credit Balance
                                 </Text>
 
-                                {/* Available Balance */}
-
                                 <Text
                                     style={{
-                                        fontSize: 12,
-                                        color: "#666",
-                                        marginTop: 5,
+                                        fontSize: 13,
+                                        color: "#6B7280",
+                                        marginTop: 4,
                                     }}
                                 >
                                     Available Balance :{" "}
                                     <Text
                                         style={{
-                                            color:
-                                                useCredit
-                                                    ? "#FF9114"
-                                                    : "#111111",
-
-                                            fontWeight: "800",
+                                            color: useCredit ? "#FF9114" : "#111111",
+                                            fontWeight: "700",
                                         }}
                                     >
                                         Rs.{" "}
-                                        {creditBalance.toLocaleString(
-                                            "en-US",
-                                            {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            }
-                                        )}
+                                        {creditBalance.toLocaleString("en-US", {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                        })}
                                     </Text>
                                 </Text>
 
                                 <Text
                                     style={{
-                                        fontSize: 10,
-                                        color: "#777",
-                                        lineHeight: 15,
-                                        marginTop: 5,
+                                        fontSize: 11.5,
+                                        color: "#6B7280",
+                                        lineHeight: 16,
+                                        marginTop: 4,
                                     }}
                                 >
-                                    Pay with your credit balance and pay
-                                    the rest with cash or card.
+                                    Pay with your credit balance and pay the rest with cash or card.
                                 </Text>
                             </View>
                         </View>
@@ -551,8 +442,8 @@ const PaymentMethod: React.FC<Props> = ({
                         flexDirection: "row",
                         alignItems: "center",
                         marginHorizontal: 19,
-                        marginTop: 28,
-                        marginBottom: 15,
+                        marginTop: 10,
+                        marginBottom: 16,
                     }}
                 >
                     <View
@@ -565,9 +456,10 @@ const PaymentMethod: React.FC<Props> = ({
 
                     <Text
                         style={{
-                            fontSize: 11,
-                            color: "#494A65",
-                            marginHorizontal: 7,
+                            fontSize: 12,
+                            fontWeight: "500",
+                            color: "#64748B",
+                            marginHorizontal: 10,
                         }}
                     >
                         Basic Payment Methods
@@ -577,7 +469,7 @@ const PaymentMethod: React.FC<Props> = ({
                         style={{
                             flex: 1,
                             height: 1,
-                            backgroundColor: "#E1E5E9",
+                            backgroundColor: "#E1E7EE",
                         }}
                     />
                 </View>
@@ -593,9 +485,9 @@ const PaymentMethod: React.FC<Props> = ({
                     onPress={() => setPaymentMethod("cash")}
                 />
 
-                {/* CARD */}
-                <View style={{ height: 13 }} /> {/*for gap creating*/}
+                <View style={{ height: 12 }} />
 
+                {/* CARD */}
                 <PaymentOptionCard
                     title="Pay with Card"
                     description="Pay the full amount using your card."
@@ -610,14 +502,11 @@ const PaymentMethod: React.FC<Props> = ({
                 <View
                     style={{
                         marginHorizontal: 15,
-                        marginTop: 22,
-
+                        marginTop: 20,
                         backgroundColor: "#EDFFF2",
-
-                        borderRadius: 17,
-
-                        paddingHorizontal: 12,
-                        paddingVertical: 11,
+                        borderRadius: 18,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
                     }}
                 >
                     <View
@@ -628,16 +517,16 @@ const PaymentMethod: React.FC<Props> = ({
                     >
                         <Ionicons
                             name="shield-checkmark"
-                            size={16}
+                            size={18}
                             color="#268343"
                         />
 
                         <Text
                             style={{
-                                fontSize: 12,
-                                fontWeight: "800",
+                                fontSize: 13,
+                                fontWeight: "700",
                                 color: "#268343",
-                                marginLeft: 5,
+                                marginLeft: 6,
                             }}
                         >
                             100% Secure Payments
@@ -646,258 +535,35 @@ const PaymentMethod: React.FC<Props> = ({
 
                     <Text
                         style={{
-                            fontSize: 9,
+                            fontSize: 11.5,
                             color: "#596B5E",
-                            lineHeight: 14,
+                            lineHeight: 16,
                             marginTop: 4,
                         }}
                     >
-                        Your payment information is safe with us
-                        and will be processed securely.
+                        Your payment information is safe with us and will be processed securely.
                     </Text>
                 </View>
             </ScrollView>
 
-            {/* BOTTOM PAYMENT SUMMARY */}
-            <View
-                style={{
+            {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
+            <OrderSummary
+                packageTotal={orderContext?.packageTotal || 0}
+                productTotal={orderContext?.productTotal || 0}
+                discount={(orderContext?.discount || 0) + couponDiscountAmount + deliveryFeeDiscount}
+                deliveryFee={effectiveDeliveryCharge}
+                grandTotal={totalAmount}
+                buttonText={submitting ? "Processing..." : "Confirm Payment Method"}
+                disabled={submitting}
+                onCheckout={handleConfirm}
+                containerStyle={{
                     position: "absolute",
+                    bottom: 0,
                     left: 0,
                     right: 0,
-                    bottom: 0,
-
-                    backgroundColor: "#FFFFFF",
-
-                    paddingTop: 12,
-                    paddingBottom: 10,
-                    paddingHorizontal: 14,
-
-                    borderTopWidth: 1,
-                    borderTopColor: "#EEEEEE",
-
-                    shadowColor: "#000",
-                    shadowOffset: {
-                        width: 0,
-                        height: -3,
-                    },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 7,
-
-                    elevation: 12,
+                    marginBottom: 0,
                 }}
-            >
-                {/* Selected payment */}
-                {useCredit && (
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginBottom: 8,
-                        }}
-                    >
-                        <FontAwesome6
-                            name="wallet"
-                            solid
-                            size={17}
-                            color="#000000"
-                        />
-
-                        <Text
-                            style={{
-                                flex: 1,
-                                marginLeft: 5,
-                                fontSize: 13,
-                                color: "#333",
-                            }}
-                        >
-                            Pay with Credit Balance
-                        </Text>
-
-                        <Text
-                            style={{
-                                fontSize: 13,
-                                fontWeight: "600",
-                                color: "#111111",
-                            }}
-                        >
-                            Rs.{" "}
-                            {creditUsed.toLocaleString("en-US", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                            })}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Coupon discount (if applied) */}
-                {appliedCoupon && (
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginBottom: 8,
-                        }}
-                    >
-                        <FontAwesome6
-                            name="ticket"
-                            solid
-                            size={14}
-                            color="#5B18AD"
-                        />
-                        <Text
-                            style={{
-                                flex: 1,
-                                fontSize: 13,
-                                color: "#5B18AD",
-                                marginLeft: 6,
-                                fontWeight: "600",
-                            }}
-                        >
-                            Coupon ({appliedCoupon.code})
-                        </Text>
-                        <Text
-                            style={{
-                                fontSize: 13,
-                                fontWeight: "700",
-                                color: "#5B18AD",
-                            }}
-                        >
-                            {appliedCoupon.isFreeDelivery
-                                ? "Free Delivery"
-                                : `- Rs. ${formatAmount(appliedCoupon.discount)}`}
-                        </Text>
-                    </View>
-                )}
-
-                <View
-                    style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingBottom: 10,
-                    }}
-                >
-                    <FontAwesome6
-                        name={
-                            paymentMethod === "cash"
-                                ? "money-bill-wave"
-                                : paymentMethod === "card"
-                                    ? "credit-card"
-                                    : "credit-card"
-                        }
-                        solid
-                        size={16}
-                        color="#111"
-                    />
-
-                    <Text
-                        style={{
-                            flex: 1,
-                            fontSize: 13,
-                            color: "#333",
-                            marginLeft: 5,
-                        }}
-                    >
-                        {getPaymentLabel()}
-                    </Text>
-
-                    <Text
-                        style={{
-                            fontSize: 13,
-                            fontWeight: "600",
-                            color: "#111",
-                        }}
-                    >
-                        Rs.{" "}
-                        {formatAmount(
-                            paymentAmount
-                        )}
-                    </Text>
-                </View>
-
-                {/* Divider */}
-
-                <View
-                    style={{
-                        height: 1,
-                        backgroundColor: "#EEEEEE",
-                        marginHorizontal: -14,
-                    }}
-                />
-
-                {/* Total */}
-
-                <View
-                    style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 10,
-                    }}
-                >
-                    <Text
-                        style={{
-                            flex: 1,
-                            fontSize: 13,
-                            color: "#111",
-                            fontWeight: "500",
-                        }}
-                    >
-                        Total
-                    </Text>
-
-                    <Text
-                        style={{
-                            fontSize: 13,
-                            color: "#111",
-                            fontWeight: "800",
-                        }}
-                    >
-                        Rs.{" "}
-                        {formatAmount(totalAmount)}
-                    </Text>
-                </View>
-
-                {/* Confirm Button */}
-
-                <TouchableOpacity
-                    activeOpacity={submitting ? 1 : 0.85}
-                    disabled={submitting}
-                    onPress={handleConfirm}
-                    style={{
-                        height: 48,
-
-                        backgroundColor: "#000",
-
-                        borderRadius: 25,
-
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 3,
-                        },
-                        shadowOpacity: 0.18,
-                        shadowRadius: 5,
-
-                        elevation: 5,
-                    }}
-                >
-                    {submitting ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                        <Text
-                            style={{
-                                color: "#FFFFFF",
-                                fontSize: 15,
-                                fontWeight: "800",
-                            }}
-                        >
-                            Confirm Payment Method
-                        </Text>
-                    )}
-                </TouchableOpacity>
-            </View>
+            />
 
             {/* ─── COUPON MODAL ──────────────────────────────────────────────── */}
             <CouponModal
@@ -910,7 +576,7 @@ const PaymentMethod: React.FC<Props> = ({
                 cartTotal={(orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)}
                 cartId={orderContext?.cartId}
             />
-        </View>
+        </SafeAreaView>
     );
 };
 

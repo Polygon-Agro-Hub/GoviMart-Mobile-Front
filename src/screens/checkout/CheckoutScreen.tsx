@@ -14,7 +14,9 @@ import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList, SavedAddress } from "@/types/types";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
-import NoDataFound from "@/component/common/NoDataFound";
+import LottieView from "lottie-react-native";
+import CustomHeader from "@/component/common/CustomHeader";
+import OrderSummary from "@/component/common/OrderSummary";
 
 type CheckoutScreenNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -216,48 +218,12 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
             {/* ─── HEADER ──────────────────────────────────────────────────────── */}
-            <View
-                style={{
-                    height: 56,
-                    paddingHorizontal: 16,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
-                }}
-            >
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => navigation.goBack()}
-                    style={{
-                        position: "absolute",
-                        left: 16,
-                        width: 42,
-                        height: 42,
-                        borderRadius: 21,
-                        backgroundColor: "#FFFFFF",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.1,
-                        shadowRadius: 3,
-                        elevation: 2,
-                    }}
-                >
-                    <Ionicons name="chevron-back" size={24} color="#000" />
-                </TouchableOpacity>
-
-                <Text
-                    style={{
-                        fontSize: 17,
-                        fontWeight: "700",
-                        color: "#111111",
-                    }}
-                >
-                    Checkout
-                </Text>
-            </View>
+            <CustomHeader
+                title="Checkout"
+                titleColor="black"
+                showBackButton={true}
+                navigation={navigation}
+            />
 
             {/* ─── CONTENT ─────────────────────────────────────────────────────── */}
             <ScrollView
@@ -271,14 +237,16 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                 {/* Add New Address Card */}
                 <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={() => navigation.navigate("AddNewAddress")}
+                    onPress={() => navigation.navigate("AddNewAddress", { fromCheckout: true })}
                     style={{
+                        height: 67,
+                        borderRadius: 40,
                         backgroundColor: "#FFF5EA",
-                        borderRadius: 28,
-                        paddingVertical: 14,
-                        paddingHorizontal: 16,
                         flexDirection: "row",
                         alignItems: "center",
+                        paddingHorizontal: 11,
+                        borderWidth: 1,
+                        borderColor: "#FFE0B2",
                     }}
                 >
                     <View
@@ -289,34 +257,35 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                             backgroundColor: "#000000",
                             justifyContent: "center",
                             alignItems: "center",
-                            marginRight: 12,
                         }}
                     >
                         <Ionicons name="add" size={22} color="#FFFFFF" />
                     </View>
 
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
                         <Text
                             style={{
                                 fontSize: 14,
                                 fontWeight: "700",
                                 color: "#111111",
+                                lineHeight: 19,
+                                marginBottom: 4,
                             }}
                         >
                             Add New Address
                         </Text>
                         <Text
                             style={{
-                                fontSize: 11,
+                                fontSize: 14,
+                                lineHeight: 18,
                                 color: "#666A7D",
-                                marginTop: 2,
                             }}
                         >
                             Save your delivery information
                         </Text>
                     </View>
 
-                    <Ionicons name="chevron-forward" size={20} color="#111111" />
+                    <Ionicons name="chevron-forward" size={20} color="#111111" style={{ marginRight: 6 }} />
                 </TouchableOpacity>
 
                 {/* Section Title */}
@@ -329,7 +298,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                         marginBottom: 12,
                     }}
                 >
-                    Saved Addresses ({addresses.length.toString().padStart(2, "0")})
+                    Saved Addresses ({addresses.length === 0 ? "0" : addresses.length.toString().padStart(2, "0")})
                 </Text>
 
                 {/* Addresses List or Empty State */}
@@ -338,7 +307,17 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                         <ActivityIndicator size="small" color="#000000" />
                     </View>
                 ) : addresses.length === 0 ? (
-                    <NoDataFound message="No saved addresses" containerStyle={{ paddingVertical: 40 }} />
+                    <View style={{ paddingVertical: 40, alignItems: "center", justifyContent: "center" }}>
+                        <LottieView
+                            source={require("@/assets/json/address/no-address.json")}
+                            style={{ width: 180, height: 180 }}
+                            autoPlay
+                            loop
+                        />
+                        <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
+                            No saved addresses
+                        </Text>
+                    </View>
                 ) : (
                     addresses.map((item) => {
                         const isSelected = selectedAddressId === item.id;
@@ -372,8 +351,8 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                 >
                                     <Text
                                         style={{
-                                            fontSize: 14,
-                                            fontWeight: "800",
+                                            fontSize: 16,
+                                            fontWeight: "700",
                                             color: "#111111",
                                         }}
                                     >
@@ -403,18 +382,18 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                     style={{
                                         flexDirection: "row",
                                         alignItems: "center",
-                                        marginBottom: 6,
+                                        marginBottom: 7,
                                     }}
                                 >
                                     <Ionicons
                                         name="person"
-                                        size={13}
+                                        size={15}
                                         color="#333333"
-                                        style={{ width: 18 }}
+                                        style={{ width: 20 }}
                                     />
                                     <Text
                                         style={{
-                                            fontSize: 12,
+                                            fontSize: 14,
                                             fontWeight: "600",
                                             color: "#222222",
                                         }}
@@ -428,21 +407,21 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                     style={{
                                         flexDirection: "row",
                                         alignItems: "flex-start",
-                                        marginBottom: 6,
+                                        marginBottom: 7,
                                     }}
                                 >
                                     <Ionicons
                                         name="location"
-                                        size={14}
+                                        size={16}
                                         color="#333333"
-                                        style={{ width: 18, marginTop: 1 }}
+                                        style={{ width: 20, marginTop: 1 }}
                                     />
                                     <Text
                                         style={{
                                             flex: 1,
-                                            fontSize: 11,
-                                            color: "#555555",
-                                            lineHeight: 16,
+                                            fontSize: 13.5,
+                                            color: "#4A4D57",
+                                            lineHeight: 19,
                                         }}
                                     >
                                         {item.address}
@@ -459,14 +438,14 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                 >
                                     <Ionicons
                                         name="call"
-                                        size={13}
+                                        size={15}
                                         color="#333333"
-                                        style={{ width: 18 }}
+                                        style={{ width: 20 }}
                                     />
                                     <Text
                                         style={{
-                                            fontSize: 11,
-                                            color: "#555555",
+                                            fontSize: 13.5,
+                                            color: "#4A4D57",
                                         }}
                                     >
                                         {item.phone}
@@ -505,13 +484,13 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
                                 >
                                     <FontAwesome6
                                         name="map-location-dot"
-                                        size={15}
+                                        size={16}
                                         color="#111111"
                                         style={{ marginRight: 6 }}
                                     />
                                     <Text
                                         style={{
-                                            fontSize: 11,
+                                            fontSize: 13,
                                             fontWeight: "600",
                                             color: "#111111",
                                         }}
@@ -526,125 +505,22 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
-            <View
-                style={{
+            <OrderSummary
+                packageTotal={orderContext?.packageTotal || 0}
+                productTotal={orderContext?.productTotal || 0}
+                discount={orderContext?.discount || 0}
+                grandTotal={orderContext?.grandTotal || 0}
+                buttonText="Proceed to Checkout"
+                disabled={!selectedAddressId}
+                onCheckout={handleProceed}
+                containerStyle={{
                     position: "absolute",
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    backgroundColor: "#FFFFFF",
-                    borderTopLeftRadius: 20,
-                    borderTopRightRadius: 20,
-                    paddingHorizontal: 18,
-                    paddingTop: 16,
-                    paddingBottom: 20,
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: -3 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 6,
-                    elevation: 10,
+                    marginBottom: 0,
                 }}
-            >
-                {/* For Packages (if any) */}
-                {Boolean(orderContext && orderContext.packageTotal > 0) ? (
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            marginBottom: 8,
-                        }}
-                    >
-                        <Text style={{ fontSize: 13, color: "#333333" }}>
-                            For Packages
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#111111" }}>
-                            Rs. {formatAmount(orderContext?.packageTotal || 0)}
-                        </Text>
-                    </View>
-                ) : null}
-
-                {/* Ala Carte Items (if any) */}
-                {Boolean(orderContext && orderContext.productTotal > 0) ? (
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            marginBottom: 8,
-                        }}
-                    >
-                        <Text style={{ fontSize: 13, color: "#333333" }}>
-                            Ala Carte Items
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#111111" }}>
-                            Rs. {formatAmount(orderContext?.productTotal || 0)}
-                        </Text>
-                    </View>
-                ) : null}
-
-                {/* Discount (if any) */}
-                {Boolean(orderContext && orderContext.discount > 0) ? (
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            marginBottom: 8,
-                        }}
-                    >
-                        <Text style={{ fontSize: 13, color: "#333333" }}>
-                            Discount
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#FF383C" }}>
-                            - Rs. {formatAmount(orderContext?.discount || 0)}
-                        </Text>
-                    </View>
-                ) : null}
-
-                {/* Total */}
-                <View
-                    style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        marginBottom: 16,
-                        marginTop: 2,
-                    }}
-                >
-                    <Text style={{ fontSize: 15, fontWeight: "800", color: "#111111" }}>
-                        Total
-                    </Text>
-                    <Text style={{ fontSize: 15, fontWeight: "800", color: "#111111" }}>
-                        Rs. {formatAmount(orderContext?.grandTotal || 0)}
-                    </Text>
-                </View>
-
-                {/* Button */}
-                <TouchableOpacity
-                    activeOpacity={selectedAddressId ? 0.85 : 1}
-                    disabled={!selectedAddressId}
-                    onPress={handleProceed}
-                    style={{
-                        height: 50,
-                        borderRadius: 25,
-                        backgroundColor: selectedAddressId ? "#000000" : "#8799A3",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: selectedAddressId ? 0.2 : 0,
-                        shadowRadius: 4,
-                        elevation: selectedAddressId ? 4 : 0,
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
-                            fontSize: 15,
-                            fontWeight: "800",
-                        }}
-                    >
-                        Proceed to Checkout
-                    </Text>
-                </TouchableOpacity>
-            </View>
+            />
         </SafeAreaView>
     );
 };

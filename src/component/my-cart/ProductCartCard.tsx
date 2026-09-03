@@ -43,7 +43,7 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
         });
 
     const activeColor = isUnavailable ? "#FF383C" : "#111";
-    const borderColor = isUnavailable ? "#FF383C" : "#E9E9E9";
+    const borderColor = isUnavailable ? "#FF383C" : "#E1E7EE";
 
     return (
         <View
@@ -52,16 +52,8 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
                 borderRadius: 20,
                 padding: 20,
                 marginBottom: 14,
-                borderWidth: 1.5,
+                borderWidth: 1,
                 borderColor: borderColor,
-                shadowColor: "#000",
-                shadowOpacity: 0.05,
-                shadowRadius: 6,
-                shadowOffset: {
-                    width: 0,
-                    height: 2,
-                },
-                elevation: 2,
             }}
         >
             {/* Top */}
@@ -116,17 +108,13 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
                         backgroundColor: "#FFF",
                         justifyContent: "center",
                         alignItems: "center",
-                        borderWidth: isUnavailable ? 1 : 0,
-                        borderColor: isUnavailable ? "#FF383C" : "transparent",
-                        shadowColor: "#000",
-                        shadowOpacity: 0.08,
-                        shadowRadius: 4,
-                        elevation: 2,
+                        borderWidth: 1,
+                        borderColor: isUnavailable ? "#FF383C" : "#E1E7EE",
                     }}
                 >
                     <FontAwesome6
                         name="trash"
-                        size={16}
+                        size={15}
                         color={isUnavailable ? "#FF383C" : "#000"}
                     />
                 </TouchableOpacity>
@@ -149,7 +137,7 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
                                 style={{
                                     width: 4,
                                     height: 1,
-                                    backgroundColor: isUnavailable ? "#FF383C" : "#D9D9D9",
+                                    backgroundColor: isUnavailable ? "#FF383C" : "#E1E7EE",
                                     marginRight: 4,
                                 }}
                             />
@@ -235,63 +223,79 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
 
                     <View style={{ flex: 1 }} />
 
-                    {/* Minus */}
-                    {!isMinimum ? (
-                        <TouchableOpacity
-                            disabled={isMinimum}
-                            onPress={() => onDecrease(item.id)}
-                            style={{
-                                width: 30,
-                                height: 30,
-                                borderRadius: 15,
-                                backgroundColor: isMinimum ? "#D9D9D9" : "#000",
-                                justifyContent: "center",
-                                alignItems: "center",
-                            }}
-                        >
-                            <Ionicons name="remove" size={18} color="#FFF" />
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            disabled={isMinimum}
-                            onPress={() => onDecrease(item.id)}
-                            style={{
-                                width: 30,
-                                height: 30,
-                                borderRadius: 15,
-                                backgroundColor: isMinimum ? "#D9D9D9" : "#000",
-                                justifyContent: "center",
-                                alignItems: "center",
-                            }}
-                        >
-                            <FontAwesome6 name="trash" size={17} color="#FFF" />
-                        </TouchableOpacity>
-                    )}
-
-                    <Text
+                    {/* Stepper with #F3F3F3 background */}
+                    <View
                         style={{
-                            width: 60,
-                            textAlign: "center",
-                            fontWeight: "600",
-                        }}
-                    >
-                        {item.weight} {item.unit}
-                    </Text>
-
-                    {/* Plus */}
-                    <TouchableOpacity
-                        onPress={() => onIncrease(item.id)}
-                        style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 15,
-                            backgroundColor: "#000",
-                            justifyContent: "center",
+                            flexDirection: "row",
                             alignItems: "center",
+                            backgroundColor: "#F3F3F3",
+                            borderRadius: 20,
+                            paddingHorizontal: 4,
+                            paddingVertical: 4,
                         }}
                     >
-                        <Ionicons name="add" size={18} color="#FFF" />
-                    </TouchableOpacity>
+                        {/* Minus / Trash */}
+                        {!isMinimum ? (
+                            <TouchableOpacity
+                                onPress={() => onDecrease(item.id)}
+                                activeOpacity={0.8}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: "#000",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Ionicons name="remove" size={16} color="#FFF" />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={() => onDecrease(item.id)}
+                                activeOpacity={0.8}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: "#D9D9D9",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <FontAwesome6 name="trash" size={13} color="#FFF" />
+                            </TouchableOpacity>
+                        )}
+
+                        <Text
+                            style={{
+                                minWidth: 44,
+                                textAlign: "center",
+                                fontWeight: "700",
+                                fontSize: 14,
+                                color: "#111",
+                                paddingHorizontal: 8,
+                            }}
+                        >
+                            {item.weight} {item.unit}
+                        </Text>
+
+                        {/* Plus */}
+                        <TouchableOpacity
+                            onPress={() => onIncrease(item.id)}
+                            activeOpacity={0.8}
+                            style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: "#000",
+                                justifyContent: "center",
+                                alignItems: "center",
+                            }}
+                        >
+                            <Ionicons name="add" size={18} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
         </View>

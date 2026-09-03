@@ -52,6 +52,11 @@ class OrderService {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CHECK_COUPON, payload, { headers });
     }
+
+    async getInvoice(orderId: string | number) {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_INVOICE.replace(":orderId", String(orderId)), { headers });
+    }
 }
 
 export default new OrderService();

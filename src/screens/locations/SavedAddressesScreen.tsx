@@ -184,57 +184,53 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                     <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={() => {
-                            console.log("Add new address");
                             navigation.navigate("AddNewAddress");
                         }}
                         style={{
-                            height: 58,
-                            borderRadius: 30,
-
+                            height: 67,
+                            borderRadius: 40,
                             backgroundColor: "#FFF5EA",
-
                             flexDirection: "row",
                             alignItems: "center",
-
-                            paddingHorizontal: 10,
-
+                            paddingHorizontal: 11,
                             marginBottom: 16,
+                            borderWidth: 1,
+                            borderColor: "#FFE0B2",
                         }}
                     >
                         {/* Plus Circle */}
-
                         <View
                             style={{
-                                width: 38,
-                                height: 38,
-                                borderRadius: 19,
-
-
+                                width: 36,
+                                height: 36,
+                                borderRadius: 18,
+                                backgroundColor: "#000000",
                                 justifyContent: "center",
                                 alignItems: "center",
-
                             }}
                         >
-                            <FontAwesome6
-                                name="circle-plus"
-                                size={30}
-                                color="#0000"
+                            <Ionicons
+                                name="add"
+                                size={22}
+                                color="#FFFFFF"
                             />
                         </View>
 
                         {/* Text */}
-
                         <View
                             style={{
                                 flex: 1,
                                 marginLeft: 10,
+                                justifyContent: "center",
                             }}
                         >
                             <Text
                                 style={{
-                                    fontSize: 15,
-                                    fontWeight: "800",
-                                    color: "#111",
+                                    fontSize: 14,
+                                    fontWeight: "700",
+                                    color: "#111111",
+                                    lineHeight: 19,
+                                    marginBottom: 4,
                                 }}
                             >
                                 Add New Address
@@ -243,8 +239,8 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                             <Text
                                 style={{
                                     fontSize: 14,
-                                    color: "#494A65",
-                                    marginTop: 2,
+                                    lineHeight: 18,
+                                    color: "#666A7D",
                                 }}
                             >
                                 Save your delivery information
@@ -252,11 +248,11 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                         </View>
 
                         {/* Arrow */}
-
                         <Ionicons
                             name="chevron-forward"
-                            size={22}
-                            color="#111"
+                            size={20}
+                            color="#111111"
+                            style={{ marginRight: 6 }}
                         />
                     </TouchableOpacity>
 
@@ -306,10 +302,10 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                     <Text
                                         style={{
-                                            fontSize: 15,
-                                            fontWeight: "800",
-                                            color: "#111",
-                                            marginBottom: 7,
+                                            fontSize: 16,
+                                            fontWeight: "700",
+                                            color: "#111111",
+                                            marginBottom: 8,
                                         }}
                                     >
                                         {item.title}
@@ -321,7 +317,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                                         style={{
                                             flexDirection: "row",
                                             alignItems: "center",
-                                            marginBottom: 6,
+                                            marginBottom: 7,
                                         }}
                                     >
                                         <FontAwesome6
@@ -333,10 +329,10 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                         <Text
                                             style={{
-                                                marginLeft: 7,
-                                                fontSize: 13,
+                                                marginLeft: 8,
+                                                fontSize: 14,
                                                 fontWeight: "600",
-                                                color: "#111",
+                                                color: "#222222",
                                             }}
                                         >
                                             {item.name}
@@ -349,22 +345,23 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                                         style={{
                                             flexDirection: "row",
                                             alignItems: "flex-start",
-                                            marginBottom: 6,
+                                            marginBottom: 7,
                                         }}
                                     >
                                         <FontAwesome6
                                             name="location-dot"
                                             size={15}
                                             color="#000"
+                                            style={{ marginTop: 2 }}
                                         />
 
                                         <Text
                                             style={{
                                                 flex: 1,
-                                                marginLeft: 7,
-                                                fontSize: 13,
-                                                lineHeight: 16,
-                                                color: "#555A72",
+                                                marginLeft: 8,
+                                                fontSize: 13.5,
+                                                lineHeight: 19,
+                                                color: "#4A4D57",
                                             }}
                                         >
                                             {item.address}
@@ -387,9 +384,9 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                         <Text
                                             style={{
-                                                marginLeft: 7,
-                                                fontSize: 13,
-                                                color: "#555A72",
+                                                marginLeft: 8,
+                                                fontSize: 13.5,
+                                                color: "#4A4D57",
                                             }}
                                         >
                                             {item.phone}
@@ -401,7 +398,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                 <View
                                     style={{
-                                        height: 30,
+                                        height: 36,
 
                                         borderTopWidth: 1,
                                         borderTopColor: "#E8EBEF",
@@ -432,9 +429,10 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 13,
+                                                fontWeight: "600",
                                                 color: "#111",
-                                                marginLeft: 7,
+                                                marginLeft: 6,
                                             }}
                                         >
                                             View
@@ -473,9 +471,10 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 13,
+                                                fontWeight: "600",
                                                 color: "#111",
-                                                marginLeft: 7,
+                                                marginLeft: 6,
                                             }}
                                         >
                                             Edit
@@ -514,9 +513,10 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 13,
+                                                fontWeight: "600",
                                                 color: "#111",
-                                                marginLeft: 7,
+                                                marginLeft: 6,
                                             }}
                                         >
                                             Delete

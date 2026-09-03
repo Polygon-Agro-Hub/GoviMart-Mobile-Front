@@ -21,6 +21,7 @@ export const ENDPOINTS = {
     VERIFY_PHONE_CHANGE_OTP: "api/customer/verify-phone-change-otp",
     RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
     UPDATE_CREDIT_BALANCE: "api/customer/update-credit-balance",
+    UPLOAD_PROFILE_IMAGE: "api/customer/upload-profile-image",
   },
 
   COMPLAINT: {
@@ -57,9 +58,17 @@ export const ENDPOINTS = {
     GET_DELIVERY_CITIES: "api/order/delivery-cities",
     GET_COUPONS: "api/order/coupons",
     CHECK_COUPON: "api/order/check-coupon",
+    GET_INVOICE: "api/order/invoice/:orderId",
   },
 
   PAYMENT: {
     PAYHERE_INITIATE: "api/payment/payhere/initiate",
+  },
+
+  NOTIFICATION: {
+    GET_ALL: "api/notification",
+    MARK_READ: "api/notification/:id/read",
+    MARK_ALL_READ: "api/notification/read-all",
+    SEED_DUMMY: "api/notification/seed-dummy",
   },
 };
