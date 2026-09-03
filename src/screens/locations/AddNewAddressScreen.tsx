@@ -39,7 +39,7 @@ interface CityResult {
 const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
   const [saveAddressAs, setSaveAddressAs] = useState("");
   const [title, setTitle] = useState("Mr");
-  const [titleOpen, setTitleOpen] = useState(false);
+  const [isTitleModalOpen, setIsTitleModalOpen] = useState(false);
   const [billingName, setBillingName] = useState("");
   const [mobileNumber1, setMobileNumber1] = useState("");
   const [mobileNumber2, setMobileNumber2] = useState("");
@@ -54,7 +54,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
   const [floorNo, setFloorNo] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [buildingTypeOpen, setBuildingTypeOpen] = useState(false);
+  const [isBuildingTypeModalOpen, setIsBuildingTypeModalOpen] = useState(false);
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [allCities, setAllCities] = useState<CityResult[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
@@ -461,10 +461,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
                 icon="user"
                 label="Title"
                 value={title}
-                open={titleOpen}
-                setOpen={setTitleOpen}
-                options={titleOptions}
-                onSelect={handleSelectTitle}
+                onPress={() => setIsTitleModalOpen(true)}
                 error={titleError}
               />
             </View>
@@ -516,10 +513,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
             icon="building"
             label="Building Type"
             value={buildingType}
-            open={buildingTypeOpen}
-            setOpen={setBuildingTypeOpen}
-            options={buildingTypes}
-            onSelect={handleSelectBuildingType}
+            onPress={() => setIsBuildingTypeModalOpen(true)}
             error={buildingTypeError}
           />
 
@@ -722,6 +716,42 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* TITLE MODAL */}
+      <GlobalSearchModal
+        visible={isTitleModalOpen}
+        onClose={() => setIsTitleModalOpen(false)}
+        title="Select Title"
+        searchPlaceholder="Search title..."
+        noResultsText="No titles found"
+        data={titleOptions.map((t) => ({ label: t, value: t }))}
+        selectedItems={title ? [title] : []}
+        onSelect={(items) => {
+          if (items && items[0]) {
+            handleSelectTitle(items[0]);
+          }
+          setIsTitleModalOpen(false);
+        }}
+        searchKeys={["label"]}
+      />
+
+      {/* BUILDING TYPE MODAL */}
+      <GlobalSearchModal
+        visible={isBuildingTypeModalOpen}
+        onClose={() => setIsBuildingTypeModalOpen(false)}
+        title="Select Building Type"
+        searchPlaceholder="Search building type..."
+        noResultsText="No building types found"
+        data={buildingTypes.map((b) => ({ label: b, value: b }))}
+        selectedItems={buildingType ? [buildingType] : []}
+        onSelect={(items) => {
+          if (items && items[0]) {
+            handleSelectBuildingType(items[0]);
+          }
+          setIsBuildingTypeModalOpen(false);
+        }}
+        searchKeys={["label"]}
+      />
 
       {/* CITY SEARCH MODAL */}
       <GlobalSearchModal
