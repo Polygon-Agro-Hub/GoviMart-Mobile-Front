@@ -37,8 +37,10 @@ import {
   PackageCartItem,
   CartState,
 } from "@/store/cartSlice";
+import { updateUserProfile } from "@/store/authSlice";
 import cartService from "@/services/cart/cart.service";
-
+import customerService from "@/services/customer/customer.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import HomeHeader from "@/component/home/HomeHeader";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
@@ -321,6 +323,34 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
+      const syncUserProfile = async () => {
+        try {
+          const response = await customerService.getAccountDetails();
+          if (response.data && response.data.data) {
+            const data = response.data.data;
+            const updatedProfile = {
+              firstName: data.firstName || userProfile?.firstName || "",
+              lastName: data.lastName || userProfile?.lastName || "",
+              title: data.title || userProfile?.title,
+              image: data.image !== undefined ? data.image : userProfile?.image,
+              buyerType: data.buyerType || userProfile?.buyerType || "Retail",
+              email: data.email || userProfile?.email || "",
+              phoneNumber: data.phoneNumber || userProfile?.phoneNumber || "",
+              firstTimeUser: userProfile?.firstTimeUser ?? 0,
+              id: data.id || userProfile?.id,
+            };
+            dispatch(updateUserProfile(updatedProfile));
+            await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
+          }
+        } catch (error) {
+          // silently handle if offline or unauthenticated
+        }
+      };
+
+      if (userToken) {
+        syncUserProfile();
+      }
+
       const onBackPress = () => {
         if (backPressedOnce.current) {
           BackHandler.exitApp();
@@ -345,7 +375,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       );
 
       return () => subscription.remove();
-    }, []),
+    }, [userToken, userProfile]),
   );
 
   const fetchBanners = async () => {
