@@ -83,7 +83,7 @@ export type RootStackParamList = {
   PackageConfirmation: { orderContext?: OrderContext } | undefined;
   SavedAddresses: undefined;
   EditAddress: { address: SavedAddress };
-  AddNewAddress: undefined;
+  AddNewAddress: { fromCheckout?: boolean } | undefined;
   ReportComplaint: undefined;
   ComplaintHistory: undefined;
   ViewComplaint: { id: number } | undefined;

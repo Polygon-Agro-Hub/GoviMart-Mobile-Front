@@ -18,6 +18,7 @@ import CustomCalendarModal, {
     getMinDeliveryDate,
 } from "@/component/common/CustomCalendarModal";
 import CustomHeader from "@/component/common/CustomHeader";
+import OrderSummary from "@/component/common/OrderSummary";
 
 type ScheduleOrderNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -285,185 +286,23 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
-            <View
-                style={{
+            <OrderSummary
+                packageTotal={orderContext?.packageTotal || 0}
+                productTotal={orderContext?.productTotal || 0}
+                discount={orderContext?.discount || 0}
+                deliveryFee={deliveryFee}
+                grandTotal={finalTotal}
+                buttonText="Proceed to Payment"
+                disabled={!isReady}
+                onCheckout={handleProceed}
+                containerStyle={{
                     position: "absolute",
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    backgroundColor: "#FFFFFF",
-                    borderTopLeftRadius: 28,
-                    borderTopRightRadius: 28,
-                    paddingHorizontal: 20,
-                    paddingTop: 22,
-                    paddingBottom: Platform.OS === "ios" ? 34 : 28,
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: -3 },
-                    shadowOpacity: 0.12,
-                    shadowRadius: 8,
-                    elevation: 15,
+                    marginBottom: 0,
                 }}
-            >
-                {/* For Packages (if any) */}
-                {Boolean(orderContext && orderContext.packageTotal > 0) && (
-                    <>
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                paddingVertical: 2,
-                            }}
-                        >
-                            <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
-                                For Packages
-                            </Text>
-                            <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
-                                Rs. {formatAmount(orderContext?.packageTotal || 0)}
-                            </Text>
-                        </View>
-
-                        <View
-                            style={{
-                                height: 1,
-                                backgroundColor: "#E1E7EE",
-                                marginVertical: 14,
-                            }}
-                        />
-                    </>
-                )}
-
-                {/* Ala Carte Items (if any) */}
-                {Boolean(orderContext && orderContext.productTotal > 0) && (
-                    <>
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                paddingVertical: 2,
-                            }}
-                        >
-                            <Text style={{ fontSize: 14, fontWeight: "400", color: "#000000" }}>
-                                Ala Carte Items
-                            </Text>
-                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#000000" }}>
-                                Rs. {formatAmount(orderContext?.productTotal || 0)}
-                            </Text>
-                        </View>
-
-                        <View
-                            style={{
-                                height: 1,
-                                backgroundColor: "#E1E7EE",
-                                marginVertical: 14,
-                            }}
-                        />
-                    </>
-                )}
-
-                {/* Discount (if any) */}
-                {Boolean(orderContext && orderContext.discount > 0) && (
-                    <>
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                paddingVertical: 2,
-                            }}
-                        >
-                            <Text style={{ fontSize: 14, fontWeight: "400", color: "#000000" }}>
-                                Discount
-                            </Text>
-                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#000000" }}>
-                                - Rs. {formatAmount(orderContext?.discount || 0)}
-                            </Text>
-                        </View>
-
-                        <View
-                            style={{
-                                height: 1,
-                                backgroundColor: "#E1E7EE",
-                                marginVertical: 14,
-                            }}
-                        />
-                    </>
-                )}
-
-                {/* Delivery Fee */}
-                <View
-                    style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingVertical: 2,
-                    }}
-                >
-                    <Text style={{ fontSize: 14, fontWeight: "400", color: "#000000" }}>
-                        Delivery Fee
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#000000" }}>
-                        {deliveryFee > 0 ? `+ Rs. ${formatAmount(deliveryFee)}` : "Free"}
-                    </Text>
-                </View>
-
-                {/* HR before Total */}
-                <View
-                    style={{
-                        height: 1,
-                        backgroundColor: "#E1E7EE",
-                        marginVertical: 14,
-                    }}
-                />
-
-                {/* Total */}
-                <View
-                    style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingVertical: 2,
-                        marginBottom: 20,
-                    }}
-                >
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#000000" }}>
-                        Total
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#000000" }}>
-                        Rs. {formatAmount(finalTotal)}
-                    </Text>
-                </View>
-
-                {/* Button */}
-                <TouchableOpacity
-                    activeOpacity={isReady ? 0.85 : 1}
-                    disabled={!isReady}
-                    onPress={handleProceed}
-                    style={{
-                        height: 54,
-                        borderRadius: 30,
-                        backgroundColor: isReady ? "#000000" : "#8799A3",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: isReady ? 0.15 : 0,
-                        shadowRadius: 6,
-                        elevation: isReady ? 5 : 0,
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
-                            fontSize: 14,
-                            fontWeight: "700",
-                        }}
-                    >
-                        Proceed to Payment
-                    </Text>
-                </TouchableOpacity>
-            </View>
+            />
 
             {/* ─── POPUP: SCHEDULE TYPE ─────────────────────────────────────── */}
             <GlobalSearchModal

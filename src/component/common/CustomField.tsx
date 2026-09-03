@@ -165,7 +165,8 @@ export const DropdownField = ({
     options,
     onSelect,
     highlighted = false,
-    error
+    error,
+    placeholder = "Select From Here",
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -175,7 +176,8 @@ export const DropdownField = ({
     options: string[];
     onSelect: (value: string) => void;
     highlighted?: boolean;
-    error?: string
+    error?: string;
+    placeholder?: string;
 }) => {
     return (
         <View
@@ -214,7 +216,7 @@ export const DropdownField = ({
                         name={icon}
                         solid
                         size={17}
-                        color="#0000"
+                        color="#000000"
                     />
                 </View>
 
@@ -242,11 +244,11 @@ export const DropdownField = ({
                         style={{
                             fontSize: 14,
                             lineHeight: 18,
-                            color: "#111",
-                            fontWeight: "500",
+                            color: value ? "#111" : "#9CA3AF",
+                            fontWeight: value ? "500" : "400",
                         }}
                     >
-                        {value}
+                        {value || placeholder}
                     </Text>
                 </View>
 

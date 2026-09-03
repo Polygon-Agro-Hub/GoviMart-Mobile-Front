@@ -216,12 +216,12 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                     paddingVertical: 4,
                   }}
                 >
-                  <Ionicons name="calendar-outline" size={12} color="#D97706" />
+                  <Ionicons name="calendar-outline" size={12} color="#000000" />
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: "600",
-                      color: "#92400E",
+                      color: "#000000",
                       marginLeft: 4,
                     }}
                   >
@@ -239,12 +239,12 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                     paddingVertical: 4,
                   }}
                 >
-                  <Ionicons name="location" size={12} color="#D97706" />
+                  <Ionicons name="location" size={12} color="#000000" />
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: "600",
-                      color: "#92400E",
+                      color: "#000000",
                       marginLeft: 4,
                     }}
                   >
@@ -367,12 +367,12 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                     paddingVertical: 4,
                   }}
                 >
-                  <Ionicons name="calendar-outline" size={12} color="#D97706" />
+                  <Ionicons name="calendar-outline" size={12} color="#000000" />
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: "600",
-                      color: "#92400E",
+                      color: "#000000",
                       marginLeft: 4,
                     }}
                   >
@@ -390,12 +390,12 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                     paddingVertical: 4,
                   }}
                 >
-                  <Ionicons name="location" size={12} color="#D97706" />
+                  <Ionicons name="location" size={12} color="#000000" />
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: "600",
-                      color: "#92400E",
+                      color: "#000000",
                       marginLeft: 4,
                     }}
                   >

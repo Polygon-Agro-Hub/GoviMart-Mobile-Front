@@ -15,7 +15,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import { DropdownField, InputField } from "@/component/common/CustomField";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
 
@@ -24,8 +24,14 @@ type AddAddressNavigationProp = StackNavigationProp<
   "AddNewAddress"
 >;
 
+type AddAddressRouteProp = RouteProp<
+  RootStackParamList,
+  "AddNewAddress"
+>;
+
 interface AddAddressProps {
   navigation: AddAddressNavigationProp;
+  route: AddAddressRouteProp;
 }
 
 interface CityResult {
@@ -36,10 +42,12 @@ interface CityResult {
   isAvailable: boolean;
 }
 
-const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
+const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
+  const fromCheckout = route.params?.fromCheckout;
+
   const [saveAddressAs, setSaveAddressAs] = useState("");
   const [title, setTitle] = useState("Mr");
-  const [titleOpen, setTitleOpen] = useState(false);
+  const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [billingName, setBillingName] = useState("");
   const [mobileNumber1, setMobileNumber1] = useState("");
   const [mobileNumber2, setMobileNumber2] = useState("");
@@ -54,7 +62,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
   const [floorNo, setFloorNo] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [buildingTypeOpen, setBuildingTypeOpen] = useState(false);
+  const [buildingTypeModalOpen, setBuildingTypeModalOpen] = useState(false);
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [allCities, setAllCities] = useState<CityResult[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
@@ -227,51 +235,64 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
         activeOpacity={0.8}
         onPress={() => setCityModalOpen(true)}
         style={{
-          height: 58,
-          borderWidth: 1,
-          borderColor: cityError ? "#FF3B30" : "#D9DEE4",
-          borderRadius: 29,
-          paddingHorizontal: 20,
-          justifyContent: "center",
+          height: 67,
+          borderWidth: cityError ? 1.5 : 1,
+          borderColor: cityError ? "#FF3B30" : "#D9DEE5",
+          borderRadius: 40,
+          paddingHorizontal: 11,
+          flexDirection: "row",
+          alignItems: "center",
           backgroundColor: "#FFFFFF",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: "#F2F2F6",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <FontAwesome6
             name="mountain-city"
-            size={16}
+            solid
+            size={17}
             color="#000000"
-            style={{ marginRight: 12 }}
           />
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 10,
-                color: "#888888",
-                marginBottom: 2,
-              }}
-            >
-              Your City
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                color: city ? "#000000" : "#A0A0A0",
-                fontWeight: "500",
-              }}
-            >
-              {city || "Select From Here"}
-            </Text>
-          </View>
-          <Ionicons name="chevron-down" size={18} color="#000000" />
         </View>
+
+        <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
+          <Text
+            style={{
+              fontSize: 14,
+              color: "#555555",
+              lineHeight: 19,
+              marginBottom: 4,
+            }}
+          >
+            Your City *
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              lineHeight: 18,
+              color: city ? "#111111" : "#9CA3AF",
+              fontWeight: city ? "500" : "400",
+            }}
+          >
+            {city || "Select From Here"}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
       </TouchableOpacity>
       {cityError ? (
         <Text
           style={{
             color: "#FF3B30",
             fontSize: 11,
-            marginLeft: 20,
+            marginLeft: 16,
             marginTop: 4,
           }}
         >
@@ -311,16 +332,18 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
       hasError = true;
     }
 
-    if (!mobileNumber1.trim()) {
+    const p1 = mobileNumber1.trim();
+    if (!p1) {
       setMobileNumber1Error("Mobile Number 1 is required.");
       hasError = true;
-    } else if (!/^\d{9}$/.test(mobileNumber1)) {
-      setMobileNumber1Error("Invalid phone number. Must be 9 digits.");
+    } else if (!/^(0\d{9}|\d{9})$/.test(p1)) {
+      setMobileNumber1Error("Invalid phone number. e.g. 07XXXXXXXX");
       hasError = true;
     }
 
-    if (mobileNumber2.trim() && !/^\d{9}$/.test(mobileNumber2)) {
-      setMobileNumber2Error("Invalid phone number. Must be 9 digits.");
+    const p2 = mobileNumber2.trim();
+    if (p2 && !/^(0\d{9}|\d{9})$/.test(p2)) {
+      setMobileNumber2Error("Invalid phone number. e.g. 07XXXXXXXX");
       hasError = true;
     }
 
@@ -354,15 +377,18 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
     }
 
     try {
+      const cleanPhone1 = p1.startsWith("0") ? p1.slice(1) : p1;
+      const cleanPhone2 = p2 ? (p2.startsWith("0") ? p2.slice(1) : p2) : "";
+
       const basePayload = {
         buildingType,
         saveAs: saveAddressAs,
         title,
         fullName: billingName,
         phonecode1: phoneCode1,
-        phone1: mobileNumber1,
+        phone1: cleanPhone1,
         phonecode2: phoneCode2,
-        phone2: mobileNumber2,
+        phone2: cleanPhone2,
         longitude,
         latitude,
         buildingNo,
@@ -457,16 +483,77 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
           <View style={{ flexDirection: "row", gap: 5 }}>
             {/* TITLE */}
             <View style={{ flex: 0.7 }}>
-              <DropdownField
-                icon="user"
-                label="Title"
-                value={title}
-                open={titleOpen}
-                setOpen={setTitleOpen}
-                options={titleOptions}
-                onSelect={handleSelectTitle}
-                error={titleError}
-              />
+              <View style={{ marginBottom: titleError ? 4 : 12 }}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setTitleModalOpen(true)}
+                  style={{
+                    height: 67,
+                    borderWidth: titleError ? 1.5 : 1,
+                    borderColor: titleError ? "#FF3B30" : "#D9DEE5",
+                    borderRadius: 40,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 11,
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#F2F2F6",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <FontAwesome6
+                      name="user"
+                      solid
+                      size={17}
+                      color="#000000"
+                    />
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: "#555555",
+                        lineHeight: 19,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Title *
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 18,
+                        color: title ? "#111111" : "#9CA3AF",
+                        fontWeight: "500",
+                      }}
+                    >
+                      {title || "Select"}
+                    </Text>
+                  </View>
+
+                  <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+                </TouchableOpacity>
+                {titleError ? (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#FF3B30",
+                      marginTop: 4,
+                      marginLeft: 16,
+                    }}
+                  >
+                    {titleError}
+                  </Text>
+                ) : null}
+              </View>
             </View>
 
             {/* BILLING NAME */}
@@ -489,8 +576,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
             label="Mobile Number - 1 *"
             value={mobileNumber1}
             onChangeText={handleMobileNumber1}
-            prefix={phoneCode1}
-            placeholder="7XXXXXXXX"
+            placeholder="07XXXXXXXX"
             keyboardType="phone-pad"
             maxLength={10}
             error={mobileNumber1Error}
@@ -502,9 +588,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
             icon="phone"
             label="Mobile Number - 2 (Optional)"
             value={mobileNumber2}
-            prefix={phoneCode2}
             onChangeText={handleMobileNumber2}
-            placeholder="7XXXXXXXX"
+            placeholder="07XXXXXXXX"
             keyboardType="phone-pad"
             maxLength={10}
             error={mobileNumber2Error}
@@ -512,16 +597,77 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
 
           {/* BUILDING TYPE */}
 
-          <DropdownField
-            icon="building"
-            label="Building Type"
-            value={buildingType}
-            open={buildingTypeOpen}
-            setOpen={setBuildingTypeOpen}
-            options={buildingTypes}
-            onSelect={handleSelectBuildingType}
-            error={buildingTypeError}
-          />
+          <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setBuildingTypeModalOpen(true)}
+              style={{
+                height: 67,
+                borderWidth: buildingTypeError ? 1.5 : 1,
+                borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
+                borderRadius: 40,
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 11,
+                backgroundColor: "#FFFFFF",
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F2F2F6",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <FontAwesome6
+                  name="building"
+                  solid
+                  size={17}
+                  color="#000000"
+                />
+              </View>
+
+              <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#555555",
+                    lineHeight: 19,
+                    marginBottom: 4,
+                  }}
+                >
+                  Building Type *
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 18,
+                    color: buildingType ? "#111111" : "#9CA3AF",
+                    fontWeight: buildingType ? "500" : "400",
+                  }}
+                >
+                  {buildingType || "Select From Here"}
+                </Text>
+              </View>
+
+              <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+            </TouchableOpacity>
+            {buildingTypeError ? (
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: "#FF3B30",
+                  marginTop: 4,
+                  marginLeft: 16,
+                }}
+              >
+                {buildingTypeError}
+              </Text>
+            ) : null}
+          </View>
 
           {/* type == apartment => specific fields (only rendered AFTER a building type is picked) */}
 
@@ -598,13 +744,15 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
               navigation.navigate("SetLocation");
             }}
             style={{
-              height: 58,
-              borderRadius: 30,
+              height: 67,
+              borderRadius: 40,
               backgroundColor: "#FFF5E9",
               flexDirection: "row",
               alignItems: "center",
-              paddingHorizontal: 10,
+              paddingHorizontal: 11,
               marginBottom: 12,
+              borderWidth: 1,
+              borderColor: "#FFE0B2",
             }}
           >
             {/* Location Icon */}
@@ -622,12 +770,13 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
             </View>
 
             {/* Text */}
-            <View style={{ flex: 1, marginLeft: 8 }}>
+            <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
               <Text
                 style={{
-                  fontSize: 11,
-                  color: "#555",
-                  marginBottom: 3,
+                  fontSize: 14,
+                  color: "#555555",
+                  lineHeight: 19,
+                  marginBottom: 4,
                 }}
               >
                 Geo Location
@@ -637,19 +786,20 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
                 {latitude !== null && longitude !== null && (
                   <View
                     style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 2.5,
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
                       backgroundColor: "#FF9518",
-                      marginRight: 5,
+                      marginRight: 6,
                     }}
                   />
                 )}
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: 14,
+                    lineHeight: 18,
                     color: "#FF9518",
-                    fontWeight: "500",
+                    fontWeight: "600",
                   }}
                 >
                   {latitude !== null && longitude !== null
@@ -663,19 +813,20 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
             {latitude !== null && longitude !== null ? (
               <View
                 style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
                   borderWidth: 1,
                   borderColor: "#FF9518",
                   justifyContent: "center",
                   alignItems: "center",
+                  marginRight: 6,
                 }}
               >
-                <Ionicons name="pencil" size={14} color="#FF9518" />
+                <Ionicons name="pencil" size={15} color="#FF9518" />
               </View>
             ) : (
-              <Ionicons name="chevron-forward" size={18} color="#FF9518" />
+              <Ionicons name="chevron-forward" size={20} color="#FF9518" style={{ marginRight: 6 }} />
             )}
           </TouchableOpacity>
         </ScrollView>
@@ -717,11 +868,47 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation }) => {
                 fontWeight: "700",
               }}
             >
-              Save Address
+              {fromCheckout ? "Save & Continue" : "Save Address"}
             </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* TITLE SEARCH MODAL */}
+      <GlobalSearchModal
+        visible={titleModalOpen}
+        onClose={() => setTitleModalOpen(false)}
+        title="Select Title"
+        data={titleOptions.map((t) => ({ label: t, value: t }))}
+        selectedItems={title ? [title] : []}
+        onSelect={(items) => {
+          if (items && items[0]) {
+            handleSelectTitle(items[0]);
+          }
+        }}
+        searchPlaceholder="Search title..."
+        noResultsText="No titles found"
+        multiSelect={false}
+        searchKeys={["label"]}
+      />
+
+      {/* BUILDING TYPE SEARCH MODAL */}
+      <GlobalSearchModal
+        visible={buildingTypeModalOpen}
+        onClose={() => setBuildingTypeModalOpen(false)}
+        title="Select Building Type"
+        data={buildingTypes.map((type) => ({ label: type, value: type }))}
+        selectedItems={buildingType ? [buildingType] : []}
+        onSelect={(items) => {
+          if (items && items[0]) {
+            handleSelectBuildingType(items[0]);
+          }
+        }}
+        searchPlaceholder="Search building type..."
+        noResultsText="No building types found"
+        multiSelect={false}
+        searchKeys={["label"]}
+      />
 
       {/* CITY SEARCH MODAL */}
       <GlobalSearchModal
