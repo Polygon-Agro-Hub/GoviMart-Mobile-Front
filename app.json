@@ -52,10 +52,6 @@
     "web": {
       "favicon": "./src/assets/images/public/app-icon-android.png"
     },
-    "notification": {
-      "icon": "./src/assets/images/notification/notification-icon.png",
-      "color": "#3E206D"
-    },
     "plugins": [
       [
         "expo-build-properties",
@@ -65,18 +61,11 @@
           }
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./src/assets/images/notification/notification-icon.png",
-          "color": "#3E206D"
-        }
-      ],
       "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
-        "projectId": "e682bc28-eec2-4eaf-8a73-636dc70b6cda"
+        "projectId": "ed205ef8-ce38-4be4-a1e0-08ba15085639"
       },
       "shoutoutApiKey": "$SHOUTOUT_API_KEY"
     }

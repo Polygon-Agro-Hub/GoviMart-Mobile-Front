@@ -1,32 +1,44 @@
 import { Platform } from "react-native";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import socketService from "../socket/socket.service";
 import { ServerNotificationItem } from "./notification.service";
 
+const isExpoGo =
+  Constants.appOwnership === "expo" ||
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
 let NotificationsModule: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  NotificationsModule = require("expo-notifications");
-} catch (e) {
-  console.warn("[PushNotificationService] expo-notifications module could not be loaded statically:", e);
+if (!isExpoGo) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    NotificationsModule = require("expo-notifications");
+  } catch (e) {
+    console.warn("[PushNotificationService] expo-notifications could not be loaded:", e);
+  }
 }
 
 // Configure how notifications are displayed when app is in foreground / background
 if (NotificationsModule?.setNotificationHandler) {
-  NotificationsModule.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  try {
+    NotificationsModule.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (e) {
+    console.warn("[PushNotificationService] setNotificationHandler error:", e);
+  }
 }
 
 class PushNotificationService {
   private isInitialized = false;
 
   private getNotifications() {
+    if (isExpoGo) return null;
     if (!NotificationsModule) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -45,7 +57,7 @@ class PushNotificationService {
     try {
       const Notifications = this.getNotifications();
       if (!Notifications) {
-        console.warn("[PushNotificationService] expo-notifications not yet resolved by bundler");
+        console.log("[PushNotificationService] Skipped — running in Expo Go (local notifications require a dev/production build)");
         return;
       }
 
