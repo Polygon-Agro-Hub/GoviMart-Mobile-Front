@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
-import { logoutSuccess } from "@/store/authSlice";
+import { logoutSuccess, updateUserProfile } from "@/store/authSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -37,14 +37,35 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const [isCreditBalanceLoading, setIsCreditBalanceLoading] =
     useState<boolean>(true);
   const [logoutModalVisible, setLogoutModalVisible] = useState<boolean>(false);
+  const [imageError, setImageError] = useState<boolean>(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.image]);
 
   const fetchAcccountDetails = async () => {
     try {
       setIsCreditBalanceLoading(true);
       const response = await customerService.getAccountDetails();
       if (response.data && response.data.data) {
-        const { creditBalance } = response.data.data;
+        const data = response.data.data;
+        const { creditBalance, image, firstName, lastName, title, buyerType, email, phoneNumber } = data;
         setCreditBalance(Number(creditBalance || 0));
+
+        const updatedProfile = {
+          firstName: firstName || user?.firstName || "",
+          lastName: lastName || user?.lastName || "",
+          title: title || user?.title,
+          image: image !== undefined ? image : user?.image,
+          buyerType: buyerType || user?.buyerType || "Retail",
+          email: email || user?.email || "",
+          phoneNumber: phoneNumber || user?.phoneNumber || "",
+          firstTimeUser: user?.firstTimeUser ?? 0,
+          id: data.id || user?.id,
+        };
+
+        dispatch(updateUserProfile(updatedProfile));
+        await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
       }
     } catch (error) {
       console.log("error fetching acc details: ", error);
@@ -96,9 +117,14 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const placeholderImage =
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200";
 
-  const userImage = user?.image || placeholderImage;
+  const userImage = (!imageError && user?.image && user.image.trim() !== "")
+    ? user.image
+    : placeholderImage;
 
-  const fullName = user ? `${user.firstName} ${user.lastName}` : "Guest User";
+  const titlePrefix = user?.title ? `${user.title}. ` : "";
+  const fullName = user
+    ? `${titlePrefix}${user.firstName || ""} ${user.lastName || ""}`.trim()
+    : "Guest User";
 
   return (
     <View
@@ -146,12 +172,14 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
               source={{
                 uri: userImage,
               }}
+              onError={() => setImageError(true)}
               style={{
                 width: 110,
                 height: 110,
                 borderRadius: 55,
                 borderWidth: 4,
                 borderColor: "#F3F4F6",
+                backgroundColor: "#EAEFF5",
               }}
             />
           </View>
