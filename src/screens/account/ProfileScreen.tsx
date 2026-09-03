@@ -16,6 +16,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6 } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
 import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import customerService from "@/services/customer/customer.service";
@@ -35,6 +36,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [isCreditBalanceLoading, setIsCreditBalanceLoading] =
     useState<boolean>(true);
+  const [logoutModalVisible, setLogoutModalVisible] = useState<boolean>(false);
 
   const fetchAcccountDetails = async () => {
     try {
@@ -57,45 +59,38 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
     }, [])
   );
 
-  const handleLogout = async () => {
-    Alert.alert("Confirm Logout", "Are you sure you want to log out?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            // Call backend logout API to expire/clear token
-            await authService.logout().catch((err) => {
-              console.log(
-                "Server logout failed, proceeding with local logout:",
-                err,
-              );
-            });
-          } catch (e) {
-            console.log("Logout API call error:", e);
-          } finally {
-            try {
-              await AsyncStorage.removeItem("userToken");
-              await AsyncStorage.removeItem("userProfile");
-              await AsyncStorage.removeItem("userLoginTime");
+  const handleLogoutPress = () => {
+    setLogoutModalVisible(true);
+  };
 
-              dispatch(logoutSuccess());
+  const confirmLogout = async () => {
+    setLogoutModalVisible(false);
+    try {
+      // Call backend logout API to expire/clear token
+      await authService.logout().catch((err) => {
+        console.log(
+          "Server logout failed, proceeding with local logout:",
+          err,
+        );
+      });
+    } catch (e) {
+      console.log("Logout API call error:", e);
+    } finally {
+      try {
+        await AsyncStorage.removeItem("userToken");
+        await AsyncStorage.removeItem("userProfile");
+        await AsyncStorage.removeItem("userLoginTime");
 
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "ChooseAuth" }],
-              });
-            } catch (e) {
-              console.error("Logout error:", e);
-            }
-          }
-        },
-      },
-    ]);
+        dispatch(logoutSuccess());
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "ChooseAuth" }],
+        });
+      } catch (e) {
+        console.error("Logout error:", e);
+      }
+    }
   };
 
   const placeholderImage =
@@ -386,10 +381,23 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="right-from-bracket"
             title="Logout"
             danger={true}
-            onPress={handleLogout}
+            onPress={handleLogoutPress}
           />
         </View>
       </ScrollView>
+
+      {/* Reusable Confirmation Modal for Logout */}
+      <ConfirmationModal
+        visible={logoutModalVisible}
+        title="Confirm Logout"
+        message="Are you sure you want to log out?"
+        confirmLabel="Logout"
+        cancelLabel="Cancel"
+        iconName="log-out-outline"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutModalVisible(false)}
+      />
+
       {/* Floating Bottom Navigation Bar */}
       <BottomNavigation activeScreen="Profile" navigation={navigation} />
     </View>

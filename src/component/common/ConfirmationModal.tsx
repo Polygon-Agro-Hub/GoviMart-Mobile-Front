@@ -59,9 +59,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             </TouchableOpacity>
           )}
 
-          {/* Red warning icon */}
-          <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4 mt-2">
-            <Ionicons name="trash-outline" size={30} color="#DC2626" />
+          {/* Action icon */}
+          <View className={`w-16 h-16 rounded-full ${iconBgColor} items-center justify-center mb-4 mt-2`}>
+            <Ionicons name={iconName} size={30} color={iconColor} />
           </View>
 
           {/* Title */}
