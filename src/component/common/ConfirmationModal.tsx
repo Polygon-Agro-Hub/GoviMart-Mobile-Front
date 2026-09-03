@@ -8,6 +8,10 @@ interface ConfirmationModalProps {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmButtonColor?: string;
+  iconName?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+  iconBgColor?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -18,6 +22,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   message,
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
+  confirmButtonColor = "#DC2626",
+  iconName = "trash-outline",
+  iconColor = "#DC2626",
+  iconBgColor = "bg-red-50",
   onConfirm,
   onCancel,
 }) => {
@@ -39,9 +47,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             <Ionicons name="close" size={18} color="#000000" />
           </TouchableOpacity>
 
-          {/* Red warning icon */}
-          <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4 mt-2">
-            <Ionicons name="trash-outline" size={30} color="#DC2626" />
+          {/* Action icon */}
+          <View className={`w-16 h-16 rounded-full ${iconBgColor} items-center justify-center mb-4 mt-2`}>
+            <Ionicons name={iconName} size={30} color={iconColor} />
           </View>
 
           {/* Title */}
@@ -67,7 +75,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             <TouchableOpacity
               onPress={onConfirm}
               activeOpacity={0.8}
-              className="flex-1 py-3.5 bg-[#DC2626] rounded-full items-center justify-center"
+              style={{ backgroundColor: confirmButtonColor }}
+              className="flex-1 py-3.5 rounded-full items-center justify-center"
             >
               <Text className="text-white font-bold text-base">{confirmLabel}</Text>
             </TouchableOpacity>

@@ -45,6 +45,7 @@ import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
+import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
 
 export type { ProductType, PackageType } from "@/types/types";
@@ -286,6 +287,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -390,11 +393,84 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     }
   };
 
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    getSelectedCategoryProducts(selectedCategoryId);
+  }, [selectedCategoryId, buyerType]);
+
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    const query = text.trim();
+    if (!query) {
+      getSelectedCategoryProducts(selectedCategoryId);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setLoadingProducts(true);
+        const response = await productService.getProductsByCategory(
+          "",
+          buyerType,
+          query,
+        );
+
+        let matchingProducts: ShopItem[] = [];
+        if (response.data?.status && response.data.products) {
+          matchingProducts = response.data.products.map((item: any) => ({
+            ...item,
+            type: "product",
+          }));
+        }
+
+        if (isRetail) {
+          try {
+            const pkgResponse = await productService.getAllPackages(buyerType);
+            if (pkgResponse.data?.status && pkgResponse.data.product) {
+              const matchingPkgs = pkgResponse.data.product
+                .filter((pkg: any) =>
+                  (pkg.displayName || pkg.packageName || "")
+                    .toLowerCase()
+                    .includes(query.toLowerCase()),
+                )
+                .map((item: any) => ({
+                  ...item,
+                  type: "package",
+                }));
+              matchingProducts = [...matchingPkgs, ...matchingProducts];
+            }
+          } catch (pkgErr) {
+            console.log("Package search error:", pkgErr);
+          }
+        }
+
+        setShopItems(matchingProducts);
+      } catch (error) {
+        console.error("Search failed:", error);
+        setShopItems([]);
+      } finally {
+        setLoadingProducts(false);
+      }
+    }, 350);
+  };
+
   const getSelectedCategoryProducts = async (
     categoryId: string,
     currentBuyerType = buyerType,
   ) => {
     try {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      setSearchQuery("");
       setSelectedCategoryId(categoryId);
       setLoadingProducts(true);
       if (categoryId === "Packages") {
@@ -714,7 +790,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             placeholder="Search Product..."
             className="text-black text-sm flex-1 font-semibold p-0"
             placeholderTextColor="#848484"
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Shop By Categories */}
@@ -795,15 +879,36 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           </ScrollView>
         </View>
 
+        {searchQuery.trim().length > 0 && (
+          <View className="flex-row items-center justify-between px-6 mt-6">
+            <Text className="text-black text-base font-bold">
+              Results for "{searchQuery.trim()}" ({shopItems.length})
+            </Text>
+            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
+              <Text className="text-[#FB4300] text-sm font-bold">Clear</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Product Grid */}
         {loadingProducts ? (
           <ProductGridSkeleton />
         ) : itemRows.length === 0 ? (
-          <View className="items-center justify-center py-16 px-6">
-            <Text className="text-gray-500 font-medium text-center text-base">
-              No products found in this category
-            </Text>
-          </View>
+          searchQuery.trim().length > 0 ? (
+            <View className="items-center justify-center py-10 px-6">
+              <NoDataFound message={`No products found matching "${searchQuery.trim()}"`} />
+              <TouchableOpacity
+                onPress={handleClearSearch}
+                activeOpacity={0.8}
+                className="mt-2 bg-black px-6 py-2.5 rounded-full"
+              >
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View className="items-center justify-center py-10 px-6">
+              <NoDataFound message="No products found in this category" />
+            </View>
+          )
         ) : (
           <View className="mt-8 px-4">
             {itemRows.map((row, rowIndex) => (
@@ -813,13 +918,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isPackage = product.type === "package";
                   const cartItem = isProduct
                     ? cartProducts.find(
-                        (p: ProductCartItem) => p.id === product.id,
-                      )
+                      (p: ProductCartItem) => p.id === product.id,
+                    )
                     : null;
                   const cartPackage = isPackage
                     ? cartPackages.find(
-                        (p: PackageCartItem) => p.id === product.id,
-                      )
+                      (p: PackageCartItem) => p.id === product.id,
+                    )
                     : null;
 
                   const isExpanded = product.id === expandedItemId;
