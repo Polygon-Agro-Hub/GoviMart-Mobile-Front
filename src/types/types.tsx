@@ -1,5 +1,58 @@
 // ─── Navigation Route Params ─────────────────────────────────────────────────
 
+export interface CheckoutDetails {
+  deliveryMethod: "home" | "pickup";
+  title?: string;
+  fullName?: string;
+  phoneCode1?: string;
+  phone1?: string;
+  phoneCode2?: string;
+  phone2?: string;
+  // Home delivery fields
+  buildingType?: "house" | "apartment";
+  cityName?: string;
+  companycenterId?: number;
+  houseNo?: string;
+  street?: string;
+  buildingNo?: string;
+  buildingName?: string;
+  flatNumber?: string;
+  floorNumber?: string;
+  saveAs?: string;
+  // Pickup fields
+  centerId?: number;
+  centreName?: string;
+  // Schedule fields
+  scheduleType?: string;
+  deliveryDate?: string;
+  timeSlot?: string;
+  recurringDays?: string[];
+  validityWeeks?: string;
+  calculatedOrders?: { index: number; label: string; date: string }[];
+  // Geo
+  geoLatitude?: number;
+  geoLongitude?: number;
+  // Coupon
+  isCoupon?: boolean;
+  couponValue?: number;
+  couponType?: string;
+}
+
+export interface OrderContext {
+  cartId?: number;
+  grandTotal: number;
+  packageTotal: number;
+  productTotal: number;
+  discount: number;
+  deliveryCharge?: number;
+  isFinalizeImdt?: number;
+  deliveryMethod?: "home" | "pickup";
+  checkoutDetails?: CheckoutDetails;
+  paymentMethod?: "cash" | "card";
+  creditPaid?: number;
+  moneyPaid?: number;
+}
+
 export type RootStackParamList = {
   Splash: undefined;
   ChooseAuth: undefined;
@@ -32,25 +85,39 @@ export type RootStackParamList = {
     price: number;
   };
   MyCart: undefined;
-  // TODO: Register PackageConfirmation in navigator when ready
-  PackageConfirmation: undefined;
+  PackageConfirmation: { orderContext?: OrderContext } | undefined;
   SavedAddresses: undefined;
   EditAddress: { address: SavedAddress };
-  AddNewAddress: undefined;
+  AddNewAddress: { fromCheckout?: boolean } | undefined;
   ReportComplaint: undefined;
   ComplaintHistory: undefined;
   ViewComplaint: { id: number } | undefined;
   MyAccount: undefined;
   DeleteAccount: undefined;
   Notification: undefined;
-  PaymentMethod: { total: number; };
-  OrderDeliveryMethod: undefined;
-  OrderConfirmed: undefined;
+  CheckoutScreen: { orderContext: OrderContext };
+  ScheduleOrder: { orderContext: OrderContext };
+  PaymentMethod: { total: number; orderContext?: OrderContext };
+  PaymentScreen: { amount?: number; title?: string; orderContext?: OrderContext } | undefined;
+  OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
+  OrderConfirmed: {
+    orderId?: string | number;
+    invoiceNumber?: string;
+    total?: number;
+    orderContext?: OrderContext;
+    deliveryDate?: string;
+    scheduleDate?: string;
+    timeSlot?: string;
+  } | undefined;
   SetLocation: undefined;
-  ChoosePickupCentre: undefined;
+  ChoosePickupCentre: { orderContext?: OrderContext } | undefined;
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
+  ReviewPackage: { replacedProduct?: any; targetStepIndex?: number; } | undefined;
+  SetQauntity: { fromProduct?: any; toProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
+  OrderCancelConfirmation: undefined;
+  ReplaceProduct: { fromProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -61,6 +128,7 @@ export interface PackageType {
   displayName: string;
   subTotal: string;
   image: string;
+  totalItems?: number;
 }
 
 export interface ProductType {
@@ -72,6 +140,8 @@ export interface ProductType {
   cropNameSinhala?: string;
   cropNameTamil?: string;
   discountedPrice?: number;
+  discount?: number;
+  comPrice?: number | string;
   tags?: string;
   unitType?: string;
   displayName: string;
@@ -176,3 +246,37 @@ export interface VerifyPhoneChangePayload {
   signupToken: string;
   accountDetails?: UpdateUserDetailsPayload | null;
 }
+
+//___________Review Package screen types________________
+export type PackageSummary = {
+    id: string;
+    name: string;
+    icon: string; // emoji placeholder — swap for an <Image> when you have assets
+    qty: number;
+    unitPrice: number;
+};
+ 
+export type ReviewProduct = {
+    id: string;
+    category: string; // e.g. "Up Country Fruit (1)"
+    name: string;
+    icon: string;
+    image?: string;
+    price: number;
+    quantity: number;
+    unit: "kg" | "g";
+    step: number;
+    excludedWarning?: string;
+    isReplaced?: boolean;
+    originalProduct?: ReviewProduct;
+};
+ 
+export type PackageReview = {
+    id: string;
+    no: number;
+    name: string;
+    products: ReviewProduct[];
+    originalPackagePrice: number;
+    serviceFee: number;
+    packingFee: number;
+};

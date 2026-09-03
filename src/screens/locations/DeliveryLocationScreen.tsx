@@ -17,6 +17,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import axios from "axios";
 import { environment } from "@/environment/environment";
+import socketService from "@/services/socket/socket.service";
 
 type DeliveryLocationNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -48,7 +49,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
 
   const isButtonDisabled = status === "unavailable";
 
-  // Fetch all cities on mount
+  // Fetch all cities on mount and subscribe to real-time socket updates
   useEffect(() => {
     const loadCities = async () => {
       setIsLoading(true);
@@ -71,6 +72,39 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
       }
     };
     loadCities();
+
+    // Connect to Socket and listen for real-time city availability updates
+    socketService.connect();
+    const unsubscribe = socketService.onCityAvailabilityUpdated((newCities) => {
+      if (Array.isArray(newCities)) {
+        const mapped: CityResult[] = newCities.map((city: any) => ({
+          id: city.id,
+          city: city.city,
+          district: city.district || "",
+          province: city.province || "",
+          isAvailable: city.isAvailable === 1 || city.isAvailable === true,
+        }));
+        setAllCities(mapped);
+
+        // Instantly update selected city availability status if selected
+        setSelectedCity((prevSelected) => {
+          if (!prevSelected) return null;
+          const match = mapped.find((c) => c.id === prevSelected.id);
+          if (match) {
+            setStatus(match.isAvailable ? "available" : "unavailable");
+            if (match.isAvailable) {
+              setValidationError(null);
+            }
+            return match;
+          }
+          return prevSelected;
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleConfirm = () => {
@@ -93,9 +127,8 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
     onPress: (value: string) => void
   ) => (
     <TouchableOpacity
-      className={`px-5 py-3.5 flex-row items-center justify-between ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row items-center justify-between ${!isLast ? "border-b border-gray-100" : ""
+        }`}
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
     >
@@ -107,9 +140,8 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
       </View>
       <View className="flex-row items-center gap-x-2">
         <Text
-          className={`text-xs font-bold ${
-            item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
-          }`}
+          className={`text-xs font-bold ${item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
+            }`}
         >
           {item.isAvailable ? "Available" : "Coming soon"}
         </Text>
@@ -182,7 +214,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
                 <FontAwesome6 name="location-dot" size={18} color="black" />
               )}
             </View>
-            <Text className={`text-sm font-semibold ${selectedCity ? "text-black" : "text-gray-400"}`}>
+            <Text className={`text-sm  ${selectedCity ? "text-black" : "text-black"}`}>
               {isLoading ? "Loading cities..." : (selectedCity ? selectedCity.city : "Select Your City")}
             </Text>
           </View>
@@ -192,7 +224,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
         {/* Status banners & validation errors */}
         <View className="mx-6">
           {status === "unavailable" && selectedCity && (
-            <View 
+            <View
               className="mt-3 flex-row items-center gap-x-2 rounded-2xl px-4 py-3"
               style={{ backgroundColor: "#FFF5E9" }}
             >
@@ -206,7 +238,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
           {validationError && (
             <View className="mt-3 flex-row items-center gap-x-2 px-1">
               <FontAwesome6 name="circle-exclamation" size={14} color="#E02424" />
-              <Text className="text-sm text-[#E02424] font-semibold flex-1">
+              <Text className="text-sm text-[#E02424] flex-1">
                 {validationError}
               </Text>
             </View>
@@ -215,18 +247,29 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
 
         {/* Continue Button */}
         <TouchableOpacity
+          style={{
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+
+            elevation: 6,
+            backgroundColor: isButtonDisabled ? "#7F919C" : "#000000"
+          }}
           className="mx-6 mt-6 rounded-full items-center justify-center h-[50px]"
           activeOpacity={isButtonDisabled ? 1 : 0.8}
           onPress={handleConfirm}
           disabled={isButtonDisabled}
-          style={{ backgroundColor: isButtonDisabled ? "#7F919C" : "#000000" }}
         >
           <Text className="text-white text-base font-bold">Continue</Text>
         </TouchableOpacity>
 
         {/* Need Help link */}
-        <TouchableOpacity 
-          className="mt-6 self-center" 
+        <TouchableOpacity
+          className="mt-6 self-center"
           activeOpacity={0.7}
           onPress={() => setIsHelpModalOpen(true)}
         >
@@ -249,7 +292,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+   
 
       {/* Fixed Bottom Lottie (city.json) */}
       <View className="w-full h-[180px]">
@@ -261,6 +304,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
           resizeMode="cover"
         />
       </View>
+         </ScrollView>
 
       {/* Cities GlobalSearchModal */}
       <GlobalSearchModal
@@ -293,9 +337,9 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
         onRequestClose={() => setIsHelpModalOpen(false)}
       >
         <View className="flex-1 bg-black/40 justify-center items-center p-6">
-          <View 
+          <View
             className="p-6 rounded-3xl items-center shadow-lg w-full max-w-sm"
-            style={{ 
+            style={{
               backgroundColor: "#FFFFFF"
             }}
           >

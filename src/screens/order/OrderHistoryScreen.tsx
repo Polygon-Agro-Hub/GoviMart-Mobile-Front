@@ -31,23 +31,22 @@ interface Order {
     deliveryDate: string;
     timeSlot: string;
     total: number;
+    rawOrderDate?: string;
+    rawScheduleDate?: string;
 }
 
 const OrderHistory: React.FC<Props> = ({ navigation }) => {
-    const [dateFilterOpen, setDateFilterOpen] =
-        useState(false);
+    const [dateFilterOpen, setDateFilterOpen] = useState(false);
 
-    const [selectedFilter, setSelectedFilter] =
-        useState("Ordered Date");
+    const [selectedFilter, setSelectedFilter] = useState("Ordered Date");
 
     const [appliedFilter, setAppliedFilter] = useState(false);
     const [datePickerVisible, setDatePickerVisible] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
     const filterOptions = [
         "Ordered Date",
-        "Delivery Date",
-        "Completed Date",
+        "Scheduled Date",
     ];
 
     const [orders, setOrders] = useState<Order[]>([]);
@@ -86,18 +85,18 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                         response.data.status &&
                         response.data.orderHistory
                     ) {
-                        console.log("order hisory:", response.data.orderHistory)
                         const mappedOrders: Order[] = response.data.orderHistory.map((bo: any) => {
-                            // const cleanTotal = bo.fullTotal ? bo.fullTotal.replace(/[^\d.]/g, "") : "0";
                             const totalVal = bo.fullTotal || 0;
                             return {
                                 id: bo.orderId ? String(bo.orderId) : 'N/A',
                                 status: bo.processStatus || 'Pending',
                                 orderDate: formatOrderDate(bo.createdAt),
                                 invoiceNumber: bo.invoiceNo || 'N/A',
-                                deliveryDate: formatDeliveryDate(bo.scheduleDate),
-                                timeSlot: bo.scheduleTime || 'N/A',
+                                deliveryDate: formatDeliveryDate(bo.scheduleDate || bo.sheduleDate),
+                                timeSlot: bo.scheduleTime || bo.sheduleTime || 'N/A',
                                 total: totalVal,
+                                rawOrderDate: bo.createdAt,
+                                rawScheduleDate: bo.scheduleDate || bo.sheduleDate,
                             };
                         });
                         setOrders(mappedOrders);
@@ -122,12 +121,16 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         });
 
     const handleApplyFilter = () => {
+        if (!selectedDate) {
+            setDatePickerVisible(true);
+            return;
+        }
         setAppliedFilter(true);
+    };
 
-        console.log({
-            filter: selectedFilter,
-            date: selectedDate,
-        });
+    const handleClearFilter = () => {
+        setSelectedDate(null);
+        setAppliedFilter(false);
     };
 
     const handleViewDetails = (order: Order) => {
@@ -136,15 +139,20 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             orderId: order.id,
         });
     };
+
     const handleDateChange = (
         event: any,
         date?: Date
     ) => {
         setDatePickerVisible(false);
 
+        if (event?.type === "dismissed") {
+            return;
+        }
+
         if (date) {
             setSelectedDate(date);
-            setAppliedFilter(false);
+            setAppliedFilter(true);
         }
     };
 
@@ -156,30 +164,62 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         return `${year}/${month}/${day}`;
     };
 
-    const getFilteredOrders = () => {
-        if (!appliedFilter) return orders;
+    const isSameCalendarDate = (
+        dateVal: string | Date | undefined | null,
+        targetDate: Date
+    ): boolean => {
+        if (!dateVal || dateVal === "N/A") return false;
 
-        return orders.filter((order) => {
-            let orderDateToCompare: Date;
-            if (selectedFilter === "Ordered Date") {
-                orderDateToCompare = new Date(order.orderDate);
-            } else if (selectedFilter === "Delivery Date") {
-                orderDateToCompare = new Date(order.deliveryDate);
-            } else {
-                // "Completed Date"
-                orderDateToCompare = new Date(order.deliveryDate);
+        // 1. Check Date object conversion in device local timezone (handles UTC ISO strings like "2026-08-03T18:30:00.000Z")
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+            if (
+                d.getFullYear() === targetDate.getFullYear() &&
+                d.getMonth() === targetDate.getMonth() &&
+                d.getDate() === targetDate.getDate()
+            ) {
+                return true;
             }
+        }
 
-            if (isNaN(orderDateToCompare.getTime())) return true;
+        // 2. Also check direct literal match (for plain YYYY-MM-DD or YYYY/MM/DD)
+        if (typeof dateVal === "string") {
+            const match = dateVal.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+            if (match) {
+                const year = parseInt(match[1], 10);
+                const month = parseInt(match[2], 10) - 1;
+                const day = parseInt(match[3], 10);
+                if (
+                    targetDate.getFullYear() === year &&
+                    targetDate.getMonth() === month &&
+                    targetDate.getDate() === day
+                ) {
+                    return true;
+                }
+            }
+        }
 
-            return (
-                orderDateToCompare.getFullYear() === selectedDate.getFullYear() &&
-                orderDateToCompare.getMonth() === selectedDate.getMonth() &&
-                orderDateToCompare.getDate() === selectedDate.getDate()
-            );
-        });
+        return false;
     };
 
+    const getFilteredOrders = () => {
+        if (!appliedFilter || !selectedDate) return orders;
+
+        return orders.filter((order) => {
+            if (selectedFilter === "Ordered Date") {
+                return (
+                    isSameCalendarDate(order.rawOrderDate, selectedDate) ||
+                    isSameCalendarDate(order.orderDate, selectedDate)
+                );
+            } else if (selectedFilter === "Scheduled Date") {
+                return (
+                    isSameCalendarDate(order.rawScheduleDate, selectedDate) ||
+                    isSameCalendarDate(order.deliveryDate, selectedDate)
+                );
+            }
+            return true;
+        });
+    };
 
     return (
         <View
@@ -191,9 +231,11 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             {/* HEADER */}
             <View
                 style={{
-                    height: 50,
+                    height: 46,
+                    backgroundColor: "#FFFFFF",
                     justifyContent: "center",
                     alignItems: "center",
+                    zIndex: 10,
                 }}
             >
                 <Text
@@ -207,614 +249,641 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                 </Text>
             </View>
 
-            {/* FILTER SECTION */}
-            <View
-                style={{
-                    paddingHorizontal: 38,
-                    paddingTop: 8,
-                    paddingBottom: 21,
-                }}
-            >
-                {/* Ordered Date Dropdown */}
-
-                <View
-                    style={{
-                        position: "relative",
-                        zIndex: 20,
-                    }}
-                >
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() =>
-                            setDateFilterOpen(
-                                !dateFilterOpen
-                            )
-                        }
-                        style={{
-                            height: 41,
-
-                            borderWidth: 1,
-                            borderColor: "#D7DDE4",
-
-                            borderRadius: 24,
-
-                            flexDirection: "row",
-                            alignItems: "center",
-
-                            paddingHorizontal: 7,
-                        }}
-                    >
-                        {/* Icon */}
-
-                        <View
-                            style={{
-                                width: 27,
-                                height: 27,
-
-                                borderRadius: 14,
-
-                                backgroundColor: "#000000",
-
-                                justifyContent: "center",
-                                alignItems: "center",
-
-                                marginRight: 8,
-                            }}
-                        >
-                            <Ionicons
-                                name="time"
-                                size={14}
-                                color="#FFFFFF"
-                            />
-                        </View>
-
-                        <Text
-                            style={{
-                                flex: 1,
-                                fontSize: 12,
-                                color: "#222222",
-                            }}
-                        >
-                            {selectedFilter}
-                        </Text>
-
-                        <Ionicons
-                            name={
-                                dateFilterOpen
-                                    ? "chevron-up"
-                                    : "chevron-down"
-                            }
-                            size={17}
-                            color="#000000"
-                        />
-                    </TouchableOpacity>
-
-                    {/* Dropdown Options */}
-
-                    {dateFilterOpen && (
-                        <View
-                            style={{
-                                position: "absolute",
-                                top: 45,
-                                left: 0,
-                                right: 0,
-
-                                backgroundColor:
-                                    "#FFFFFF",
-
-                                borderWidth: 1,
-                                borderColor:
-                                    "#E0E3E8",
-
-                                borderRadius: 12,
-
-                                shadowColor: "#000",
-                                shadowOffset: {
-                                    width: 0,
-                                    height: 3,
-                                },
-                                shadowOpacity: 0.12,
-                                shadowRadius: 5,
-
-                                elevation: 6,
-
-                                overflow: "hidden",
-                            }}
-                        >
-                            {filterOptions.map(
-                                (option) => (
-                                    <TouchableOpacity
-                                        key={option}
-                                        activeOpacity={
-                                            0.7
-                                        }
-                                        onPress={() => {
-                                            setSelectedFilter(
-                                                option
-                                            );
-                                            setDateFilterOpen(
-                                                false
-                                            );
-                                            setAppliedFilter(false);
-                                        }}
-                                        style={{
-                                            height: 38,
-                                            justifyContent:
-                                                "center",
-                                            paddingHorizontal: 14,
-
-                                            borderBottomWidth: 1,
-                                            borderBottomColor:
-                                                "#F0F0F0",
-                                        }}
-                                    >
-                                        <Text
-                                            style={{
-                                                fontSize: 12,
-                                                color:
-                                                    selectedFilter ===
-                                                        option
-                                                        ? "#000"
-                                                        : "#555",
-                                                fontWeight:
-                                                    selectedFilter ===
-                                                        option
-                                                        ? "700"
-                                                        : "400",
-                                            }}
-                                        >
-                                            {option}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )
-                            )}
-                        </View>
-                    )}
-                </View>
-
-                {/* ================================================= */}
-                {/* DATE INPUT */}
-                {/* ================================================= */}
-
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => {
-                        // Open DateTimePicker here
-                        setDatePickerVisible(!datePickerVisible)
-                    }}
-                    style={{
-                        height: 41,
-
-                        marginTop: 9,
-
-                        borderWidth: 1,
-                        borderColor: "#D7DDE4",
-
-                        borderRadius: 24,
-
-                        backgroundColor: "#F2F2F6",
-
-                        flexDirection: "row",
-                        alignItems: "center",
-
-                        paddingHorizontal: 7,
-                    }}
-                >
-                    <View
-                        style={{
-                            width: 27,
-                            height: 27,
-
-                            borderRadius: 14,
-
-                            backgroundColor: "#000000",
-
-                            justifyContent: "center",
-                            alignItems: "center",
-
-                            marginRight: 8,
-                        }}
-                    >
-                        <Ionicons
-                            name="calendar"
-                            size={14}
-                            color="#FFFFFF"
-                        />
-                    </View>
-
-                    <Text
-                        style={{
-                            fontSize: 12,
-                            color: selectedDate
-                                ? "#222"
-                                : "#7B8090",
-                        }}
-                    >
-                        {formatDate(selectedDate)}
-                    </Text>
-                </TouchableOpacity>
-
-                {/* APPLY FILTER */}
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={handleApplyFilter}
-                    style={{
-                        height: 42,
-
-                        marginTop: 15,
-
-                        borderRadius: 23,
-
-                        backgroundColor: "#000000",
-
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 3,
-                        },
-                        shadowOpacity: 0.16,
-                        shadowRadius: 4,
-
-                        elevation: 4,
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
-                            fontSize: 12,
-                            fontWeight: "600",
-                        }}
-                    >
-                        Apply Filter
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* DIVIDER */}
-            <View
-                style={{
-                    height: 1,
-                    backgroundColor: "#E8E8EA",
-                }}
-            />
-
-            {/* ORDER LIST */}
-
             {loading ? (
+                /* LOADING STATE: Show only title + LoadingPage component */
                 <View
                     style={{
                         flex: 1,
+                        backgroundColor: "#FFFFFF",
                         justifyContent: "center",
                         alignItems: "center",
                     }}
                 >
                     <LoadingPage message="Loading Orders..." fullScreen={false} />
                 </View>
-            ) : getFilteredOrders().length === 0 ? (
-                <View
-                    style={{
-                        flex: 1,
-                        justifyContent: "center",
-                        alignItems: "center",
-                        paddingHorizontal: 30,
-                    }}
-                >
-                    <Ionicons
-                        name="receipt-outline"
-                        size={46}
-                        color="#A0A5BA"
-                    />
-                    <Text
+            ) : (
+                /* FULLY LOADED STATE: Show filter inputs + order list */
+                <>
+                    {/* FILTER SECTION */}
+                    <View
                         style={{
-                            fontSize: 14,
-                            color: "#747990",
-                            marginTop: 12,
-                            textAlign: "center",
+                            paddingHorizontal: 38,
+                            paddingTop: 8,
+                            paddingBottom: 21,
                         }}
                     >
-                        No orders found.
-                    </Text>
-                </View>
-            ) : (
-                <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{
-                        paddingHorizontal: 12,
-                        paddingTop: 24,
-                        paddingBottom: 130,
-                    }}
-                >
-                    {getFilteredOrders().map((order) => (
+                        {/* Ordered Date Dropdown */}
+
                         <View
-                            key={order.id}
                             style={{
-                                minHeight: 139,
-
-                                borderWidth: 1,
-                                borderColor: "#E0E5EA",
-
-                                borderRadius: 20,
-
-                                backgroundColor: "#FFFFFF",
-
-                                marginBottom: 20,
-
-                                paddingHorizontal: 10,
-                                paddingTop: 9,
-                                paddingBottom: 8,
-
-                                shadowColor: "#000",
-                                shadowOffset: {
-                                    width: 0,
-                                    height: 2,
-                                },
-                                shadowOpacity: 0.08,
-                                shadowRadius: 4,
-
-                                elevation: 2,
+                                position: "relative",
+                                zIndex: 20,
                             }}
                         >
-
-                            {/* TOP ROW */}
-                            <View
+                            <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() =>
+                                    setDateFilterOpen(
+                                        !dateFilterOpen
+                                    )
+                                }
                                 style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    justifyContent:
-                                        "space-between",
-                                }}
-                            >
-                                {/* Status */}
+                                    height: 41,
 
-                                <View
-                                    style={{
-                                        backgroundColor:
-                                            "#F1F1F5",
+                                    borderWidth: 1,
+                                    borderColor: "#D7DDE4",
 
-                                        borderRadius: 12,
+                                    borderRadius: 24,
 
-                                        paddingHorizontal: 6,
-                                        paddingVertical: 3,
-
-                                        flexDirection:
-                                            "row",
-                                        alignItems:
-                                            "center",
-                                    }}
-                                >
-                                    <Ionicons
-                                        name="star"
-                                        size={8}
-                                        color="#111"
-                                    />
-
-                                    <Text
-                                        style={{
-                                            fontSize: 10,
-                                            color: "#333",
-                                            marginLeft: 3,
-                                        }}
-                                    >
-                                        {order.status}
-                                    </Text>
-                                </View>
-
-                                {/* Order Date */}
-
-                                <Text
-                                    style={{
-                                        fontSize: 11,
-                                        color: "#565B70",
-                                    }}
-                                >
-                                    {order.orderDate}
-                                </Text>
-                            </View>
-
-                            {/* ORDER ID */}
-                            <View
-                                style={{
-                                    marginTop: 9,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontSize: 10,
-                                        color: "#747990",
-                                    }}
-                                >
-                                    Order ID
-                                </Text>
-
-                                <Text
-                                    style={{
-                                        fontSize: 14,
-                                        color: "#111111",
-                                        fontWeight: "600",
-                                        marginTop: 2,
-                                    }}
-                                >
-                                    [{order.invoiceNumber}]
-                                </Text>
-                            </View>
-
-                            {/* DELIVERY + TOTAL */}
-                            <View
-                                style={{
                                     flexDirection: "row",
                                     alignItems: "center",
 
-                                    marginTop: 12,
+                                    paddingHorizontal: 7,
                                 }}
                             >
-                                {/* Delivery Date */}
+                                {/* Icon */}
 
                                 <View
                                     style={{
-                                        flexDirection:
-                                            "row",
-                                        alignItems:
-                                            "center",
+                                        width: 27,
+                                        height: 27,
 
-                                        paddingRight: 8,
-                                    }}
-                                >
-                                    <Ionicons
-                                        name="location"
-                                        size={13}
-                                        color="#000"
-                                    />
+                                        borderRadius: 14,
 
-                                    <Text
-                                        style={{
-                                            fontSize: 10,
-                                            color: "#222",
-                                            marginLeft: 4,
-                                        }}
-                                    >
-                                        {
-                                            order.deliveryDate
-                                        }
-                                    </Text>
-                                </View>
+                                        backgroundColor: "#000000",
 
-                                {/* Divider */}
+                                        justifyContent: "center",
+                                        alignItems: "center",
 
-                                <View
-                                    style={{
-                                        width: 1,
-                                        height: 22,
-                                        backgroundColor:
-                                            "#E1E4E8",
-                                    }}
-                                />
-
-                                {/* Time */}
-
-                                <View
-                                    style={{
-                                        flexDirection:
-                                            "row",
-                                        alignItems:
-                                            "center",
-
-                                        paddingHorizontal: 8,
+                                        marginRight: 8,
                                     }}
                                 >
                                     <Ionicons
                                         name="time"
-                                        size={13}
-                                        color="#000"
+                                        size={14}
+                                        color="#FFFFFF"
                                     />
-
-                                    <Text
-                                        style={{
-                                            fontSize: 10,
-                                            color: "#222",
-                                            marginLeft: 4,
-                                        }}
-                                    >
-                                        {order.timeSlot}
-                                    </Text>
                                 </View>
 
-                                {/* Divider */}
-
-                                <View
-                                    style={{
-                                        width: 1,
-                                        height: 22,
-                                        backgroundColor:
-                                            "#E1E4E8",
-                                    }}
-                                />
-
-                                {/* Total */}
-
-                                <View
-                                    style={{
-                                        flex: 1,
-                                        paddingLeft: 8,
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            fontSize: 10,
-                                            color: "#747990",
-                                        }}
-                                    >
-                                        Total
-                                    </Text>
-
-                                    <Text
-                                        style={{
-                                            fontSize: 11,
-                                            color: "#111",
-                                            fontWeight:
-                                                "700",
-                                            marginTop: 1,
-                                        }}
-                                        numberOfLines={1}
-                                    >
-                                        {formatAmount(
-                                            order.total
-                                        )}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* VIEW DETAILS */}
-                            <TouchableOpacity
-                                activeOpacity={0.7}
-                                onPress={() =>
-                                    handleViewDetails(
-                                        order
-                                    )
-                                }
-                                style={{
-                                    flexDirection:
-                                        "row",
-                                    alignItems:
-                                        "center",
-
-                                    marginTop: 9,
-                                }}
-                            >
                                 <Text
                                     style={{
-                                        fontSize: 10,
-                                        color: "#60647A",
+                                        flex: 1,
+                                        fontSize: 12,
+                                        color: "#222222",
                                     }}
                                 >
-                                    View Details
+                                    {selectedFilter}
                                 </Text>
 
                                 <Ionicons
-                                    name="chevron-forward"
-                                    size={12}
-                                    color="#60647A"
-                                    style={{
-                                        marginLeft: 3,
-                                    }}
+                                    name={
+                                        dateFilterOpen
+                                            ? "chevron-up"
+                                            : "chevron-down"
+                                    }
+                                    size={17}
+                                    color="#000000"
                                 />
                             </TouchableOpacity>
+
+                            {/* Dropdown Options */}
+
+                            {dateFilterOpen && (
+                                <View
+                                    style={{
+                                        position: "absolute",
+                                        top: 45,
+                                        left: 0,
+                                        right: 0,
+
+                                        backgroundColor:
+                                            "#FFFFFF",
+
+                                        borderWidth: 1,
+                                        borderColor:
+                                            "#E0E3E8",
+
+                                        borderRadius: 12,
+
+                                        shadowColor: "#000",
+                                        shadowOffset: {
+                                            width: 0,
+                                            height: 3,
+                                        },
+                                        shadowOpacity: 0.12,
+                                        shadowRadius: 5,
+
+                                        elevation: 6,
+
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    {filterOptions.map(
+                                        (option) => (
+                                            <TouchableOpacity
+                                                key={option}
+                                                activeOpacity={
+                                                    0.7
+                                                }
+                                                onPress={() => {
+                                                    setSelectedFilter(
+                                                        option
+                                                    );
+                                                    setDateFilterOpen(
+                                                        false
+                                                    );
+                                                }}
+                                                style={{
+                                                    height: 38,
+                                                    justifyContent:
+                                                        "center",
+                                                    paddingHorizontal: 14,
+
+                                                    borderBottomWidth: 1,
+                                                    borderBottomColor:
+                                                        "#F0F0F0",
+                                                }}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: 12,
+                                                        color:
+                                                            selectedFilter ===
+                                                                option
+                                                                ? "#000"
+                                                                : "#555",
+                                                        fontWeight:
+                                                            selectedFilter ===
+                                                                option
+                                                                ? "700"
+                                                                : "400",
+                                                    }}
+                                                >
+                                                    {option}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )
+                                    )}
+                                </View>
+                            )}
                         </View>
-                    ))}
-                </ScrollView>
+
+                        {/* ================================================= */}
+                        {/* DATE INPUT */}
+                        {/* ================================================= */}
+
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => {
+                                setDatePickerVisible(true);
+                            }}
+                            style={{
+                                height: 41,
+
+                                marginTop: 9,
+
+                                borderWidth: 1,
+                                borderColor: "#D7DDE4",
+
+                                borderRadius: 24,
+
+                                backgroundColor: "#F2F2F6",
+
+                                flexDirection: "row",
+                                alignItems: "center",
+
+                                paddingHorizontal: 7,
+                            }}
+                        >
+                            <View
+                                style={{
+                                    width: 27,
+                                    height: 27,
+
+                                    borderRadius: 14,
+
+                                    backgroundColor: "#000000",
+
+                                    justifyContent: "center",
+                                    alignItems: "center",
+
+                                    marginRight: 8,
+                                }}
+                            >
+                                <Ionicons
+                                    name="calendar"
+                                    size={14}
+                                    color="#FFFFFF"
+                                />
+                            </View>
+
+                            <Text
+                                style={{
+                                    fontSize: 12,
+                                    color: selectedDate
+                                        ? "#111111"
+                                        : "#8E8E93",
+                                }}
+                            >
+                                {selectedDate ? formatDate(selectedDate) : "YYYY/MM/DD"}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* APPLY / CLEAR FILTER BUTTON */}
+                        <TouchableOpacity
+                            activeOpacity={0.85}
+                            onPress={appliedFilter ? handleClearFilter : handleApplyFilter}
+                            style={{
+                                height: 42,
+
+                                marginTop: 15,
+
+                                borderRadius: 23,
+
+                                backgroundColor: "#000000",
+
+                                flexDirection: "row",
+                                justifyContent: "center",
+                                alignItems: "center",
+
+                                shadowColor: "#000",
+                                shadowOffset: {
+                                    width: 0,
+                                    height: 3,
+                                },
+                                shadowOpacity: 0.16,
+                                shadowRadius: 4,
+
+                                elevation: 4,
+                            }}
+                        >
+                            {appliedFilter && (
+                                <Ionicons
+                                    name="close"
+                                    size={16}
+                                    color="#FFFFFF"
+                                    style={{ marginRight: 6 }}
+                                />
+                            )}
+                            <Text
+                                style={{
+                                    color: "#FFFFFF",
+                                    fontSize: 12,
+                                    fontWeight: "600",
+                                }}
+                            >
+                                {appliedFilter ? "Clear Filter" : "Apply Filter"}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* DIVIDER */}
+                    <View
+                        style={{
+                            height: 1,
+                            backgroundColor: "#E8E8EA",
+                        }}
+                    />
+
+                    {/* ORDER LIST */}
+
+                    {loading ? (
+                        <View
+                            style={{
+                                flex: 1,
+                                justifyContent: "center",
+                                alignItems: "center",
+                            }}
+                        >
+                            <LoadingPage message="Loading Orders..." fullScreen={false} />
+                        </View>
+                    ) : getFilteredOrders().length === 0 ? (
+                        <View
+                            style={{
+                                flex: 1,
+                                justifyContent: "center",
+                                alignItems: "center",
+                                paddingHorizontal: 30,
+                            }}
+                        >
+                            <Ionicons
+                                name="receipt-outline"
+                                size={46}
+                                color="#A0A5BA"
+                            />
+                            <Text
+                                style={{
+                                    fontSize: 14,
+                                    color: "#747990",
+                                    marginTop: 12,
+                                    textAlign: "center",
+                                }}
+                            >
+                                No orders found.
+                            </Text>
+                        </View>
+                    ) : (
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{
+                                paddingHorizontal: 12,
+                                paddingTop: 24,
+                                paddingBottom: 130,
+                            }}
+                        >
+                            {getFilteredOrders().map((order) => (
+                                <View
+                                    key={order.id}
+                                    style={{
+                                        minHeight: 139,
+
+                                        borderWidth: 1,
+                                        borderColor: "#E0E5EA",
+
+                                        borderRadius: 20,
+
+                                        backgroundColor: "#FFFFFF",
+
+                                        marginBottom: 20,
+
+                                        paddingHorizontal: 10,
+                                        paddingTop: 9,
+                                        paddingBottom: 8,
+
+                                        shadowColor: "#000",
+                                        shadowOffset: {
+                                            width: 0,
+                                            height: 2,
+                                        },
+                                        shadowOpacity: 0.08,
+                                        shadowRadius: 4,
+
+                                        elevation: 2,
+                                    }}
+                                >
+
+                                    {/* TOP ROW */}
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            justifyContent:
+                                                "space-between",
+                                        }}
+                                    >
+                                        {/* Status */}
+
+                                        <View
+                                            style={{
+                                                backgroundColor:
+                                                    "#F1F1F5",
+
+                                                borderRadius: 12,
+
+                                                paddingHorizontal: 6,
+                                                paddingVertical: 3,
+
+                                                flexDirection:
+                                                    "row",
+                                                alignItems:
+                                                    "center",
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="star"
+                                                size={8}
+                                                color="#111"
+                                            />
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#333",
+                                                    marginLeft: 3,
+                                                }}
+                                            >
+                                                {order.status}
+                                            </Text>
+                                        </View>
+
+                                        {/* Order Date */}
+
+                                        <Text
+                                            style={{
+                                                fontSize: 11,
+                                                color: "#565B70",
+                                            }}
+                                        >
+                                            {order.orderDate}
+                                        </Text>
+                                    </View>
+
+                                    {/* ORDER ID */}
+                                    <View
+                                        style={{
+                                            marginTop: 9,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 10,
+                                                color: "#747990",
+                                            }}
+                                        >
+                                            Order ID
+                                        </Text>
+
+                                        <Text
+                                            style={{
+                                                fontSize: 12,
+                                                color: "#111111",
+                                                fontWeight: "600",
+                                                marginTop: 2,
+                                            }}
+                                        >
+                                             #{order.invoiceNumber}
+                                        </Text>
+                                    </View>
+
+                                    {/* DELIVERY + TOTAL */}
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+
+                                            marginTop: 12,
+                                        }}
+                                    >
+                                        {/* Delivery Date */}
+
+                                        <View
+                                            style={{
+                                                flexDirection:
+                                                    "row",
+                                                alignItems:
+                                                    "center",
+
+                                                paddingRight: 8,
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="location"
+                                                size={13}
+                                                color="#000"
+                                            />
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#222",
+                                                    marginLeft: 4,
+                                                }}
+                                            >
+                                                {
+                                                    order.deliveryDate
+                                                }
+                                            </Text>
+                                        </View>
+
+                                        {/* Divider */}
+
+                                        <View
+                                            style={{
+                                                width: 1,
+                                                height: 22,
+                                                backgroundColor:
+                                                    "#E1E4E8",
+                                            }}
+                                        />
+
+                                        {/* Time */}
+
+                                        <View
+                                            style={{
+                                                flexDirection:
+                                                    "row",
+                                                alignItems:
+                                                    "center",
+
+                                                paddingHorizontal: 8,
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="time"
+                                                size={13}
+                                                color="#000"
+                                            />
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#222",
+                                                    marginLeft: 4,
+                                                }}
+                                            >
+                                                {order.timeSlot}
+                                            </Text>
+                                        </View>
+
+                                        {/* Divider */}
+
+                                        <View
+                                            style={{
+                                                width: 1,
+                                                height: 22,
+                                                backgroundColor:
+                                                    "#E1E4E8",
+                                            }}
+                                        />
+
+                                        {/* Total */}
+
+                                        <View
+                                            style={{
+                                                flex: 1,
+                                                paddingLeft: 8,
+                                            }}
+                                        >
+                                            <Text
+                                                style={{
+                                                    fontSize: 10,
+                                                    color: "#747990",
+                                                }}
+                                            >
+                                                Total
+                                            </Text>
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 11,
+                                                    color: "#111",
+                                                    fontWeight:
+                                                        "700",
+                                                    marginTop: 1,
+                                                }}
+                                                numberOfLines={1}
+                                            >
+                                                {formatAmount(
+                                                    order.total
+                                                )}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* VIEW DETAILS */}
+                                    <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        onPress={() =>
+                                            handleViewDetails(
+                                                order
+                                            )
+                                        }
+                                        style={{
+                                            flexDirection:
+                                                "row",
+                                            alignItems:
+                                                "center",
+
+                                            marginTop: 9,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 10,
+                                                color: "#60647A",
+                                            }}
+                                        >
+                                            View Details
+                                        </Text>
+
+                                        <Ionicons
+                                            name="chevron-forward"
+                                            size={12}
+                                            color="#60647A"
+                                            style={{
+                                                marginLeft: 3,
+                                            }}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    )}
+                </>
             )}
+
+            {/* DatePicker */}
             {datePickerVisible && (
                 <DateTimePicker
-                    value={selectedDate}
+                    value={selectedDate || new Date()}
                     mode="date"
                     display="default"
                     onChange={handleDateChange}
                 />
             )}
+
             {/* Floating Bottom Navigation Bar */}
-            <BottomNavigation activeScreen="MyCart" navigation={navigation} />
+            <BottomNavigation activeScreen="OrderHistory" navigation={navigation} />
         </View>
     );
 };

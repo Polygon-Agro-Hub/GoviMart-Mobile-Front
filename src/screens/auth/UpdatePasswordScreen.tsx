@@ -37,7 +37,10 @@ interface UpdatePasswordProps {
   route: UpdatePasswordRouteProp;
 }
 
-const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) => {
+const UpdatePassword: React.FC<UpdatePasswordProps> = ({
+  navigation,
+  route,
+}) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const { customerId, name, number, redirectTo } = route.params || {};
 
@@ -50,20 +53,6 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    );
-    return () => {
-      keyboardDidShowListener.remove();
-    };
-  }, []);
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -78,6 +67,9 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const currentPasswordPlaceholder =
+    redirectTo === "Profile" ? "Type Here" : "Type Your NIC Number Here";
 
   const showAlert = (
     title: string,
@@ -101,7 +93,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
       newErrors.newPassword = "New password is required";
     } else {
       if (newPassword.length < 8) {
-        newErrors.newPassword = "Must be at least 8 characters";
+        newErrors.newPassword =
+          "New password must have at least 8 characters with a mix of letters, numbers and symbols.";
       } else if (!/[a-zA-Z]/.test(newPassword)) {
         newErrors.newPassword = "Must contain at least 1 letter";
       } else if (!/[0-9]/.test(newPassword)) {
@@ -141,16 +134,15 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
               text: "OK",
               onPress: () => {
                 // Navigate to Customize Packages (ExcludeListAdd screen)
-                if( redirectTo == "Profile"){
-                    navigation.navigate("Profile")
-                }
-                else if(redirectTo == "ExcludeListAdd"){
-                navigation.navigate("ExcludeListAdd", {
-                  customerId: customerId || 0,
-                  name: name,
-                  number: number,
-                });}
-                else{
+                if (redirectTo == "Profile") {
+                  navigation.navigate("Profile");
+                } else if (redirectTo == "ExcludeListAdd") {
+                  navigation.navigate("ExcludeListAdd", {
+                    customerId: customerId || 0,
+                    name: name,
+                    number: number,
+                  });
+                } else {
                   navigation.goBack();
                 }
               },
@@ -177,6 +169,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.select({ ios: 100, android: 80 })}
       className="flex-1 bg-white"
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
@@ -196,7 +189,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
-          paddingBottom: 24,
+          paddingBottom: 120,
         }}
       >
         <View className="flex-1 justify-start">
@@ -233,7 +226,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
                       Current Password
                     </Text>
                     <TextInput
-                      placeholder="Type Your NIC Number Here"
+                      placeholder={currentPasswordPlaceholder}
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showCurrentPassword}
                       value={currentPassword}
@@ -384,13 +377,15 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
             </View>
           </View>
         </View>
+      </ScrollView>
 
-        {/* Update Password Submission Button */}
+      {/* Update Password Submission Button */}
+      <View className="px-6 pb-6 pt-2 bg-white">
         <TouchableOpacity
           onPress={handleUpdatePassword}
           disabled={loading || !isValid}
           activeOpacity={isValid ? 0.8 : 1}
-          className={`rounded-full items-center justify-center mt-8 h-[50px] shadow-sm ${
+          className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
             isValid ? "bg-black" : "bg-[#7F919C]"
           }`}
         >
@@ -402,7 +397,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({ navigation, route }) =>
             </Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       {/* Alert Modal */}
       <AlertModal

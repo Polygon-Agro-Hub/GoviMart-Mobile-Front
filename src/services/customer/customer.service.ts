@@ -48,6 +48,11 @@ class CustomerService {
     return apiClient.delete(ENDPOINTS.CUSTOMER.DELETE_ACCOUNT, { headers });
   }
 
+  async getDeleteAccountStatus() {
+    const headers = await getAuthHeader();
+    return apiClient.get(ENDPOINTS.CUSTOMER.GET_DELETE_ACCOUNT_STATUS, { headers });
+  }
+
   async sendPhoneChangeOtp(data: PhoneChangeOtpPayload) {
     const headers = await getAuthHeader();
     return apiClient.post(ENDPOINTS.CUSTOMER.SEND_PHONE_CHANGE_OTP, data, { headers });
@@ -61,6 +66,15 @@ class CustomerService {
   async resendPhoneChangeOtp(data: { signupToken: string }) {
     const headers = await getAuthHeader();
     return apiClient.post(ENDPOINTS.CUSTOMER.RESEND_PHONE_CHANGE_OTP, data, { headers });
+  }
+
+  async updateCreditBalance(creditBalance: number) {
+    const headers = await getAuthHeader();
+    return apiClient.put(
+      ENDPOINTS.CUSTOMER.UPDATE_CREDIT_BALANCE,
+      { creditBalance },
+      { headers }
+    );
   }
 }
 

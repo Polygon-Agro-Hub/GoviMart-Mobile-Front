@@ -7,11 +7,6 @@
     "icon": "./src/assets/images/public/app-icon-android.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./src/assets/images/public/app-icon-android.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "android": {
       "package": "com.polygonagro.Polygon",
       "versionCode": 1,
@@ -57,6 +52,10 @@
     "web": {
       "favicon": "./src/assets/images/public/app-icon-android.png"
     },
+    "notification": {
+      "icon": "./src/assets/images/notification/notification-icon.png",
+      "color": "#3E206D"
+    },
     "plugins": [
       [
         "expo-build-properties",
@@ -64,6 +63,13 @@
           "ios": {
             "deploymentTarget": "15.1"
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/images/notification/notification-icon.png",
+          "color": "#3E206D"
         }
       ],
       "@react-native-community/datetimepicker"

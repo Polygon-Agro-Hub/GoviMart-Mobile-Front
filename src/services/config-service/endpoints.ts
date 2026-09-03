@@ -5,6 +5,7 @@ export const ENDPOINTS = {
     LOGOUT: "api/auth/logout",
     UPDATE_PASSWORD: "api/auth/update-password",
     REFRESH_TOKEN: "api/auth/refresh-token",
+    GET_CITIES: "api/auth/cities",
   },
 
   CUSTOMER: {
@@ -15,9 +16,11 @@ export const ENDPOINTS = {
     DELETE_ADDRESS: "api/customer/delete-address",
     UPDATE_USER_DETAILS: "api/customer/update-details",
     DELETE_ACCOUNT: "api/customer/delete-account",
+    GET_DELETE_ACCOUNT_STATUS: "api/customer/delete-account-status",
     SEND_PHONE_CHANGE_OTP: "api/customer/send-phone-change-otp",
     VERIFY_PHONE_CHANGE_OTP: "api/customer/verify-phone-change-otp",
     RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
+    UPDATE_CREDIT_BALANCE: "api/customer/update-credit-balance",
   },
 
   COMPLAINT: {
@@ -32,6 +35,16 @@ export const ENDPOINTS = {
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
     GET_BANNERS: "api/product/slides",
+    CHECK_AVAILABILITY: "api/product/check-availability",
+  },
+
+  CART: {
+    GET_USER_CART: "api/cart/user-cart",
+    ADD_UPDATE_PRODUCT: "api/cart/product",
+    ADD_UPDATE_PACKAGE: "api/cart/package",
+    REMOVE_PRODUCT: "api/cart/product/:productId",
+    REMOVE_PACKAGE: "api/cart/package/:packageId",
+    CLEAR_CART: "api/cart/clear",
   },
 
   ORDER: {
@@ -39,5 +52,22 @@ export const ENDPOINTS = {
     GET_ORDER_BY_ID: "api/order/:orderId",
     GET_ORDER_PACKAGES: "api/order/packages/:orderId",
     GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
+    CREATE_ORDER: "api/order/create-order",
+    GET_PICKUP_CENTERS: "api/order/pickup-centers",
+    GET_DELIVERY_CITIES: "api/order/delivery-cities",
+    GET_COUPONS: "api/order/coupons",
+    CHECK_COUPON: "api/order/check-coupon",
+    GET_INVOICE: "api/order/invoice/:orderId",
+  },
+
+  PAYMENT: {
+    PAYHERE_INITIATE: "api/payment/payhere/initiate",
+  },
+
+  NOTIFICATION: {
+    GET_ALL: "api/notification",
+    MARK_READ: "api/notification/:id/read",
+    MARK_ALL_READ: "api/notification/read-all",
+    SEED_DUMMY: "api/notification/seed-dummy",
   },
 };

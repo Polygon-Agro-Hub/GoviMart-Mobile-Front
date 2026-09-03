@@ -206,7 +206,14 @@ Alert.alert = (title, message, buttons, options) => {
   if (hasMultipleButtons) {
     originalAlert(title, message, buttons, options);
   } else {
-    const isSuccess = typeof title === "string" && title.toLowerCase().includes("success");
+    const lowerTitle = typeof title === "string" ? title.toLowerCase() : "";
+    const isSuccess =
+      lowerTitle.includes("success") ||
+      lowerTitle.includes("resent") ||
+      lowerTitle.includes("sent") ||
+      lowerTitle.includes("updated") ||
+      lowerTitle.includes("created") ||
+      lowerTitle.includes("completed");
     const type = isSuccess ? "success" : "error";
 
     const onCloseCallback = () => {

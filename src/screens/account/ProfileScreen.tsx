@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,97 +12,85 @@ import { RootState } from "@/store";
 import { logoutSuccess } from "@/store/authSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6 } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
 import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
 
-
-type ProfileNavigationProp = StackNavigationProp<
-  RootStackParamList,
-  "Profile"
->;
+type ProfileNavigationProp = StackNavigationProp<RootStackParamList, "Profile">;
 
 interface ProfileProps {
   navigation: ProfileNavigationProp;
 }
 
 const Profile: React.FC<ProfileProps> = ({ navigation }) => {
-  const user = useSelector(
-    (state: RootState) => state.auth.userProfile
-  );
+  const user = useSelector((state: RootState) => state.auth.userProfile);
 
   const dispatch = useDispatch();
 
-
   const [creditBalance, setCreditBalance] = useState<number>(0);
-  const [isCreditBalanceLoading, setIsCreditBalanceLoading] = useState<boolean>(true);
+  const [isCreditBalanceLoading, setIsCreditBalanceLoading] =
+    useState<boolean>(true);
+  const [logoutModalVisible, setLogoutModalVisible] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchAcccountDetails = async () => {
-      try {
-        setIsCreditBalanceLoading(true);
-        const response = await customerService.getAccountDetails()
-        if (response.data) {
-          const { creditBalance } = response.data.data
-          setCreditBalance(Number(creditBalance!))
-        }
-        console.log("acc details fetchihng success: ", response.data.data)
+  const fetchAcccountDetails = async () => {
+    try {
+      setIsCreditBalanceLoading(true);
+      const response = await customerService.getAccountDetails();
+      if (response.data && response.data.data) {
+        const { creditBalance } = response.data.data;
+        setCreditBalance(Number(creditBalance || 0));
       }
+    } catch (error) {
+      console.log("error fetching acc details: ", error);
+    } finally {
+      setIsCreditBalanceLoading(false);
+    }
+  };
 
-      catch (error) {
-        console.log("error fetching acc details: ", error)
-      } finally {
-        setIsCreditBalanceLoading(false);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAcccountDetails();
+    }, [])
+  );
+
+  const handleLogoutPress = () => {
+    setLogoutModalVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutModalVisible(false);
+    try {
+      // Call backend logout API to expire/clear token
+      await authService.logout().catch((err) => {
+        console.log(
+          "Server logout failed, proceeding with local logout:",
+          err,
+        );
+      });
+    } catch (e) {
+      console.log("Logout API call error:", e);
+    } finally {
+      try {
+        await AsyncStorage.removeItem("userToken");
+        await AsyncStorage.removeItem("userProfile");
+        await AsyncStorage.removeItem("userLoginTime");
+
+        dispatch(logoutSuccess());
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "ChooseAuth" }],
+        });
+      } catch (e) {
+        console.error("Logout error:", e);
       }
     }
-    fetchAcccountDetails()
-  }, [])
-
-
-  const handleLogout = async () => {
-    Alert.alert(
-      "Confirm Logout",
-      "Are you sure you want to log out?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Call backend logout API to expire/clear token
-              await authService.logout().catch((err) => {
-                console.log("Server logout failed, proceeding with local logout:", err);
-              });
-            } catch (e) {
-              console.log("Logout API call error:", e);
-            } finally {
-              try {
-                await AsyncStorage.removeItem("userToken");
-                await AsyncStorage.removeItem("userProfile");
-                await AsyncStorage.removeItem("userLoginTime");
-
-                dispatch(logoutSuccess());
-
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: "ChooseAuth" }],
-                });
-              } catch (e) {
-                console.error("Logout error:", e);
-              }
-            }
-          },
-        },
-      ]
-    );
   };
 
   const placeholderImage =
@@ -110,9 +98,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
 
   const userImage = user?.image || placeholderImage;
 
-  const fullName = user
-    ? `${user.firstName} ${user.lastName}`
-    : "Guest User";
+  const fullName = user ? `${user.firstName} ${user.lastName}` : "Guest User";
 
   return (
     <View
@@ -124,7 +110,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
       {/* Header */}
 
       <CustomHeader
-        title="My Profile"
+        title=""
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
@@ -134,7 +120,6 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 16,
-          paddingTop: 20,
           paddingBottom: 120,
         }}
       >
@@ -183,8 +168,6 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           >
             {fullName}
           </Text>
-
-
         </View>
 
         {/* CREDIT BALANCE */}
@@ -256,11 +239,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                   alignItems: "center",
                 }}
               >
-                <FontAwesome6
-                  name="wallet"
-                  size={15}
-                  color="#FFF"
-                />
+                <FontAwesome6 name="wallet" size={15} color="#FFF" />
               </View>
 
               <Text
@@ -279,10 +258,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                   marginTop: 1,
                   fontSize: 20,
                   fontWeight: "800",
-                  color:
-                    creditBalance < 0
-                      ? "#FF383C"
-                      : "#000",
+                  color: creditBalance < 0 ? "#FF383C" : "#000",
                 }}
               >
                 Rs. {creditBalance.toFixed(2)}
@@ -296,16 +272,21 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                       fontSize: 13,
                     }}
                   >
-                    You won’t be able to place a new order until
-                    the negative balance is cleared. This balance
-                    occurred due to a previous return order. Once
-                    the outstanding amount is paid, you’ll be able
-                    to place orders again. Thank you for your
+                    You won’t be able to place a new order until the negative
+                    balance is cleared. This balance occurred due to a previous
+                    return order. Once the outstanding amount is paid, you’ll be
+                    able to place orders again. Thank you for your
                     understanding!
                   </Text>
 
                   <TouchableOpacity
                     activeOpacity={0.85}
+                    onPress={() => {
+                      navigation.navigate("PaymentScreen", {
+                        amount: Math.abs(creditBalance),
+                        title: "Payment Summery",
+                      });
+                    }}
                     style={{
                       paddingVertical: 12,
                       marginTop: 10,
@@ -332,7 +313,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                         fontWeight: "700",
                       }}
                     >
-                      Proceed to Checkout
+                      Clear the negative balance
                     </Text>
                   </TouchableOpacity>
                 </>
@@ -390,12 +371,6 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="headset"
             title="Report a Complaint"
             onPress={() => {
-              navigation.navigate("ReportComplaint");
-            }}
-          /><ProfileMenuItem
-            icon="list"
-            title="My Complaints"
-            onPress={() => {
               navigation.navigate("ComplaintHistory");
             }}
           />
@@ -406,10 +381,23 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="right-from-bracket"
             title="Logout"
             danger={true}
-            onPress={handleLogout}
+            onPress={handleLogoutPress}
           />
         </View>
       </ScrollView>
+
+      {/* Reusable Confirmation Modal for Logout */}
+      <ConfirmationModal
+        visible={logoutModalVisible}
+        title="Confirm Logout"
+        message="Are you sure you want to log out?"
+        confirmLabel="Logout"
+        cancelLabel="Cancel"
+        iconName="log-out-outline"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutModalVisible(false)}
+      />
+
       {/* Floating Bottom Navigation Bar */}
       <BottomNavigation activeScreen="Profile" navigation={navigation} />
     </View>

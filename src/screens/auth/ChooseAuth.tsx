@@ -1,11 +1,21 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity, ScrollView, StatusBar } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+} from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
-type ChooseAuthNavigationProp = StackNavigationProp<RootStackParamList, "ChooseAuth">;
+type ChooseAuthNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "ChooseAuth"
+>;
 
 interface ChooseAuthProps {
   navigation: ChooseAuthNavigationProp;
@@ -13,18 +23,22 @@ interface ChooseAuthProps {
 
 const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
   return (
-    <ScrollView 
-      className="flex-1 bg-white" 
+    <ScrollView
+      className="flex-1 bg-white"
       contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
       showsVerticalScrollIndicator={false}
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
-      
+
       {/* Top Header Section */}
       <View className="relative w-full h-[320px] px-6 pt-12 flex-row justify-between items-center">
         {/* Left side text content */}
         <View className="z-10 w-[55%] items-start justify-center pr-2">
-          <Text className="text-3xl font-black text-black text-left leading-tight">
+          <Text
+            className="text-3xl font-black text-black text-left leading-tight"
+            numberOfLines={2}
+            adjustsFontSizeToFit
+          >
             {"Good food,\ndelivered fresh."}
           </Text>
           <Text className="text-xs text-[#5A5859] text-left mt-3 leading-normal">
@@ -49,29 +63,37 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
       </View>
 
       {/* Info Features Box */}
-      <View className="mx-6 rounded-2xl mt-4">
+      <View className="mx-6 rounded-2xl ">
         {/* Feature 1: Leaf */}
         <View className="flex-row items-center py-2">
-          <View className="w-10 h-10 rounded-md bg-[#E4EBF2] items-center justify-center mr-4">
+          <View className="w-10 h-10 rounded-md bg-[#F8F6F4] items-center justify-center mr-4">
             <FontAwesome6 name="leaf" size={18} color="black" />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-bold text-black">Farm to door step</Text>
-            <Text className="text-xs text-[#5A5859] mt-0.5">Sourced with delivered within 24 hours</Text>
+            <Text className="text-base font-bold text-black">
+              Farm to door step
+            </Text>
+            <Text className="text-xs text-[#5A5859] mt-0.5">
+              Sourced with delivered within 24 hours
+            </Text>
           </View>
         </View>
-        
+
         {/* Border line 1 */}
         <View className="border-b border-[#E4EBF2] my-2 w-[50%]" />
 
         {/* Feature 2: Lorry */}
         <View className="flex-row items-center py-2">
-          <View className="w-10 h-10 rounded-md bg-[#E4EBF2] items-center justify-center mr-4">
+          <View className="w-10 h-10 rounded-md bg-[#F8F6F4] items-center justify-center mr-4">
             <FontAwesome6 name="truck" size={18} color="black" />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-bold text-black">Fast Delivery</Text>
-            <Text className="text-xs text-[#5A5859] mt-0.5">Right to your door</Text>
+            <Text className="text-base font-bold text-black">
+              Fast Delivery
+            </Text>
+            <Text className="text-xs text-[#5A5859] mt-0.5">
+              Right to your door
+            </Text>
           </View>
         </View>
 
@@ -80,11 +102,13 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
 
         {/* Feature 3: Secure */}
         <View className="flex-row items-center py-2">
-          <View className="w-10 h-10 rounded-md bg-[#E4EBF2] items-center justify-center mr-4">
+          <View className="w-10 h-10 rounded-md bg-[#F8F6F4] items-center justify-center mr-4">
             <FontAwesome6 name="shield-halved" size={18} color="black" />
           </View>
           <View className="flex-1">
-            <Text className="text-base font-bold text-black">Secure & Easy</Text>
+            <Text className="text-base font-bold text-black">
+              Secure & Easy
+            </Text>
             <Text className="text-xs text-[#5A5859] mt-0.5">Safe payments</Text>
           </View>
         </View>
@@ -93,7 +117,18 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
       {/* Action Buttons Section */}
       <View className="mt-10 px-6 pb-8">
         {/* Sign Up Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
+          style={{
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+
+            elevation: 5,
+          }}
           className="w-full bg-black py-4 rounded-full items-center justify-center"
           activeOpacity={0.8}
           onPress={() => navigation.navigate("DeliveryLocation")}
@@ -111,15 +146,24 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
         </View>
 
         {/* Sign In Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
+          style={{
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+
+            elevation: 5,
+          }}
           className="w-full bg-[#FF9114] py-4 rounded-full items-center justify-center"
           activeOpacity={0.8}
           onPress={() => navigation.navigate("Login")}
         >
           <Text className="text-white text-base font-bold">Sign in</Text>
         </TouchableOpacity>
-
-
       </View>
     </ScrollView>
   );

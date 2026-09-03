@@ -12,28 +12,44 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState } from "@/store";
+import { addPackage, setPackageQuantity, removePackage } from "@/store/cartSlice";
 import { RootStackParamList } from "@/types/types";
 import BottomCart from "@/component/common/BottomCart";
 
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
+import AuthPromptModal from "@/component/common/AuthPromptModal";
 import productService from "@/services/product/product.service";
-
+import cartService from "@/services/cart/cart.service";
 
 type Props = StackScreenProps<RootStackParamList, "ViewPackage">;
 
 const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
     const { packageId, packageName, image, price } = route.params;
+    const dispatch = useDispatch();
+    const token = useSelector((state: RootState) => state.auth.token);
+    const existingPackage = useSelector((state: RootState) =>
+        state.cart.packages.find((p) => p.id === packageId)
+    );
 
     const [packageItems, setPackageItems] = useState<{ itemName: string; quantity: number }[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [unit, setUnit] = useState<"kg" | "g">("g");
-    const [quantity, setQuantity] = useState(1);
+    const [quantity, setQuantity] = useState(existingPackage ? existingPackage.quantity : 1);
     const [toastVisible, setToastVisible] = useState(false);
     const [toastMessage, setToastMessage] = useState("");
+    const [authModalVisible, setAuthModalVisible] = useState(false);
 
-    const [viewCartVisible, setViewCartVisible] = useState(false);
+    const [viewCartVisible, setViewCartVisible] = useState(!!existingPackage);
+
+    useEffect(() => {
+        if (existingPackage) {
+            setQuantity(existingPackage.quantity);
+            setViewCartVisible(true);
+        }
+    }, [existingPackage]);
 
     useEffect(() => {
         const fetchDetails = async () => {
@@ -57,54 +73,81 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
         fetchDetails();
     }, [packageId]);
 
+    const totalItems = packageItems.reduce(
+        (total, item) => total + item.quantity,
+        0
+    );
+
     const increaseQty = () => {
         setQuantity((prev) => prev + 1);
     };
 
     const decreaseQty = () => {
         if (quantity > 1) setQuantity((prev) => prev - 1);
-
     };
 
     const onAddToCart = async () => {
-        // API
-        console.log("Added");
+        if (!token) {
+            setAuthModalVisible(true);
+            return;
+        }
+        dispatch(
+            addPackage({
+                id: packageId,
+                name: packageName,
+                image: image,
+                price: price,
+                quantity: quantity,
+                totalItems: totalItems,
+            })
+        );
+        if (token) {
+            cartService.syncCartPackage(packageId, quantity).catch((err) =>
+                console.error("DB cart sync error:", err)
+            );
+        }
         showCartMessage("Added to Cart");
     };
 
     const onUpdateCart = async () => {
-        // API
-
-        console.log("Updated");
+        if (!token) {
+            setAuthModalVisible(true);
+            return;
+        }
+        dispatch(
+            setPackageQuantity({
+                id: packageId,
+                quantity: quantity,
+            })
+        );
+        if (token) {
+            cartService.syncCartPackage(packageId, quantity).catch((err) =>
+                console.error("DB cart sync error:", err)
+            );
+        }
         showCartMessage("Cart Updated");
-
     };
 
     const onRemoveFromCart = async () => {
-        // API
-
-        console.log("Removed");
+        dispatch(removePackage(packageId));
+        if (token) {
+            cartService.removeCartPackage(packageId).catch((err) =>
+                console.error("DB cart sync error:", err)
+            );
+        }
         showCartMessage("Removed from Cart");
         setViewCartVisible(false);
     };
 
     const showCartMessage = (message: string) => {
         setToastMessage(message);
-
         setToastVisible(true);
-
         setViewCartVisible(true);
 
         setTimeout(() => {
             setToastVisible(false);
         }, 4000);
-    }
-    // let samplePackages  = packages[1]
-
-    const totalItems = packageItems.reduce(
-        (total, item) => total + item.quantity,
-        0
-    );
+    };
 
     if (loading) {
         return (
@@ -116,14 +159,12 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
 
     return (
         <View className="flex-1 bg-[#FCEFD9]">
-
             <StatusBar
                 backgroundColor="#FCEFD9"
                 barStyle="dark-content"
             />
 
             {/* Close Button */}
-
             <TouchableOpacity
                 onPress={() => navigation.goBack()}
                 className="absolute right-5 top-3 z-50 bg-white w-11 h-11 rounded-full items-center justify-center"
@@ -137,15 +178,11 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
 
             {/* Product Image */}
             <ScrollView
-
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                    // paddingBottom: 120, // Prevent content from being hidden behind the bottom bar
                     flexGrow: 1,
                 }}
             >
-
-
                 <View className="items-center mt-10 mb-10">
                     <Image
                         source={{ uri: image }}
@@ -158,7 +195,6 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 </View>
 
                 {/* White area */}
-
                 <View
                     style={{
                         flex: 1,
@@ -169,7 +205,6 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                         paddingHorizontal: 20,
                         paddingTop: 22,
                         paddingBottom: 30,
-
                         shadowColor: "#000",
                         shadowOpacity: 0.08,
                         shadowRadius: 8,
@@ -207,12 +242,12 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                         })}
                     </Text>
                     <View
-                                            style={{
-                                                height: 1,
-                                                backgroundColor: "#ECECEC",
-                                                marginVertical: 16,
-                                            }}
-                                        />
+                        style={{
+                            height: 1,
+                            backgroundColor: "#ECECEC",
+                            marginVertical: 16,
+                        }}
+                    />
 
                     {/* Section Title */}
                     <Text
@@ -221,13 +256,11 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                             fontWeight: "700",
                             color: "#111827",
                             marginBottom: 10,
-                               paddingHorizontal: 15,
+                            paddingHorizontal: 15,
                         }}
                     >
                         All ({totalItems} Items)
                     </Text>
-
-                     
 
                     {/* Package Items */}
                     {packageItems.map((item, index) => (
@@ -276,8 +309,8 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
 
             <ViewCartPopup
                 visible={viewCartVisible}
-                itemCount={1}
-            // onPress={() => navigation.navigate("Cart")}
+                itemCount={quantity}
+                onPress={() => navigation.navigate("MyCart")}
             />
 
             <BottomCart
@@ -291,6 +324,13 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
                 onRemoveFromCart={onRemoveFromCart}
             />
 
+            <AuthPromptModal
+                visible={authModalVisible}
+                onClose={() => setAuthModalVisible(false)}
+                navigation={navigation}
+                title="Sign In to Add Package"
+                subtitle="Please sign in or create an account to add packages to your cart and place orders."
+            />
         </View>
     );
 };

@@ -131,10 +131,17 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           placeholder={searchPlaceholder}
           value={searchValue}
           onChangeText={setSearchValue}
-          className="flex-1 ml-2 text-base h-full"
           placeholderTextColor="#666"
           autoCapitalize="none"
           autoCorrect={false}
+              style={{
+            flex: 1,
+            minWidth: 0,
+            paddingVertical: 0,
+            fontSize: 16,
+            height: "100%",
+            marginLeft:4
+          }}
         />
 
         {searchValue ? (

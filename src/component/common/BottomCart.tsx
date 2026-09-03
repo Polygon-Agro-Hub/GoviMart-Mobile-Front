@@ -6,7 +6,8 @@ interface Props {
     minimumValue: number;
     quantity: number;
     unit?: any;
-    step?: number
+    step?: number;
+    initialIsAdded?: boolean;
     onIncrease: () => void;
     onDecrease: () => void;
 
@@ -22,6 +23,7 @@ const ProductBottomCart: React.FC<Props> = ({
     quantity,
     unit,
     step,
+    initialIsAdded = false,
     onIncrease,
     onDecrease,
     onAddToCart,
@@ -29,33 +31,37 @@ const ProductBottomCart: React.FC<Props> = ({
     onRemoveFromCart,
     // onViewCart,
 }) => {
-    const [isAdded, setIsAdded] = useState(false);
+    const [isAdded, setIsAdded] = useState(initialIsAdded);
     const [hasChanges, setHasChanges] = useState(false);
 
-    const increase = async () => {
-        if (!isAdded) {
-            // First '+' click behaves like Add to Cart
-            await onAddToCart();
+    const isFirstRender = React.useRef(true);
 
-            setIsAdded(true);
-            setHasChanges(true); // Quantity changed immediately
+    useEffect(() => {
+        setIsAdded(initialIsAdded);
+        setHasChanges(false);
+    }, [initialIsAdded]);
 
-            onIncrease(); // 500g -> 600g
-
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
             return;
         }
+        if (isAdded) {
+            setHasChanges(true);
+        }
+    }, [unit]);
 
+    const increase = () => {
         onIncrease();
-        setHasChanges(true);
+        if (isAdded) {
+            setHasChanges(true);
+        }
     };
     const stepValue = step ?? 1;
 
     const decrease = () => {
         onDecrease();
-
-        if (quantity - stepValue <= minimumValue) {
-            setHasChanges(false);
-        } else {
+        if (isAdded) {
             setHasChanges(true);
         }
     };
@@ -105,31 +111,35 @@ const ProductBottomCart: React.FC<Props> = ({
                 elevation: 12,
             }}
         >
-            {/* Left Button */}
-            {!isAdded ? (
-                <View
+            {/* Left Button:
+                - quantity > minimum  → active dark minus button (always, even before adding to cart)
+                - quantity <= minimum, not added → gray disabled trash (nothing to delete)
+                - quantity <= minimum, added      → dark active trash (removes from cart) */}
+            {quantity > minimumValue ? (
+                <TouchableOpacity
+                    onPress={decrease}
                     style={{
                         width: 48,
                         height: 48,
                         borderRadius: 24,
-                        backgroundColor: "#F3F3F3",
+                        backgroundColor: "#000",
                         justifyContent: "center",
                         alignItems: "center",
 
                         shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.08,
+                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.2,
                         shadowRadius: 4,
-                        elevation: 2,
+                        elevation: 4,
                     }}
                 >
                     <Ionicons
-                        name="trash-outline"
+                        name="remove"
                         size={24}
-                        color="#CFCFCF"
+                        color="#FFF"
                     />
-                </View>
-            ) : quantity <= minimumValue ? (
+                </TouchableOpacity>
+            ) : isAdded ? (
                 <TouchableOpacity
                     onPress={handleDelete}
                     style={{
@@ -154,29 +164,28 @@ const ProductBottomCart: React.FC<Props> = ({
                     />
                 </TouchableOpacity>
             ) : (
-                <TouchableOpacity
-                    onPress={decrease}
+                <View
                     style={{
                         width: 48,
                         height: 48,
                         borderRadius: 24,
-                        backgroundColor: "#000",
+                        backgroundColor: "#F3F3F3",
                         justifyContent: "center",
                         alignItems: "center",
 
                         shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.2,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.08,
                         shadowRadius: 4,
-                        elevation: 4,
+                        elevation: 2,
                     }}
                 >
                     <Ionicons
-                        name="remove"
+                        name="trash-outline"
                         size={24}
-                        color="#FFF"
+                        color="#CFCFCF"
                     />
-                </TouchableOpacity>
+                </View>
             )}
 
             {/* Quantity */}
@@ -250,31 +259,32 @@ const ProductBottomCart: React.FC<Props> = ({
                     </Text>
                 </TouchableOpacity>
             ) : (
-                <TouchableOpacity
-                    disabled={!hasChanges}
-                    onPress={handleUpdate}
-                    style={{
-                        marginLeft: 140,
-                        width: 52,
-                        height: 52,
-                        borderRadius: 26,
-                        justifyContent: "center",
-                        alignItems: "center",
-                        backgroundColor: hasChanges ? "#000" : "#D9D9D9",
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <TouchableOpacity
+                        disabled={!hasChanges}
+                        onPress={handleUpdate}
+                        style={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: 26,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            backgroundColor: hasChanges ? "#000" : "#D9D9D9",
 
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 4,
-                        elevation: 4,
-                    }}
-                >
-                    <Ionicons
-                        name="checkmark"
-                        size={24}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 3 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 4,
+                            elevation: 4,
+                        }}
+                    >
+                        <Ionicons
+                            name="checkmark"
+                            size={24}
+                            color="#FFF"
+                        />
+                    </TouchableOpacity>
+                </View>
             )}
         </View>
     );

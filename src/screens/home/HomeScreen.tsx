@@ -8,18 +8,46 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  BackHandler,
+  ToastAndroid,
+  Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList, ProductType, PackageType, ShopItem } from "@/types/types";
-import { useSelector } from "react-redux";
+import { useFocusEffect } from "@react-navigation/native";
+import {
+  RootStackParamList,
+  ProductType,
+  PackageType,
+  ShopItem,
+} from "@/types/types";
+import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
+import {
+  addProduct,
+  removeProduct,
+  increaseProductWeight,
+  decreaseProductWeight,
+  changeProductUnit,
+  addPackage,
+  removePackage,
+  increasePackageQuantity,
+  decreasePackageQuantity,
+  ProductCartItem,
+  PackageCartItem,
+  CartState,
+} from "@/store/cartSlice";
+import cartService from "@/services/cart/cart.service";
+
+
 import HomeHeader from "@/component/home/HomeHeader";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
+import CartToast from "@/component/common/CartToast";
+import ViewCartPopup from "@/component/common/ViewCartPopup";
+import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
 
-// Re-export for backward compatibility with any screens importing ProductType from here
 export type { ProductType, PackageType } from "@/types/types";
 
 type HomeNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -31,59 +59,85 @@ interface HomeProps {
 interface Category {
   id: string;
   name: string;
-  image: string;
   circleBg: string;
   borderColor: string;
   activeBg: string;
   active: boolean;
 }
 
-const CATEGORIES: Category[] = [
+interface AddTimeSnapshot {
+  weight?: number;
+  unit?: "g" | "kg";
+  quantity?: number;
+  price: number;
+}
 
+const CATEGORY_IMAGES: Record<string, any> = {
+  Packages: require("@/assets/images/home/packages.webp"),
+  Vegetables: require("@/assets/images/home/veggies.webp"),
+  Fruits: require("@/assets/images/home/fruits.webp"),
+  Cereals: require("@/assets/images/home/cereal.webp"),
+  Spices: require("@/assets/images/home/spices.webp"),
+  Mushrooms: require("@/assets/images/home/mushroom.webp"),
+  Pulses: require("@/assets/images/home/pulses.webp"),
+};
+
+const CATEGORIES: Category[] = [
   {
     id: "Packages",
     name: "Packages",
-    image: "https://cdn-icons-png.flaticon.com/512/2956/2956820.png",
-    circleBg: "#FFE4E6",
-    borderColor: "#FDA4AF",
-    activeBg: "#F43F5E",
-    active: false
+    circleBg: "#FFCCB9",
+    borderColor: "#C58B8B",
+    activeBg: "#FB4300",
+    active: false,
   },
   {
     id: "Vegetables",
     name: "Veggies",
-    image: "https://cdn-icons-png.flaticon.com/512/2909/2909848.png",
-    circleBg: "#FFFFFF",
-    borderColor: "#84CC16",
-    activeBg: "#84CC16",
-    active: true
+    circleBg: "#F3FFDD",
+    borderColor: "#50FF43",
+    activeBg: "#92D01B",
+    active: true,
   },
   {
     id: "Fruits",
     name: "Fruits",
-    image: "https://cdn-icons-png.flaticon.com/512/415/415733.png",
-    circleBg: "#FFE4E6",
-    borderColor: "#F87171",
-    activeBg: "#EF4444",
-    active: false
+    circleBg: "#FEE5E4",
+    borderColor: "#EA2A3D",
+    activeBg: "#EA2A3D",
+    active: false,
   },
   {
     id: "Cereals",
     name: "Cereal",
-    image: "https://cdn-icons-png.flaticon.com/512/2674/2674486.png",
-    circleBg: "#FEF9C3",
-    borderColor: "#FDE047",
-    activeBg: "#EAB308",
-    active: false
+    circleBg: "#FFFBE0",
+    borderColor: "#FFCF70",
+    activeBg: "#FBA600",
+    active: false,
   },
   {
     id: "Spices",
     name: "Spices",
-    image: "https://cdn-icons-png.flaticon.com/512/8106/8106571.png",
-    circleBg: "#FFEDD5",
-    borderColor: "#FDBA74",
-    activeBg: "#D97706",
-    active: false
+    circleBg: "#FFF0DD",
+    borderColor: "#A56021",
+    activeBg: "#8C4C17",
+    active: false,
+  },
+  {
+    id: "Mushrooms",
+    name: "Mushrooms",
+    circleBg: "#FFEED9",
+    borderColor: "#B47E7F",
+    activeBg: "#8D4546",
+    active: false,
+  },
+  {
+    id: "Pulses",
+    name: "Pulses",
+    circleBg: "#FFE3E9",
+    borderColor: "#B47E7F",
+    activeBg: "#872844",
+    active: false,
   },
 ];
 
@@ -105,7 +159,7 @@ const BannerSkeleton = () => {
           duration: 1000,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, [pulseAnim]);
 
@@ -122,10 +176,7 @@ const BannerSkeleton = () => {
       />
       <View className="flex-row justify-center items-center gap-1.5 mt-3">
         {[1, 2, 3].map((_, index) => (
-          <View
-            key={index}
-            className="w-1.5 h-1.5 rounded-full bg-[#E5E5EA]"
-          />
+          <View key={index} className="w-1.5 h-1.5 rounded-full bg-[#E5E5EA]" />
         ))}
       </View>
     </View>
@@ -184,7 +235,7 @@ const ProductGridSkeleton = () => {
           duration: 1000,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, [pulseAnim]);
 
@@ -203,96 +254,281 @@ const ProductGridSkeleton = () => {
 };
 
 const Home: React.FC<HomeProps> = ({ navigation }) => {
-  const [bannerSlides, setBannerSlides] = useState<{ id: number; image: string; details: string }[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("Packages");
-  const [activeProducts, setActiveProducts] = useState<{ [id: number]: { quantity: number; unit: "g" | "kg" } }>({});
+  const dispatch = useDispatch();
+  const userToken = useSelector(
+    (state: RootState) => (state as RootState & { auth: any }).auth.token,
+  );
+  const userProfile = useSelector(
+    (state: RootState) => (state as RootState & { auth: any }).auth.userProfile,
+  );
+  const buyerType = userProfile?.buyerType || "Retail";
+  const isRetail = buyerType.toLowerCase() === "retail";
+
+  const cartProducts = useSelector(
+    (state: RootState) =>
+      (state as RootState & { cart: CartState }).cart.products,
+  );
+  const cartPackages = useSelector(
+    (state: RootState) =>
+      (state as RootState & { cart: CartState }).cart.packages,
+  );
+  const totalCartItems = cartProducts.length + cartPackages.length;
+
+  const visibleCategories = isRetail
+    ? CATEGORIES
+    : CATEGORIES.filter((category) => category.id !== "Packages");
+
+  const [bannerSlides, setBannerSlides] = useState<
+    { id: number; image: string; details: string }[]
+  >([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
+    isRetail ? "Packages" : "Vegetables",
+  );
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // initial fetching
-  useEffect(() => {
-    const fetchBanners = async () => {
-      try {
-        setLoadingBanners(true);
-        const response = await productService.getBanners();
-        if (response.data && response.data.status) {
-          const fetchedSlides = response.data.slides || [];
-          // Filter for Retail marketplace slides
-          const retailSlides = fetchedSlides.filter((slide: any) => slide.type === "Retail");
-          setBannerSlides(retailSlides);
-        }
-      } catch (err) {
-        console.error("Failed to load banner slides from backend:", err);
-      } finally {
-        setLoadingBanners(false);
-      }
-    };
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const fetchPackages = async () => {
-      try {
-        setLoadingProducts(true);
-        const response = await productService.getAllPackages();
-        if (response.data && response.data.status) {
-          const packages = response.data?.product.map((item: any) => ({
-            ...item,
-            type: "package",
-          }));
-          setShopItems(packages);
-        }
-      } catch (error) {
-        console.error("Failed to load packages from backend:", error);
-      } finally {
-        setLoadingProducts(false);
-      }
-    };
-    fetchBanners();
-    fetchPackages();
+  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
+
+  const [addTimeSnapshots, setAddTimeSnapshots] = useState<
+    Record<number, AddTimeSnapshot>
+  >({});
+
+  const showToast = useCallback((message: string) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMessage(message);
+    setToastVisible(true);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastVisible(false);
+    }, 2500);
   }, []);
 
-  const getSelectedCategoryProducts = async (categoryId: string) => {
-    try {
-      setSelectedCategoryId(categoryId);
-      setLoadingProducts(true);
-      // Packages
-      if (categoryId === "Packages") {
-        const response = await productService.getAllPackages();
+  const formatPrice = (value: number) =>
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
-        if (response.data?.status) {
-          const packages = response.data?.product.map((item: any) => ({
-            ...item,
-            type: "package",
-          }));
+  const backPressedOnce = useRef(false);
 
-          setShopItems(packages);
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (backPressedOnce.current) {
+          BackHandler.exitApp();
+          return true;
         }
-        setLoadingProducts(false);
-        return;
-      }
 
-      // Normal product category
-      const response =
-        await productService.getProductsByCategory(categoryId);
+        backPressedOnce.current = true;
+        if (Platform.OS === "android") {
+          ToastAndroid.show("Press back again to exit", ToastAndroid.SHORT);
+        }
 
-      if (response.data?.status) {
-        const products = response.data.products.map(
-          (item: any) => ({
-            ...item,
-            type: "product",
-          })
+        setTimeout(() => {
+          backPressedOnce.current = false;
+        }, 2000);
+
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+
+      return () => subscription.remove();
+    }, []),
+  );
+
+  const fetchBanners = async () => {
+    try {
+      setLoadingBanners(true);
+      const response = await productService.getBanners();
+      if (response.data && response.data.status) {
+        const fetchedSlides = response.data.slides || [];
+        const matchingSlides = fetchedSlides.filter(
+          (slide: any) => slide.type?.toLowerCase() === buyerType.toLowerCase(),
         );
+        setBannerSlides(
+          matchingSlides.length > 0 ? matchingSlides : fetchedSlides,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load banner slides from backend:", err);
+    } finally {
+      setLoadingBanners(false);
+    }
+  };
 
-        setShopItems(products);
+  const fetchPackages = async () => {
+    if (!isRetail) {
+      setShopItems([]);
+      return;
+    }
+    try {
+      setLoadingProducts(true);
+      const response = await productService.getAllPackages(buyerType);
+      if (response.data && response.data.status) {
+        const packages = (response.data?.product || []).map((item: any) => ({
+          ...item,
+          type: "package",
+        }));
+        setShopItems(packages);
+      } else {
+        setShopItems([]);
       }
     } catch (error) {
-      console.error("Failed to load selected category products from backend:", error);
+      console.error("Failed to load packages from backend:", error);
+      setShopItems([]);
     } finally {
       setLoadingProducts(false);
     }
   };
 
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    getSelectedCategoryProducts(selectedCategoryId);
+  }, [selectedCategoryId, buyerType]);
 
-  // Chunk products into rows of 2 for grid layout
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    const query = text.trim();
+    if (!query) {
+      getSelectedCategoryProducts(selectedCategoryId);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setLoadingProducts(true);
+        const response = await productService.getProductsByCategory(
+          "",
+          buyerType,
+          query,
+        );
+
+        let matchingProducts: ShopItem[] = [];
+        if (response.data?.status && response.data.products) {
+          matchingProducts = response.data.products.map((item: any) => ({
+            ...item,
+            type: "product",
+          }));
+        }
+
+        if (isRetail) {
+          try {
+            const pkgResponse = await productService.getAllPackages(buyerType);
+            if (pkgResponse.data?.status && pkgResponse.data.product) {
+              const matchingPkgs = pkgResponse.data.product
+                .filter((pkg: any) =>
+                  (pkg.displayName || pkg.packageName || "")
+                    .toLowerCase()
+                    .includes(query.toLowerCase()),
+                )
+                .map((item: any) => ({
+                  ...item,
+                  type: "package",
+                }));
+              matchingProducts = [...matchingPkgs, ...matchingProducts];
+            }
+          } catch (pkgErr) {
+            console.log("Package search error:", pkgErr);
+          }
+        }
+
+        setShopItems(matchingProducts);
+      } catch (error) {
+        console.error("Search failed:", error);
+        setShopItems([]);
+      } finally {
+        setLoadingProducts(false);
+      }
+    }, 350);
+  };
+
+  const getSelectedCategoryProducts = async (
+    categoryId: string,
+    currentBuyerType = buyerType,
+  ) => {
+    try {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      setSearchQuery("");
+      setSelectedCategoryId(categoryId);
+      setLoadingProducts(true);
+      if (categoryId === "Packages") {
+        if (!isRetail) {
+          setShopItems([]);
+          setLoadingProducts(false);
+          return;
+        }
+        const response = await productService.getAllPackages(currentBuyerType);
+        if (response.data?.status) {
+          const packages = (response.data?.product || []).map((item: any) => ({
+            ...item,
+            type: "package",
+          }));
+          setShopItems(packages);
+        } else {
+          setShopItems([]);
+        }
+        setLoadingProducts(false);
+        return;
+      }
+
+      const response = await productService.getProductsByCategory(
+        categoryId,
+        currentBuyerType,
+      );
+
+      if (response.data?.status) {
+        const products = (response.data.products || []).map((item: any) => ({
+          ...item,
+          type: "product",
+        }));
+        setShopItems(products);
+      } else {
+        setShopItems([]);
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load selected category products from backend:",
+        error,
+      );
+      setShopItems([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBanners();
+    if (isRetail) {
+      setSelectedCategoryId("Packages");
+      fetchPackages();
+    } else {
+      setSelectedCategoryId("Vegetables");
+      getSelectedCategoryProducts("Vegetables", buyerType);
+    }
+  }, [buyerType, isRetail]);
+
   const itemRows: ShopItem[][] = [];
   for (let i = 0; i < shopItems?.length; i += 2) {
     itemRows.push(shopItems?.slice(i, i + 2));
@@ -306,65 +542,227 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     navigation.navigate("MyCart");
   }, [navigation]);
 
-  const handleToggleUnit = useCallback((productId: number, unit: "g" | "kg") => {
-    setActiveProducts(prev => ({
-      ...prev,
-      [productId]: {
-        unit,
-        quantity: unit === "g" ? 500 : 1,
-      },
-    }));
-  }, []);
-
-  const handleIncrement = useCallback((productId: number) => {
-    setActiveProducts(prev => {
-      const item = prev[productId];
-      if (!item) return prev;
-      const step = item.unit === "g" ? 100 : 0.5;
-      return {
-        ...prev,
-        [productId]: {
-          ...item,
-          quantity: Number((item.quantity + step).toFixed(1)),
-        },
-      };
-    });
-  }, []);
-
-  const handleDecrement = useCallback((productId: number) => {
-    setActiveProducts(prev => {
-      const item = prev[productId];
-      if (!item) return prev;
-      const step = item.unit === "g" ? 100 : 0.5;
-      const nextQty = item.quantity - step;
-      if (nextQty <= 0) {
-        const updated = { ...prev };
-        delete updated[productId];
-        return updated;
+  const handleToggleUnit = useCallback(
+    (productId: number, unit: "g" | "kg") => {
+      dispatch(changeProductUnit({ id: productId, newUnit: unit }));
+      showToast("Cart Updated");
+      if (userToken) {
+        const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+        if (item) {
+          const newWeight = unit === "kg" ? item.weight / 1000 : item.weight * 1000;
+          cartService.syncCartProduct(productId, newWeight, unit).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
       }
-      return {
-        ...prev,
-        [productId]: {
-          ...item,
-          quantity: Number(nextQty.toFixed(1)),
-        },
-      };
-    });
-  }, []);
+    },
+    [dispatch, showToast, userToken, cartProducts],
+  );
 
-  const handleAddProduct = useCallback((productId: number) => {
-    setActiveProducts(prev => ({
-      ...prev,
-      [productId]: { quantity: 500, unit: "g" },
-    }));
-  }, []);
+  const handleIncrement = useCallback(
+    (productId: number) => {
+      dispatch(increaseProductWeight(productId));
+      showToast("Cart Updated");
+      if (userToken) {
+        const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+        if (item) {
+          const newWeight = item.weight + item.step;
+          cartService.syncCartProduct(productId, newWeight, item.unit).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
+      }
+    },
+    [dispatch, showToast, userToken, cartProducts],
+  );
+
+  const handleDecrement = useCallback(
+    (productId: number) => {
+      const existing = cartProducts.find(
+        (p: ProductCartItem) => p.id === productId,
+      );
+      if (existing && existing.weight <= existing.minimumWeight) {
+        dispatch(removeProduct(productId));
+
+        setAddTimeSnapshots((prev) => {
+          const next = { ...prev };
+          delete next[productId];
+          return next;
+        });
+        showToast("Removed from cart");
+        if (userToken) {
+          cartService.removeCartProduct(productId).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
+      } else {
+        dispatch(decreaseProductWeight(productId));
+        showToast("Cart Updated");
+        if (existing && userToken) {
+          const newWeight = Math.max(existing.minimumWeight, existing.weight - existing.step);
+          cartService.syncCartProduct(productId, newWeight, existing.unit).catch((err) =>
+            console.error("Cart DB sync error:", err)
+          );
+        }
+      }
+    },
+    [dispatch, cartProducts, showToast, userToken],
+  );
+
+  const handleAddProduct = useCallback(
+    (product: ProductType) => {
+      const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
+      const unitType = (product.unitType || "g").toLowerCase() as "g" | "kg";
+
+      let initialUnit: "g" | "kg" = unitType;
+      let initialWeight = rawStartValue;
+      if (unitType === "kg" && rawStartValue < 1) {
+        initialUnit = "g";
+        initialWeight = Math.round(rawStartValue * 1000);
+      }
+
+      const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
+      const discountedPerUnit =
+        product.discountedPrice != null
+          ? parseFloat(String(product.discountedPrice))
+          : null;
+
+      const hasDiscount =
+        discountedPerUnit != null &&
+        discountedPerUnit > 0 &&
+        discountedPerUnit < normalPerUnit;
+
+      const effectiveUnitPrice = hasDiscount
+        ? discountedPerUnit
+        : normalPerUnit;
+      const startEffectivePrice = effectiveUnitPrice * rawStartValue;
+
+      const step =
+        initialUnit === "kg" ? 0.5 : initialWeight >= 500 ? 500 : 100;
+
+      dispatch(
+        addProduct({
+          id: product.id,
+          name: product.displayName,
+          image: product.image,
+          price: startEffectivePrice,
+          normalPrice: normalPerUnit * rawStartValue,
+          weight: initialWeight,
+          unit: initialUnit,
+          minimumWeight: initialWeight,
+          step: step,
+        }),
+      );
+
+      if (userToken) {
+        cartService.syncCartProduct(product.id, initialWeight, initialUnit).catch((err) =>
+          console.error("Cart DB sync error:", err)
+        );
+      }
+
+      setAddTimeSnapshots((prev) => ({
+        ...prev,
+        [product.id]: {
+          weight: initialWeight,
+          unit: initialUnit,
+          price: startEffectivePrice,
+        },
+      }));
+
+      setExpandedItemId(product.id);
+      showToast("Added to Cart");
+    },
+    [dispatch, showToast, userToken],
+  );
+
+  const handleAddPackage = useCallback(
+    (pkg: PackageType) => {
+      const price = parseFloat(pkg.subTotal) || 0;
+
+      dispatch(
+        addPackage({
+          id: pkg.id,
+          name: pkg.displayName,
+          image: pkg.image,
+          price,
+          quantity: 1,
+          totalItems: pkg.totalItems || 0,
+        }),
+      );
+
+      if (userToken) {
+        cartService.syncCartPackage(pkg.id, 1).catch((err) =>
+          console.error("Cart DB sync package error:", err)
+        );
+      }
+
+      setAddTimeSnapshots((prev) => ({
+        ...prev,
+        [pkg.id]: { quantity: 1, price },
+      }));
+
+      setExpandedItemId(pkg.id);
+      showToast("Added to Cart");
+    },
+    [dispatch, showToast, userToken],
+  );
+
+  const handleIncrementPackage = useCallback(
+    (packageId: number) => {
+      dispatch(increasePackageQuantity(packageId));
+      const existing = cartPackages.find((p: PackageCartItem) => p.id === packageId);
+      const newQty = (existing?.quantity || 1) + 1;
+      if (userToken) {
+        cartService.syncCartPackage(packageId, newQty).catch((err) =>
+          console.error("Cart DB sync package increment error:", err)
+        );
+      }
+      showToast("Cart Updated");
+    },
+    [dispatch, cartPackages, showToast, userToken],
+  );
+
+  const handleDecrementPackage = useCallback(
+    (packageId: number) => {
+      const existing = cartPackages.find(
+        (p: PackageCartItem) => p.id === packageId,
+      );
+      if (existing && existing.quantity <= 1) {
+        dispatch(removePackage(packageId));
+        if (userToken) {
+          cartService.removeCartPackage(packageId).catch((err) =>
+            console.error("Cart DB remove package error:", err)
+          );
+        }
+
+        setAddTimeSnapshots((prev) => {
+          const next = { ...prev };
+          delete next[packageId];
+          return next;
+        });
+        showToast("Removed from cart");
+      } else {
+        dispatch(decreasePackageQuantity(packageId));
+        const newQty = (existing?.quantity || 1) - 1;
+        if (userToken) {
+          cartService.syncCartPackage(packageId, newQty).catch((err) =>
+            console.error("Cart DB sync package decrement error:", err)
+          );
+        }
+        showToast("Cart Updated");
+      }
+    },
+    [dispatch, cartPackages, showToast, userToken],
+  );
 
   return (
     <View className="flex-1 bg-white">
+      {/* Top Cart Toast Notification */}
+      <CartToast visible={toastVisible} message={toastMessage} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 140 }}
+        contentContainerStyle={{ paddingBottom: 160 }}
         className="flex-1"
       >
         {/* Top Header */}
@@ -392,7 +790,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             placeholder="Search Product..."
             className="text-black text-sm flex-1 font-semibold p-0"
             placeholderTextColor="#848484"
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Shop By Categories */}
@@ -407,7 +813,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
             className="flex-row"
           >
-            {CATEGORIES.map((category) => {
+            {visibleCategories.map((category) => {
               const isActive = category.id === selectedCategoryId;
               return (
                 <TouchableOpacity
@@ -419,7 +825,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     height: 98,
                     backgroundColor: isActive ? category.activeBg : "#FFFFFF",
                     borderWidth: 1.2,
-                    borderColor: isActive ? category.activeBg : category.borderColor,
+                    borderColor: isActive
+                      ? category.activeBg
+                      : category.borderColor,
                     borderTopLeftRadius: 38,
                     borderTopRightRadius: 38,
                     borderBottomLeftRadius: 18,
@@ -441,8 +849,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       justifyContent: "center",
                     }}
                   >
+                    {/*
+                      FIX: use the locally required image asset (resolved at
+                      build time) instead of `{ uri: category.image }`, which
+                      cannot resolve a relative bundler path and silently
+                      fails to render.
+                    */}
                     <Image
-                      source={{ uri: category.image }}
+                      source={CATEGORY_IMAGES[category.id]}
                       style={{ width: 28, height: 28 }}
                       resizeMode="contain"
                     />
@@ -465,171 +879,529 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           </ScrollView>
         </View>
 
+        {searchQuery.trim().length > 0 && (
+          <View className="flex-row items-center justify-between px-6 mt-6">
+            <Text className="text-black text-base font-bold">
+              Results for "{searchQuery.trim()}" ({shopItems.length})
+            </Text>
+            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
+              <Text className="text-[#FB4300] text-sm font-bold">Clear</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Product Grid */}
         {loadingProducts ? (
           <ProductGridSkeleton />
+        ) : itemRows.length === 0 ? (
+          searchQuery.trim().length > 0 ? (
+            <View className="items-center justify-center py-10 px-6">
+              <NoDataFound message={`No products found matching "${searchQuery.trim()}"`} />
+              <TouchableOpacity
+                onPress={handleClearSearch}
+                activeOpacity={0.8}
+                className="mt-2 bg-black px-6 py-2.5 rounded-full"
+              >
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View className="items-center justify-center py-10 px-6">
+              <NoDataFound message="No products found in this category" />
+            </View>
+          )
         ) : (
           <View className="mt-8 px-4">
             {itemRows.map((row, rowIndex) => (
-            <View key={rowIndex} className="flex-row justify-between mb-4">
-              {row.map((product) => {
-                const cartItem = activeProducts[product.id];
+              <View key={rowIndex} className="flex-row justify-between mb-4">
+                {row.map((product) => {
+                  const isProduct = product.type === "product";
+                  const isPackage = product.type === "package";
+                  const cartItem = isProduct
+                    ? cartProducts.find(
+                      (p: ProductCartItem) => p.id === product.id,
+                    )
+                    : null;
+                  const cartPackage = isPackage
+                    ? cartPackages.find(
+                      (p: PackageCartItem) => p.id === product.id,
+                    )
+                    : null;
 
-                return (
-                  <TouchableOpacity
-                    key={product.id}
-                    activeOpacity={0.9}
-                    className="flex-1"
-                    onPress={() => {
-                      if (product.type === "package") {
-                        navigation.navigate("ViewPackage", {
-                          packageId: product.id,
-                          packageName: product.displayName,
-                          image: product.image,
-                          price: parseFloat(product.subTotal),
-                        });
-                      } else {
-                        navigation.navigate("ViewProduct", {
-                          product: product,
-                        });
-                      }
-                    }}
-                  >
-                    <View
-                      key={product.id!}
-                      className="flex-1 bg-[#F4F3F3] pt-12 pb-6 px-4 items-center mx-2 relative mb-6"
-                      style={{
-                        borderTopLeftRadius: 100,
-                        borderTopRightRadius: 100,
-                        borderBottomLeftRadius: 18,
-                        borderBottomRightRadius: 18,
+                  const isExpanded = product.id === expandedItemId;
+                  const snapshot = addTimeSnapshots[product.id];
+
+                  const rawStartValue = isProduct
+                    ? parseFloat(String(product.startValue ?? "1")) || 1
+                    : 1;
+                  const rawUnitType = isProduct
+                    ? (product.unitType || "g").toLowerCase()
+                    : "g";
+
+                  const displayWeightText = isProduct
+                    ? rawUnitType === "kg" && rawStartValue < 1
+                      ? `${Math.round(rawStartValue * 1000)} g`
+                      : `${rawStartValue} ${rawUnitType}`
+                    : "";
+
+                  const normalPerUnit = isProduct
+                    ? parseFloat(String(product.normalPrice)) || 0
+                    : 0;
+                  const discountedPerUnit =
+                    isProduct && product.discountedPrice != null
+                      ? parseFloat(String(product.discountedPrice))
+                      : null;
+
+                  const hasDiscount =
+                    isProduct &&
+                    discountedPerUnit != null &&
+                    discountedPerUnit > 0 &&
+                    discountedPerUnit < normalPerUnit;
+
+                  const startNormalPrice = isProduct
+                    ? normalPerUnit * rawStartValue
+                    : 0;
+                  const startDiscountedPrice =
+                    isProduct && discountedPerUnit != null
+                      ? discountedPerUnit * rawStartValue
+                      : startNormalPrice;
+
+                  const basePrice = isProduct
+                    ? hasDiscount
+                      ? startDiscountedPrice
+                      : startNormalPrice
+                    : parseFloat(String(product.subTotal)) || 0;
+
+                  const currentWeightInG = cartItem
+                    ? cartItem.unit === "kg"
+                      ? cartItem.weight * 1000
+                      : cartItem.weight
+                    : 0;
+                  const minWeightInG = cartItem
+                    ? cartItem.unit === "kg"
+                      ? cartItem.minimumWeight * 1000
+                      : cartItem.minimumWeight
+                    : 0;
+                  const weightMultiplier =
+                    minWeightInG > 0 ? currentWeightInG / minWeightInG : 1;
+                  const calculatedProductPrice = cartItem
+                    ? basePrice * weightMultiplier
+                    : basePrice;
+                  const calculatedPackagePrice = cartPackage
+                    ? basePrice * cartPackage.quantity
+                    : basePrice;
+                  const isMinimum = cartItem
+                    ? cartItem.weight <= cartItem.minimumWeight
+                    : false;
+
+                  return (
+                    <TouchableOpacity
+                      key={product.id}
+                      activeOpacity={0.9}
+                      className="flex-1"
+                      onPress={() => {
+                        if (product.type === "package") {
+                          navigation.navigate("ViewPackage", {
+                            packageId: product.id,
+                            packageName: product.displayName,
+                            image: product.image,
+                            price: parseFloat(product.subTotal),
+                          });
+                        } else {
+                          navigation.navigate("ViewProduct", {
+                            product: product,
+                          });
+                        }
                       }}
                     >
-                      {/* Circular Product Image Container */}
-                      <View className="w-[72px] h-[72px] rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
-                        <Image
-                          source={{ uri: product?.image! }}
-                          className="w-12 h-12"
-                          resizeMode="contain"
-                        />
-                      </View>
-
-                      {/* Product Details */}
-                      <Text className="text-black font-bold text-sm mt-1 text-center" numberOfLines={1}>
-                        {product?.displayName!}
-                      </Text>
-
-                      {!cartItem ? (
-                        <>
-                          {product.type == "product" &&<Text className="   text-gray-400 text-[11px] mt-0.5 text-center">
-                            {product.type == "product" && product?.startValue! +" " +(product.unitType!).toLowerCase()}
-                          </Text>}
-                          {product.type == "package" &&<Text className="text-black font-extrabold text-sm mt-1 text-center">
-                            {product.type == "package" && "Rs. " + product?.subTotal!}
-                          </Text>}
-                          {product.type == "product" &&
-                            <Text className="text-black font-extrabold text-sm mt-1 text-center">
-                              {product.type == "product" && "Rs. " + product.normalPrice}
-                            </Text>
-                          }
-
-                          {/* Add Button */}
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => handleAddProduct(product.id)}
-                            className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                      <View
+                        key={product.id!}
+                        className="flex-1 bg-[#F4F3F3] pt-10 pb-5 px-3 items-center mx-2 relative mb-6 min-h-[220px]"
+                        style={{
+                          borderTopLeftRadius: 100,
+                          borderTopRightRadius: 100,
+                          borderBottomLeftRadius: 18,
+                          borderBottomRightRadius: 18,
+                        }}
+                      >
+                        {isProduct && hasDiscount && product.discount && (
+                          <View
                             style={{
-                              shadowColor: "#000",
-                              shadowOffset: { width: 0, height: 4 },
-                              shadowOpacity: 0.3,
-                              shadowRadius: 4,
-                              elevation: 5,
+                              position: "absolute",
+                              display: "flex",
+                              top: 15,
+                              left: 4,
+                              width: 35,
+                              height: 35,
+                              backgroundColor: "#F34261",
+                              borderRadius: 100,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              zIndex: 10,
                             }}
                           >
-                            <Ionicons name="add" size={20} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <>
-                          {/* Unit Switcher: kg vs g */}
-                          <View className="flex-row items-center justify-center mt-2 mb-1">
-                            {/* kg button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleToggleUnit(product.id, "kg")}
+                            <Text
                               style={{
-                                backgroundColor: cartItem.unit === "kg" ? "#FF9114" : "#FFC179",
-                                width: 36,
-                                height: 22,
-                                borderRadius: 11,
-                                alignItems: "center",
-                                justifyContent: "center",
+                                fontSize: 10,
+                                fontWeight: "700",
+                                textAlign: "center",
+                                color: "#FFF",
                               }}
                             >
-                              <Text className="text-white text-[11px] font-bold">kg</Text>
-                            </TouchableOpacity>
-
-                            {/* Arrow icon */}
-                            <Text className="text-black font-black text-xs mx-1.5">↔</Text>
-
-                            {/* g button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleToggleUnit(product.id, "g")}
-                              style={{
-                                backgroundColor: cartItem.unit === "g" ? "#FF9114" : "#FFC179",
-                                width: 36,
-                                height: 22,
-                                borderRadius: 11,
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <Text className="text-white text-[11px] font-bold">g</Text>
-                            </TouchableOpacity>
+                              {product.discount}%
+                            </Text>
                           </View>
+                        )}
 
-                          {/* Quantity Selector capsule */}
-                          <View className="flex-row items-center justify-between bg-white border border-[#E5E5EA] rounded-full px-1 py-1 w-full max-w-[124px] mt-1.5 shadow-sm">
-                            {/* Minus Button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => handleDecrement(product.id)}
-                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                            >
-                              <Ionicons name="remove" size={14} color="#FFFFFF" />
-                            </TouchableOpacity>
+                        {/*
+                          Product/package images come from the backend as
+                          absolute URLs, so `{ uri: product.image }` is
+                          correct here — unlike the local category icons
+                          above, these are NOT bundler-relative paths.
+                        */}
+                        <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
+                          <Image
+                            source={{ uri: product?.image! }}
+                            className="w-20 h-20"
+                            resizeMode="contain"
+                          />
+                        </View>
 
-                            {/* Qty value */}
-                            <Text className="text-black font-bold text-[11px]">
-                              {cartItem.quantity} {cartItem.unit}
+                        {/* Product Details */}
+                        <Text
+                          className="text-black font-bold text-sm mt-1 text-center"
+                          numberOfLines={1}
+                        >
+                          {product?.displayName!}
+                        </Text>
+
+                        {/* PRODUCT CARD: Not in cart */}
+                        {isProduct && !cartItem && (
+                          <>
+                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                              {displayWeightText}
                             </Text>
 
-                            {/* Plus Button */}
+                            {hasDiscount && (
+                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                                Rs. {formatPrice(startNormalPrice)}
+                              </Text>
+                            )}
+
+                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                              Rs. {formatPrice(basePrice)}
+                            </Text>
+
+                            {/* Black Circular Add Button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={() => handleIncrement(product.id)}
-                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleAddProduct(product as ProductType);
+                              }}
+                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                              style={{
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 5,
+                              }}
                             >
-                              <Ionicons name="add" size={14} color="#FFFFFF" />
+                              <Ionicons name="add" size={22} color="#FFFFFF" />
                             </TouchableOpacity>
-                          </View>
+                          </>
+                        )}
 
-                          {/* Price */}
-                          <Text className="text-black font-extrabold text-sm mt-3 text-center">
-                            {product.type == "package" ? "Rs. " + product?.subTotal! : "Rs. " + product?.normalPrice!}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ))}
+                        {/* PRODUCT CARD: In cart, EXPANDED (currently active) */}
+                        {isProduct && cartItem && isExpanded && (
+                          <>
+                            {/* Unit Switcher: kg vs g */}
+                            <View className="flex-row items-center justify-center mt-2 mb-1">
+                              {/* kg button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleUnit(product.id, "kg");
+                                }}
+                                style={{
+                                  backgroundColor:
+                                    cartItem.unit === "kg"
+                                      ? "#FF9114"
+                                      : "#FFC179",
+                                  width: 38,
+                                  height: 22,
+                                  borderRadius: 11,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <Text className="text-white text-[11px] font-bold">
+                                  kg
+                                </Text>
+                              </TouchableOpacity>
+
+                              {/* Arrow icon */}
+                              <Text className="text-black font-black text-xs mx-1.5">
+                                ↔
+                              </Text>
+
+                              {/* g button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleUnit(product.id, "g");
+                                }}
+                                style={{
+                                  backgroundColor:
+                                    cartItem.unit === "g"
+                                      ? "#FF9114"
+                                      : "#FFC179",
+                                  width: 38,
+                                  height: 22,
+                                  borderRadius: 11,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <Text className="text-white text-[11px] font-bold">
+                                  g
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Quantity Selector Capsule */}
+                            <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-1 shadow-sm">
+                              {/* Minus / Trash Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleDecrement(product.id);
+                                }}
+                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              >
+                                {isMinimum ? (
+                                  <FontAwesome6
+                                    name="trash"
+                                    size={13}
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="remove"
+                                    size={14}
+                                    color="#FFFFFF"
+                                  />
+                                )}
+                              </TouchableOpacity>
+
+                              {/* Qty value */}
+                              <Text className="text-black font-bold text-[11px]">
+                                {cartItem.weight} {cartItem.unit}
+                              </Text>
+
+                              {/* Plus Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleIncrement(product.id);
+                                }}
+                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              >
+                                <Ionicons
+                                  name="add"
+                                  size={14}
+                                  color="#FFFFFF"
+                                />
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Price */}
+                            <Text className="text-black font-extrabold text-sm mt-2 text-center">
+                              Rs. {formatPrice(calculatedProductPrice)}
+                            </Text>
+                          </>
+                        )}
+
+                        {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
+                        {isProduct && cartItem && !isExpanded && (
+                          <>
+                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                              {displayWeightText}
+                            </Text>
+
+                            {hasDiscount && (
+                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                                Rs. {formatPrice(startNormalPrice)}
+                              </Text>
+                            )}
+
+                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                              Rs. {formatPrice(basePrice)}
+                            </Text>
+
+                            {/* Plus Button — tap to re-expand this card and see live controls */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setExpandedItemId(product.id);
+                              }}
+                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                              style={{
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 5,
+                              }}
+                            >
+                              <Ionicons name="add" size={22} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </>
+                        )}
+
+                        {/* PACKAGE CARD: Not in cart */}
+                        {isPackage && !cartPackage && (
+                          <>
+                            <Text className="text-black font-extrabold text-sm mt-2 text-center">
+                              Rs. {formatPrice(basePrice)}
+                            </Text>
+
+                            {/* Add Button */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleAddPackage(product as PackageType);
+                              }}
+                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                              style={{
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 5,
+                              }}
+                            >
+                              <Ionicons name="add" size={22} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </>
+                        )}
+
+                        {/* PACKAGE CARD: In cart, EXPANDED (currently active) */}
+                        {isPackage && cartPackage && isExpanded && (
+                          <>
+                            {/* Quantity Selector capsule for Package */}
+                            <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-2 shadow-sm">
+                              {/* Minus / Trash Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleDecrementPackage(product.id);
+                                }}
+                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              >
+                                {cartPackage.quantity <= 1 ? (
+                                  <FontAwesome6
+                                    name="trash"
+                                    size={13}
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="remove"
+                                    size={14}
+                                    color="#FFFFFF"
+                                  />
+                                )}
+                              </TouchableOpacity>
+
+                              {/* Qty value */}
+                              <Text className="text-black font-bold text-[11px]">
+                                {cartPackage.quantity} Qty
+                              </Text>
+
+                              {/* Plus Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleIncrementPackage(product.id);
+                                }}
+                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                              >
+                                <Ionicons
+                                  name="add"
+                                  size={14}
+                                  color="#FFFFFF"
+                                />
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Price */}
+                            <Text className="text-black font-extrabold text-sm mt-2 text-center">
+                              Rs. {formatPrice(calculatedPackagePrice)}
+                            </Text>
+                          </>
+                        )}
+
+                        {/* PACKAGE CARD: In cart, COLLAPSED (not the active one) */}
+                        {/* Shows the FROZEN add-time snapshot, not live cartPackage data. */}
+                        {isPackage && cartPackage && !isExpanded && (
+                          <>
+                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                              {snapshot?.quantity ?? cartPackage.quantity} Qty
+                            </Text>
+
+                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                              Rs.{" "}
+                              {formatPrice(
+                                snapshot?.price ?? calculatedPackagePrice,
+                              )}
+                            </Text>
+
+                            {/* Checkmark Button — tap to re-expand this card and see live data */}
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setExpandedItemId(product.id);
+                              }}
+                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                              style={{
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 5,
+                              }}
+                            >
+                              <Ionicons name="add" size={20} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                {row.length === 1 && <View className="flex-1" />}
+              </View>
+            ))}
           </View>
         )}
       </ScrollView>
+
+      {/* Floating View Cart Button */}
+      <ViewCartPopup
+        visible={totalCartItems > 0}
+        itemCount={totalCartItems}
+        onPress={handleMyCartNavigation}
+      />
 
       {/* Floating Bottom Navigation Bar */}
       <BottomNavigation activeScreen="Home" navigation={navigation} />

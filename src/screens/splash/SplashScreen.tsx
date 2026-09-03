@@ -79,8 +79,12 @@ const Splash: React.FC = () => {
   return (
     <View className="flex-1 bg-white justify-center items-center">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
-      <View className="items-center">
-        <Image source={logo} className="w-96 h-full" resizeMode="contain" />
+      <View className="items-center justify-center">
+        <Image
+          source={logo}
+          style={{ width: 180, height: 180 }}
+          resizeMode="contain"
+        />
       </View>
       <View className="absolute bottom-6 left-0 right-0 items-center">
         <Text className="text-base text-black opacity-60 font-normal tracking-widest">
