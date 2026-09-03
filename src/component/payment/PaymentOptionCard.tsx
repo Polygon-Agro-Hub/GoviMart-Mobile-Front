@@ -1,3 +1,4 @@
+import React from "react";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { Text, TouchableOpacity, View } from "react-native";
 
@@ -13,7 +14,7 @@ export const PaymentOptionCard = ({
     title: string;
     description: string;
     total: number;
-    icon: keyof typeof Ionicons.glyphMap| any;
+    icon: keyof typeof Ionicons.glyphMap | any;
     iconColor: string;
     selected: boolean;
     onPress: () => void;
@@ -24,50 +25,35 @@ export const PaymentOptionCard = ({
             onPress={onPress}
             style={{
                 marginHorizontal: 15,
-                minHeight: 89,
-
-                borderWidth: 1,
-                borderColor: selected
-                    ? "#FF8A00"
-                    : "#DDE3E9",
-
-                borderRadius: 18,
-
-                paddingHorizontal: 10,
-                paddingVertical: 12,
-
+                minHeight: 96,
+                borderWidth: 1.5,
+                borderColor: selected ? "#000000" : "#E1E7EE",
+                borderRadius: 20,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
                 backgroundColor: "#FFFFFF",
-
                 shadowColor: "#000",
                 shadowOffset: {
                     width: 0,
                     height: 2,
                 },
-                shadowOpacity: 0.05,
+                shadowOpacity: selected ? 0.08 : 0.03,
                 shadowRadius: 4,
-                elevation: 2,
+                elevation: selected ? 3 : 1,
             }}
         >
-            {/* Radio / Check */}
-
+            {/* Radio / Check Circle */}
             <View
                 style={{
                     position: "absolute",
-                    right: 7,
-                    top: 8,
-
-                    width: 17,
-                    height: 17,
-
-                    borderRadius: 9,
-
+                    right: 12,
+                    top: 12,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
                     borderWidth: selected ? 0 : 2,
-                    borderColor: "#000",
-
-                    backgroundColor: selected
-                        ? "#000"
-                        : "#FFF",
-
+                    borderColor: "#BAC2C7",
+                    backgroundColor: selected ? "#000000" : "#FFFFFF",
                     justifyContent: "center",
                     alignItems: "center",
                 }}
@@ -75,54 +61,50 @@ export const PaymentOptionCard = ({
                 {selected && (
                     <Ionicons
                         name="checkmark"
-                        size={11}
-                        color="#FFF"
+                        size={14}
+                        color="#FFFFFF"
                     />
                 )}
             </View>
 
             {/* Content */}
-
             <View
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
                 }}
             >
-                {/* Icon */}
-
+                {/* Left Icon (Bigger) */}
                 <View
                     style={{
-                        width: 33,
-                        height: 33,
-                        borderRadius: 99,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
                         backgroundColor: iconColor,
-
                         justifyContent: "center",
                         alignItems: "center",
-
-                        marginRight: 10,
+                        marginRight: 14,
                     }}
                 >
                     <FontAwesome6
                         name={icon}
-                        size={16}
-                        color="#FFF"
+                        size={20}
+                        color="#FFFFFF"
                     />
                 </View>
 
-                {/* Text */}
-
+                {/* Text Details (Bigger) */}
                 <View
                     style={{
                         flex: 1,
+                        paddingRight: 24,
                     }}
                 >
                     <Text
                         style={{
-                            fontSize: 13,
-                            fontWeight: "800",
-                            color: "#111",
+                            fontSize: 16,
+                            fontWeight: "700",
+                            color: "#111111",
                         }}
                     >
                         {title}
@@ -130,50 +112,45 @@ export const PaymentOptionCard = ({
 
                     <Text
                         style={{
-                            fontSize: 10,
-                            color: "#777",
-                            marginTop: 5,
+                            fontSize: 12.5,
+                            color: "#64748B",
+                            marginTop: 3,
+                            lineHeight: 17,
                         }}
                     >
                         {description}
                     </Text>
 
-                    {/* Total */}
-
+                    {/* Total Badge */}
                     <View
                         style={{
                             alignSelf: "flex-start",
-                            marginTop: 5,
-
-                            backgroundColor: "#F2F2F2",
-
-                            borderRadius: 3,
-
-                            paddingHorizontal: 5,
-                            paddingVertical: 2,
+                            marginTop: 6,
+                            backgroundColor: "#F3F4F6",
+                            borderRadius: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
                         }}
                     >
                         <Text
                             style={{
-                                fontSize: 10,
-                                color: "#555",
+                                fontSize: 12,
+                                color: "#4B5563",
+                                fontWeight: "500",
                             }}
                         >
                             Total :{" "}
                             <Text
                                 style={{
-                                    color: "#111",
+                                    color: "#111111",
                                     fontWeight: "700",
                                 }}
                             >
                                 Rs.{" "}
-                                {total.toLocaleString(
-                                    "en-US",
-                                    {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                    }
-                                )}
+                                {total.toLocaleString("en-US", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
                             </Text>
                         </Text>
                     </View>

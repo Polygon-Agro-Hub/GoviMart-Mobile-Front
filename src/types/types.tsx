@@ -26,6 +26,9 @@ export interface CheckoutDetails {
   scheduleType?: string;
   deliveryDate?: string;
   timeSlot?: string;
+  recurringDays?: string[];
+  validityWeeks?: string;
+  calculatedOrders?: { index: number; label: string; date: string }[];
   // Geo
   geoLatitude?: number;
   geoLongitude?: number;
@@ -46,6 +49,8 @@ export interface OrderContext {
   deliveryMethod?: "home" | "pickup";
   checkoutDetails?: CheckoutDetails;
   paymentMethod?: "cash" | "card";
+  creditPaid?: number;
+  moneyPaid?: number;
 }
 
 export type RootStackParamList = {
@@ -95,7 +100,15 @@ export type RootStackParamList = {
   PaymentMethod: { total: number; orderContext?: OrderContext };
   PaymentScreen: { amount?: number; title?: string; orderContext?: OrderContext } | undefined;
   OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
-  OrderConfirmed: { orderId?: string | number; invoiceNumber?: string; total?: number } | undefined;
+  OrderConfirmed: {
+    orderId?: string | number;
+    invoiceNumber?: string;
+    total?: number;
+    orderContext?: OrderContext;
+    deliveryDate?: string;
+    scheduleDate?: string;
+    timeSlot?: string;
+  } | undefined;
   SetLocation: undefined;
   ChoosePickupCentre: { orderContext?: OrderContext } | undefined;
   OrderHistory: undefined;

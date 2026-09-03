@@ -85,7 +85,6 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                         response.data.status &&
                         response.data.orderHistory
                     ) {
-                        console.log("order history:", response.data.orderHistory);
                         const mappedOrders: Order[] = response.data.orderHistory.map((bo: any) => {
                             const totalVal = bo.fullTotal || 0;
                             return {
