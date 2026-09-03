@@ -114,17 +114,66 @@ const SummaryRow: React.FC<{
 --------------------------------------------------------- */
 
 const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
-  // const { fromProduct, toProduct } = route.params;
-  const fromProduct = MOCK_FROM; // for testing
-  const toProduct = MOCK_TO; // for testing
+  const rawFrom = route.params?.fromProduct;
+  const rawTo = route.params?.toProduct;
+  const packageId = route.params?.packageId || "fruity";
+  const stepIndex = route.params?.stepIndex ?? 0;
 
-  const step = toProduct.unit === "kg" ? 1 : 100;
-  const minQty = step;
-  const maxQty = step * 20;
+  const fromProduct: ProductInfo = useMemo(() => {
+    if (rawFrom) {
+      const rawUnit = (rawFrom.unit || "kg").toLowerCase();
+      let rawQty = rawFrom.quantity || 1;
+      const rawPrice = rawFrom.price || 500;
+      if (rawUnit === "g") {
+        rawQty = Number((rawQty / 1000).toFixed(3));
+      }
+      return {
+        id: rawFrom.id?.toString() || "from",
+        name: rawFrom.name || "Original Product",
+        icon: rawFrom.icon || "🍓",
+        image: rawFrom.image,
+        unit: "kg",
+        baseQty: rawQty,
+        pricePerBaseQty: rawPrice,
+      };
+    }
+    return MOCK_FROM;
+  }, [rawFrom]);
 
-  const [quantity, setQuantity] = useState(minQty);
+  const toProduct: ProductInfo = useMemo(() => {
+    if (rawTo) {
+      const priceVal =
+        parseFloat(rawTo.normalPrice || rawTo.price || rawTo.pricePerBaseQty) ||
+        600;
+      const rawUnit = (rawTo.unitType || rawTo.unit || "kg").toLowerCase();
+      let startVal = parseFloat(rawTo.startValue);
+      if (isNaN(startVal) || startVal <= 0) {
+        startVal = 1;
+      }
+      if (rawUnit === "g") {
+        startVal = Number((startVal / 1000).toFixed(3));
+      }
 
-  const fromPrice = fromProduct.pricePerBaseQty;
+      return {
+        id: rawTo.id?.toString() || "to",
+        name: rawTo.displayName || rawTo.name || "Replacement Product",
+        icon: rawTo.icon || "🥗",
+        image: rawTo.image,
+        unit: "kg",
+        baseQty: startVal,
+        pricePerBaseQty: priceVal,
+      };
+    }
+    return MOCK_TO;
+  }, [rawTo]);
+
+  const step = 0.5;
+  const minQty = 0.5;
+  const maxQty = 10;
+
+  const [quantity, setQuantity] = useState(toProduct.baseQty || minQty);
+
+  const fromPrice = fromProduct.pricePerBaseQty * fromProduct.baseQty;
 
   const toUnitPrice = toProduct.pricePerBaseQty / toProduct.baseQty;
   const toPrice = useMemo(
@@ -142,9 +191,26 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     setQuantity((q) => Math.min(maxQty, Number((q + step).toFixed(2))));
 
   const onReplace = async () => {
-    // API call to replace product with { productId: toProduct.id, quantity }
-    console.log("Replace with", toProduct.id, quantity);
-    navigation.goBack();
+    navigation.navigate("ReviewPackage", {
+      replacedProduct: {
+        packageId,
+        originalProductId: fromProduct.id,
+        newProduct: {
+          id: toProduct.id,
+          category: rawFrom?.category || "Replaced Product",
+          name: toProduct.name,
+          icon: toProduct.icon || "🥗",
+          image: toProduct.image,
+          price: toUnitPrice,
+          quantity: quantity,
+          unit: "kg",
+          step: step,
+          isReplaced: true,
+          originalProduct: rawFrom?.originalProduct || rawFrom,
+        },
+      },
+      targetStepIndex: stepIndex,
+    });
   };
 
   return (
