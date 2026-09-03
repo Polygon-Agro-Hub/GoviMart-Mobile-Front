@@ -50,10 +50,16 @@ import ReplaceProduct from "@/screens/products/ReplaceProductScreen";
 import PackageConfirmation from "@/screens/packages/PackageConfirmation";
 import CheckoutScreen from "@/screens/checkout/CheckoutScreen";
 import ScheduleOrder from "@/screens/checkout/ScheduleOrderScreen";
+import InAppNotificationBanner from "@/component/common/InAppNotificationBanner";
+import pushNotificationService from "@/services/notification/pushNotification.service";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
 function AppContent() {
+  React.useEffect(() => {
+    pushNotificationService.init();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
@@ -101,6 +107,7 @@ function AppContent() {
             <Stack.Screen name="ReplaceProduct" component={ReplaceProduct} />
           </Stack.Navigator>
         </NavigationContainer>
+        <InAppNotificationBanner />
         <GlobalAlert />
       </SafeAreaView>
     </GestureHandlerRootView>

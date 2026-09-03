@@ -10,6 +10,7 @@ interface CustomHeaderProps {
   dark?: boolean;
   showLogo?: boolean;
   titleColor?: string;
+  rightComponent?: React.ReactNode;
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
@@ -20,6 +21,7 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
   dark = false,
   showLogo = false,
   titleColor,
+  rightComponent,
 }) => {
   return (
     <View
@@ -66,8 +68,10 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         )}
       </View>
 
-      {/* Right section (balanced placeholder) */}
-      <View className="w-12" />
+      {/* Right section (balanced placeholder or custom right component) */}
+      <View className="w-12 items-end justify-center">
+        {rightComponent || null}
+      </View>
     </View>
   );
 };
