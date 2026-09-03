@@ -57,6 +57,7 @@ export const ENDPOINTS = {
     GET_DELIVERY_CITIES: "api/order/delivery-cities",
     GET_COUPONS: "api/order/coupons",
     CHECK_COUPON: "api/order/check-coupon",
+    GET_INVOICE: "api/order/invoice/:orderId",
   },
 
   PAYMENT: {

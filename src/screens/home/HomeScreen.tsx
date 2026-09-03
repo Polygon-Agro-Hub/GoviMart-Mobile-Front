@@ -73,13 +73,13 @@ interface AddTimeSnapshot {
 }
 
 const CATEGORY_IMAGES: Record<string, any> = {
-  Packages: require("../../assets/images/home/packages.webp"),
-  Vegetables: require("../../assets/images/home/veggies.webp"),
-  Fruits: require("../../assets/images/home/fruits.webp"),
-  Cereals: require("../../assets/images/home/cereal.webp"),
-  Spices: require("../../assets/images/home/spices.webp"),
-  Mushrooms: require("../../assets/images/home/mushroom.webp"),
-  Pulses: require("../../assets/images/home/pulses.webp"),
+  Packages: require("@/assets/images/home/packages.webp"),
+  Vegetables: require("@/assets/images/home/veggies.webp"),
+  Fruits: require("@/assets/images/home/fruits.webp"),
+  Cereals: require("@/assets/images/home/cereal.webp"),
+  Spices: require("@/assets/images/home/spices.webp"),
+  Mushrooms: require("@/assets/images/home/mushroom.webp"),
+  Pulses: require("@/assets/images/home/pulses.webp"),
 };
 
 const CATEGORIES: Category[] = [

@@ -165,12 +165,12 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         setSubmitting(true);
         const payload = {
           cartId: orderContext?.cartId || 0,
-          paymentMethod: "payhere",
-          grandTotal: fullTotal,
+          paymentMethod: "card",
+          grandTotal: orderContext?.grandTotal || fullTotal,
           discountAmount: orderContext?.discount || 0,
           deliveryCharge: orderContext?.deliveryCharge || 0,
-          creditPaid: 0,
-          moneyPaid: fullTotal,
+          creditPaid: orderContext?.creditPaid || 0,
+          moneyPaid: orderContext?.moneyPaid || fullTotal,
           isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
           checkoutDetails: {
             ...(orderContext?.checkoutDetails || {
@@ -182,20 +182,23 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
         const response = await orderService.createOrder(payload);
         if (response.data && response.data.status && response.data.data) {
+          setShowPayHereModal(false);
           dispatch(clearCart());
           navigation.navigate("OrderConfirmed", {
             orderId: response.data.data.orderId,
             invoiceNumber: response.data.data.invoiceNumber,
             total: response.data.data.total,
+            orderContext,
           });
         } else {
-          Alert.alert("Order Placed", "Your payment was received. Checking order status...");
+          Alert.alert("Order Placed", response.data?.message || "Payment received, finalizing order...");
         }
       } catch (err: any) {
         console.error("Error creating order after PayHere:", err);
         dispatch(clearCart());
         navigation.navigate("OrderConfirmed", {
           total: fullTotal,
+          orderContext,
         });
       } finally {
         setSubmitting(false);
@@ -308,17 +311,52 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       setSubmitting(true);
       setCardError("");
 
-      const response = await customerService.updateCreditBalance(subTotal);
+      if (isClearBalanceFlow) {
+        const response = await customerService.updateCreditBalance(subTotal);
 
-      if (response.data && response.data.status) {
-        setShowCardModal(false);
-        setShowSuccessModal(true);
+        if (response.data && response.data.status) {
+          setShowCardModal(false);
+          setShowSuccessModal(true);
+        } else {
+          setCardError(response.data?.message || "Failed to clear credit balance.");
+        }
       } else {
-        setCardError(response.data?.message || "Failed to clear credit balance.");
+        // Direct card flow for order placement
+        const payload = {
+          cartId: orderContext?.cartId || 0,
+          paymentMethod: "card",
+          grandTotal: orderContext?.grandTotal || fullTotal,
+          discountAmount: orderContext?.discount || 0,
+          deliveryCharge: orderContext?.deliveryCharge || 0,
+          creditPaid: orderContext?.creditPaid || 0,
+          moneyPaid: orderContext?.moneyPaid || fullTotal,
+          isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+          checkoutDetails: {
+            ...(orderContext?.checkoutDetails || {
+              deliveryMethod: orderContext?.deliveryMethod || "home",
+            }),
+          },
+        };
+
+        const response = await orderService.createOrder(payload);
+        if (response.data && response.data.status && response.data.data) {
+          setShowCardModal(false);
+          dispatch(clearCart());
+          navigation.navigate("OrderConfirmed", {
+            orderId: response.data.data.orderId,
+            invoiceNumber: response.data.data.invoiceNumber,
+            total: response.data.data.total,
+            orderContext,
+          });
+        } else {
+          setCardError(response.data?.message || "Failed to create order. Please try again.");
+        }
       }
     } catch (err: any) {
+      const errorData = err?.response?.data;
       const errorMsg =
-        err?.response?.data?.message ||
+        errorData?.message ||
+        (Array.isArray(errorData?.details) ? errorData.details.join("; ") : null) ||
         err?.message ||
         "Payment failed. Please check your card details and try again.";
       setCardError(errorMsg);

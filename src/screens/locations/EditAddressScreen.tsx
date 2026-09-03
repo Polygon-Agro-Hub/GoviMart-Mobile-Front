@@ -530,6 +530,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         value={mobileNumber1}
                         onChangeText={handleMobileNumber1Change}
                         keyboardType="phone-pad"
+                        placeholder="07XXXXXXXX"
                         maxLength={10}
                         error={mobileNumber1Error}
                     />

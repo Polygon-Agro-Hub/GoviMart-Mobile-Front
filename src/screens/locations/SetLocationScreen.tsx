@@ -5,6 +5,7 @@ import {
     TouchableOpacity,
     Alert,
     ActivityIndicator,
+    Platform,
 } from "react-native";
 import MapView, {
     Marker,
@@ -187,30 +188,33 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                 backgroundColor: "#FFFFFF",
             }}
         >
-
             {/* HEADER */}
-            <CustomHeader navigation={navigation} showBackButton title="Set Location" />
+            <CustomHeader
+                navigation={navigation}
+                showBackButton={true}
+                title="Set Location"
+                titleColor="black"
+            />
 
             {/* INSTRUCTION */}
             <View
                 style={{
-                    height: 48,
                     justifyContent: "center",
                     alignItems: "center",
                     paddingHorizontal: 30,
+                    paddingBottom: 10,
+                    backgroundColor: "#FFFFFF",
                 }}
             >
                 <Text
                     style={{
                         textAlign: "center",
                         fontSize: 13,
-                        lineHeight: 20,
+                        lineHeight: 19,
                         color: "#7A7D88",
                     }}
                 >
-                    Tap on the map to select the exact
-                    {"\n"}
-                    delivery location.
+                    Tap on the map to select the exact delivery location.
                 </Text>
             </View>
 
@@ -222,14 +226,11 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
             >
                 <MapView
                     style={{
-
-                        height: 550
+                        flex: 1,
                     }}
                     initialRegion={initialRegion}
                     region={region}
-                    onRegionChangeComplete={(
-                        newRegion
-                    ) => {
+                    onRegionChangeComplete={(newRegion) => {
                         setRegion(newRegion);
                     }}
                     onPress={handleMapPress}
@@ -240,25 +241,21 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                 >
                     {/* Selected Location */}
                     <Marker
-                        coordinate={
-                            selectedLocation
-                        }
+                        coordinate={selectedLocation}
                         anchor={{
                             x: 0.5,
-                            y: 0.5,
+                            y: 1.0,
                         }}
                     >
                         <View
                             style={{
-                                justifyContent:
-                                    "center",
-                                alignItems:
-                                    "center",
+                                justifyContent: "center",
+                                alignItems: "center",
                             }}
                         >
                             <Ionicons
                                 name="location"
-                                size={33}
+                                size={36}
                                 color="#000000"
                             />
                         </View>
@@ -270,59 +267,42 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
             <View
                 style={{
                     backgroundColor: "#FFFFFF",
-
-                    paddingHorizontal: 9,
-                    paddingTop: 9,
-                    paddingBottom: 10,
+                    paddingHorizontal: 11,
+                    paddingTop: 10,
+                    paddingBottom: Platform.OS === "ios" ? 18 : 10,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: -3 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 5,
+                    elevation: 6,
                 }}
             >
-                {/* Current Location */}
+                {/* Current Location (Same height and design as Geo Location button) */}
                 <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={
-                        handleCurrentLocation
-                    }
+                    activeOpacity={0.85}
+                    onPress={handleCurrentLocation}
                     disabled={loadingLocation}
                     style={{
-                        height: 58,
-
-                        borderWidth: 1,
-                        borderColor: "#111111",
-
-                        borderRadius: 99,
-
-                        backgroundColor: "#F5F4F7",
-
+                        height: 67,
+                        borderRadius: 40,
+                        backgroundColor: "#F2F2F6",
                         flexDirection: "row",
                         alignItems: "center",
-
-                        paddingHorizontal: 9,
-
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 1,
-                        },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 3,
-
-                        elevation: 2,
+                        paddingHorizontal: 11,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: "#000000",
                     }}
                 >
                     {/* Icon */}
                     <View
                         style={{
-                            width: 23,
-                            height: 23,
-
-                            borderRadius: 12,
-
-                            backgroundColor: "#000",
-
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: "#000000",
                             justifyContent: "center",
                             alignItems: "center",
-
-                            marginRight: 8,
                         }}
                     >
                         {loadingLocation ? (
@@ -333,7 +313,7 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                         ) : (
                             <Ionicons
                                 name="locate"
-                                size={13}
+                                size={19}
                                 color="#FFFFFF"
                             />
                         )}
@@ -343,13 +323,16 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                     <View
                         style={{
                             flex: 1,
+                            marginLeft: 10,
+                            justifyContent: "center",
                         }}
                     >
                         <Text
                             style={{
-                                fontSize: 10,
-                                color: "#111",
-                                fontWeight: "600",
+                                fontSize: 14,
+                                color: "#000000",
+                                lineHeight: 19,
+                                marginBottom: 4,
                             }}
                         >
                             Fetch My Current Location
@@ -357,49 +340,43 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
 
                         <Text
                             style={{
-                                fontSize: 7,
-                                color: "#777",
-                                marginTop: 1,
+                                fontSize: 12,
+                                lineHeight: 18,
+                                color: "#494A65",
                             }}
                         >
-                            Use GPS to get your exact location
+                            {loadingLocation
+                                ? "Detecting GPS..."
+                                : "Use GPS to get your exact location"}
                         </Text>
                     </View>
+
                 </TouchableOpacity>
 
-                {/* Confirm */}
+                {/* Confirm Button (Same width, height, position, and styling as Save & Continue) */}
                 <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={
-                        handleConfirmLocation
-                    }
+                    onPress={handleConfirmLocation}
                     style={{
-                        height: 58,
-
-                        marginTop: 10,
-
-                        borderRadius: 99,
-
+                        height: 50,
+                        borderRadius: 26,
                         backgroundColor: "#000000",
-
                         justifyContent: "center",
                         alignItems: "center",
-
                         shadowColor: "#000",
                         shadowOffset: {
                             width: 0,
                             height: 3,
                         },
-                        shadowOpacity: 0.18,
-                        shadowRadius: 4,
-
+                        shadowOpacity: 0.15,
+                        shadowRadius: 5,
                         elevation: 4,
                     }}
                 >
                     <Text
                         style={{
                             color: "#FFFFFF",
-                            fontSize: 11,
+                            fontSize: 14,
                             fontWeight: "700",
                         }}
                     >
