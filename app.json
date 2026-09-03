@@ -7,11 +7,6 @@
     "icon": "./src/assets/images/public/app-icon-android.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./src/assets/images/public/app-icon-android.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "android": {
       "package": "com.polygonagro.Polygon",
       "versionCode": 1,
