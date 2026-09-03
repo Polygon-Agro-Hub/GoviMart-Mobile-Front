@@ -312,18 +312,17 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
     total,
     current,
 }) => (
-    <View className="flex-row items-center justify-center gap-x-2 my-2">
-        {Array.from({ length: total }).map((_, idx) => {
-            const isActive = idx === current;
-            return (
-                <View
-                    key={idx}
-                    className={`h-2.5 rounded-full ${
-                        isActive ? "w-7 bg-black" : "w-2.5 bg-[#D9D9D9]"
-                    }`}
-                />
-            );
-        })}
+    <View className="flex-row mx-5 mt-6" style={{ gap: 6 }}>
+        {Array.from({ length: total }).map((_, i) => (
+            <View
+                key={i}
+                className="flex-1 rounded-full"
+                style={{
+                    height: 4,
+                    backgroundColor: i <= current ? "#000" : "#E4E4E4",
+                }}
+            />
+        ))}
     </View>
 );
 
