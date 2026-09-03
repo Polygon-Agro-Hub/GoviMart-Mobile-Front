@@ -26,6 +26,24 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
         weightDisplay: string;
         quantity: number;
     };
+    const normalizeToKg = (product: ProductType): ProductType => {
+        const rawUnit = (product.unitType || "kg").toLowerCase();
+        if (rawUnit === "g") {
+            const rawVal = parseFloat(product.startValue || "500");
+            const kgVal = Number((rawVal / 1000).toFixed(3));
+            return {
+                ...product,
+                unitType: "kg",
+                startValue: kgVal.toString(),
+            };
+        }
+        return {
+            ...product,
+            unitType: "kg",
+            startValue: product.startValue || "1",
+        };
+    };
+
     const FALLBACK_VEGETABLES: ProductType[] = [
         {
             id: 9001,
@@ -34,8 +52,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
             category: "Vegetables",
             cropNameEnglish: "Cantaloup",
             normalPrice: "800",
-            startValue: "500",
-            unitType: "g",
+            startValue: "0.5",
+            unitType: "kg",
             image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
         },
         {
@@ -56,8 +74,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
             category: "Vegetables",
             cropNameEnglish: "Lettuce",
             normalPrice: "800",
-            startValue: "100",
-            unitType: "g",
+            startValue: "0.1",
+            unitType: "kg",
             image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
         },
         {
@@ -67,8 +85,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
             category: "Vegetables",
             cropNameEnglish: "Luffa",
             normalPrice: "1200",
-            startValue: "500",
-            unitType: "g",
+            startValue: "0.5",
+            unitType: "kg",
             image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
         },
         {
@@ -78,8 +96,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
             category: "Vegetables",
             cropNameEnglish: "Okra",
             normalPrice: "800",
-            startValue: "100",
-            unitType: "g",
+            startValue: "0.1",
+            unitType: "kg",
             image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
         },
         {
@@ -89,8 +107,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
             category: "Vegetables",
             cropNameEnglish: "Pumpkin",
             normalPrice: "1200",
-            startValue: "500",
-            unitType: "g",
+            startValue: "0.5",
+            unitType: "kg",
             image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
         },
     ];
@@ -102,24 +120,23 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
 
     const pulseAnim = useRef(new Animated.Value(0.3)).current;
     const toggleAlacartProduct = (product: ProductType) => {
-        const price = parseFloat(product.normalPrice) || 0;
-
-        const weightDisplay = `${product.startValue ?? "500"} ${(product.unitType || "g").toLowerCase()
-            }`;
+        const normalized = normalizeToKg(product);
+        const price = parseFloat(normalized.normalPrice) || 0;
+        const weightDisplay = `${normalized.startValue} kg`;
 
         setAlacartSelection((prev) => {
             // If clicking the currently selected product,
             // unselect it
-            if (prev[product.id]) {
+            if (prev[normalized.id]) {
                 return {};
             }
 
             // Otherwise, select ONLY this product
             return {
-                [product.id]: {
-                    id: product.id,
-                    displayName: product.displayName,
-                    image: product.image,
+                [normalized.id]: {
+                    id: normalized.id,
+                    displayName: normalized.displayName,
+                    image: normalized.image,
                     price,
                     weightDisplay,
                     quantity: 1,
@@ -177,7 +194,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                                     {row.map((product) => (
                                         <AlacartProductCard
                                             key={product.id}
-                                            product={product}
+                                            product={normalizeToKg(product)}
                                             selected={product.id in alacartSelection}
                                             onToggle={() => toggleAlacartProduct(product)}
                                         />
@@ -190,21 +207,40 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                 </ScrollView>
             )}
 
-            <View className="absolute bottom-0 left-0 right-0 bg-white py-4 px-6 ">
-                <TouchableOpacity disabled={Object.keys(alacartSelection).length === 0} onPress={() => navigation.navigate("SetQauntity")}>
-                    <Text className="text-[15px] text-center text-white font-semibold bg-black py-4 rounded-full"
+            <View className="absolute bottom-0 left-0 right-0 bg-white py-4 px-6 border-t border-[#F0F0F0]">
+                <TouchableOpacity
+                    disabled={Object.keys(alacartSelection).length === 0}
+                    onPress={() => {
+                        const selectedId = Object.keys(alacartSelection)[0];
+                        const selectedProduct = alaCartProducts.find(
+                            (p) => p.id.toString() === selectedId.toString()
+                        );
+                        if (!selectedProduct) return;
+
+                        navigation.navigate("SetQauntity", {
+                            fromProduct: route.params?.fromProduct,
+                            toProduct: normalizeToKg(selectedProduct),
+                            packageId: route.params?.packageId,
+                            stepIndex: route.params?.stepIndex,
+                        });
+                    }}
+                    activeOpacity={0.85}
+                >
+                    <Text
+                        className="text-[15px] text-center text-white font-semibold py-4 rounded-full"
                         style={{
                             backgroundColor:
                                 Object.keys(alacartSelection).length === 0
                                     ? "#7F919C"
                                     : "#000000",
-                        }}>
+                        }}
+                    >
                         Select
                     </Text>
                 </TouchableOpacity>
             </View>
         </View>
-    )
-}
+    );
+};
 
 export default ReplaceProduct
