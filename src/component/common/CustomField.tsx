@@ -160,23 +160,33 @@ export const DropdownField = ({
     icon,
     label,
     value,
-    open,
+    open = false,
     setOpen,
-    options,
+    options = [],
     onSelect,
     highlighted = false,
-    error
+    error,
+    onPress,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
     value: string;
-    open: boolean;
-    setOpen: (value: boolean) => void;
-    options: string[];
-    onSelect: (value: string) => void;
+    open?: boolean;
+    setOpen?: (value: boolean) => void;
+    options?: string[];
+    onSelect?: (value: string) => void;
     highlighted?: boolean;
-    error?: string
+    error?: string;
+    onPress?: () => void;
 }) => {
+    const handlePress = () => {
+        if (onPress) {
+            onPress();
+        } else if (setOpen) {
+            setOpen(!open);
+        }
+    };
+
     return (
         <View
             style={{
@@ -186,7 +196,7 @@ export const DropdownField = ({
         >
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => setOpen(!open)}
+                onPress={handlePress}
                 style={{
                     height: 67,
                     borderWidth: highlighted ? 2 : 1,
@@ -242,11 +252,11 @@ export const DropdownField = ({
                         style={{
                             fontSize: 14,
                             lineHeight: 18,
-                            color: "#111",
+                            color: value ? "#111" : "#A0A0A0",
                             fontWeight: "500",
                         }}
                     >
-                        {value}
+                        {value || "Select"}
                     </Text>
                 </View>
 
@@ -265,7 +275,7 @@ export const DropdownField = ({
 
             {/* Dropdown Options */}
 
-            {open && (
+            {open && options.length > 0 && (
                 <View
                     style={{
                         position: "absolute",
@@ -293,8 +303,8 @@ export const DropdownField = ({
                             key={option}
                             activeOpacity={0.7}
                             onPress={() => {
-                                onSelect(option);
-                                setOpen(false);
+                                onSelect?.(option);
+                                setOpen?.(false);
                             }}
                             style={{
                                 minHeight: 44,
