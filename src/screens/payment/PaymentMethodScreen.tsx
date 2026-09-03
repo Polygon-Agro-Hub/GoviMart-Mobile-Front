@@ -425,26 +425,14 @@ const PaymentMethod: React.FC<Props> = ({
                         <View
                             style={{
                                 position: "absolute",
-                                top: 9,
-                                right: 9,
-
-                                width: 18,
-                                height: 18,
-
-                                borderRadius: 5,
-
-                                backgroundColor:
-                                    useCredit
-                                        ? "#FF9114"
-                                        : "#FFF",
-
-                                borderWidth:
-                                    useCredit
-                                        ? 0
-                                        : 2,
-
-                                borderColor: "#111",
-
+                                top: 12,
+                                right: 12,
+                                width: 22,
+                                height: 22,
+                                borderRadius: 11,
+                                backgroundColor: useCredit ? "#FF9114" : "#FFF",
+                                borderWidth: useCredit ? 0 : 2,
+                                borderColor: "#BAC2C7",
                                 justifyContent: "center",
                                 alignItems: "center",
                             }}

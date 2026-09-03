@@ -23,29 +23,22 @@ export const PaymentOptionCard = ({
             activeOpacity={0.85}
             onPress={onPress}
             style={{
-                marginHorizontal: 15,
-                minHeight: 89,
-
-                borderWidth: 1,
-                borderColor: selected
-                    ? "#FF8A00"
-                    : "#DDE3E9",
-
-                borderRadius: 18,
-
-                paddingHorizontal: 10,
-                paddingVertical: 12,
-
+               marginHorizontal: 15,
+                minHeight: 96,
+                borderWidth: 1.5,
+                borderColor: selected ? "#FF8A00" : "#E1E7EE",
+                borderRadius: 20,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
                 backgroundColor: "#FFFFFF",
-
                 shadowColor: "#000",
                 shadowOffset: {
                     width: 0,
                     height: 2,
                 },
-                shadowOpacity: 0.05,
+                shadowOpacity: selected ? 0.08 : 0.03,
                 shadowRadius: 4,
-                elevation: 2,
+                elevation: selected ? 3 : 1,
             }}
         >
             {/* Radio / Check */}
@@ -53,14 +46,11 @@ export const PaymentOptionCard = ({
             <View
                 style={{
                     position: "absolute",
-                    right: 7,
-                    top: 8,
-
-                    width: 17,
-                    height: 17,
-
-                    borderRadius: 9,
-
+                    right: 12,
+                    top: 12,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 90,
                     borderWidth: selected ? 0 : 2,
                     borderColor: "#000",
 
