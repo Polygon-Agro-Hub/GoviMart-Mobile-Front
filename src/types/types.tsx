@@ -101,10 +101,10 @@ export type RootStackParamList = {
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
-  ReviewPackage: undefined;
-  SetQauntity: undefined;
+  ReviewPackage: { replacedProduct?: any; targetStepIndex?: number; } | undefined;
+  SetQauntity: { fromProduct?: any; toProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
   OrderCancelConfirmation: undefined;
-  ReplaceProduct: { product: ProductType; } | undefined;
+  ReplaceProduct: { fromProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -248,11 +248,14 @@ export type ReviewProduct = {
     category: string; // e.g. "Up Country Fruit (1)"
     name: string;
     icon: string;
+    image?: string;
     price: number;
     quantity: number;
     unit: "kg" | "g";
     step: number;
     excludedWarning?: string;
+    isReplaced?: boolean;
+    originalProduct?: ReviewProduct;
 };
  
 export type PackageReview = {

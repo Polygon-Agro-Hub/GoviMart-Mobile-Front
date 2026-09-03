@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     View,
     Text,
@@ -8,14 +8,18 @@ import {
     ScrollView,
     Image,
     Animated,
+    BackHandler,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
-import { RootStackParamList, ProductType } from "@/types/types";
+import { useFocusEffect } from "@react-navigation/native";
+import { RootStackParamList, ProductType, ReviewProduct } from "@/types/types";
 import productService from "@/services/product/product.service";
 import { HurryBanner } from "@/component/package/HurryBanner";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
+import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
@@ -33,18 +37,6 @@ type PackageMeta = {
     unitPrice: number;
     serviceFee: number;
     packingFee: number;
-};
-
-type ReviewProduct = {
-    id: string;
-    category: string; // e.g. "Up Country Fruit (1)"
-    name: string;
-    icon: string;
-    price: number;
-    quantity: number;
-    unit: "kg" | "g";
-    step: number;
-    excludedWarning?: string;
 };
 
 type AlacartSelectedProduct = {
@@ -66,10 +58,9 @@ const getPackageImage = (pkgId: string) => {
     return require("@/assets/images/home/packages.webp");
 };
 
-// One step per package INSTANCE, plus one alacart step, plus one confirm step.
-// package1 (*1) + package2 (*2) -> [pkg1#1, pkg2#1, pkg2#2, alacart, confirm]
+// One step per package type, plus one alacart step, plus one confirm step.
 type FlowStep =
-    | { type: "package"; packageId: string; instanceIndex: number }
+    | { type: "package"; packageId: string }
     | { type: "alacart" }
     | { type: "confirm" };
 
@@ -105,6 +96,7 @@ const PRODUCT_TEMPLATES: Record<string, ReviewProduct[]> = {
             category: "Up Country Fruit (1)",
             name: "Strawberry",
             icon: "🍓",
+            image: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400",
             price: 500,
             quantity: 0.5,
             unit: "kg",
@@ -117,6 +109,7 @@ const PRODUCT_TEMPLATES: Record<string, ReviewProduct[]> = {
             category: "Low Country Fruit (1)",
             name: "Lemon",
             icon: "🍋",
+            image: "https://images.unsplash.com/photo-1590502593747-42a996133562?w=400",
             price: 200,
             quantity: 0.5,
             unit: "kg",
@@ -127,6 +120,7 @@ const PRODUCT_TEMPLATES: Record<string, ReviewProduct[]> = {
             category: "Low Country Fruit (2)",
             name: "Grapes",
             icon: "🍇",
+            image: "https://images.unsplash.com/photo-1537640538966-79f369143f8f?w=400",
             price: 200,
             quantity: 0.1,
             unit: "kg",
@@ -139,6 +133,7 @@ const PRODUCT_TEMPLATES: Record<string, ReviewProduct[]> = {
             category: "Root Vegetable (1)",
             name: "Carrot",
             icon: "🥕",
+            image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
             price: 300,
             quantity: 0.5,
             unit: "kg",
@@ -149,6 +144,7 @@ const PRODUCT_TEMPLATES: Record<string, ReviewProduct[]> = {
             category: "Leafy Vegetable (1)",
             name: "Cabbage",
             icon: "🥬",
+            image: "https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=400",
             price: 250,
             quantity: 0.5,
             unit: "kg",
@@ -234,8 +230,8 @@ const FALLBACK_VEGETABLES: ProductType[] = [
         category: "Vegetables",
         cropNameEnglish: "Cantaloup",
         normalPrice: "800",
-        startValue: "500",
-        unitType: "g",
+        startValue: "0.5",
+        unitType: "kg",
         image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
     },
     {
@@ -256,8 +252,8 @@ const FALLBACK_VEGETABLES: ProductType[] = [
         category: "Vegetables",
         cropNameEnglish: "Lettuce",
         normalPrice: "800",
-        startValue: "100",
-        unitType: "g",
+        startValue: "0.1",
+        unitType: "kg",
         image: "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=400",
     },
     {
@@ -267,8 +263,8 @@ const FALLBACK_VEGETABLES: ProductType[] = [
         category: "Vegetables",
         cropNameEnglish: "Luffa",
         normalPrice: "1200",
-        startValue: "500",
-        unitType: "g",
+        startValue: "0.5",
+        unitType: "kg",
         image: "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=400",
     },
     {
@@ -278,8 +274,8 @@ const FALLBACK_VEGETABLES: ProductType[] = [
         category: "Vegetables",
         cropNameEnglish: "Okra",
         normalPrice: "800",
-        startValue: "100",
-        unitType: "g",
+        startValue: "0.1",
+        unitType: "kg",
         image: "https://images.unsplash.com/photo-1425543103986-22abb7d7e8d2?w=400",
     },
     {
@@ -289,8 +285,8 @@ const FALLBACK_VEGETABLES: ProductType[] = [
         category: "Vegetables",
         cropNameEnglish: "Pumpkin",
         normalPrice: "1200",
-        startValue: "500",
-        unitType: "g",
+        startValue: "0.5",
+        unitType: "kg",
         image: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400",
     },
 ];
@@ -316,98 +312,23 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
     total,
     current,
 }) => (
-    <View className="flex-row mx-5 mt-6" style={{ gap: 6 }}>
-        {Array.from({ length: total }).map((_, i) => (
-            <View
-                key={i}
-                className="flex-1 rounded-full"
-                style={{
-                    height: 4,
-                    backgroundColor: i <= current ? "#000" : "#E4E4E4",
-                }}
-            />
-        ))}
-    </View>
-);
-
-const ProductReviewCard: React.FC<{
-    product: ReviewProduct;
-    onIncrease: () => void;
-    onDecrease: () => void;
-    onChangeProduct: () => void;
-}> = ({ product, onIncrease, onDecrease, onChangeProduct }) => (
-    <View className="mx-5 mt-4 border border-[#EEEEEE] rounded-2xl p-4">
-        <Text className="text-[13px] text-[#8A8A8A] mb-2">
-            {product.category}
-        </Text>
-
-        <View className="flex-row items-center">
-            <View className="w-11 h-11 rounded-full bg-[#F5F5F5] items-center justify-center">
-                <Text style={{ fontSize: 20 }}>{product.icon}</Text>
-            </View>
-            <View className="ml-3">
-                <Text className="text-[16px] font-semibold text-black">
-                    {product.name}
-                </Text>
-                <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                    Price :{" "}
-                    <Text className="font-bold text-black">
-                        Rs. {product.price.toFixed(2)}
-                    </Text>
-                </Text>
-            </View>
-        </View>
-
-        <View className="flex-row items-center justify-between mt-4 bg-[#F7F7F7] rounded-full px-2 py-1.5">
-            <TouchableOpacity
-                onPress={onDecrease}
-                className="w-9 h-9 rounded-full bg-[#DADADA] items-center justify-center"
-            >
-                <Ionicons name="remove" size={18} color="#fff" />
-            </TouchableOpacity>
-
-            <Text className="text-[15px] font-semibold text-black">
-                {product.quantity} {product.unit}
-            </Text>
-
-            <TouchableOpacity
-                onPress={onIncrease}
-                className="w-9 h-9 rounded-full bg-black items-center justify-center"
-            >
-                <Ionicons name="add" size={18} color="#fff" />
-            </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-            onPress={onChangeProduct}
-            className="flex-row items-center justify-center mt-3"
-        >
-            <Ionicons name="sync-outline" size={14} color="#000" />
-            <Text className="ml-1.5 text-[13px] font-semibold text-black underline">
-                Change Product
-            </Text>
-        </TouchableOpacity>
-
-        {product.excludedWarning && (
-            <View className="flex-row items-start mt-3">
-                <Ionicons
-                    name="alert-circle"
-                    size={14}
-                    color="#F04438"
-                    style={{ marginTop: 2 }}
+    <View className="flex-row items-center justify-center gap-x-2 my-2">
+        {Array.from({ length: total }).map((_, idx) => {
+            const isActive = idx === current;
+            return (
+                <View
+                    key={idx}
+                    className={`h-2.5 rounded-full ${
+                        isActive ? "w-7 bg-black" : "w-2.5 bg-[#D9D9D9]"
+                    }`}
                 />
-                <Text className="flex-1 ml-1.5 text-[12px] text-[#F04438] leading-4">
-                    {product.excludedWarning}
-                </Text>
-            </View>
-        )}
+            );
+        })}
     </View>
 );
-
-
 
 /* ---------------------------------------------------------
-   Screen
+   Main Screen Component
 --------------------------------------------------------- */
 
 const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
@@ -416,34 +337,57 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
     const [mode, setMode] = useState<ScreenMode>("overview");
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
+    const [showExitModal, setShowExitModal] = useState(false);
 
-    // Build the flattened step list once: one "package" step per instance,
+    // Intercept Android hardware back button only when this screen is active/focused
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (mode === "flow") {
+                    goToPrevStep();
+                    return true;
+                } else {
+                    navigation.navigate("Notification");
+                    return true;
+                }
+            };
+
+            const subscription = BackHandler.addEventListener(
+                "hardwareBackPress",
+                onBackPress
+            );
+
+            return () => subscription.remove();
+        }, [mode, currentStepIndex])
+    );
+
+    const handleBackPress = () => {
+        if (mode === "flow") {
+            goToPrevStep();
+        } else {
+            navigation.navigate("Notification");
+        }
+    };
+
+    // Build the step list: one "package" step per unique package type,
     // then one "alacart" step, then one "confirm" step.
-    // e.g. fruity(*1) + veggie(*2) -> [fruity#1, veggie#1, veggie#2, alacart, confirm]
     const steps: FlowStep[] = useMemo(() => {
-        const packageSteps: FlowStep[] = PACKAGES.flatMap((pkg) =>
-            Array.from({ length: pkg.qty }, (_, i) => ({
-                type: "package" as const,
-                packageId: pkg.id,
-                instanceIndex: i + 1,
-            }))
-        );
+        const packageSteps: FlowStep[] = PACKAGES.map((pkg) => ({
+            type: "package" as const,
+            packageId: pkg.id,
+        }));
         return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
     }, []);
 
-    // Independent product state per package INSTANCE (not per package type),
-    // keyed as "<packageId>#<instanceIndex>" — so package2's two instances
-    // can be edited independently.
-    const [instanceProducts, setInstanceProducts] = useState<
+    // Product state per package type, keyed by packageId
+    const [packageProducts, setPackageProducts] = useState<
         Record<string, ReviewProduct[]>
     >(() => {
         const initial: Record<string, ReviewProduct[]> = {};
         PACKAGES.forEach((pkg) => {
-            for (let i = 1; i <= pkg.qty; i++) {
-                initial[`${pkg.id}#${i}`] = PRODUCT_TEMPLATES[pkg.id].map((p) => ({
-                    ...p,
-                }));
-            }
+            initial[pkg.id] = (PRODUCT_TEMPLATES[pkg.id] || []).map((p) => ({
+                ...p,
+            }));
         });
         return initial;
     });
@@ -460,9 +404,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
             price: 1200,
             basePrice: 1200,
-            weightDisplay: "500 g",
-            unit: "g",
-            amount: 500,
+            weightDisplay: "0.5 kg",
+            unit: "kg",
+            amount: 0.5,
             quantity: 1,
             isAddedNow: false,
         },
@@ -627,6 +571,56 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         });
     };
 
+    // Handle product replaced return from SetQuantityProductScreen
+    useEffect(() => {
+        if (route.params?.replacedProduct) {
+            const { packageId, originalProductId, newProduct } =
+                route.params.replacedProduct;
+
+            setPackageProducts((prev) => {
+                const currentList = prev[packageId] || [];
+                return {
+                    ...prev,
+                    [packageId]: currentList.map((prod) =>
+                        prod.id === originalProductId ? newProduct : prod
+                    ),
+                };
+            });
+
+            setMode("flow");
+            if (typeof route.params.targetStepIndex === "number") {
+                setCurrentStepIndex(route.params.targetStepIndex);
+            }
+
+            navigation.setParams({
+                replacedProduct: undefined,
+                targetStepIndex: undefined,
+            });
+        }
+    }, [route.params?.replacedProduct]);
+
+    const onResetToOriginal = (packageId: string, productId: string) => {
+        const templateList = PRODUCT_TEMPLATES[packageId] || [];
+        setPackageProducts((prev) => {
+            const currentList = prev[packageId] || [];
+            return {
+                ...prev,
+                [packageId]: currentList.map((prod) => {
+                    if (prod.id === productId) {
+                        if (prod.originalProduct) {
+                            return { ...prod.originalProduct, isReplaced: false };
+                        }
+                        const defaultProd = templateList.find((t) => t.id === productId);
+                        if (defaultProd) {
+                            return { ...defaultProd, isReplaced: false };
+                        }
+                    }
+                    return prod;
+                }),
+            };
+        });
+    };
+
     const overviewTotal = PACKAGES.reduce(
         (sum, p) => sum + p.qty * p.unitPrice,
         0
@@ -636,7 +630,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
     const goToPrevStep = () => {
         if (currentStepIndex === 0) {
-            setMode("overview");
+            setShowExitModal(true);
         } else {
             setCurrentStepIndex((prev) => prev - 1);
         }
@@ -646,19 +640,29 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         if (currentStepIndex < steps.length - 1) {
             setCurrentStepIndex((prev) => prev + 1);
         } else {
-            // API call — submit the whole order
-            console.log("Order confirmed", { instanceProducts, alacartSelection });
+            // Confirm order completion
+            if (additionalPayAmount > 0) {
+                navigation.navigate("PaymentMethod", {
+                    total: additionalPayAmount,
+                });
+            } else {
+                navigation.navigate("OrderConfirmed", {
+                    orderId: "2660000",
+                    invoiceNumber: "INV-2660000",
+                    total: confirmGrandTotal,
+                });
+            }
         }
     };
 
     const updateProductQuantity = (
-        instanceKey: string,
+        packageId: string,
         productId: string,
         delta: number
     ) => {
-        setInstanceProducts((prev) => ({
+        setPackageProducts((prev) => ({
             ...prev,
-            [instanceKey]: prev[instanceKey].map((prod) =>
+            [packageId]: (prev[packageId] || []).map((prod) =>
                 prod.id === productId
                     ? {
                         ...prod,
@@ -672,9 +676,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         }));
     };
 
-    const onChangeProduct = (productId: string) => {
-        navigation.navigate("ReplaceProduct");
-        console.log("Change product", productId);
+    const onChangeProduct = (packageId: string, product: ReviewProduct) => {
+        navigation.navigate("ReplaceProduct", {
+            fromProduct: product,
+            packageId,
+            stepIndex: currentStepIndex,
+        });
     };
 
     const onCancelOrder = async () => {
@@ -683,11 +690,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         navigation.navigate("OrderCancelConfirmation");
     };
 
-    // Package instances calculation for the final confirm step
-    const packageInstances = useMemo(() => {
+    // Package calculation for the final confirm step
+    const packageSummaries = useMemo(() => {
         const list: {
             pkg: PackageMeta;
-            instanceIndex: number;
             stepIndex: number;
             originalPrice: number;
             additionalChanges: number;
@@ -697,8 +703,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         steps.forEach((step, idx) => {
             if (step.type === "package") {
                 const pkg = PACKAGES.find((p) => p.id === step.packageId)!;
-                const instanceKey = `${pkg.id}#${step.instanceIndex}`;
-                const prods = instanceProducts[instanceKey] || [];
+                const prods = packageProducts[pkg.id] || [];
                 const templateProds = PRODUCT_TEMPLATES[pkg.id] || [];
 
                 const templateSum = templateProds.reduce(
@@ -710,27 +715,28 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     0
                 );
                 let diff = currentSum - templateSum;
-                if (diff === 0 && step.instanceIndex === 1 && pkg.id === "fruity") {
+                if (diff === 0 && pkg.id === "fruity") {
                     diff = 700;
                 }
 
-                const originalPrice = pkg.unitPrice;
-                const currentPrice = originalPrice + (diff > 0 ? diff : 0);
+                const additionalChangesPerPkg = diff > 0 ? diff : 0;
+                const originalPrice = pkg.unitPrice * pkg.qty;
+                const additionalChanges = additionalChangesPerPkg * pkg.qty;
+                const currentPrice = (pkg.unitPrice + additionalChangesPerPkg) * pkg.qty;
 
                 list.push({
                     pkg,
-                    instanceIndex: step.instanceIndex,
                     stepIndex: idx,
                     originalPrice,
-                    additionalChanges: diff,
+                    additionalChanges,
                     currentPrice,
                 });
             }
         });
         return list;
-    }, [steps, instanceProducts]);
+    }, [steps, packageProducts]);
 
-    const confirmPackagesTotal = packageInstances.reduce(
+    const confirmPackagesTotal = packageSummaries.reduce(
         (sum, item) => sum + item.currentPrice,
         0
     );
@@ -757,9 +763,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             {/* Header */}
             <View className="flex-row items-center px-5 pt-3 pb-4">
                 <TouchableOpacity
-                    onPress={() =>
-                        mode === "flow" ? goToPrevStep() : navigation.goBack()
-                    }
+                    onPress={handleBackPress}
                     className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
                 >
                     <Ionicons name="chevron-back" size={22} color="#000" />
@@ -791,10 +795,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     contentContainerStyle={{ paddingBottom: 24 }}
                 >
                     <View className="items-center mt-2">
-                        <Text className="text-[20px] font-bold text-black">
+                        <Text className="text-[17px] font-bold text-black">
                             Order : {orderId}
                         </Text>
-                        <Text className="text-[15px] text-[#8A8A8A] mt-1">
+                        <Text className="text-[14px] text-[#494A65] mt-1">
                             Schedule to : 14
                             <Text className="text-[10px]">th</Text> August
                         </Text>
@@ -802,7 +806,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
                     <View className="h-[1px] bg-[#ECECEC] mt-5" />
 
-                    <Text className="text-center text-[14px] text-[#6B6B6B] mt-4 mx-8 leading-5">
+                    <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
                         Review and customize your package as per your
                         preference.
                     </Text>
@@ -813,7 +817,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
                     <View className="h-[1px] bg-[#ECECEC] mt-6" />
 
-                    <Text className="text-center text-[14px] text-[#6B6B6B] mt-4 mx-8 leading-5">
+                    <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
                         Here are the packages you purchased. You can review
                         and update them if needed.
                     </Text>
@@ -864,8 +868,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 const pkg = PACKAGES.find(
                     (p) => p.id === currentStep.packageId
                 )!;
-                const instanceKey = `${pkg.id}#${currentStep.instanceIndex}`;
-                const products = instanceProducts[instanceKey];
+                const products = packageProducts[pkg.id] || [];
 
                 return (
                     <ScrollView
@@ -874,8 +877,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         contentContainerStyle={{ paddingBottom: 24 }}
                     >
                         <Text className="text-[19px] font-bold text-black mx-5 mt-4">
-                            Package : {pkg.name} (No :{" "}
-                            {String(currentStep.instanceIndex).padStart(2, "0")})
+                            Package : {pkg.name}{pkg.qty > 1 ? ` (x${pkg.qty})` : ""}
                         </Text>
                         <Text className="text-[13px] text-[#6B6B6B] mx-5 mt-1 mb-2">
                             You can change the products and quantity as
@@ -888,20 +890,23 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 product={product}
                                 onIncrease={() =>
                                     updateProductQuantity(
-                                        instanceKey,
+                                        pkg.id,
                                         product.id,
                                         1
                                     )
                                 }
                                 onDecrease={() =>
                                     updateProductQuantity(
-                                        instanceKey,
+                                        pkg.id,
                                         product.id,
                                         -1
                                     )
                                 }
                                 onChangeProduct={() =>
-                                    onChangeProduct(product.id)
+                                    onChangeProduct(pkg.id, product)
+                                }
+                                onResetToOriginal={() =>
+                                    onResetToOriginal(pkg.id, product.id)
                                 }
                             />
                         ))}
@@ -1038,11 +1043,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     className="flex-1"
                     contentContainerStyle={{ paddingBottom: 24 }}
                 >
-                    {/* Package Instance Cards */}
+                    {/* Package Cards */}
                     <View className="mt-3">
-                        {packageInstances.map((item) => (
+                        {packageSummaries.map((item) => (
                             <View
-                                key={`${item.pkg.id}#${item.instanceIndex}`}
+                                key={item.pkg.id}
                                 className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
                             >
                                 <View className="flex-row items-center">
@@ -1055,7 +1060,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                     </View>
                                     <View className="flex-1">
                                         <Text className="text-[16px] font-bold text-black">
-                                            {item.pkg.name}
+                                            {item.pkg.name}{item.pkg.qty > 1 ? ` (x${item.pkg.qty})` : ""}
                                         </Text>
                                         <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                                             Original Price :{" "}
@@ -1309,7 +1314,25 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
             {mode === "flow" && currentStep.type === "package" && (() => {
                 const pkg = PACKAGES.find((p) => p.id === currentStep.packageId)!;
-                const instanceTotal = pkg.unitPrice + pkg.serviceFee + pkg.packingFee;
+                const prods = packageProducts[pkg.id] || [];
+                const templateProds = PRODUCT_TEMPLATES[pkg.id] || [];
+                const templateSum = templateProds.reduce(
+                    (s, p) => s + p.price * p.quantity,
+                    0
+                );
+                const currentSum = prods.reduce(
+                    (s, p) => s + p.price * p.quantity,
+                    0
+                );
+                const diff = currentSum - templateSum;
+                const additionalDiff = diff > 0 ? diff : 0;
+
+                const originalPackagePrice = pkg.unitPrice;
+                const serviceFee = pkg.serviceFee;
+                const packingFee = pkg.packingFee;
+                const totalFor1Package =
+                    originalPackagePrice + serviceFee + packingFee + additionalDiff;
+                const totalForNPackages = totalFor1Package * pkg.qty;
 
                 return (
                     <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
@@ -1318,7 +1341,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 Original Package
                             </Text>
                             <Text className="text-[13px] text-black font-medium">
-                                Rs. {pkg.unitPrice.toFixed(2)}
+                                Rs. {formatPrice(originalPackagePrice)}
                             </Text>
                         </View>
                         <View className="flex-row justify-between mb-1">
@@ -1326,7 +1349,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 Service Fee
                             </Text>
                             <Text className="text-[13px] text-black font-medium">
-                                Rs. {pkg.serviceFee.toFixed(2)}
+                                Rs. {formatPrice(serviceFee)}
                             </Text>
                         </View>
                         <View className="flex-row justify-between mb-1">
@@ -1334,25 +1357,38 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 Packing Fee
                             </Text>
                             <Text className="text-[13px] text-black font-medium">
-                                Rs. {pkg.packingFee.toFixed(2)}
+                                Rs. {formatPrice(packingFee)}
                             </Text>
                         </View>
 
                         <View className="h-[1px] bg-[#ECECEC] my-1.5" />
 
-                        <View className="flex-row justify-between mb-3">
-                            <Text className="text-[16px] font-bold text-black">
-                                Total
+                        <View className="flex-row justify-between mb-1">
+                            <Text className="text-[15px] font-bold text-black">
+                                Total for 1 Package
                             </Text>
-                            <Text className="text-[16px] font-bold text-black">
-                                Rs. {instanceTotal.toFixed(2)}
+                            <Text className="text-[15px] font-bold text-black">
+                                Rs. {formatPrice(totalFor1Package)}
                             </Text>
                         </View>
+
+                        {pkg.qty > 1 && (
+                            <View className="flex-row justify-between mb-3 mt-1">
+                                <Text className="text-[16px] font-extrabold text-black">
+                                    Total for {pkg.qty} Packages
+                                </Text>
+                                <Text className="text-[16px] font-extrabold text-black">
+                                    Rs. {formatPrice(totalForNPackages)}
+                                </Text>
+                            </View>
+                        )}
 
                         <TouchableOpacity
                             onPress={goToNextStep}
                             activeOpacity={0.85}
-                            className="bg-black rounded-full py-4 items-center"
+                            className={`bg-black rounded-full py-4 items-center ${
+                                pkg.qty <= 1 ? "mt-2" : ""
+                            }`}
                         >
                             <Text className="text-white text-[16px] font-bold">
                                 Confirm & Continue ({currentStepIndex + 1})
@@ -1420,11 +1456,36 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         className="bg-black rounded-full py-4 items-center mt-1"
                     >
                         <Text className="text-white text-[16px] font-bold">
-                            Confirm Order Details
+                            {additionalPayAmount > 0
+                                ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
+                                : "Confirm & Complete Order"}
                         </Text>
                     </TouchableOpacity>
                 </View>
             )}
+
+            {/* Confirmation Modal when navigating back */}
+            <ConfirmationModal
+                visible={showExitModal}
+                title="Are you sure you want to go back?"
+                message="Going back will cause you to lose all your changes."
+                confirmLabel="Yes, Go Back"
+                cancelLabel="No, Stay on the page"
+                confirmButtonColor="#000000"
+                confirmButtonTextColor="#FFFFFF"
+                cancelButtonBgColor="#EAEFF5"
+                cancelButtonTextColor="#4B5563"
+                iconName="warning"
+                iconColor="#D32F2F"
+                iconBgColor="bg-[#FEECEC]"
+                buttonLayout="column"
+                showCloseButton={false}
+                onConfirm={() => {
+                    setShowExitModal(false);
+                    setMode("overview");
+                }}
+                onCancel={() => setShowExitModal(false)}
+            />
         </SafeAreaView>
     );
 };
