@@ -7,12 +7,14 @@
     "icon": "./src/assets/images/public/app-icon-android.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./src/assets/images/public/polygon-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "android": {
       "package": "com.polygonagro.Polygon",
       "versionCode": 1,
-      "compileSdkVersion": 36,
-      "targetSdkVersion": 36,
-      "minSdkVersion": 24,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
@@ -56,6 +58,11 @@
       [
         "expo-build-properties",
         {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 24
+          },
           "ios": {
             "deploymentTarget": "15.1"
           }
@@ -66,8 +73,7 @@
     "extra": {
       "eas": {
         "projectId": "ed205ef8-ce38-4be4-a1e0-08ba15085639"
-      },
-      "shoutoutApiKey": "$SHOUTOUT_API_KEY"
+      }
     }
   }
 }
