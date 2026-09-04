@@ -114,10 +114,10 @@ export type RootStackParamList = {
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
-  ReviewPackage: { replacedProduct?: any; targetStepIndex?: number; } | undefined;
-  SetQauntity: { fromProduct?: any; toProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
+  ReviewPackage: { orderId?: string | number; replacedProduct?: any; targetStepIndex?: number; } | undefined;
+  SetQauntity: { fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
   OrderCancelConfirmation: undefined;
-  ReplaceProduct: { fromProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
+  ReplaceProduct: { fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -266,6 +266,9 @@ export type ReviewProduct = {
     quantity: number;
     unit: "kg" | "g";
     step: number;
+    productType?: number | string;
+    productTypeId?: number | string;
+    productTypeName?: string;
     excludedWarning?: string;
     isReplaced?: boolean;
     originalProduct?: ReviewProduct;
