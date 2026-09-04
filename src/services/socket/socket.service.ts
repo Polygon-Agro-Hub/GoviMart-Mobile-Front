@@ -13,12 +13,6 @@ class SocketService {
   private cityListeners: Set<CityAvailabilityCallback> = new Set();
   private isConnecting: boolean = false;
 
-  private getSocketUrl(): string {
-    const baseUrl = environment.API_BASE_URL || "http://localhost:3000";
-    // Strip trailing /polygon or /polygon/ to connect to root socket namespace
-    return baseUrl.replace(/\/polygon\/?$/i, "").replace(/\/+$/, "");
-  }
-
   async connect() {
     if (this.socket?.connected || this.isConnecting) {
       return;
@@ -32,12 +26,23 @@ class SocketService {
         (await AsyncStorage.getItem("userToken")) ||
         "";
 
-      const socketUrl = this.getSocketUrl();
-      console.log(`🔌 [SocketService] Connecting to: ${socketUrl}`);
+      // Always connect to the root host — Socket.IO is mounted at /socket.io on the server
+      const baseUrl = environment.API_BASE_URL || "http://localhost:3000";
+      const urlMatch = baseUrl.match(/^(https?:\/\/[^\/]+)/);
+      const socketUrl = urlMatch ? urlMatch[1] : baseUrl;
+      const socketPath = "/socket.io";
+
+      console.log(`🔌 [SocketService] Connecting to: ${socketUrl} with path: ${socketPath}`);
 
       this.socket = io(socketUrl, {
-        transports: ["websocket", "polling"],
-        auth: { token },
+        path: socketPath,
+        transports: ["polling", "websocket"],
+        extraHeaders: {
+          Authorization: `Bearer ${token}`,
+        },
+        auth: {
+          token: token,
+        },
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 2000,
