@@ -15,6 +15,7 @@ import { StackScreenProps } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList, ProductType, ReviewProduct } from "@/types/types";
 import productService from "@/services/product/product.service";
+import orderService from "@/services/order/order.service";
 import { HurryBanner } from "@/component/package/HurryBanner";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
@@ -32,8 +33,9 @@ type ScreenMode = "overview" | "flow";
 type PackageMeta = {
     id: string;
     name: string;
-    icon: string; // emoji placeholder — swap for an <Image> when you have assets
-    qty: number; // how many instances of this package the user bought
+    icon?: string;
+    image?: string;
+    qty: number;
     unitPrice: number;
     serviceFee: number;
     packingFee: number;
@@ -64,94 +66,6 @@ type FlowStep =
     | { type: "alacart" }
     | { type: "confirm" };
 
-/* ---------------------------------------------------------
-   Mock data — replace with data from route.params / API
---------------------------------------------------------- */
-
-const PACKAGES: PackageMeta[] = [
-    {
-        id: "fruity",
-        name: "Fruity Pack",
-        icon: "🍇",
-        qty: 1,
-        unitPrice: 1000,
-        serviceFee: 50,
-        packingFee: 50,
-    },
-    {
-        id: "veggie",
-        name: "Veggie Pack",
-        icon: "🥗",
-        qty: 2,
-        unitPrice: 1000,
-        serviceFee: 50,
-        packingFee: 50,
-    },
-];
-
-const PRODUCT_TEMPLATES: Record<string, ReviewProduct[]> = {
-    fruity: [
-        {
-            id: "strawberry",
-            category: "Up Country Fruit (1)",
-            name: "Strawberry",
-            icon: "🍓",
-            image: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400",
-            price: 500,
-            quantity: 0.5,
-            unit: "kg",
-            step: 0.5,
-            excludedWarning:
-                "You marked Strawberry as an exclude product for your packages. Please Change Product if you don't need this.",
-        },
-        {
-            id: "lemon",
-            category: "Low Country Fruit (1)",
-            name: "Lemon",
-            icon: "🍋",
-            image: "https://images.unsplash.com/photo-1590502593747-42a996133562?w=400",
-            price: 200,
-            quantity: 0.5,
-            unit: "kg",
-            step: 0.5,
-        },
-        {
-            id: "grapes",
-            category: "Low Country Fruit (2)",
-            name: "Grapes",
-            icon: "🍇",
-            image: "https://images.unsplash.com/photo-1537640538966-79f369143f8f?w=400",
-            price: 200,
-            quantity: 0.1,
-            unit: "kg",
-            step: 0.1,
-        },
-    ],
-    veggie: [
-        {
-            id: "carrot",
-            category: "Root Vegetable (1)",
-            name: "Carrot",
-            icon: "🥕",
-            image: "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
-            price: 300,
-            quantity: 0.5,
-            unit: "kg",
-            step: 0.5,
-        },
-        {
-            id: "cabbage",
-            category: "Leafy Vegetable (1)",
-            name: "Cabbage",
-            icon: "🥬",
-            image: "https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=400",
-            price: 250,
-            quantity: 0.5,
-            unit: "kg",
-            step: 0.5,
-        },
-    ],
-};
 
 interface Category {
     id: string;
@@ -331,12 +245,131 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
 --------------------------------------------------------- */
 
 const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
-    // const { orderId } = route.params;
-    const orderId = 2660000
+    const effectiveOrderId = route.params?.orderId || 3835;
 
     const [mode, setMode] = useState<ScreenMode>("overview");
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [showExitModal, setShowExitModal] = useState(false);
+    const [isLocked, setIsLocked] = useState(false);
+    const [loadingReview, setLoadingReview] = useState(true);
+    const [processOrderId, setProcessOrderId] = useState<number | string | null>(null);
+    const [invoiceNo, setInvoiceNo] = useState<string>("INV-2660000");
+    const [scheduleDateStr, setScheduleDateStr] = useState<string>("14th August");
+
+    const [packagesMeta, setPackagesMeta] = useState<PackageMeta[]>([]);
+    const [productTemplatesState, setProductTemplatesState] = useState<Record<string, ReviewProduct[]>>({});
+    const [packageProducts, setPackageProducts] = useState<Record<string, ReviewProduct[]>>({});
+    const [orderPackageDbIds, setOrderPackageDbIds] = useState<Record<string, number>>({});
+
+    // Fetch review data from backend
+    useEffect(() => {
+        const fetchReviewData = async () => {
+            setLoadingReview(true);
+            try {
+                const res = await orderService.getPackageReview(effectiveOrderId);
+                if (res.data?.status && res.data?.data) {
+                    console.log("package review data: ", res.data.data);
+                    const { orderInfo, packages } = res.data.data;
+                    if (orderInfo) {
+                        setProcessOrderId(orderInfo.processOrderId || orderInfo.actualOrderId);
+                        if (orderInfo.invNo) setInvoiceNo(orderInfo.invNo);
+                        if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
+                            const d = new Date(orderInfo.sheduleDate || orderInfo.processScheduleDate);
+                            if (!isNaN(d.getTime())) {
+                                setScheduleDateStr(d.toLocaleDateString("en-US", { day: "numeric", month: "long" }));
+                            }
+                        }
+                    }
+
+                    if (Array.isArray(packages) && packages.length > 0) {
+                        const newMeta: PackageMeta[] = [];
+                        const newTemplates: Record<string, ReviewProduct[]> = {};
+                        const newProducts: Record<string, ReviewProduct[]> = {};
+                        const dbIdMap: Record<string, number> = {};
+                        let anyLocked = false;
+
+                        packages.forEach((pkg: any) => {
+                            const pkgKey = String(pkg.packageId || pkg.orderPackageId);
+                            dbIdMap[pkgKey] = pkg.orderPackageId;
+                            if (pkg.isLock === 1) anyLocked = true;
+
+                            newMeta.push({
+                                id: pkgKey,
+                                name: pkg.packageName || "Custom Package",
+                                icon: pkg.packageName?.toLowerCase().includes("fruit") ? "🍇" : "🥗",
+                                image: pkg.packageImage,
+                                qty: parseInt(pkg.qty) || 1,
+                                unitPrice: parseFloat(pkg.unitPrice) || 1000,
+                                serviceFee: parseFloat(pkg.serviceFee) || 50,
+                                packingFee: parseFloat(pkg.packingFee) || 50,
+                            });
+
+                            // Map active items
+                            const activeItems: ReviewProduct[] = (pkg.items || []).map((i: any) => ({
+                                id: String(i.productId || i.itemId),
+                                category: i.categoryName || i.productTypeName || "Package Item",
+                                name: i.productName || "Product",
+                                icon: "🥗",
+                                image: i.productImage,
+                                price: parseFloat(i.baseUnitPrice || i.price || 0),
+                                quantity: parseFloat(i.qty || 1),
+                                unit: (i.unitType?.toLowerCase() === "g" ? "g" : "kg") as "kg" | "g",
+                                step: parseFloat(i.step || 0.5),
+                                productType: i.productType,
+                                productTypeId: i.productType || i.productTypeId,
+                                productTypeName: i.productTypeName,
+                                isReplaced: !!i.isReplaced,
+                                originalProduct: i.originalProduct ? {
+                                    id: String(i.originalProduct.id),
+                                    category: i.originalProduct.category || "Original Item",
+                                    name: i.originalProduct.name,
+                                    icon: "🥗",
+                                    image: i.originalProduct.image,
+                                    price: parseFloat(i.originalProduct.price || 0),
+                                    quantity: parseFloat(i.originalProduct.quantity || 1),
+                                    unit: i.originalProduct.unit || "kg",
+                                    step: 0.5,
+                                    productType: i.originalProduct.productType,
+                                    productTypeId: i.originalProduct.productType,
+                                } : undefined,
+                            }));
+
+                            // Map baseline templates
+                            const baseItems: ReviewProduct[] = (pkg.baselineProducts || []).map((b: any) => ({
+                                id: String(b.productId || b.baselineId),
+                                category: b.categoryName || b.productTypeName || "Baseline Item",
+                                name: b.productName || "Product",
+                                icon: "🥗",
+                                image: b.productImage,
+                                price: parseFloat(b.baseUnitPrice || b.price || 0),
+                                quantity: parseFloat(b.qty || 1),
+                                unit: (b.unitType?.toLowerCase() === "g" ? "g" : "kg") as "kg" | "g",
+                                step: 0.5,
+                                productType: b.productType,
+                                productTypeId: b.productType || b.productTypeId,
+                                productTypeName: b.productTypeName,
+                            }));
+
+                            newProducts[pkgKey] = activeItems;
+                            newTemplates[pkgKey] = baseItems.length > 0 ? baseItems : activeItems;
+                        });
+
+                        setPackagesMeta(newMeta);
+                        setPackageProducts(newProducts);
+                        setProductTemplatesState(newTemplates);
+                        setOrderPackageDbIds(dbIdMap);
+                        setIsLocked(anyLocked);
+                    }
+                }
+            } catch (err) {
+                console.log("Failed to load package review details from API:", err);
+            } finally {
+                setLoadingReview(false);
+            }
+        };
+
+        fetchReviewData();
+    }, [effectiveOrderId]);
 
     // Intercept Android hardware back button only when this screen is active/focused
     useFocusEffect(
@@ -371,25 +404,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     // Build the step list: one "package" step per unique package type,
     // then one "alacart" step, then one "confirm" step.
     const steps: FlowStep[] = useMemo(() => {
-        const packageSteps: FlowStep[] = PACKAGES.map((pkg) => ({
+        const packageSteps: FlowStep[] = packagesMeta.map((pkg) => ({
             type: "package" as const,
             packageId: pkg.id,
         }));
         return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
-    }, []);
+    }, [packagesMeta]);
 
-    // Product state per package type, keyed by packageId
-    const [packageProducts, setPackageProducts] = useState<
-        Record<string, ReviewProduct[]>
-    >(() => {
-        const initial: Record<string, ReviewProduct[]> = {};
-        PACKAGES.forEach((pkg) => {
-            initial[pkg.id] = (PRODUCT_TEMPLATES[pkg.id] || []).map((p) => ({
-                ...p,
-            }));
-        });
-        return initial;
-    });
 
     const [selectedAlaCartCategory, setSelectedAlaCartCategory] = useState<string>("Vegetables");
     const [alaCartProducts, setAlaCartProducts] = useState<ProductType[]>(FALLBACK_VEGETABLES);
@@ -576,6 +597,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             const { packageId, originalProductId, newProduct } =
                 route.params.replacedProduct;
 
+            const dbPkgId = orderPackageDbIds[packageId];
+            if (dbPkgId && newProduct) {
+                orderService.replacePackageItem({
+                    orderPackageId: dbPkgId,
+                    replceId: parseInt(originalProductId) || undefined,
+                    newProductId: parseInt(newProduct.id) || 0,
+                    productType: newProduct.productTypeId || newProduct.productType || newProduct.category,
+                    newQty: newProduct.quantity || 1,
+                    newPrice: (newProduct.price || 0) * (newProduct.quantity || 1),
+                }).catch((err) => console.log("Sync replace package item error:", err));
+            }
+
             setPackageProducts((prev) => {
                 const currentList = prev[packageId] || [];
                 return {
@@ -596,10 +629,22 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 targetStepIndex: undefined,
             });
         }
-    }, [route.params?.replacedProduct]);
+    }, [route.params?.replacedProduct, orderPackageDbIds]);
 
-    const onResetToOriginal = (packageId: string, productId: string) => {
-        const templateList = PRODUCT_TEMPLATES[packageId] || [];
+    const onResetToOriginal = async (packageId: string, productId: string) => {
+        const templateList = productTemplatesState[packageId] || [];
+        const dbPkgId = orderPackageDbIds[packageId];
+        if (dbPkgId) {
+            try {
+                await orderService.resetPackageItem({
+                    orderPackageId: dbPkgId,
+                    replceId: parseInt(productId) || undefined,
+                });
+            } catch (e) {
+                console.log("Sync reset package item error:", e);
+            }
+        }
+
         setPackageProducts((prev) => {
             const currentList = prev[packageId] || [];
             return {
@@ -620,12 +665,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         });
     };
 
-    const overviewTotal = PACKAGES.reduce(
+    const overviewTotal = packagesMeta.reduce(
         (sum, p) => sum + p.qty * p.unitPrice,
         0
     );
 
-    const currentStep = steps[currentStepIndex];
+    const currentStep = steps[currentStepIndex] || steps[0] || { type: "confirm" as const };
 
     const goToPrevStep = () => {
         if (currentStepIndex === 0) {
@@ -635,19 +680,30 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         }
     };
 
-    const goToNextStep = () => {
+    const goToNextStep = async () => {
         if (currentStepIndex < steps.length - 1) {
             setCurrentStepIndex((prev) => prev + 1);
         } else {
-            // Confirm order completion
+            // Confirm order completion & finalize review
+            try {
+                await orderService.confirmPackageReview({
+                    orderId: effectiveOrderId,
+                    processOrderId: processOrderId || undefined,
+                    lockNow: true,
+                    additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+                });
+            } catch (err) {
+                console.log("Confirm review API error:", err);
+            }
+
             if (additionalPayAmount > 0) {
                 navigation.navigate("PaymentMethod", {
                     total: additionalPayAmount,
                 });
             } else {
                 navigation.navigate("OrderConfirmed", {
-                    orderId: "2660000",
-                    invoiceNumber: "INV-2660000",
+                    orderId: String(effectiveOrderId),
+                    invoiceNumber: invoiceNo,
                     total: confirmGrandTotal,
                 });
             }
@@ -679,6 +735,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         navigation.navigate("ReplaceProduct", {
             fromProduct: product,
             packageId,
+            orderPackageId: orderPackageDbIds[packageId],
+            replceId: parseInt(product.id) || undefined,
             stepIndex: currentStepIndex,
         });
     };
@@ -701,9 +759,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
         steps.forEach((step, idx) => {
             if (step.type === "package") {
-                const pkg = PACKAGES.find((p) => p.id === step.packageId)!;
+                const pkg = packagesMeta.find((p) => p.id === step.packageId)!;
+                if (!pkg) return;
                 const prods = packageProducts[pkg.id] || [];
-                const templateProds = PRODUCT_TEMPLATES[pkg.id] || [];
+                const templateProds = productTemplatesState[pkg.id] || [];
 
                 const templateSum = templateProds.reduce(
                     (s, p) => s + p.price * p.quantity,
@@ -733,7 +792,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             }
         });
         return list;
-    }, [steps, packageProducts]);
+    }, [steps, packagesMeta, packageProducts, productTemplatesState]);
 
     const confirmPackagesTotal = packageSummaries.reduce(
         (sum, item) => sum + item.currentPrice,
@@ -741,7 +800,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     );
 
     // Totals for the final confirm step
-    const packagesTotal = PACKAGES.reduce(
+    const packagesTotal = packagesMeta.reduce(
         (sum, pkg) =>
             sum + pkg.qty * (pkg.unitPrice + pkg.serviceFee + pkg.packingFee),
         0
@@ -795,13 +854,21 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 >
                     <View className="items-center mt-2">
                         <Text className="text-[17px] font-bold text-black">
-                            Order : {orderId}
+                            Order : #{effectiveOrderId}
                         </Text>
                         <Text className="text-[14px] text-[#494A65] mt-1">
-                            Schedule to : 14
-                            <Text className="text-[10px]">th</Text> August
+                            Schedule to : {scheduleDateStr}
                         </Text>
                     </View>
+
+                    {isLocked && (
+                        <View className="mx-5 mt-3 bg-[#FFF3CD] border border-[#FFEBAA] rounded-2xl p-4 flex-row items-center">
+                            <Ionicons name="lock-closed" size={20} color="#856404" />
+                            <Text className="text-[13px] text-[#856404] font-medium ml-2 flex-1">
+                                Package reviewing is currently locked. Your order is already being packed.
+                            </Text>
+                        </View>
+                    )}
 
                     <View className="h-[1px] bg-[#ECECEC] mt-5" />
 
@@ -811,7 +878,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     </Text>
 
                     <View className="mt-5">
-                        <HurryBanner ordersLeft={30} date="14th August" />
+                        <HurryBanner ordersLeft={30} date={scheduleDateStr} />
                     </View>
 
                     <View className="h-[1px] bg-[#ECECEC] mt-6" />
@@ -821,28 +888,47 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         and update them if needed.
                     </Text>
 
-                    {PACKAGES.map((pkg) => (
-                        <View
-                            key={pkg.id}
-                            className="mx-5 mt-4 border border-[#EEEEEE] rounded-2xl p-4 flex-row items-center"
-                        >
-                            <View className="w-11 h-11 rounded-full bg-[#F5F5F5] items-center justify-center">
-                                <Text style={{ fontSize: 20 }}>{pkg.icon}</Text>
-                            </View>
-                            <View className="ml-3">
-                                <Text className="text-[17px] font-bold text-black">
-                                    {pkg.name} (x{pkg.qty})
-                                </Text>
-                                <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                                    Price :{" "}
-                                    <Text className="font-bold text-black">
-                                        Rs.{pkg.unitPrice.toFixed(2)} x {pkg.qty} = Rs.
-                                        {(pkg.unitPrice * pkg.qty).toFixed(2)}
-                                    </Text>
-                                </Text>
-                            </View>
+                    {loadingReview ? (
+                        <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
+                            <Text className="text-[14px] text-[#6B6B6B] font-medium">Loading your package details...</Text>
                         </View>
-                    ))}
+                    ) : packagesMeta.length === 0 ? (
+                        <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
+                            <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
+                            <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">No packages found for this order.</Text>
+                        </View>
+                    ) : (
+                        packagesMeta.map((pkg) => (
+                            <View
+                                key={pkg.id}
+                                className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl p-4 flex-row items-center"
+                            >
+                                <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
+                                    {pkg.image ? (
+                                        <Image
+                                            source={{ uri: pkg.image }}
+                                            className="w-12 h-12 rounded-xl"
+                                            resizeMode="cover"
+                                        />
+                                    ) : (
+                                        <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
+                                    )}
+                                </View>
+                                <View className="ml-3 flex-1">
+                                    <Text className="text-[17px] font-bold text-black" numberOfLines={1}>
+                                        {pkg.name} (x{pkg.qty})
+                                    </Text>
+                                    <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
+                                        Price :{" "}
+                                        <Text className="font-bold text-black">
+                                            Rs.{pkg.unitPrice.toFixed(2)} x {pkg.qty} = Rs.
+                                            {(pkg.unitPrice * pkg.qty).toFixed(2)}
+                                        </Text>
+                                    </Text>
+                                </View>
+                            </View>
+                        ))
+                    )}
 
                     <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
                         Lastly, you may also purchase any additional items
@@ -864,9 +950,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             )}
 
             {mode === "flow" && currentStep.type === "package" && (() => {
-                const pkg = PACKAGES.find(
+                const pkg = packagesMeta.find(
                     (p) => p.id === currentStep.packageId
                 )!;
+                if (!pkg) return null;
                 const products = packageProducts[pkg.id] || [];
 
                 return (
@@ -1070,11 +1157,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                         <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                                             Additional Changes :{" "}
                                             <Text
-                                                className={`font-bold ${
-                                                    item.additionalChanges > 0
-                                                        ? "text-[#F04438]"
-                                                        : "text-black"
-                                                }`}
+                                                className={`font-bold ${item.additionalChanges > 0
+                                                    ? "text-[#F04438]"
+                                                    : "text-black"
+                                                    }`}
                                             >
                                                 {item.additionalChanges > 0
                                                     ? `+ Rs. ${formatPrice(item.additionalChanges)}`
@@ -1157,11 +1243,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                                 {item.displayName}
                                             </Text>
                                             <Text
-                                                className={`text-[15px] font-bold mt-0.5 ${
-                                                    item.isAddedNow
-                                                        ? "text-[#F04438]"
-                                                        : "text-black"
-                                                }`}
+                                                className={`text-[15px] font-bold mt-0.5 ${item.isAddedNow
+                                                    ? "text-[#F04438]"
+                                                    : "text-black"
+                                                    }`}
                                             >
                                                 Rs. {formatPrice(item.price)}
                                             </Text>
@@ -1203,11 +1288,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                                 toggleAlacartItemUnit(item.id, "kg")
                                             }
                                             activeOpacity={0.8}
-                                            className={`px-3.5 py-1 rounded-full mr-1.5 ${
-                                                item.unit === "kg"
-                                                    ? "bg-[#FF9114]"
-                                                    : "bg-[#FCE1C5]"
-                                            }`}
+                                            className={`px-3.5 py-1 rounded-full mr-1.5 ${item.unit === "kg"
+                                                ? "bg-[#FF9114]"
+                                                : "bg-[#FCE1C5]"
+                                                }`}
                                         >
                                             <Text className="text-white font-bold text-[12px]">
                                                 kg
@@ -1218,11 +1302,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                                 toggleAlacartItemUnit(item.id, "g")
                                             }
                                             activeOpacity={0.8}
-                                            className={`px-3.5 py-1 rounded-full ${
-                                                item.unit === "g"
-                                                    ? "bg-[#FF9114]"
-                                                    : "bg-[#FCE1C5]"
-                                            }`}
+                                            className={`px-3.5 py-1 rounded-full ${item.unit === "g"
+                                                ? "bg-[#FF9114]"
+                                                : "bg-[#FCE1C5]"
+                                                }`}
                                         >
                                             <Text className="text-white font-bold text-[12px]">
                                                 g
@@ -1297,24 +1380,27 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     </View>
 
                     <TouchableOpacity
+                        disabled={loadingReview || packagesMeta.length === 0}
                         onPress={() => {
                             setCurrentStepIndex(0);
                             setMode("flow");
                         }}
                         activeOpacity={0.85}
-                        className="bg-black rounded-full py-4 items-center"
+                        className={`rounded-full py-4 items-center ${loadingReview || packagesMeta.length === 0 ? "bg-[#7F919C]" : "bg-black"
+                            }`}
                     >
                         <Text className="text-white text-[16px] font-bold">
-                            Review My Packages
+                            {loadingReview ? "Loading Packages..." : "Review My Packages"}
                         </Text>
                     </TouchableOpacity>
                 </View>
             )}
 
-            {mode === "flow" && currentStep.type === "package" && (() => {
-                const pkg = PACKAGES.find((p) => p.id === currentStep.packageId)!;
+            {mode === "flow" && currentStep && currentStep.type === "package" && (() => {
+                const pkg = packagesMeta.find((p) => p.id === currentStep.packageId);
+                if (!pkg) return null;
                 const prods = packageProducts[pkg.id] || [];
-                const templateProds = PRODUCT_TEMPLATES[pkg.id] || [];
+                const templateProds = productTemplatesState[pkg.id] || [];
                 const templateSum = templateProds.reduce(
                     (s, p) => s + p.price * p.quantity,
                     0
@@ -1385,9 +1471,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         <TouchableOpacity
                             onPress={goToNextStep}
                             activeOpacity={0.85}
-                            className={`bg-black rounded-full py-4 items-center ${
-                                pkg.qty <= 1 ? "mt-2" : ""
-                            }`}
+                            className={`bg-black rounded-full py-4 items-center ${pkg.qty <= 1 ? "mt-2" : ""
+                                }`}
                         >
                             <Text className="text-white text-[16px] font-bold">
                                 Confirm & Continue ({currentStepIndex + 1})
