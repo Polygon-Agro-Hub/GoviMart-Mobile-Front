@@ -61,7 +61,9 @@ const InAppNotificationBanner: React.FC = () => {
 
     const titleLower = (currentNotification.title || "").toLowerCase();
     if (titleLower.includes("package finalization review")) {
-      (navigationRef.current as any)?.navigate("ReviewPackage");
+      (navigationRef.current as any)?.navigate("ReviewPackage", {
+        orderId: currentNotification.orderId || currentNotification.processOrderId,
+      });
     } else if (currentNotification.orderId || currentNotification.processOrderId) {
       (navigationRef.current as any)?.navigate("OrderDetails", {
         orderId: String(currentNotification.orderId || currentNotification.processOrderId),

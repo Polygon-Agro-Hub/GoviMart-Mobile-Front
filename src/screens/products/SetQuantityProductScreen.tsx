@@ -197,7 +197,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
         originalProductId: fromProduct.id,
         newProduct: {
           id: toProduct.id,
-          category: rawFrom?.category || "Replaced Product",
+          category: rawFrom?.category || rawTo?.productTypeName || "Replaced Product",
           name: toProduct.name,
           icon: toProduct.icon || "🥗",
           image: toProduct.image,
@@ -205,6 +205,9 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           quantity: quantity,
           unit: "kg",
           step: step,
+          productType: rawFrom?.productType || rawTo?.productTypeId,
+          productTypeId: rawFrom?.productTypeId || rawTo?.productTypeId,
+          productTypeName: rawFrom?.productTypeName || rawTo?.productTypeName,
           isReplaced: true,
           originalProduct: rawFrom?.originalProduct || rawFrom,
         },

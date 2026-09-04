@@ -179,8 +179,10 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
         // Navigate based on notification title/type
         const titleLower = (item.title || "").toLowerCase();
-        if (titleLower.includes("package finalization review")) {
-            navigation.navigate("ReviewPackage");
+        if (titleLower.includes("package finalization review") || titleLower.includes("review package") || titleLower.includes("package review")) {
+            navigation.navigate("ReviewPackage", {
+                orderId: item.processOrderId || item.orderId,
+            });
         } else if (item.processOrderId || item.orderId) {
             navigation.navigate("OrderDetails", {
                 orderId: String(item.processOrderId || item.orderId),
@@ -190,6 +192,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
     // MARK ALL NOTIFICATIONS AS READ
     const handleMarkAllAsRead = async () => {
+        // navigation.navigate("ReviewPackage"); //testing purpose-remove this after testing 
         setShowMenu(false);
         setNotifications((previous) =>
             previous.map((n) => ({
@@ -586,4 +589,4 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     );
 };
 
-export default Notifications;
+export default Notifications;

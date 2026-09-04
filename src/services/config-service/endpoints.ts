@@ -35,6 +35,7 @@ export const ENDPOINTS = {
     GET_ALL_PRODUCTS: "api/product/all-product",
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
+    GET_PRODUCTS_BY_PRODUCT_TYPE: "api/product/by-product-type/:productTypeId",
     GET_BANNERS: "api/product/slides",
     CHECK_AVAILABILITY: "api/product/check-availability",
   },
@@ -59,6 +60,10 @@ export const ENDPOINTS = {
     GET_COUPONS: "api/order/coupons",
     CHECK_COUPON: "api/order/check-coupon",
     GET_INVOICE: "api/order/invoice/:orderId",
+    GET_PACKAGE_REVIEW: "api/order/package/review/:orderId",
+    REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
+    RESET_PACKAGE_ITEM: "api/order/package/reset-item",
+    CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
   },
 
   PAYMENT: {
