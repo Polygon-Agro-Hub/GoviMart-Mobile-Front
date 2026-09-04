@@ -21,6 +21,7 @@ export const ENDPOINTS = {
     VERIFY_PHONE_CHANGE_OTP: "api/customer/verify-phone-change-otp",
     RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
     UPDATE_CREDIT_BALANCE: "api/customer/update-credit-balance",
+    UPLOAD_PROFILE_IMAGE: "api/customer/upload-profile-image",
   },
 
   COMPLAINT: {

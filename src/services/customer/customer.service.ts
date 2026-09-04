@@ -76,6 +76,23 @@ class CustomerService {
       { headers }
     );
   }
+
+  async uploadProfileImage(uri: string, name = "profile.jpg", type = "image/jpeg") {
+    const headers = await getAuthHeader();
+    const formData = new FormData();
+    formData.append("profileImage", {
+      uri,
+      name,
+      type,
+    } as any);
+
+    return apiClient.post(ENDPOINTS.CUSTOMER.UPLOAD_PROFILE_IMAGE, formData, {
+      headers: {
+        ...headers,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
 }
 
 export default new CustomerService();

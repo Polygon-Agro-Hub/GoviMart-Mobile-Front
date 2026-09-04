@@ -24,10 +24,10 @@ export const PaymentOptionCard = ({
             activeOpacity={0.85}
             onPress={onPress}
             style={{
-                marginHorizontal: 15,
+               marginHorizontal: 15,
                 minHeight: 96,
                 borderWidth: 1.5,
-                borderColor: selected ? "#000000" : "#E1E7EE",
+                borderColor: selected ? "#FF8A00" : "#E1E7EE",
                 borderRadius: 20,
                 paddingHorizontal: 16,
                 paddingVertical: 14,
@@ -50,7 +50,7 @@ export const PaymentOptionCard = ({
                     top: 12,
                     width: 22,
                     height: 22,
-                    borderRadius: 11,
+                    borderRadius: 90,
                     borderWidth: selected ? 0 : 2,
                     borderColor: "#BAC2C7",
                     backgroundColor: selected ? "#000000" : "#FFFFFF",

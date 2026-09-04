@@ -8,12 +8,16 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
+import { updateUserProfileImage } from "@/store/authSlice";
 
 import { RootStackParamList } from "../../types/types";
 import { DropdownField, InputField } from "@/component/common/CustomField";
@@ -89,6 +93,7 @@ interface MyAccountProps {
 }
 
 const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
+  const dispatch = useDispatch();
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
   );
@@ -97,13 +102,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [title, setTitle] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [profileImage, setProfileImage] = useState<string | null>(
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+  );
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
   const [mobileCode, setMobileCode] = useState("+94");
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [compnayMobile, setCompanyMobile] = useState("");
   const [companyMobileCode, setCompanyMobileCode] = useState("+94");
-  const [titleOpen, setTitleOpen] = useState(false);
+  const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [isPhoneCodeModalOpen, setIsPhoneCodeModalOpen] = useState(false);
   const [isCompanyPhoneCodeModalOpen, setIsCompanyPhoneCodeModalOpen] =
     useState(false);
@@ -135,6 +145,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.title) setTitle(data.title);
             if (data.firstName) setFirstName(data.firstName);
             if (data.lastName) setLastName(data.lastName);
+            if (data.profileImage || data.image) {
+              setProfileImage(data.profileImage || data.image);
+            }
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
             if (data.email) setEmail(data.email);
@@ -157,7 +170,15 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }, []),
   );
 
-  const titleOptions = ["Mr", "Mrs", "Ms"];
+  const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
+
+  const handleSelectTitle = (val: string) => {
+    setTitle(val);
+    setTitleModalOpen(false);
+    if (titleError) {
+      setTitleError("");
+    }
+  };
 
   const mobilecodeOptions = ["+94", "+91", "+65"];
   const companycodeOptions = ["+94", "+91", "+65"];
@@ -294,9 +315,99 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
   };
 
+  // UPLOAD PROFILE IMAGE TO BACKEND
+  const uploadImage = async (uri: string) => {
+    try {
+      setUploadingImage(true);
+      const filename = uri.split("/").pop() || "profile.jpg";
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1].toLowerCase()}` : `image/jpeg`;
+
+      const response = await customerService.uploadProfileImage(uri, filename, type);
+      if (response.data && response.data.status && response.data.data?.imageUrl) {
+        const uploadedUrl = response.data.data.imageUrl;
+        setProfileImage(uploadedUrl);
+        dispatch(updateUserProfileImage({ image: uploadedUrl }));
+        Alert.alert("Success", "Profile photo updated successfully.");
+      } else {
+        Alert.alert("Upload Failed", response.data?.message || "Failed to upload image.");
+      }
+    } catch (error) {
+      console.log("Error uploading profile image:", error);
+      Alert.alert("Error", "Failed to upload profile photo. Please try again.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // CHANGE PROFILE IMAGE
   const handleChangeProfileImage = () => {
-    console.log("Change profile image");
+    setImagePickerModalVisible(true);
+  };
+
+  // TAKE PHOTO
+  const handleTakePhoto = async () => {
+    try {
+      setImagePickerModalVisible(false);
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Camera access is required to take a profile photo.",
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await uploadImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.log("Error taking photo:", error);
+      Alert.alert("Error", "Could not take photo. Please try again.");
+    }
+  };
+
+  // CHOOSE FROM GALLERY
+  const handleChooseFromGallery = async () => {
+    try {
+      setImagePickerModalVisible(false);
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Photo library access is required to choose a profile photo.",
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await uploadImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.log("Error choosing from gallery:", error);
+      Alert.alert("Error", "Could not select image. Please try again.");
+    }
+  };
+
+  // REMOVE PHOTO
+  const handleRemovePhoto = () => {
+    setImagePickerModalVisible(false);
+    setProfileImage(null);
   };
 
   // DELELE OPTION
@@ -429,45 +540,68 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           >
             <View
               style={{
-                width: 78,
-                height: 78,
+                width: 93,
+                height: 93,
                 position: "relative",
               }}
             >
-              <Image
-                source={{
-                  uri: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
-                }}
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={handleChangeProfileImage}
+                disabled={uploadingImage}
                 style={{
                   width: 93,
                   height: 93,
                   borderRadius: 999,
-                  backgroundColor: "#D9D9D9",
+                  backgroundColor: "#EAEFF5",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  overflow: "hidden",
+                  borderWidth: 2,
+                  borderColor: "#F0F0F0",
                 }}
-              />
+              >
+                {uploadingImage ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : profileImage ? (
+                  <Image
+                    source={{ uri: profileImage }}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                    }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <FontAwesome6 name="user" size={40} color="#8B9DA7" solid />
+                )}
+              </TouchableOpacity>
 
               {/* Edit Image */}
-
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={handleChangeProfileImage}
+                disabled={uploadingImage}
                 style={{
                   position: "absolute",
-                  right: -10,
-                  bottom: -13,
-
-                  width: 28,
-                  height: 28,
-
-                  borderRadius: 13,
-
+                  right: -4,
+                  bottom: -4,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
                   backgroundColor: "#000000",
-
                   justifyContent: "center",
                   alignItems: "center",
+                  borderWidth: 2,
+                  borderColor: "#FFFFFF",
+                  elevation: 4,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 3,
                 }}
               >
-                <FontAwesome6 name="pen" size={14} color="#FFFFFF" solid />
+                <FontAwesome6 name="pen" size={13} color="#FFFFFF" solid />
               </TouchableOpacity>
             </View>
           </View>
@@ -497,16 +631,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 <DropdownField
                   label="Title"
                   value={title}
-                  open={titleOpen}
-                  setOpen={setTitleOpen}
-                  options={titleOptions}
-                  onSelect={(value: string) => {
-                    setTitle(value);
-                    setTitleOpen(false);
-                    if (titleError) {
-                      setTitleError("");
-                    }
-                  }}
+                  open={false}
+                  setOpen={() => setTitleModalOpen(true)}
+                  options={[]}
+                  onSelect={() => {}}
                   icon="user"
                   error={titleError}
                 />
@@ -830,6 +958,216 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         searchKeys={["name", "dialCode"]}
         renderItem={renderCountryItem}
       />
+
+      {/* Title GlobalSearchModal */}
+      <GlobalSearchModal
+        visible={titleModalOpen}
+        onClose={() => setTitleModalOpen(false)}
+        title="Select Title"
+        data={titleOptions.map((t) => ({ label: t, value: t }))}
+        selectedItems={title ? [title] : []}
+        onSelect={(items) => {
+          if (items && items[0]) {
+            handleSelectTitle(items[0]);
+          }
+        }}
+        searchPlaceholder="Search title..."
+        noResultsText="No titles found"
+        multiSelect={false}
+        searchKeys={["label"]}
+      />
+
+      {/* Profile Image Picker Modal */}
+      <Modal
+        visible={imagePickerModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImagePickerModalVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setImagePickerModalVisible(false)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: Platform.OS === "ios" ? 36 : 24,
+            }}
+          >
+            {/* Handle bar */}
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                backgroundColor: "#E0E0E0",
+                borderRadius: 2,
+                alignSelf: "center",
+                marginBottom: 16,
+              }}
+            />
+            <Text
+              style={{
+                fontSize: 17,
+                fontWeight: "700",
+                color: "#1F2937",
+                textAlign: "center",
+                marginBottom: 18,
+              }}
+            >
+              Profile Photo
+            </Text>
+
+            {/* Options */}
+            <View style={{ gap: 8 }}>
+              {/* Take Photo */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleTakePhoto}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: 14,
+                  backgroundColor: "#F9FAFB",
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: "#EEF2F6",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 14,
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={22} color="#1F2937" />
+                </View>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "600",
+                    color: "#1F2937",
+                  }}
+                >
+                  Take Photo
+                </Text>
+              </TouchableOpacity>
+
+              {/* Choose from Gallery */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleChooseFromGallery}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: 14,
+                  backgroundColor: "#F9FAFB",
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: "#EEF2F6",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 14,
+                  }}
+                >
+                  <Ionicons name="images-outline" size={22} color="#1F2937" />
+                </View>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "600",
+                    color: "#1F2937",
+                  }}
+                >
+                  Choose from Gallery
+                </Text>
+              </TouchableOpacity>
+
+              {/* Remove Photo (if image exists) */}
+              {profileImage && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleRemovePhoto}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderRadius: 14,
+                    backgroundColor: "#FEECEC",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: "#FCD8D8",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginRight: 14,
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#D32F2F" />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: "600",
+                      color: "#D32F2F",
+                    }}
+                  >
+                    Remove Current Photo
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setImagePickerModalVisible(false)}
+              style={{
+                marginTop: 14,
+                paddingVertical: 14,
+                borderRadius: 14,
+                backgroundColor: "#F3F4F6",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: "#4B5563",
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
