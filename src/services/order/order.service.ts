@@ -57,6 +57,42 @@ class OrderService {
         const headers = await getAuthHeader();
         return apiClient.get(ENDPOINTS.ORDER.GET_INVOICE.replace(":orderId", String(orderId)), { headers });
     }
+
+    async getPackageReview(orderId: string | number) {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_PACKAGE_REVIEW.replace(":orderId", String(orderId)), { headers });
+    }
+
+    async replacePackageItem(payload: {
+        orderPackageId: number;
+        replceId?: number;
+        newProductId: number;
+        productType?: string;
+        newQty: number;
+        newPrice: number;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.REPLACE_PACKAGE_ITEM, payload, { headers });
+    }
+
+    async resetPackageItem(payload: {
+        orderPackageId: number;
+        replceId?: number;
+        originalBaselineId?: number;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.RESET_PACKAGE_ITEM, payload, { headers });
+    }
+
+    async confirmPackageReview(payload: {
+        orderId?: number | string;
+        processOrderId?: number | string;
+        lockNow?: boolean;
+        additionalAmount?: number;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
+    }
 }
 
 export default new OrderService();

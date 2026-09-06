@@ -23,6 +23,14 @@ class ProductService {
             },
         });
     }
+    async getProductsByProductType(productTypeId: number | string, buyerType: string = "Retail") {
+        const url = ENDPOINTS.PRODUCT.GET_PRODUCTS_BY_PRODUCT_TYPE.replace(":productTypeId", String(productTypeId));
+        return apiClient.get(url, {
+            params: {
+                buyerType,
+            },
+        });
+    }
     async getBanners() {
         return apiClient.get(ENDPOINTS.PRODUCT.GET_BANNERS);
     }
