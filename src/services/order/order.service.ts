@@ -93,6 +93,11 @@ class OrderService {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
     }
+
+    async getDeliveredOrdersTotal(userId: string | number) {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_DELIVERED_ORDERS_TOTAL.replace(":userId", String(userId)), { headers });
+    }
 }
 
 export default new OrderService();

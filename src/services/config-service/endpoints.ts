@@ -64,6 +64,7 @@ export const ENDPOINTS = {
     REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
     RESET_PACKAGE_ITEM: "api/order/package/reset-item",
     CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
+    GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
   },
 
   PAYMENT: {

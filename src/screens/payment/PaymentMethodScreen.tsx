@@ -16,7 +16,7 @@ import { useDispatch } from "react-redux";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { PaymentOptionCard } from "@/component/payment/PaymentOptionCard";
-import OrderSummary from "@/component/common/OrderSummary";
+import PaymentMethodSummary from "@/component/payment/PaymentMethodSummary";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
@@ -68,24 +68,49 @@ const PaymentMethod: React.FC<Props> = ({
     const totalAmount = Math.max(0, baseTotal - couponDiscountAmount - deliveryFeeDiscount);
 
     const [creditBalance, setCreditBalance] = useState<number>(0);
+    const [cashLimit, setCashLimit] = useState<number | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<PaymentType>("cash");
     const [useCredit, setUseCredit] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
+    const isImmediateFinalize = orderContext?.isFinalizeImdt === 1;
+    const isExceedCashLimit = cashLimit !== null && totalAmount >= cashLimit;
+    const isCashDisabled = isImmediateFinalize || isExceedCashLimit;
+
     useEffect(() => {
-        const fetchBalance = async () => {
+        const fetchBalanceAndLimit = async () => {
             try {
                 const response = await customerService.getAccountDetails();
                 if (response.data && response.data.data) {
                     const bal = parseFloat(response.data.data.creditBalance || 0);
                     setCreditBalance(Math.max(0, bal));
+
+                    const userId = response.data.data.id;
+                    if (userId) {
+                        try {
+                            const deliveredRes = await orderService.getDeliveredOrdersTotal(userId);
+                            if (deliveredRes.data && deliveredRes.data.data) {
+                                const limit = parseFloat(deliveredRes.data.data.creditBalance || 2000);
+                                setCashLimit(limit);
+                            }
+                        } catch (limitErr) {
+                            console.log("Error loading delivered total / cash limit:", limitErr);
+                            setCashLimit(2000);
+                        }
+                    }
                 }
             } catch (err) {
-                console.log("Error loading credit balance:", err);
+                console.log("Error loading account details:", err);
             }
         };
-        fetchBalance();
+        fetchBalanceAndLimit();
     }, []);
+
+    useEffect(() => {
+        if (isCashDisabled) {
+            setPaymentMethod("card");
+        }
+    }, [isCashDisabled]);
 
     const creditUsed = useCredit
         ? Math.min(creditBalance, totalAmount)
@@ -99,18 +124,24 @@ const PaymentMethod: React.FC<Props> = ({
 
     // CONFIRM
     const handleConfirm = async () => {
-        const totalDiscountApplied = (orderContext?.discount || 0) + couponDiscountAmount + deliveryFeeDiscount;
-        const couponVal = appliedCoupon ? (appliedCoupon.isFreeDelivery ? initialDeliveryCharge : appliedCoupon.discount) : 0;
+        const itemDiscount = orderContext?.discount || 0;
+        const isFreeDelivery = Boolean(appliedCoupon?.isFreeDelivery);
+        const couponVal = appliedCoupon
+            ? (appliedCoupon.isFreeDelivery ? initialDeliveryCharge : appliedCoupon.discount)
+            : 0;
+        const deliveryChargeToSave = isFreeDelivery ? 0 : effectiveDeliveryCharge;
 
-        if (paymentMethod === "card") {
+        if (paymentMethod === "card" && paymentAmount > 0) {
             navigation.navigate("PaymentScreen", {
                 amount: paymentAmount,
                 title: "Payment Summary",
                 orderContext: {
                     ...(orderContext as any),
                     grandTotal: totalAmount,
-                    deliveryCharge: effectiveDeliveryCharge,
-                    discount: totalDiscountApplied,
+                    deliveryCharge: deliveryChargeToSave,
+                    discount: itemDiscount,
+                    creditPaid: creditUsed,
+                    moneyPaid: paymentAmount,
                     paymentMethod: "card",
                     checkoutDetails: {
                         ...(orderContext?.checkoutDetails || {}),
@@ -128,10 +159,10 @@ const PaymentMethod: React.FC<Props> = ({
             setSubmitting(true);
             const payload = {
                 cartId: orderContext?.cartId || 0,
-                paymentMethod: "cash",
+                paymentMethod: paymentAmount === 0 ? "card" : (paymentMethod === "card" ? "card" : "cash"),
                 grandTotal: totalAmount,
-                discountAmount: totalDiscountApplied,
-                deliveryCharge: effectiveDeliveryCharge,
+                discountAmount: itemDiscount,
+                deliveryCharge: deliveryChargeToSave,
                 creditPaid: creditUsed,
                 moneyPaid: paymentAmount,
                 isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
@@ -156,8 +187,11 @@ const PaymentMethod: React.FC<Props> = ({
                     orderContext: {
                         ...(orderContext as any),
                         grandTotal: totalAmount,
-                        deliveryCharge: effectiveDeliveryCharge,
-                        discount: totalDiscountApplied,
+                        deliveryCharge: deliveryChargeToSave,
+                        discount: itemDiscount,
+                        creditPaid: creditUsed,
+                        moneyPaid: paymentAmount,
+                        paymentMethod: paymentAmount === 0 ? "Card" : (paymentMethod === "card" ? "Card" : "Cash"),
                     },
                 });
             } else {
@@ -195,7 +229,7 @@ const PaymentMethod: React.FC<Props> = ({
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                    paddingBottom: 340,
+                    paddingBottom: 220,
                 }}
             >
                 {/* ─── APPLY COUPON CARD ────────────────────────────────────────── */}
@@ -482,6 +516,7 @@ const PaymentMethod: React.FC<Props> = ({
                     icon="money-bill-wave"
                     iconColor="#00B83D"
                     selected={paymentMethod === "cash"}
+                    disabled={isCashDisabled}
                     onPress={() => setPaymentMethod("cash")}
                 />
 
@@ -490,13 +525,57 @@ const PaymentMethod: React.FC<Props> = ({
                 {/* CARD */}
                 <PaymentOptionCard
                     title="Pay with Card"
-                    description="Pay the full amount using your card."
+                    description="Pay the full amount in using your card."
                     total={paymentAmount}
                     icon="credit-card"
                     iconColor="#0788FF"
                     selected={paymentMethod === "card"}
                     onPress={() => setPaymentMethod("card")}
                 />
+
+                {/* CASH UNAVAILABLE BANNER */}
+                {isCashDisabled && (
+                    <View
+                        style={{
+                            marginHorizontal: 15,
+                            marginTop: 14,
+                            backgroundColor: "#FDE8E8",
+                            borderRadius: 24,
+                            paddingHorizontal: 16,
+                            paddingVertical: 12,
+                            flexDirection: "row",
+                            alignItems: "center",
+                        }}
+                    >
+                        <Ionicons
+                            name="information-circle"
+                            size={20}
+                            color="#991B1B"
+                            style={{ marginRight: 8 }}
+                        />
+                        <Text
+                            style={{
+                                flex: 1,
+                                fontSize: 12.5,
+                                color: "#1F2937",
+                                lineHeight: 17,
+                                fontWeight: "500",
+                            }}
+                        >
+                            {isImmediateFinalize ? (
+                                "Immediate Finalization requires card payment."
+                            ) : (
+                                <>
+                                    Cash payment is not available for orders equal or greater than{" "}
+                                    <Text style={{ fontWeight: "700", color: "#991B1B" }}>
+                                        Rs. {(cashLimit || 2000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </Text>
+                                    .
+                                </>
+                            )}
+                        </Text>
+                    </View>
+                )}
 
                 {/* SECURE PAYMENT */}
                 <View
@@ -547,21 +626,19 @@ const PaymentMethod: React.FC<Props> = ({
             </ScrollView>
 
             {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
-            <OrderSummary
-                packageTotal={orderContext?.packageTotal || 0}
-                productTotal={orderContext?.productTotal || 0}
-                discount={(orderContext?.discount || 0) + couponDiscountAmount + deliveryFeeDiscount}
-                deliveryFee={effectiveDeliveryCharge}
-                grandTotal={totalAmount}
-                buttonText={submitting ? "Processing..." : "Confirm Payment Method"}
-                disabled={submitting}
-                onCheckout={handleConfirm}
+            <PaymentMethodSummary
+                useCredit={useCredit}
+                creditUsed={creditUsed}
+                paymentAmount={paymentAmount}
+                paymentMethod={paymentMethod}
+                totalAmount={totalAmount}
+                submitting={submitting}
+                onConfirm={handleConfirm}
                 containerStyle={{
                     position: "absolute",
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    marginBottom: 0,
                 }}
             />
 
