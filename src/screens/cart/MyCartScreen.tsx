@@ -93,7 +93,9 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         dispatch(increaseProductWeight(id));
         const item = products.find((p) => p.id === id);
         if (item && token) {
-            const newWeight = item.weight + item.step;
+            const newWeight = item.unit === "kg"
+                ? parseFloat((item.weight + item.step).toFixed(3))
+                : Math.round(item.weight + item.step);
             cartService.syncCartProduct(id, newWeight, item.unit).catch((err) =>
                 console.error("Failed DB sync for increaseWeight:", err)
             );
@@ -104,7 +106,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         dispatch(decreaseProductWeight(id));
         const item = products.find((p) => p.id === id);
         if (item && token) {
-            const newWeight = Math.max(item.minimumWeight, item.weight - item.step);
+            const decremented = item.unit === "kg"
+                ? parseFloat((item.weight - item.step).toFixed(3))
+                : Math.round(item.weight - item.step);
+            const newWeight = Math.max(item.minimumWeight, decremented);
             cartService.syncCartProduct(id, newWeight, item.unit).catch((err) =>
                 console.error("Failed DB sync for decreaseWeight:", err)
             );
@@ -124,7 +129,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         dispatch(changeProductUnit({ id, newUnit }));
         const item = products.find((p) => p.id === id);
         if (item && token) {
-            const newWeight = newUnit === "kg" ? item.weight / 1000 : item.weight * 1000;
+            const newWeight = newUnit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
             cartService.syncCartProduct(id, newWeight, newUnit).catch((err) =>
                 console.error("Failed DB sync for changeProductUnit:", err)
             );

@@ -579,7 +579,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       if (userToken) {
         const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
         if (item) {
-          const newWeight = unit === "kg" ? item.weight / 1000 : item.weight * 1000;
+          const newWeight = unit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
           cartService.syncCartProduct(productId, newWeight, unit).catch((err) =>
             console.error("Cart DB sync error:", err)
           );
@@ -596,7 +596,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       if (userToken) {
         const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
         if (item) {
-          const newWeight = item.weight + item.step;
+          const newWeight = item.unit === "kg"
+            ? parseFloat((item.weight + item.step).toFixed(3))
+            : Math.round(item.weight + item.step);
           cartService.syncCartProduct(productId, newWeight, item.unit).catch((err) =>
             console.error("Cart DB sync error:", err)
           );
@@ -629,7 +631,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         dispatch(decreaseProductWeight(productId));
         showToast("Cart Updated");
         if (existing && userToken) {
-          const newWeight = Math.max(existing.minimumWeight, existing.weight - existing.step);
+          const decremented = existing.unit === "kg"
+            ? parseFloat((existing.weight - existing.step).toFixed(3))
+            : Math.round(existing.weight - existing.step);
+          const newWeight = Math.max(existing.minimumWeight, decremented);
           cartService.syncCartProduct(productId, newWeight, existing.unit).catch((err) =>
             console.error("Cart DB sync error:", err)
           );
@@ -646,7 +651,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       let initialUnit: "g" | "kg" = unitType;
       let initialWeight = rawStartValue;
-      if (unitType === "kg" && rawStartValue < 1) {
+      if (rawStartValue < 1) {
         initialUnit = "g";
         initialWeight = Math.round(rawStartValue * 1000);
       }
@@ -665,7 +670,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       const effectiveUnitPrice = hasDiscount
         ? discountedPerUnit
         : normalPerUnit;
-      const startEffectivePrice = effectiveUnitPrice * rawStartValue;
 
       const step =
         initialUnit === "kg" ? 0.5 : initialWeight >= 500 ? 500 : 100;
@@ -675,8 +679,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           id: product.id,
           name: product.displayName,
           image: product.image,
-          price: startEffectivePrice,
-          normalPrice: normalPerUnit * rawStartValue,
+          price: effectiveUnitPrice,
+          normalPrice: normalPerUnit,
           weight: initialWeight,
           unit: initialUnit,
           minimumWeight: initialWeight,
@@ -695,7 +699,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         [product.id]: {
           weight: initialWeight,
           unit: initialUnit,
-          price: startEffectivePrice,
+          price: effectiveUnitPrice,
         },
       }));
 
@@ -968,7 +972,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     : "g";
 
                   const displayWeightText = isProduct
-                    ? rawUnitType === "kg" && rawStartValue < 1
+                    ? rawStartValue < 1
                       ? `${Math.round(rawStartValue * 1000)} g`
                       : `${rawStartValue} ${rawUnitType}`
                     : "";
@@ -1001,20 +1005,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       : startNormalPrice
                     : parseFloat(String(product.subTotal)) || 0;
 
-                  const currentWeightInG = cartItem
+                  const weightMultiplier = cartItem
                     ? cartItem.unit === "kg"
-                      ? cartItem.weight * 1000
-                      : cartItem.weight
-                    : 0;
-                  const minWeightInG = cartItem
-                    ? cartItem.unit === "kg"
-                      ? cartItem.minimumWeight * 1000
-                      : cartItem.minimumWeight
-                    : 0;
-                  const weightMultiplier =
-                    minWeightInG > 0 ? currentWeightInG / minWeightInG : 1;
+                      ? cartItem.weight
+                      : cartItem.weight / 1000
+                    : 1;
                   const calculatedProductPrice = cartItem
-                    ? basePrice * weightMultiplier
+                    ? cartItem.price * weightMultiplier
                     : basePrice;
                   const calculatedPackagePrice = cartPackage
                     ? basePrice * cartPackage.quantity
