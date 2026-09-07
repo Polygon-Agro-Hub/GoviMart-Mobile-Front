@@ -89,6 +89,21 @@ class OrderService {
         processOrderId?: number | string;
         lockNow?: boolean;
         additionalAmount?: number;
+        replacements?: Array<{
+            orderPackageId: number;
+            replceId?: number;
+            newProductId: number;
+            productType?: string | number;
+            newQty: number;
+            newPrice: number;
+        }>;
+        additionalItems?: Array<{
+            productId: number;
+            qty: number;
+            unit?: string;
+            normalPrice?: number;
+            price: number;
+        }>;
     }) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
