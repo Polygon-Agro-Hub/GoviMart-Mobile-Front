@@ -1164,72 +1164,72 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                     onCancelOrder={onCancelOrder}
                                 />
                             </View>
+
+                            <View className="h-[1px] bg-[#ECECEC] mt-6" />
+
+                            <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
+                                Here are the packages you purchased. You can review
+                                and update them if needed.
+                            </Text>
+
+                            {loadingReview ? (
+                                <LoadingPage message="Loading package details..." fullScreen={false} />
+                            ) : packagesMeta.length === 0 ? (
+                                <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
+                                    <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
+                                    <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">No packages found for this order.</Text>
+                                </View>
+                            ) : (
+                                packagesMeta.map((pkg, pIdx) => (
+                                    <View
+                                        key={`pkg-${pkg.id}-${pIdx}`}
+                                        className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl p-4 flex-row items-center"
+                                    >
+                                        <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
+                                            {pkg.image ? (
+                                                <Image
+                                                    source={{ uri: pkg.image }}
+                                                    className="w-12 h-12 rounded-xl"
+                                                    resizeMode="cover"
+                                                />
+                                            ) : (
+                                                <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
+                                            )}
+                                        </View>
+                                        <View className="ml-3 flex-1">
+                                            <Text className="text-[17px] font-bold text-black" numberOfLines={1}>
+                                                {pkg.name} (x{pkg.qty})
+                                            </Text>
+                                            <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
+                                                Price :{" "}
+                                                <Text className="font-bold text-black">
+                                                    Rs.{pkg.unitPrice.toFixed(2)} x {pkg.qty} = Rs.
+                                                    {(pkg.unitPrice * pkg.qty).toFixed(2)}
+                                                </Text>
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))
+                            )}
+
+                            <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
+                                Lastly, you may also purchase any additional items
+                                you want after reviewing the packages you purchased.
+                            </Text>
+
+                            <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
+                                <Text className="text-[14px] font-bold text-black mb-1">
+                                    Please Note :
+                                </Text>
+                                <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                                    If you update the quantities of products in your
+                                    packages, or add or replace products, the total
+                                    amount may change. You'll need to pay any
+                                    additional amount due.
+                                </Text>
+                            </View>
                         </>
                     )}
-
-                    <View className="h-[1px] bg-[#ECECEC] mt-6" />
-
-                    <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
-                        Here are the packages you purchased. You can review
-                        and update them if needed.
-                    </Text>
-
-                    {loadingReview ? (
-                        <LoadingPage message="Loading package details..." fullScreen={false} />
-                    ) : packagesMeta.length === 0 ? (
-                        <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
-                            <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
-                            <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">No packages found for this order.</Text>
-                        </View>
-                    ) : (
-                        packagesMeta.map((pkg, pIdx) => (
-                            <View
-                                key={`pkg-${pkg.id}-${pIdx}`}
-                                className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl p-4 flex-row items-center"
-                            >
-                                <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
-                                    {pkg.image ? (
-                                        <Image
-                                            source={{ uri: pkg.image }}
-                                            className="w-12 h-12 rounded-xl"
-                                            resizeMode="cover"
-                                        />
-                                    ) : (
-                                        <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
-                                    )}
-                                </View>
-                                <View className="ml-3 flex-1">
-                                    <Text className="text-[17px] font-bold text-black" numberOfLines={1}>
-                                        {pkg.name} (x{pkg.qty})
-                                    </Text>
-                                    <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                                        Price :{" "}
-                                        <Text className="font-bold text-black">
-                                            Rs.{pkg.unitPrice.toFixed(2)} x {pkg.qty} = Rs.
-                                            {(pkg.unitPrice * pkg.qty).toFixed(2)}
-                                        </Text>
-                                    </Text>
-                                </View>
-                            </View>
-                        ))
-                    )}
-
-                    <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
-                        Lastly, you may also purchase any additional items
-                        you want after reviewing the packages you purchased.
-                    </Text>
-
-                    <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
-                        <Text className="text-[14px] font-bold text-black mb-1">
-                            Please Note :
-                        </Text>
-                        <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                            If you update the quantities of products in your
-                            packages, or add or replace products, the total
-                            amount may change. You'll need to pay any
-                            additional amount due.
-                        </Text>
-                    </View>
                 </ScrollView>
             ) : null}
 
@@ -1652,41 +1652,31 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             )}
 
             {/* Fixed Bottom Payment & Action Section */}
-            {mode === "overview" && !loadingReview && (
+            {mode === "overview" && !loadingReview && !isTimeRanOut && (
                 <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
-                    {isTimeRanOut ? (
-                        <View className="bg-[#F5F5F5] rounded-full py-4 items-center border border-[#E0E0E0]">
-                            <Text className="text-[#8A8A8A] text-[15px] font-semibold">
-                                Review Window Closed (8:00 AM - 6:00 PM)
-                            </Text>
-                        </View>
-                    ) : (
-                        <>
-                            <View className="flex-row items-center justify-between mb-3">
-                                <Text className="text-[16px] font-bold text-black">
-                                    Total
-                                </Text>
-                                <Text className="text-[16px] font-bold text-black">
-                                    Rs. {overviewTotal.toFixed(2)}
-                                </Text>
-                            </View>
+                    <View className="flex-row items-center justify-between mb-3">
+                        <Text className="text-[16px] font-bold text-black">
+                            Total
+                        </Text>
+                        <Text className="text-[16px] font-bold text-black">
+                            Rs. {overviewTotal.toFixed(2)}
+                        </Text>
+                    </View>
 
-                            <TouchableOpacity
-                                disabled={loadingReview || packagesMeta.length === 0}
-                                onPress={() => {
-                                    setCurrentStepIndex(0);
-                                    setMode("flow");
-                                }}
-                                activeOpacity={0.85}
-                                className={`rounded-full py-4 items-center ${loadingReview || packagesMeta.length === 0 ? "bg-[#7F919C]" : "bg-black"
-                                    }`}
-                            >
-                                <Text className="text-white text-[16px] font-bold">
-                                    {loadingReview ? "Loading Packages..." : "Review My Packages"}
-                                </Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
+                    <TouchableOpacity
+                        disabled={loadingReview || packagesMeta.length === 0}
+                        onPress={() => {
+                            setCurrentStepIndex(0);
+                            setMode("flow");
+                        }}
+                        activeOpacity={0.85}
+                        className={`rounded-full py-4 items-center ${loadingReview || packagesMeta.length === 0 ? "bg-[#7F919C]" : "bg-black"
+                            }`}
+                    >
+                        <Text className="text-white text-[16px] font-bold">
+                            {loadingReview ? "Loading Packages..." : "Review My Packages"}
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             )}
 
