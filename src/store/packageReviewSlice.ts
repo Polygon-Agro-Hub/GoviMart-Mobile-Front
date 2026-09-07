@@ -31,6 +31,11 @@ export interface PackageReviewState {
   invoiceNo: string;
   scheduleDateStr: string;
   initialPaidAmount: number;
+  moneyPaid: number;
+  creditPaid: number;
+  paymentMethod: string;
+  isPaid: boolean;
+  processOrderAmount: number;
   packagesMeta: PackageMeta[];
   packageProducts: Record<string, ReviewProduct[]>;
   productTemplatesState: Record<string, ReviewProduct[]>;
@@ -38,6 +43,10 @@ export interface PackageReviewState {
   alacartSelection: Record<string | number, AlacartSelectedProduct>;
   isLocked: boolean;
   loadingReview: boolean;
+  availableSlots: number;
+  targetLimit: number;
+  isLimitReached: boolean;
+  unreadReminderDays: number;
 }
 
 const initialState: PackageReviewState = {
@@ -46,6 +55,11 @@ const initialState: PackageReviewState = {
   invoiceNo: "INV-2660000",
   scheduleDateStr: "14th August",
   initialPaidAmount: 0,
+  moneyPaid: 0,
+  creditPaid: 0,
+  paymentMethod: "",
+  isPaid: false,
+  processOrderAmount: 0,
   packagesMeta: [],
   packageProducts: {},
   productTemplatesState: {},
@@ -53,6 +67,10 @@ const initialState: PackageReviewState = {
   alacartSelection: {},
   isLocked: false,
   loadingReview: false,
+  availableSlots: 50,
+  targetLimit: 50,
+  isLimitReached: false,
+  unreadReminderDays: 1,
 };
 
 export const packageReviewSlice = createSlice({
@@ -62,6 +80,22 @@ export const packageReviewSlice = createSlice({
     setLoadingReview: (state, action: PayloadAction<boolean>) => {
       state.loadingReview = action.payload;
     },
+    setPackingSlots: (
+      state,
+      action: PayloadAction<{
+        availableSlots: number;
+        targetLimit: number;
+        isLimitReached: boolean;
+        unreadReminderDays?: number;
+      }>
+    ) => {
+      state.availableSlots = action.payload.availableSlots;
+      state.targetLimit = action.payload.targetLimit;
+      state.isLimitReached = action.payload.isLimitReached;
+      if (typeof action.payload.unreadReminderDays === "number") {
+        state.unreadReminderDays = action.payload.unreadReminderDays;
+      }
+    },
     initReviewData: (
       state,
       action: PayloadAction<{
@@ -70,12 +104,21 @@ export const packageReviewSlice = createSlice({
         invoiceNo?: string;
         scheduleDateStr?: string;
         initialPaidAmount?: number;
+        moneyPaid?: number;
+        creditPaid?: number;
+        paymentMethod?: string;
+        isPaid?: boolean;
+        processOrderAmount?: number;
         packagesMeta: PackageMeta[];
         packageProducts: Record<string, ReviewProduct[]>;
         productTemplatesState: Record<string, ReviewProduct[]>;
         orderPackageDbIds: Record<string, number>;
         alacartSelection?: Record<string | number, AlacartSelectedProduct>;
         isLocked?: boolean;
+        availableSlots?: number;
+        targetLimit?: number;
+        isLimitReached?: boolean;
+        unreadReminderDays?: number;
       }>
     ) => {
       const payload = action.payload;
@@ -86,10 +129,37 @@ export const packageReviewSlice = createSlice({
       if (typeof payload.initialPaidAmount === "number") {
         state.initialPaidAmount = payload.initialPaidAmount;
       }
+      if (typeof payload.moneyPaid === "number") {
+        state.moneyPaid = payload.moneyPaid;
+      }
+      if (typeof payload.creditPaid === "number") {
+        state.creditPaid = payload.creditPaid;
+      }
+      if (typeof payload.paymentMethod === "string") {
+        state.paymentMethod = payload.paymentMethod;
+      }
+      if (typeof payload.isPaid === "boolean") {
+        state.isPaid = payload.isPaid;
+      }
+      if (typeof payload.processOrderAmount === "number") {
+        state.processOrderAmount = payload.processOrderAmount;
+      }
       state.packagesMeta = payload.packagesMeta;
       state.productTemplatesState = payload.productTemplatesState;
       state.orderPackageDbIds = payload.orderPackageDbIds;
       state.isLocked = !!payload.isLocked;
+      if (typeof payload.availableSlots === "number") {
+        state.availableSlots = payload.availableSlots;
+      }
+      if (typeof payload.targetLimit === "number") {
+        state.targetLimit = payload.targetLimit;
+      }
+      if (typeof payload.isLimitReached === "boolean") {
+        state.isLimitReached = payload.isLimitReached;
+      }
+      if (typeof payload.unreadReminderDays === "number") {
+        state.unreadReminderDays = payload.unreadReminderDays;
+      }
       state.loadingReview = false;
 
       // Preserve any existing replacements if already modified
@@ -322,6 +392,7 @@ export const packageReviewSlice = createSlice({
 
 export const {
   setLoadingReview,
+  setPackingSlots,
   initReviewData,
   replacePackageProduct,
   resetPackageProduct,

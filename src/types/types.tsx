@@ -116,7 +116,34 @@ export type RootStackParamList = {
   ViewLocation: { latitude: number; longitude: number; title: string };
   ReviewPackage: { orderId?: string | number; replacedProduct?: any; targetStepIndex?: number; } | undefined;
   SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
-  OrderCancelConfirmation: undefined;
+  OrderCancelConfirmation: {
+    orderId?: string | number;
+    processOrderId?: string | number;
+    packages?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      qty: number;
+      unitPrice: number;
+    }>;
+    alaCarteItems?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      weight: string;
+      price: number;
+      originalPrice?: number;
+    }>;
+    totalPaid?: number;
+    totalPaidCard?: number;
+    totalPaidCredit?: number;
+    totalCashDue?: number;
+    processOrderTotal?: number;
+    paymentMethod?: string;
+    refundCreditAmount?: number;
+  } | undefined;
   ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
 };
 
