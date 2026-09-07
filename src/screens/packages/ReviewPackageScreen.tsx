@@ -10,6 +10,7 @@ import {
     Animated,
     BackHandler,
     RefreshControl,
+    Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -26,15 +27,18 @@ import {
     removeAlacartItem as removeAlacartItemAction,
     toggleAlacartItemUnit as toggleAlacartItemUnitAction,
     updateAlacartItemQuantity as updateAlacartItemQuantityAction,
+    revertReviewChanges,
 } from "@/store/packageReviewSlice";
 import { RootStackParamList, ProductType, ReviewProduct } from "@/types/types";
 import productService from "@/services/product/product.service";
 import orderService from "@/services/order/order.service";
 import { HurryBanner } from "@/component/package/HurryBanner";
+import { TimeRanOutBanner } from "@/component/package/TimeRanOutBanner";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
 import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
+import LoadingPage from "@/component/common/LoadingPage";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
@@ -259,7 +263,7 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
 --------------------------------------------------------- */
 
 const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
-    const effectiveOrderId = route.params?.orderId || 3889;
+    const effectiveOrderId = route.params?.orderId || 3907;
     const dispatch = useDispatch();
 
     const {
@@ -296,6 +300,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
     const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
+    const isTimeRanOut = useMemo(() => {
+        const currentHour = new Date().getHours();
+        // Package review window is from 8:00 AM to 6:00 PM (08:00 - 18:00)
+        // Past 6:00 PM (or before 8:00 AM), time ran out for the day
+        return currentHour >= 18 || currentHour < 8;
+    }, []);
+    // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
     const nextScheduleDateStr = useMemo(() => {
         try {
             const today = new Date();
@@ -314,6 +325,24 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             return "Schedule Date";
         }
     }, [scheduleDateStr]);
+
+    const onSendReminderTomorrow = () => {
+        Alert.alert(
+            "Reminder Scheduled",
+            `Your scheduled order review date will be extended to ${nextScheduleDateStr}. We'll remind you again tomorrow at 8:00 AM.`,
+            [
+                {
+                    text: "OK",
+                    onPress: () => {
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: "Home" }],
+                        });
+                    },
+                },
+            ]
+        );
+    };
 
     useEffect(() => {
         const loop = Animated.loop(
@@ -336,11 +365,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
     // Fetch review data from backend
     const fetchReviewData = useCallback(async (force = false) => {
-        if (!force && packagesMeta && packagesMeta.length > 0) return;
-
-        if (!force) {
-            dispatch(setLoadingReview(true));
-        }
+        dispatch(setLoadingReview(true));
         try {
             const res = await orderService.getPackageReview(effectiveOrderId);
             if (res.data?.status && res.data?.data) {
@@ -511,15 +536,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         } catch (err) {
             console.log("Failed to load package review details from API:", err);
         } finally {
-            if (!force) {
-                dispatch(setLoadingReview(false));
-            }
+            dispatch(setLoadingReview(false));
         }
-    }, [dispatch, effectiveOrderId, packagesMeta]);
+    }, [dispatch, effectiveOrderId]);
 
-    useEffect(() => {
-        fetchReviewData(false);
-    }, [fetchReviewData]);
+    // Refresh review data from backend whenever user is on/enters overview screen
+    useFocusEffect(
+        useCallback(() => {
+            if (mode === "overview") {
+                fetchReviewData(true);
+            }
+        }, [mode, fetchReviewData])
+    );
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -718,7 +746,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 console.log("\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:", {
                     orderId: effectiveOrderId,
                     processOrderId: processOrderId || undefined,
-                    lockNow: true,
+                    lockNow: false,
                     additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
                     replacements,
                     additionalItems: additionalItemsPayload,
@@ -727,7 +755,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 const confirmRes = await orderService.confirmPackageReview({
                     orderId: effectiveOrderId,
                     processOrderId: processOrderId || undefined,
-                    lockNow: true,
+                    lockNow: false,
                     additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
                     replacements,
                     additionalItems: additionalItemsPayload,
@@ -904,8 +932,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 </View>
             )}
 
-            {/* Case 1: 3-Day Reminder Expired / Auto-Cancel Screen (Matching Design) */}
-            {mode === "overview" && unreadReminderDays >= 3 ? (
+            {/* Overview Full-Page Loading State */}
+            {mode === "overview" && loadingReview ? (
+                <View className="flex-1 justify-center items-center">
+                    <LoadingPage message="Loading package details..." fullScreen={true} />
+                </View>
+            ) : mode === "overview" && unreadReminderDays >= 3 ? (
                 <ScrollView
                     showsVerticalScrollIndicator={false}
                     className="flex-1"
@@ -1111,14 +1143,29 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
                     <View className="h-[1px] bg-[#ECECEC] mt-5" />
 
-                    <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
-                        Review and customize your package as per your
-                        preference.
-                    </Text>
+                    {isTimeRanOut ? (
+                        <TimeRanOutBanner
+                            nextScheduleDateStr={nextScheduleDateStr}
+                            onSendReminderTomorrow={onSendReminderTomorrow}
+                            onCancelOrder={onCancelOrder}
+                        />
+                    ) : (
+                        <>
+                            <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
+                                Review and customize your package as per your
+                                preference.
+                            </Text>
 
-                    <View className="mt-5">
-                        <HurryBanner ordersLeft={availableSlots > 0 ? availableSlots : 30} date={scheduleDateStr} />
-                    </View>
+                            <View className="mt-5">
+                                <HurryBanner
+                                    ordersLeft={availableSlots > 0 ? availableSlots : 30}
+                                    date={scheduleDateStr}
+                                    showCancelLink={true}
+                                    onCancelOrder={onCancelOrder}
+                                />
+                            </View>
+                        </>
+                    )}
 
                     <View className="h-[1px] bg-[#ECECEC] mt-6" />
 
@@ -1128,9 +1175,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     </Text>
 
                     {loadingReview ? (
-                        <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
-                            <Text className="text-[14px] text-[#6B6B6B] font-medium">Loading your package details...</Text>
-                        </View>
+                        <LoadingPage message="Loading package details..." fullScreen={false} />
                     ) : packagesMeta.length === 0 ? (
                         <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
                             <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
@@ -1607,31 +1652,41 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             )}
 
             {/* Fixed Bottom Payment & Action Section */}
-            {mode === "overview" && (
+            {mode === "overview" && !loadingReview && (
                 <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
-                    <View className="flex-row items-center justify-between mb-3">
-                        <Text className="text-[16px] font-bold text-black">
-                            Total
-                        </Text>
-                        <Text className="text-[16px] font-bold text-black">
-                            Rs. {overviewTotal.toFixed(2)}
-                        </Text>
-                    </View>
+                    {isTimeRanOut ? (
+                        <View className="bg-[#F5F5F5] rounded-full py-4 items-center border border-[#E0E0E0]">
+                            <Text className="text-[#8A8A8A] text-[15px] font-semibold">
+                                Review Window Closed (8:00 AM - 6:00 PM)
+                            </Text>
+                        </View>
+                    ) : (
+                        <>
+                            <View className="flex-row items-center justify-between mb-3">
+                                <Text className="text-[16px] font-bold text-black">
+                                    Total
+                                </Text>
+                                <Text className="text-[16px] font-bold text-black">
+                                    Rs. {overviewTotal.toFixed(2)}
+                                </Text>
+                            </View>
 
-                    <TouchableOpacity
-                        disabled={loadingReview || packagesMeta.length === 0}
-                        onPress={() => {
-                            setCurrentStepIndex(0);
-                            setMode("flow");
-                        }}
-                        activeOpacity={0.85}
-                        className={`rounded-full py-4 items-center ${loadingReview || packagesMeta.length === 0 ? "bg-[#7F919C]" : "bg-black"
-                            }`}
-                    >
-                        <Text className="text-white text-[16px] font-bold">
-                            {loadingReview ? "Loading Packages..." : "Review My Packages"}
-                        </Text>
-                    </TouchableOpacity>
+                            <TouchableOpacity
+                                disabled={loadingReview || packagesMeta.length === 0}
+                                onPress={() => {
+                                    setCurrentStepIndex(0);
+                                    setMode("flow");
+                                }}
+                                activeOpacity={0.85}
+                                className={`rounded-full py-4 items-center ${loadingReview || packagesMeta.length === 0 ? "bg-[#7F919C]" : "bg-black"
+                                    }`}
+                            >
+                                <Text className="text-white text-[16px] font-bold">
+                                    {loadingReview ? "Loading Packages..." : "Review My Packages"}
+                                </Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
             )}
 
@@ -1805,7 +1860,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 showCloseButton={false}
                 onConfirm={() => {
                     setShowExitModal(false);
+                    setCurrentStepIndex(0);
                     setMode("overview");
+                    dispatch(revertReviewChanges());
+                    fetchReviewData(true);
                 }}
                 onCancel={() => setShowExitModal(false)}
             />

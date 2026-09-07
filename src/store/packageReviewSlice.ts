@@ -306,9 +306,9 @@ export const packageReviewSlice = createSlice({
         state.packageProducts[packageId] = state.packageProducts[packageId].map((prod) =>
           prod.id === productId
             ? {
-                ...prod,
-                quantity: Math.max(prod.step, Number((prod.quantity + delta * prod.step).toFixed(2))),
-              }
+              ...prod,
+              quantity: Math.max(prod.step, Number((prod.quantity + delta * prod.step).toFixed(2))),
+            }
             : prod
         );
       }
@@ -386,6 +386,27 @@ export const packageReviewSlice = createSlice({
         price: newPrice,
       };
     },
+    revertReviewChanges: (state) => {
+      // 1. Revert packageProducts to original productTemplatesState
+      const restoredProducts: Record<string, ReviewProduct[]> = {};
+      Object.entries(state.productTemplatesState).forEach(([pkgKey, items]) => {
+        restoredProducts[pkgKey] = items.map((prod) => ({
+          ...prod,
+          isReplaced: false,
+          originalProduct: undefined,
+        }));
+      });
+      state.packageProducts = restoredProducts;
+
+      // 2. Remove any newly added ala carte items (isAddedNow: true)
+      const restoredAlacart: Record<string | number, AlacartSelectedProduct> = {};
+      Object.entries(state.alacartSelection).forEach(([key, item]) => {
+        if (!item.isAddedNow) {
+          restoredAlacart[key] = item;
+        }
+      });
+      state.alacartSelection = restoredAlacart;
+    },
     clearPackageReview: () => initialState,
   },
 });
@@ -401,7 +422,9 @@ export const {
   removeAlacartItem,
   toggleAlacartItemUnit,
   updateAlacartItemQuantity,
+  revertReviewChanges,
   clearPackageReview,
 } = packageReviewSlice.actions;
 
 export default packageReviewSlice.reducer;
+
