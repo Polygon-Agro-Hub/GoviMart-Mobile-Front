@@ -115,9 +115,9 @@ export type RootStackParamList = {
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
   ReviewPackage: { orderId?: string | number; replacedProduct?: any; targetStepIndex?: number; } | undefined;
-  SetQauntity: { fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
+  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
   OrderCancelConfirmation: undefined;
-  ReplaceProduct: { fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
+  ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -258,6 +258,8 @@ export type PackageSummary = {
  
 export type ReviewProduct = {
     id: string;
+    itemId?: number;
+    productId?: number;
     category: string; // e.g. "Up Country Fruit (1)"
     name: string;
     icon: string;

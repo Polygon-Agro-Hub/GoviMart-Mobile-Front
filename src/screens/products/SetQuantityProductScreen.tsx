@@ -11,6 +11,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
+import { useDispatch } from "react-redux";
+import { replacePackageProduct } from "@/store/packageReviewSlice";
 
 type Props = StackScreenProps<RootStackParamList, "SetQauntity">;
 
@@ -145,14 +147,6 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       const priceVal =
         parseFloat(rawTo.normalPrice || rawTo.price || rawTo.pricePerBaseQty) ||
         600;
-      const rawUnit = (rawTo.unitType || rawTo.unit || "kg").toLowerCase();
-      let startVal = parseFloat(rawTo.startValue);
-      if (isNaN(startVal) || startVal <= 0) {
-        startVal = 1;
-      }
-      if (rawUnit === "g") {
-        startVal = Number((startVal / 1000).toFixed(3));
-      }
 
       return {
         id: rawTo.id?.toString() || "to",
@@ -160,7 +154,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
         icon: rawTo.icon || "🥗",
         image: rawTo.image,
         unit: "kg",
-        baseQty: startVal,
+        baseQty: 1,
         pricePerBaseQty: priceVal,
       };
     }
@@ -171,11 +165,16 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const minQty = 0.5;
   const maxQty = 10;
 
-  const [quantity, setQuantity] = useState(toProduct.baseQty || minQty);
+  const [quantity, setQuantity] = useState(
+    typeof rawFrom?.quantity === "number" && rawFrom.quantity > 0
+      ? (rawFrom.unit === "g" ? Number((rawFrom.quantity / 1000).toFixed(2)) || 0.5 : rawFrom.quantity)
+      : 0.5
+  );
 
-  const fromPrice = fromProduct.pricePerBaseQty * fromProduct.baseQty;
+  const fromUnitPrice = fromProduct.pricePerBaseQty;
+  const fromPrice = fromUnitPrice * fromProduct.baseQty;
 
-  const toUnitPrice = toProduct.pricePerBaseQty / toProduct.baseQty;
+  const toUnitPrice = toProduct.pricePerBaseQty;
   const toPrice = useMemo(
     () => toUnitPrice * quantity,
     [toUnitPrice, quantity]
@@ -185,33 +184,51 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const isCredit = balance >= 0;
 
   const decrease = () =>
-    setQuantity((q) => Math.max(minQty, Number((q - step).toFixed(2))));
+    setQuantity((q: number) => Math.max(minQty, Number((q - step).toFixed(2))));
 
   const increase = () =>
-    setQuantity((q) => Math.min(maxQty, Number((q + step).toFixed(2))));
+    setQuantity((q: number) => Math.min(maxQty, Number((q + step).toFixed(2))));
+
+  const dispatch = useDispatch();
 
   const onReplace = async () => {
+    const newProductObj = {
+      id: String(rawTo?.id ?? toProduct.id),
+      itemId: rawFrom?.itemId,
+      productId: rawTo?.id ? Number(rawTo.id) : (parseInt(toProduct.id) || undefined),
+      category: rawFrom?.category || rawTo?.productTypeName || "Replaced Product",
+      name: toProduct.name,
+      icon: toProduct.icon || "🥗",
+      image: toProduct.image,
+      price: toUnitPrice,
+      quantity: quantity,
+      unit: "kg" as const,
+      step: step,
+      productType: rawFrom?.productType || rawTo?.productTypeId,
+      productTypeId: rawFrom?.productTypeId || rawTo?.productTypeId,
+      productTypeName: rawFrom?.productTypeName || rawTo?.productTypeName,
+      isReplaced: true,
+      originalProduct: rawFrom?.originalProduct || rawFrom,
+    };
+
+    console.log("\n[SetQuantityProductScreen] onReplace triggered. Dispatching replacePackageProduct to Redux:", {
+      packageId: route.params?.packageId,
+      orderPackageId: route.params?.orderPackageId,
+      originalProductId: String(rawFrom?.id ?? fromProduct.id),
+      newProduct: newProductObj,
+    });
+
+    dispatch(
+      replacePackageProduct({
+        packageId: route.params?.packageId,
+        orderPackageId: route.params?.orderPackageId,
+        originalProductId: String(rawFrom?.id ?? fromProduct.id),
+        newProduct: newProductObj,
+      })
+    );
+
     navigation.navigate("ReviewPackage", {
-      replacedProduct: {
-        packageId,
-        originalProductId: fromProduct.id,
-        newProduct: {
-          id: toProduct.id,
-          category: rawFrom?.category || rawTo?.productTypeName || "Replaced Product",
-          name: toProduct.name,
-          icon: toProduct.icon || "🥗",
-          image: toProduct.image,
-          price: toUnitPrice,
-          quantity: quantity,
-          unit: "kg",
-          step: step,
-          productType: rawFrom?.productType || rawTo?.productTypeId,
-          productTypeId: rawFrom?.productTypeId || rawTo?.productTypeId,
-          productTypeName: rawFrom?.productTypeName || rawTo?.productTypeName,
-          isReplaced: true,
-          originalProduct: rawFrom?.originalProduct || rawFrom,
-        },
-      },
+      orderId: route.params?.orderId,
       targetStepIndex: stepIndex,
     });
   };
