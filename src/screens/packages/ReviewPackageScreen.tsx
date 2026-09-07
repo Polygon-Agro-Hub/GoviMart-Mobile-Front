@@ -72,7 +72,11 @@ type AlacartSelectedProduct = {
     isAddedNow?: boolean;
 };
 
-const getPackageImage = (pkgId: string) => {
+const getPackageImage = (pkgId: string, image?: any) => {
+    if (image) {
+        if (typeof image === "string") return { uri: image };
+        return image;
+    }
     if (pkgId === "fruity") return require("@/assets/images/home/fruits.webp");
     if (pkgId === "veggie") return require("@/assets/images/home/veggies.webp");
     return require("@/assets/images/home/packages.webp");
@@ -1421,12 +1425,24 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
                             >
                                 <View className="flex-row items-center">
-                                    <View className="w-12 h-12 rounded-full bg-[#F5F5F5] items-center justify-center mr-3 overflow-hidden">
-                                        <Image
-                                            source={getPackageImage(item.pkg.id)}
-                                            className="w-10 h-10"
-                                            resizeMode="contain"
-                                        />
+                                    <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center mr-3 overflow-hidden">
+                                        {item.pkg.image ? (
+                                            <Image
+                                                source={
+                                                    typeof item.pkg.image === "string"
+                                                        ? { uri: item.pkg.image }
+                                                        : item.pkg.image
+                                                }
+                                                className="w-12 h-12 rounded-xl"
+                                                resizeMode="cover"
+                                            />
+                                        ) : (
+                                            <Image
+                                                source={getPackageImage(item.pkg.id)}
+                                                className="w-10 h-10"
+                                                resizeMode="contain"
+                                            />
+                                        )}
                                     </View>
                                     <View className="flex-1">
                                         <Text className="text-[16px] font-bold text-black">
