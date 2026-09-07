@@ -61,10 +61,12 @@ export const ENDPOINTS = {
     CHECK_COUPON: "api/order/check-coupon",
     GET_INVOICE: "api/order/invoice/:orderId",
     GET_PACKAGE_REVIEW: "api/order/package/review/:orderId",
+    GET_PACKING_LIMIT: "api/order/package/packing-limit",
     REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
     RESET_PACKAGE_ITEM: "api/order/package/reset-item",
     CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
     GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
+    CANCEL_ORDER: "api/order/package/cancel-order",
   },
 
   PAYMENT: {

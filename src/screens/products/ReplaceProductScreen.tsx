@@ -394,12 +394,23 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                         );
                         if (!selectedProduct) return;
 
-                        navigation.navigate("SetQauntity", {
+                        console.log("\n[ReplaceProductScreen] Navigating to SetQauntity with:", {
+                            orderId: route.params?.orderId,
                             fromProduct: route.params?.fromProduct,
                             toProduct: normalizeToKg(selectedProduct),
                             packageId: route.params?.packageId,
                             orderPackageId: route.params?.orderPackageId,
-                            replceId: route.params?.replceId,
+                            replceId: route.params?.fromProduct?.itemId || route.params?.replceId,
+                            stepIndex: route.params?.stepIndex,
+                        });
+
+                        navigation.navigate("SetQauntity", {
+                            orderId: route.params?.orderId,
+                            fromProduct: route.params?.fromProduct,
+                            toProduct: normalizeToKg(selectedProduct),
+                            packageId: route.params?.packageId,
+                            orderPackageId: route.params?.orderPackageId,
+                            replceId: route.params?.fromProduct?.itemId || route.params?.replceId,
                             stepIndex: route.params?.stepIndex,
                         });
                     }}

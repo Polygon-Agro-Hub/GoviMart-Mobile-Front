@@ -63,6 +63,14 @@ class OrderService {
         return apiClient.get(ENDPOINTS.ORDER.GET_PACKAGE_REVIEW.replace(":orderId", String(orderId)), { headers });
     }
 
+    async getPackingLimit(date?: string, processOrderId?: string | number) {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_PACKING_LIMIT, {
+            params: { date, processOrderId },
+            headers,
+        });
+    }
+
     async replacePackageItem(payload: {
         orderPackageId: number;
         replceId?: number;
@@ -89,9 +97,32 @@ class OrderService {
         processOrderId?: number | string;
         lockNow?: boolean;
         additionalAmount?: number;
+        replacements?: Array<{
+            orderPackageId: number;
+            replceId?: number;
+            newProductId: number;
+            productType?: string | number;
+            newQty: number;
+            newPrice: number;
+        }>;
+        additionalItems?: Array<{
+            productId: number;
+            qty: number;
+            unit?: string;
+            normalPrice?: number;
+            price: number;
+        }>;
     }) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
+    }
+
+    async cancelOrder(payload: {
+        orderId?: number | string;
+        processOrderId?: number | string;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER, payload, { headers });
     }
 
     async getDeliveredOrdersTotal(userId: string | number) {
