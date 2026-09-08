@@ -366,10 +366,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                                 rows.push(availableProducts.slice(i, i + 2));
                             }
                             return rows.map((row, rowIndex) => (
-                                <View key={rowIndex} className="flex-row justify-between mb-4">
-                                    {row.map((product) => (
+                                <View key={`replace-row-${rowIndex}`} className="flex-row justify-between mb-4">
+                                    {row.map((product, pIdx) => (
                                         <AlacartProductCard
-                                            key={product.id}
+                                            key={`replace-prod-${product.id}-${rowIndex}-${pIdx}`}
                                             product={normalizeToKg(product)}
                                             selected={product.id in alacartSelection}
                                             onToggle={() => toggleAlacartProduct(product)}
