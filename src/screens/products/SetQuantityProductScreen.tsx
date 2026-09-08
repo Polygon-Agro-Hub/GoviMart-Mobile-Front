@@ -202,6 +202,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       image: toProduct.image,
       price: toUnitPrice,
       quantity: quantity,
+      minQuantity: step || 0.5,
       unit: "kg" as const,
       step: step,
       productType: rawFrom?.productType || rawTo?.productTypeId,
@@ -260,7 +261,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
         <View className="items-center mt-6">
           <ProductRow
             product={fromProduct}
-            subtitle={`${fromProduct.baseQty} ${fromProduct.unit}`}
+            subtitle={`${fromProduct.baseQty} kg`}
             price={`Rs. ${fromPrice.toFixed(2)}`}
           />
 
@@ -270,7 +271,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
           <ProductRow
             product={toProduct}
-            subtitle={`${quantity} ${toProduct.unit}`}
+            subtitle={`${quantity} kg`}
             price={`Rs. ${toPrice.toFixed(2)}`}
           />
         </View>
@@ -288,7 +289,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           </TouchableOpacity>
 
           <Text className="text-[16px] font-semibold text-black">
-            {quantity} {toProduct.unit}
+            {quantity} kg
           </Text>
 
           <TouchableOpacity

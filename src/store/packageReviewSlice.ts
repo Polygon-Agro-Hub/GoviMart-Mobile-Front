@@ -239,6 +239,7 @@ export const packageReviewSlice = createSlice({
               id: String(newProduct.productId || newProduct.id),
               itemId: prod.itemId || prod.originalProduct?.itemId,
               productId: newProduct.productId ? Number(newProduct.productId) : (parseInt(newProduct.id) || undefined),
+              minQuantity: newProduct.minQuantity ?? newProduct.step ?? 0.5,
               isReplaced: true,
               originalProduct: preservedOriginal,
             };
@@ -303,14 +304,16 @@ export const packageReviewSlice = createSlice({
     ) => {
       const { packageId, productId, delta } = action.payload;
       if (state.packageProducts[packageId]) {
-        state.packageProducts[packageId] = state.packageProducts[packageId].map((prod) =>
-          prod.id === productId
-            ? {
+        state.packageProducts[packageId] = state.packageProducts[packageId].map((prod) => {
+          if (prod.id === productId) {
+            const minAllowed = prod.minQuantity ?? prod.originalProduct?.quantity ?? prod.step ?? 1;
+            return {
               ...prod,
-              quantity: Math.max(prod.step, Number((prod.quantity + delta * prod.step).toFixed(2))),
-            }
-            : prod
-        );
+              quantity: Math.max(minAllowed, Number((prod.quantity + delta * prod.step).toFixed(2))),
+            };
+          }
+          return prod;
+        });
       }
     },
     toggleAlacartProduct: (state, action: PayloadAction<ProductType>) => {
