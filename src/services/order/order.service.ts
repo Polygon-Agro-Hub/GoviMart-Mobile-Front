@@ -97,6 +97,7 @@ class OrderService {
         processOrderId?: number | string;
         lockNow?: boolean;
         additionalAmount?: number;
+        newScheduleDate?: string;
         replacements?: Array<{
             orderPackageId: number;
             replceId?: number;

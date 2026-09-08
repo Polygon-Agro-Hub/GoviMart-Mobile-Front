@@ -267,7 +267,7 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
 --------------------------------------------------------- */
 
 const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
-    const effectiveOrderId = route.params?.orderId || 3907;
+    const effectiveOrderId = route.params?.orderId || 3906;
     const dispatch = useDispatch();
 
     const {
@@ -458,8 +458,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         });
 
                         // Map active items
-                        const activeItems: ReviewProduct[] = (pkg.items || []).map((i: any) => ({
-                            id: String(i.productId || i.itemId),
+                        const activeItems: ReviewProduct[] = (pkg.items || []).map((i: any, itemIdx: number) => ({
+                            id: String(i.productId || i.itemId || `${pkgKey}-${itemIdx}`),
                             itemId: i.itemId ? Number(i.itemId) : undefined,
                             productId: i.productId ? Number(i.productId) : undefined,
                             category: i.categoryName || i.productTypeName || "Package Item",
@@ -492,8 +492,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         }));
 
                         // Map baseline templates
-                        const baseItems: ReviewProduct[] = (pkg.baselineProducts || []).map((b: any) => ({
-                            id: String(b.productId || b.baselineId),
+                        const baseItems: ReviewProduct[] = (pkg.baselineProducts || []).map((b: any, bIdx: number) => ({
+                            id: String(b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`),
                             itemId: b.itemId || b.baselineId ? Number(b.itemId || b.baselineId) : undefined,
                             productId: b.productId ? Number(b.productId) : undefined,
                             category: b.categoryName || b.productTypeName || "Baseline Item",
@@ -752,6 +752,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     processOrderId: processOrderId || undefined,
                     lockNow: false,
                     additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+                    newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
                     replacements,
                     additionalItems: additionalItemsPayload,
                 });
@@ -761,6 +762,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     processOrderId: processOrderId || undefined,
                     lockNow: false,
                     additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+                    newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
                     replacements,
                     additionalItems: additionalItemsPayload,
                 });
@@ -1260,7 +1262,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
                         {products.map((product, index) => (
                             <ProductReviewCard
-                                key={product.itemId ? `item-${product.itemId}` : `prod-${product.id}-${index}`}
+                                key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
                                 product={product}
                                 onIncrease={() =>
                                     updateProductQuantity(
@@ -1392,10 +1394,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                     rows.push(alaCartProducts.slice(i, i + 2));
                                 }
                                 return rows.map((row, rowIndex) => (
-                                    <View key={rowIndex} className="flex-row justify-between mb-4">
-                                        {row.map((product) => (
+                                    <View key={`alacart-row-${rowIndex}`} className="flex-row justify-between mb-4">
+                                        {row.map((product, pIdx) => (
                                             <AlacartProductCard
-                                                key={product.id}
+                                                key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
                                                 product={product}
                                                 selected={product.id in alacartSelection}
                                                 onToggle={() => toggleAlacartProduct(product)}
