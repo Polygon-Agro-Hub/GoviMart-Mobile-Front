@@ -301,6 +301,7 @@ export type ReviewProduct = {
     excludedWarning?: string;
     isReplaced?: boolean;
     originalProduct?: ReviewProduct;
+    minQuantity?: number;
 };
  
 export type PackageReview = {

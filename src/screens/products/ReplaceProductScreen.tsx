@@ -307,7 +307,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                             {fromProduct.name}
                         </Text>
                         <Text className="text-[12px] text-[#4B5563] mt-0.5 font-medium">
-                            {resolvedTypeName} • {fromProduct.quantity} {fromProduct.unit || "kg"}
+                            {resolvedTypeName} • {fromProduct.unit === "g" ? Number((fromProduct.quantity / 1000).toFixed(2)) : fromProduct.quantity} kg
                         </Text>
                     </View>
                     <View className="bg-[#FEF3C7] px-3 py-1.5 rounded-full border border-[#FDE68A]">
