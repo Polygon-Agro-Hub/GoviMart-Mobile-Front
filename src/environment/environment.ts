@@ -1,10 +1,10 @@
 export const environment = {
 
   // LOCAL --------------------
-  API_BASE_URL: "http://192.168.8.180:3000/polygon/",
+  // API_BASE_URL: "http://192.168.8.180:3000/polygon/",
 
   // DEV --------------------
- // API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",
+  API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",
 
   // UAT --------------------
   // API_BASE_URL: "https://govimart-mobile-api-uat.vercel.app/polygon/",
