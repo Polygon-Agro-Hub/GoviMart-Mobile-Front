@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Govi Mart",
-    "slug": "govi-mart",
+    "name": "Polygon",
+    "slug": "Polygon",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/public/app-icon-android.png",
@@ -17,15 +17,37 @@
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.CAMERA",
-        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.CHANGE_WIFI_STATE",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "blockedPermissions": [
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.CALL_PHONE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.CALL_PHONE"
+        "android.permission.CHANGE_WIFI_STATE",
+        "android.permission.CHANGE_NETWORK_STATE"
       ]
     },
     "ios": {
@@ -35,13 +57,14 @@
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Camera access is required to scan documents and capture images.",
-        "NSMicrophoneUsageDescription": "Microphone access is required for in-app communication.",
-        "NSPhotoLibraryUsageDescription": "Photo library access is required to upload mart-related images.",
-        "NSLocationWhenInUseUsageDescription": "Location access is required to track mart activity.",
-        "NSUserTrackingUsageDescription": "Tracking is used to improve app experience.",
-        "NSUserNotificationUsageDescription": "Notifications are used to send important mart updates.",
-        "NSPhoneUsageDescription": "Phone access is used to call drivers or customers directly."
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSCameraUsageDescription": "Camera access is required to take profile photos and capture images.",
+        "NSPhotoLibraryUsageDescription": "Photo library access is required to upload profile and complaint images.",
+        "NSPhotoLibraryAddUsageDescription": "Photo library access is required to save related images.",
+        "NSLocationWhenInUseUsageDescription": "Location access is required to detect and set delivery addresses.",
+        "NSUserTrackingUsageDescription": "Tracking is used to improve app experience."
       }
     },
     "web": {
@@ -71,7 +94,17 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Photo library access is required to upload related images.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
+          "microphonePermission": false
+        }
+      ],
+      "expo-location",
+      "./plugins/withCustomAndroidPermissions"
     ],
     "extra": {
       "eas": {

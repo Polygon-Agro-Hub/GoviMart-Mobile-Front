@@ -57,6 +57,13 @@ export type RootStackParamList = {
   Splash: undefined;
   ChooseAuth: undefined;
   DeliveryLocation: undefined;
+  CameraAccess?: {
+    returnScreen?: keyof RootStackParamList;
+  };
+  LocationAccess?: {
+    returnScreen?: keyof RootStackParamList;
+    blockBackNavigation?: boolean;
+  };
   Login: undefined;
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;

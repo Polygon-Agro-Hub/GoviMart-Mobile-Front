@@ -181,9 +181,12 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             "Failed to submit complaint. Please try again.",
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log("failed to create complaint: ", error);
-      Alert.alert("Error", "Failed to submit complaint. Please try again.");
+      const errorMessage =
+        error?.response?.data?.message ||
+        "Failed to submit complaint. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setSubmitting(false);
     }

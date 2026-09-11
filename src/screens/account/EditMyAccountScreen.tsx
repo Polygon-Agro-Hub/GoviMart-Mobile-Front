@@ -25,6 +25,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import customerService from "@/services/customer/customer.service";
+import CameraAccess from "@/screens/permission/CameraAccess";
 
 interface PhoneCode {
   code: string;
@@ -107,6 +108,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   );
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
+  const [showCameraPermission, setShowCameraPermission] = useState(false);
   const [mobileCode, setMobileCode] = useState("+94");
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
@@ -345,19 +347,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     setImagePickerModalVisible(true);
   };
 
-  // TAKE PHOTO
-  const handleTakePhoto = async () => {
+  const launchCamera = async () => {
     try {
-      setImagePickerModalVisible(false);
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Camera access is required to take a profile photo.",
-        );
-        return;
-      }
-
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
@@ -371,6 +362,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     } catch (error) {
       console.log("Error taking photo:", error);
       Alert.alert("Error", "Could not take photo. Please try again.");
+    }
+  };
+
+  // TAKE PHOTO
+  const handleTakePhoto = async () => {
+    try {
+      setImagePickerModalVisible(false);
+      const { status } = await ImagePicker.getCameraPermissionsAsync();
+      if (status !== "granted") {
+        setShowCameraPermission(true);
+        return;
+      }
+
+      await launchCamera();
+    } catch (error) {
+      console.log("Error checking camera permission:", error);
+      setShowCameraPermission(true);
     }
   };
 
@@ -1167,6 +1175,24 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* CAMERA PERMISSION MODAL */}
+      <Modal
+        visible={showCameraPermission}
+        animationType="slide"
+        onRequestClose={() => setShowCameraPermission(false)}
+      >
+        <CameraAccess
+          onRequestPermission={ImagePicker.requestCameraPermissionsAsync}
+          onPermissionGranted={() => {
+            setShowCameraPermission(false);
+            setTimeout(() => {
+              launchCamera();
+            }, 300);
+          }}
+          onClose={() => setShowCameraPermission(false)}
+        />
       </Modal>
     </KeyboardAvoidingView>
   );

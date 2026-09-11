@@ -18,6 +18,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LocationAccess from "@/screens/permission/LocationAccess";
 
 type SetLocationNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -44,6 +45,7 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
 
     const [region, setRegion] = useState<Region>(initialRegion);
     const [loadingLocation, setLoadingLocation] = useState(false);
+    const [showPermissionUI, setShowPermissionUI] = useState(false);
 
     // Fetch user location
     const fetchLocation = async (showAlertOnError = false) => {
@@ -64,10 +66,7 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== "granted") {
                 if (showAlertOnError) {
-                    Alert.alert(
-                        "Location Permission Required",
-                        "Please allow location permission in your device settings to detect your current location."
-                    );
+                    setShowPermissionUI(true);
                 }
                 return;
             }
@@ -121,7 +120,12 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                         longitudeDelta: 0.01,
                     });
                 } else {
-                    fetchLocation(false);
+                    const perm = await Location.getForegroundPermissionsAsync();
+                    if (perm.status === "granted") {
+                        fetchLocation(false);
+                    } else {
+                        setShowPermissionUI(true);
+                    }
                 }
             } catch {
                 fetchLocation(false);
@@ -137,7 +141,12 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
     };
 
     // CURRENT LOCATION BUTTON
-    const handleCurrentLocation = () => {
+    const handleCurrentLocation = async () => {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== "granted") {
+            setShowPermissionUI(true);
+            return;
+        }
         fetchLocation(true);
     };
 
@@ -180,6 +189,19 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
             );
         }
     };
+
+    if (showPermissionUI) {
+        return (
+            <LocationAccess
+                onPermissionGranted={async () => {
+                    setShowPermissionUI(false);
+                    await fetchLocation(true);
+                }}
+                onClose={() => setShowPermissionUI(false)}
+                onNotNow={() => setShowPermissionUI(false)}
+            />
+        );
+    }
 
     return (
         <View
