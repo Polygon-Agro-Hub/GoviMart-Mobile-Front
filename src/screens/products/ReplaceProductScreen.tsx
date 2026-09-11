@@ -3,7 +3,6 @@ import {
     View,
     Text,
     TouchableOpacity,
-    SafeAreaView,
     StatusBar,
     ScrollView,
     Image,
@@ -300,7 +299,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                         )}
                     </View>
                     <View className="flex-1">
-                        <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">
+                        <Text className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">
                             Replacing Product
                         </Text>
                         <Text className="text-[16px] font-bold text-black mt-0.5" numberOfLines={1}>
@@ -311,7 +310,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                         </Text>
                     </View>
                     <View className="bg-[#FEF3C7] px-3 py-1.5 rounded-full border border-[#FDE68A]">
-                        <Text className="text-[11px] font-bold text-[#B45309]">Selected</Text>
+                        <Text className="text-[12px] font-bold text-[#B45309]">Selected</Text>
                     </View>
                 </View>
             )}

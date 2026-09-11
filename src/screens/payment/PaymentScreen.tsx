@@ -5,7 +5,6 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   Modal,
@@ -13,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -561,14 +561,14 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                         borderRadius: 4,
                       }}
                     >
-                      <Text style={{ fontSize: 9, fontWeight: "700", color: "#FFFFFF" }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>
                         POPULAR
                       </Text>
                     </View>
                   </View>
                   <Text
                     style={{
-                      fontSize: 11,
+                      fontSize: 12.5,
                       color: "#64748B",
                       marginTop: 2,
                     }}
@@ -630,7 +630,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   </Text>
                   <Text
                     style={{
-                      fontSize: 11,
+                      fontSize: 12.5,
                       color: "#64748B",
                       marginTop: 2,
                     }}
@@ -874,7 +874,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text
                       style={{
                         color: "#FFFFFF",
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: "700",
                       }}
                     >
@@ -892,7 +892,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text
                       style={{
                         color: "#FFFFFF",
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: "700",
                       }}
                     >

@@ -115,7 +115,7 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                         >
                             <Text
                                 style={{
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     fontWeight:
                                         "600",
                                     marginBottom:
@@ -171,7 +171,7 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                                         >
                                             <Text
                                                 style={{
-                                                    fontSize: 12,
+                                                    fontSize: 13,
                                                     fontWeight:
                                                         "500",
                                                 }}

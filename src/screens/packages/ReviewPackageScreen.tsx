@@ -3,7 +3,6 @@ import {
     View,
     Text,
     TouchableOpacity,
-    SafeAreaView,
     StatusBar,
     ScrollView,
     Image,
@@ -11,7 +10,9 @@ import {
     BackHandler,
     RefreshControl,
     Alert,
+    Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -39,6 +40,7 @@ import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductC
 import ConfirmationModal from "@/component/common/ConfirmationModal";
 import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
 import LoadingPage from "@/component/common/LoadingPage";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
@@ -373,9 +375,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         try {
             const res = await orderService.getPackageReview(effectiveOrderId);
             if (res.data?.status && res.data?.data) {
-                console.log("package review data: ", res.data.data);
                 const { orderInfo, packages, additionalItems, packingSlots } = res.data.data;
-                console.log("Available packign slots: ", packingSlots);
                 let resolvedProcessOrderId = null;
                 let resolvedInvNo = "INV-2660000";
                 let resolvedPaidAmount = 0;
@@ -915,18 +915,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
             {/* Header */}
-            <View className="flex-row items-center px-5 pt-3 pb-4">
-                <TouchableOpacity
-                    onPress={handleBackPress}
-                    className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
-                >
-                    <Ionicons name="chevron-back" size={22} color="#000" />
-                </TouchableOpacity>
-
-                <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
-                    Review Your Package
-                </Text>
-            </View>
+            <CustomHeader
+                title="Review Your Package"
+                showBackButton={true}
+                navigation={navigation}
+                onBackPress={handleBackPress}
+            />
 
             {/* Fixed Top Section in Flow: Hurry Banner & Progress Dots */}
             {mode === "flow" && (
@@ -1572,7 +1566,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                         </TouchableOpacity>
 
                                         {item.isAddedNow && (
-                                            <Text className="text-[11px] font-medium text-[#F04438]">
+                                            <Text className="text-[12px] font-medium text-[#F04438]">
                                                 Added Now
                                             </Text>
                                         )}
@@ -1674,12 +1668,34 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
             {/* Fixed Bottom Payment & Action Section */}
             {mode === "overview" && !loadingReview && !isTimeRanOut && (
-                <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
-                    <View className="flex-row items-center justify-between mb-3">
-                        <Text className="text-[16px] font-bold text-black">
+                <View
+                    style={{
+                        backgroundColor: "#FFF",
+                        borderTopLeftRadius: 28,
+                        borderTopRightRadius: 28,
+                        paddingHorizontal: 20,
+                        paddingTop: 22,
+                        paddingBottom: Platform.OS === "ios" ? 34 : 28,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.12,
+                        shadowRadius: 8,
+                        shadowOffset: { width: 0, height: -3 },
+                        elevation: 15,
+                    }}
+                >
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 2,
+                            marginBottom: 20,
+                        }}
+                    >
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
                             Total
                         </Text>
-                        <Text className="text-[16px] font-bold text-black">
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
                             Rs. {overviewTotal.toFixed(2)}
                         </Text>
                     </View>
@@ -1691,10 +1707,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             setMode("flow");
                         }}
                         activeOpacity={0.85}
-                        className={`rounded-full py-4 items-center ${loadingReview || packagesMeta.length === 0 ? "bg-[#7F919C]" : "bg-black"
-                            }`}
+                        style={{
+                            height: 54,
+                            backgroundColor: loadingReview || packagesMeta.length === 0 ? "#7F919C" : "#000000",
+                            borderRadius: 30,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            shadowColor: "#000",
+                            shadowOpacity: loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
+                            shadowRadius: 6,
+                            shadowOffset: { width: 0, height: 3 },
+                            elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
+                        }}
                     >
-                        <Text className="text-white text-[16px] font-bold">
+                        <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
                             {loadingReview ? "Loading Packages..." : "Review My Packages"}
                         </Text>
                     </TouchableOpacity>
@@ -1725,61 +1751,234 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 const totalForNPackages = totalFor1Package * pkg.qty;
 
                 return (
-                    <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
-                        <View className="flex-row justify-between mb-1">
-                            <Text className="text-[13px] text-[#6B6B6B]">
+                    <View
+                        style={{
+                            backgroundColor: "#FFF",
+                            borderTopLeftRadius: 28,
+                            borderTopRightRadius: 28,
+                            paddingHorizontal: 20,
+                            paddingTop: 22,
+                            paddingBottom: Platform.OS === "ios" ? 34 : 28,
+                            shadowColor: "#000",
+                            shadowOpacity: 0.12,
+                            shadowRadius: 8,
+                            shadowOffset: {
+                                width: 0,
+                                height: -3,
+                            },
+                            elevation: 15,
+                        }}
+                    >
+                        {/* Original Package */}
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                paddingVertical: 2,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "400",
+                                    color: "#000000",
+                                }}
+                            >
                                 Original Package
                             </Text>
-                            <Text className="text-[13px] text-black font-medium">
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "600",
+                                    color: "#000000",
+                                }}
+                            >
                                 Rs. {formatPrice(originalPackagePrice)}
                             </Text>
                         </View>
-                        <View className="flex-row justify-between mb-1">
-                            <Text className="text-[13px] text-[#6B6B6B]">
+
+                        {/* HR line 1 */}
+                        <View
+                            style={{
+                                height: 1,
+                                backgroundColor: "#E1E7EE",
+                                marginVertical: 14,
+                            }}
+                        />
+
+                        {/* Service Fee */}
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                paddingVertical: 2,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "400",
+                                    color: "#000000",
+                                }}
+                            >
                                 Service Fee
                             </Text>
-                            <Text className="text-[13px] text-black font-medium">
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "600",
+                                    color: "#000000",
+                                }}
+                            >
                                 Rs. {formatPrice(serviceFee)}
                             </Text>
                         </View>
-                        <View className="flex-row justify-between mb-1">
-                            <Text className="text-[13px] text-[#6B6B6B]">
+
+                        {/* HR line 2 */}
+                        <View
+                            style={{
+                                height: 1,
+                                backgroundColor: "#E1E7EE",
+                                marginVertical: 14,
+                            }}
+                        />
+
+                        {/* Packing Fee */}
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                paddingVertical: 2,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "400",
+                                    color: "#000000",
+                                }}
+                            >
                                 Packing Fee
                             </Text>
-                            <Text className="text-[13px] text-black font-medium">
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "600",
+                                    color: "#000000",
+                                }}
+                            >
                                 Rs. {formatPrice(packingFee)}
                             </Text>
                         </View>
 
-                        <View className="h-[1px] bg-[#ECECEC] my-1.5" />
+                        {/* HR line 3 */}
+                        <View
+                            style={{
+                                height: 1,
+                                backgroundColor: "#E1E7EE",
+                                marginVertical: 14,
+                            }}
+                        />
 
-                        <View className="flex-row justify-between mb-1">
-                            <Text className="text-[15px] font-bold text-black">
+                        {/* Total for 1 Package */}
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                paddingVertical: 2,
+                                marginBottom: pkg.qty > 1 ? 0 : 20,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: pkg.qty > 1 ? 16 : 18,
+                                    fontWeight: pkg.qty > 1 ? "600" : "700",
+                                    color: "#000000",
+                                }}
+                            >
                                 Total for 1 Package
                             </Text>
-                            <Text className="text-[15px] font-bold text-black">
+                            <Text
+                                style={{
+                                    fontSize: pkg.qty > 1 ? 16 : 18,
+                                    fontWeight: pkg.qty > 1 ? "600" : "700",
+                                    color: "#000000",
+                                }}
+                            >
                                 Rs. {formatPrice(totalFor1Package)}
                             </Text>
                         </View>
 
                         {pkg.qty > 1 && (
-                            <View className="flex-row justify-between mb-3 mt-1">
-                                <Text className="text-[16px] font-extrabold text-black">
-                                    Total for {pkg.qty} Packages
-                                </Text>
-                                <Text className="text-[16px] font-extrabold text-black">
-                                    Rs. {formatPrice(totalForNPackages)}
-                                </Text>
-                            </View>
+                            <>
+                                <View
+                                    style={{
+                                        height: 1,
+                                        backgroundColor: "#E1E7EE",
+                                        marginVertical: 14,
+                                    }}
+                                />
+                                <View
+                                    style={{
+                                        flexDirection: "row",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        paddingVertical: 2,
+                                        marginBottom: 20,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 18,
+                                            fontWeight: "700",
+                                            color: "#000000",
+                                        }}
+                                    >
+                                        Total for {pkg.qty} Packages
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontSize: 18,
+                                            fontWeight: "700",
+                                            color: "#000000",
+                                        }}
+                                    >
+                                        Rs. {formatPrice(totalForNPackages)}
+                                    </Text>
+                                </View>
+                            </>
                         )}
 
                         <TouchableOpacity
                             onPress={goToNextStep}
                             activeOpacity={0.85}
-                            className={`bg-black rounded-full py-4 items-center ${pkg.qty <= 1 ? "mt-2" : ""
-                                }`}
+                            style={{
+                                height: 54,
+                                backgroundColor: "#000000",
+                                borderRadius: 30,
+                                justifyContent: "center",
+                                alignItems: "center",
+                                shadowColor: "#000",
+                                shadowOpacity: 0.15,
+                                shadowRadius: 6,
+                                shadowOffset: {
+                                    width: 0,
+                                    height: 3,
+                                },
+                                elevation: 5,
+                            }}
                         >
-                            <Text className="text-white text-[16px] font-bold">
+                            <Text
+                                style={{
+                                    color: "#FFF",
+                                    fontSize: 16,
+                                    fontWeight: "700",
+                                }}
+                            >
                                 Confirm & Continue ({currentStepIndex + 1})
                             </Text>
                         </TouchableOpacity>
@@ -1788,12 +1987,34 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             })()}
 
             {mode === "flow" && currentStep.type === "alacart" && (
-                <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
-                    <View className="flex-row items-center justify-between mb-3">
-                        <Text className="text-[16px] font-bold text-black">
+                <View
+                    style={{
+                        backgroundColor: "#FFF",
+                        borderTopLeftRadius: 28,
+                        borderTopRightRadius: 28,
+                        paddingHorizontal: 20,
+                        paddingTop: 22,
+                        paddingBottom: Platform.OS === "ios" ? 34 : 28,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.12,
+                        shadowRadius: 8,
+                        shadowOffset: { width: 0, height: -3 },
+                        elevation: 15,
+                    }}
+                >
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 2,
+                            marginBottom: 20,
+                        }}
+                    >
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
                             For Ala Carte Items
                         </Text>
-                        <Text className="text-[16px] font-bold text-black">
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
                             Rs. {formatPrice(alacartTotal)}
                         </Text>
                     </View>
@@ -1801,9 +2022,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     <TouchableOpacity
                         onPress={goToNextStep}
                         activeOpacity={0.85}
-                        className="bg-black rounded-full py-4 items-center"
+                        style={{
+                            height: 54,
+                            backgroundColor: "#000000",
+                            borderRadius: 30,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            shadowColor: "#000",
+                            shadowOpacity: 0.15,
+                            shadowRadius: 6,
+                            shadowOffset: { width: 0, height: 3 },
+                            elevation: 5,
+                        }}
                     >
-                        <Text className="text-white text-[16px] font-bold">
+                        <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
                             Confirm & Continue ({currentStepIndex + 1})
                         </Text>
                     </TouchableOpacity>
@@ -1811,30 +2043,82 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             )}
 
             {mode === "flow" && currentStep.type === "confirm" && (
-                <View className="border-t border-[#EEEEEE] bg-white px-5 pt-3 pb-6">
-                    <View className="flex-row justify-between mb-2">
-                        <Text className="text-[14px] text-[#4A4A4A]">
+                <View
+                    style={{
+                        backgroundColor: "#FFF",
+                        borderTopLeftRadius: 28,
+                        borderTopRightRadius: 28,
+                        paddingHorizontal: 20,
+                        paddingTop: 22,
+                        paddingBottom: Platform.OS === "ios" ? 34 : 28,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.12,
+                        shadowRadius: 8,
+                        shadowOffset: { width: 0, height: -3 },
+                        elevation: 15,
+                    }}
+                >
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 2,
+                        }}
+                    >
+                        <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
                             For Packages
                         </Text>
-                        <Text className="text-[14px] font-bold text-black">
+                        <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
                             Rs. {formatPrice(confirmPackagesTotal)}
                         </Text>
                     </View>
 
-                    <View className="flex-row justify-between mb-2">
-                        <Text className="text-[14px] text-[#4A4A4A]">
+                    <View
+                        style={{
+                            height: 1,
+                            backgroundColor: "#E1E7EE",
+                            marginVertical: 14,
+                        }}
+                    />
+
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 2,
+                        }}
+                    >
+                        <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
                             Ala Carte Items
                         </Text>
-                        <Text className="text-[14px] font-bold text-black">
+                        <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
                             Rs. {formatPrice(alacartTotal)}
                         </Text>
                     </View>
 
-                    <View className="flex-row justify-between mb-3">
-                        <Text className="text-[16px] font-bold text-black">
+                    <View
+                        style={{
+                            height: 1,
+                            backgroundColor: "#E1E7EE",
+                            marginVertical: 14,
+                        }}
+                    />
+
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            paddingVertical: 2,
+                            marginBottom: 20,
+                        }}
+                    >
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
                             Total
                         </Text>
-                        <Text className="text-[16px] font-extrabold text-black">
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
                             Rs. {formatPrice(confirmGrandTotal)}
                         </Text>
                     </View>
@@ -1842,9 +2126,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     <TouchableOpacity
                         onPress={goToNextStep}
                         activeOpacity={0.85}
-                        className="bg-black rounded-full py-4 items-center mt-1"
+                        style={{
+                            height: 54,
+                            backgroundColor: "#000000",
+                            borderRadius: 30,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            shadowColor: "#000",
+                            shadowOpacity: 0.15,
+                            shadowRadius: 6,
+                            shadowOffset: { width: 0, height: 3 },
+                            elevation: 5,
+                        }}
                     >
-                        <Text className="text-white text-[16px] font-bold">
+                        <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
                             {additionalPayAmount > 0
                                 ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
                                 : "Confirm & Complete Order"}

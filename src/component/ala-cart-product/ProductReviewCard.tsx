@@ -43,7 +43,7 @@ export const ProductReviewCard: React.FC<{
                         </Text>
                         {product.isReplaced && (
                             <View className="bg-[#FFF0F0] px-2 py-0.5 rounded-full border border-[#FFD5D5]">
-                                <Text className="text-[10px] font-bold text-[#E02424]">Replaced</Text>
+                                <Text className="text-[11.5px] font-bold text-[#E02424]">Replaced</Text>
                             </View>
                         )}
                     </View>

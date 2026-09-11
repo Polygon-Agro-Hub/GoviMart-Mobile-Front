@@ -7,6 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
+import { tokenStorage } from "@/utils/tokenStorage";
 
 const logo = require("@/assets/images/public/polygon-logo.png");
 
@@ -20,7 +21,7 @@ const Splash: React.FC = () => {
     const checkLoginStatus = async () => {
       try {
         const isRemembered = await AsyncStorage.getItem("rememberMeEnabled");
-        const token = await AsyncStorage.getItem("userToken");
+        const token = await tokenStorage.getToken();
         const profileStr = await AsyncStorage.getItem("userProfile");
         const loginTimeStr = await AsyncStorage.getItem("userLoginTime");
 
@@ -39,7 +40,7 @@ const Splash: React.FC = () => {
             return;
           } else {
             // Access token expired, attempt to refresh it silently using the Refresh Token
-            const refreshToken = await AsyncStorage.getItem("userRefreshToken");
+            const refreshToken = await tokenStorage.getRefreshToken();
             if (refreshToken) {
               try {
                 const response = await authService.refreshToken(refreshToken);
@@ -49,7 +50,7 @@ const Splash: React.FC = () => {
                   const userProfile = JSON.parse(profileStr);
 
                   // Update storage with the new access token and time
-                  await AsyncStorage.setItem("userToken", newToken);
+                  await tokenStorage.setToken(newToken);
                   await AsyncStorage.setItem("userLoginTime", newLoginTime.toString());
 
                   // Preload to Redux store and navigate to Home

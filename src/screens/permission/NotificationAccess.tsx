@@ -11,25 +11,27 @@ import {
   Platform,
   StatusBar,
   LayoutChangeEvent,
+  PermissionsAndroid,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RootStackParamList } from "@/types/types";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Location from "expo-location";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 
-type LocationAccessNavigationProp = StackNavigationProp<
+type NotificationAccessNavigationProp = StackNavigationProp<
   RootStackParamList,
-  "LocationAccess"
+  "NotificationAccess"
 >;
 
-interface LocationAccessProps {
-  navigation?: LocationAccessNavigationProp;
+interface NotificationAccessProps {
+  navigation?: NotificationAccessNavigationProp;
   route?: {
     params?: {
       returnScreen?: keyof RootStackParamList;
+      returnParams?: any;
       blockBackNavigation?: boolean;
     };
   };
@@ -37,19 +39,21 @@ interface LocationAccessProps {
   onClose?: () => void;
   onNotNow?: () => void;
   returnScreen?: keyof RootStackParamList;
+  returnParams?: any;
   onBackPress?: () => void;
   blockBackNavigation?: boolean;
 }
 
-const locationImage = require("@/assets/images/permission/location.webp");
+const notificationImage = require("@/assets/images/permission/notification.jpg");
 
-const LocationAccess: React.FC<LocationAccessProps> = ({
+const NotificationAccess: React.FC<NotificationAccessProps> = ({
   navigation,
   route,
   onPermissionGranted,
   onClose,
   onNotNow,
   returnScreen = "Home",
+  returnParams,
   onBackPress,
   blockBackNavigation = false,
 }) => {
@@ -58,22 +62,38 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
 
   const targetReturnScreen = route?.params?.returnScreen || returnScreen;
-  const isBackBlocked = route?.params?.blockBackNavigation ?? blockBackNavigation;
+  const targetReturnParams = route?.params?.returnParams || returnParams;
+  const isBackBlocked =
+    route?.params?.blockBackNavigation ?? blockBackNavigation;
 
   const isScreenTooLong =
     scrollViewHeight > 0 &&
     contentHeight > 0 &&
     scrollViewHeight >= contentHeight + 20;
 
-  const handleDenyOrClose = () => {
+  const navigateForward = () => {
+    if (navigation) {
+      if (targetReturnParams) {
+        navigation.navigate(targetReturnScreen as any, targetReturnParams);
+      } else {
+        navigation.navigate(targetReturnScreen as any);
+      }
+    }
+  };
+
+  const handleDenyOrClose = async () => {
+    try {
+      await AsyncStorage.setItem("hasAskedNotificationPermission", "true");
+    } catch (e) {
+      console.warn("Error saving notification permission flag:", e);
+    }
+
     if (onClose) {
       onClose();
     } else if (onBackPress) {
       onBackPress();
-    } else if (navigation?.canGoBack && navigation.canGoBack()) {
-      navigation.goBack();
     } else if (navigation) {
-      navigation.navigate(targetReturnScreen as any);
+      navigateForward();
     }
   };
 
@@ -96,57 +116,51 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
       };
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        handleHardwareBackPress
+        handleHardwareBackPress,
       );
       return () => subscription.remove();
-    }, [isBackBlocked, navigation, onClose, onBackPress, targetReturnScreen])
+    }, [isBackBlocked, navigation, onClose, onBackPress, targetReturnScreen]),
   );
 
-  const requestLocationPermission = async () => {
+  const requestNotificationAccess = async () => {
     setIsLoading(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      let isGranted = true;
 
-      if (status === "granted") {
+      if (Platform.OS === "android" && Platform.Version >= 33) {
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+        isGranted = result === PermissionsAndroid.RESULTS.GRANTED;
+      }
+
+      await AsyncStorage.setItem("hasAskedNotificationPermission", "true");
+
+      if (isGranted) {
         if (onPermissionGranted) {
           onPermissionGranted();
         } else if (navigation) {
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-          } else {
-            navigation.navigate(targetReturnScreen as any);
-          }
+          navigateForward();
         }
       } else {
         Alert.alert(
-          "Permission Denied",
-          "Location access is required for this feature. Please enable it in settings.",
+          "Notifications Disabled",
+          "You won't receive live alerts for your orders or delivery status. You can turn them on anytime in your device Settings.",
           [
             {
-              text: "Not Now",
-              style: "cancel",
+              text: "Continue",
               onPress: handleNotNowPress,
             },
             {
               text: "Open Settings",
               onPress: () => Linking.openSettings(),
             },
-          ]
+          ],
         );
       }
     } catch (error) {
-      console.error("Error requesting location permission:", error);
-      Alert.alert(
-        "Error",
-        "Unable to request location permission. Please try again.",
-        [
-          {
-            text: "Not Now",
-            onPress: handleNotNowPress,
-          },
-          { text: "OK" },
-        ]
-      );
+      console.error("Error requesting notification permission:", error);
+      handleNotNowPress();
     } finally {
       setIsLoading(false);
     }
@@ -179,59 +193,78 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
           }
           className="w-full"
         >
-          {/* Centered Image */}
+          {/* Centered 3D Bell Image */}
           <View className="items-center justify-center mt-2 mb-4">
             <Image
-              source={locationImage}
-              className="w-32 h-32"
+              source={notificationImage}
+              className="w-32 h-32 rounded-3xl"
               resizeMode="contain"
             />
           </View>
 
           {/* Title */}
           <Text className="text-white text-2xl font-bold text-center mb-2">
-            Why Polygon Uses Location
+            Never Miss an Order Update
           </Text>
 
           {/* Intro */}
           <Text className="text-gray-300 text-sm text-center mb-5 leading-5">
-            Polygon requires location access to enable the following features:
+            Allow Polygon notifications to stay informed on everything that matters:
           </Text>
 
-          {/* Feature 1: Accurate Delivery Location */}
+          {/* Feature 1: Real-Time Order & Delivery Tracking */}
           <View className="bg-[#1E1E1E] p-4 rounded-xl mb-3 border border-gray-800 flex-row items-start">
             <View className="bg-[#FF9114]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#FF9114]/30">
               <MaterialCommunityIcons
-                name="map-marker-radius"
+                name="truck-delivery-outline"
                 size={24}
                 color="#FF9114"
               />
             </View>
             <View className="flex-1">
               <Text className="text-white font-semibold text-base mb-1">
-                Accurate Delivery Pinpoint
+                Real-Time Order & Delivery Tracking
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Pin your home, office, or shop drop-off point directly on the map to ensure orders arrive right at your doorstep.
+                Get instant notifications when your order is confirmed, packed, dispatched, and arriving at your doorstep.
               </Text>
             </View>
           </View>
 
-          {/* Feature 2: Nearby Centers & Availability */}
-          <View className="bg-[#1E1E1E] p-4 rounded-xl mb-4 border border-gray-800 flex-row items-start">
+          {/* Feature 2: Package Availability & Selection */}
+          <View className="bg-[#1E1E1E] p-4 rounded-xl mb-3 border border-gray-800 flex-row items-start">
             <View className="bg-[#FF9114]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#FF9114]/30">
               <MaterialCommunityIcons
-                name="storefront-outline"
+                name="basket-outline"
                 size={24}
                 color="#FF9114"
               />
             </View>
             <View className="flex-1">
               <Text className="text-white font-semibold text-base mb-1">
-                Nearby Centres & Delivery Coverage
+                Package Windows & Customizations
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Verify delivery service in your area and find the closest Polygon pickup centres for fast self-pickup.
+                Be notified when new farm packages open for customization so you can select your preferred fresh veggies in time.
+              </Text>
+            </View>
+          </View>
+
+          {/* Feature 3: Exclusive Offers & Price Updates */}
+          <View className="bg-[#1E1E1E] p-4 rounded-xl mb-4 border border-gray-800 flex-row items-start">
+            <View className="bg-[#FF9114]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#FF9114]/30">
+              <MaterialCommunityIcons
+                name="tag-heart-outline"
+                size={24}
+                color="#FF9114"
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-semibold text-base mb-1">
+                Discounts & Seasonal Harvests
+              </Text>
+              <Text className="text-gray-400 text-xs leading-4">
+                Receive special discounts, coupon drops, and announcements when seasonal farm produce becomes available.
               </Text>
             </View>
           </View>
@@ -245,7 +278,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
               style={{ marginTop: 2, marginRight: 8 }}
             />
             <Text className="text-gray-300 text-xs flex-1 leading-4">
-              Location access is only requested in the foreground while detecting or setting your delivery address. Background location is never tracked.
+              Polygon values your privacy. We only send relevant alerts and essential order updates. No spam, ever.
             </Text>
           </View>
 
@@ -256,7 +289,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
             }`}
           >
             <TouchableOpacity
-              onPress={requestLocationPermission}
+              onPress={requestNotificationAccess}
               activeOpacity={0.8}
               disabled={isLoading}
               className="w-full mb-3"
@@ -276,13 +309,13 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
               >
                 <View className="flex-row items-center justify-center">
                   <Ionicons
-                    name="location-outline"
+                    name="notifications-outline"
                     size={20}
                     color="#FFFFFF"
                     style={{ marginRight: 8 }}
                   />
                   <Text className="text-white font-extrabold text-base tracking-wide">
-                    {isLoading ? "Requesting..." : "Agree & Continue"}
+                    {isLoading ? "Enabling..." : "Allow Notifications"}
                   </Text>
                 </View>
               </LinearGradient>
@@ -294,7 +327,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
               className="py-3 px-6 items-center justify-center"
             >
               <Text className="text-gray-400 font-semibold text-sm">
-                Not Now
+                Maybe Later
               </Text>
             </TouchableOpacity>
           </View>
@@ -304,4 +337,4 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
   );
 };
 
-export default LocationAccess;
+export default NotificationAccess;

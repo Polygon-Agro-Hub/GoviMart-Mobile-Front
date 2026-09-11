@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Modal,
-  SafeAreaView,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +15,8 @@ interface CustomCalendarModalProps {
   onSelectDate: (dateStr: string) => void;
   minDate?: Date;
   maxDate?: Date;
+  title?: string;
+  showPreparationNotice?: boolean;
 }
 
 // ─── WEB VALIDATION LOGIC REPLICATED ──────────────────────────────────────────
@@ -81,6 +82,8 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   onSelectDate,
   minDate: customMinDate,
   maxDate: customMaxDate,
+  title,
+  showPreparationNotice,
 }) => {
   const minDate = useMemo(() => customMinDate || getMinDeliveryDate(), [customMinDate]);
   const maxDate = useMemo(() => {
@@ -91,14 +94,29 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
     return max;
   }, [customMaxDate]);
 
-  // Parse initially selected date or fallback to minDate
-  const initialDate = useMemo(() => {
+  const shouldShowNotice =
+    showPreparationNotice !== undefined
+      ? showPreparationNotice
+      : !customMinDate;
+
+  const modalTitle = title || "Select Schedule Date";
+
+  // Determine default display date (selectedDate -> today if valid -> fallback)
+  const getDefaultDate = useCallback(() => {
     if (selectedDate) {
       const parsed = new Date(selectedDate.replace(/\//g, "-"));
       if (!isNaN(parsed.getTime())) return parsed;
     }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (today >= minDate && today <= maxDate) {
+      return today;
+    }
+    if (today > maxDate) return maxDate;
     return minDate;
-  }, [selectedDate, minDate]);
+  }, [selectedDate, minDate, maxDate]);
+
+  const initialDate = useMemo(() => getDefaultDate(), [getDefaultDate]);
 
   const [currentYear, setCurrentYear] = useState<number>(initialDate.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(initialDate.getMonth());
@@ -117,10 +135,12 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           return;
         }
       }
-      setCurrentYear(minDate.getFullYear());
-      setCurrentMonth(minDate.getMonth());
+      setInternalSelectedDate(null);
+      const def = getDefaultDate();
+      setCurrentYear(def.getFullYear());
+      setCurrentMonth(def.getMonth());
     }
-  }, [visible, selectedDate, minDate]);
+  }, [visible, selectedDate, getDefaultDate]);
 
   const canGoPrev = useMemo(() => {
     const prevMonthDate = new Date(currentYear, currentMonth, 0);
@@ -273,7 +293,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                 color: "#111827",
               }}
             >
-              Select Schedule Date
+              {modalTitle}
             </Text>
 
             <TouchableOpacity
@@ -293,37 +313,39 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           </View>
 
           {/* Web Validation Info Badge */}
-          <View
-            style={{
-              backgroundColor: "#FFF7ED",
-              borderColor: "#FFEDD5",
-              borderWidth: 1,
-              borderRadius: 12,
-              paddingVertical: 7,
-              paddingHorizontal: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
-          >
-            <Ionicons
-              name="information-circle"
-              size={17}
-              color="#EA580C"
-              style={{ marginRight: 6 }}
-            />
-            <Text
+          {shouldShowNotice && (
+            <View
               style={{
-                fontSize: 11,
-                color: "#C2410C",
-                flex: 1,
-                lineHeight: 15,
-                fontWeight: "500",
+                backgroundColor: "#FFF7ED",
+                borderColor: "#FFEDD5",
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingVertical: 7,
+                paddingHorizontal: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 16,
               }}
             >
-              Orders require 3 days preparation (4 days after 6:00 PM cutoff).
-            </Text>
-          </View>
+              <Ionicons
+                name="information-circle"
+                size={17}
+                color="#EA580C"
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: "#C2410C",
+                  flex: 1,
+                  lineHeight: 16,
+                  fontWeight: "500",
+                }}
+              >
+                Orders require 3 days preparation (4 days after 6:00 PM cutoff).
+              </Text>
+            </View>
+          )}
 
           {/* Month & Year Navigator */}
           <View

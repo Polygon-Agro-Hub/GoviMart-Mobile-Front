@@ -291,7 +291,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         <Text
           style={{
             color: "#FF3B30",
-            fontSize: 11,
+            fontSize: 12,
             marginLeft: 16,
             marginTop: 4,
           }}
@@ -544,7 +544,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 {titleError ? (
                   <Text
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       color: "#FF3B30",
                       marginTop: 4,
                       marginLeft: 16,
@@ -658,7 +658,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             {buildingTypeError ? (
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   color: "#FF3B30",
                   marginTop: 4,
                   marginLeft: 16,

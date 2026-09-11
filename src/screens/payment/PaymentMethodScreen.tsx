@@ -7,8 +7,8 @@ import {
     ActivityIndicator,
     Alert,
     Image,
-    SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -354,13 +354,13 @@ const PaymentMethod: React.FC<Props> = ({
                                 <FontAwesome6
                                     name={useCredit ? "check" : "star"}
                                     solid
-                                    size={10}
+                                    size={11}
                                     color="#FFF"
                                 />
                                 <Text
                                     style={{
                                         color: "#FFF",
-                                        fontSize: 10,
+                                        fontSize: 11.5,
                                         fontWeight: "600",
                                     }}
                                 >
@@ -457,9 +457,9 @@ const PaymentMethod: React.FC<Props> = ({
 
                                 <Text
                                     style={{
-                                        fontSize: 11.5,
+                                        fontSize: 12.5,
                                         color: "#6B7280",
-                                        lineHeight: 16,
+                                        lineHeight: 17,
                                         marginTop: 4,
                                     }}
                                 >
@@ -614,9 +614,9 @@ const PaymentMethod: React.FC<Props> = ({
 
                     <Text
                         style={{
-                            fontSize: 11.5,
+                            fontSize: 12.5,
                             color: "#596B5E",
-                            lineHeight: 16,
+                            lineHeight: 17,
                             marginTop: 4,
                         }}
                     >

@@ -1068,7 +1068,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           >
                             <Text
                               style={{
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: "700",
                                 textAlign: "center",
                                 color: "#FFF",
@@ -1163,7 +1163,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   justifyContent: "center",
                                 }}
                               >
-                                <Text className="text-white text-[11px] font-bold">
+                                <Text className="text-white text-[12px] font-bold">
                                   kg
                                 </Text>
                               </TouchableOpacity>
@@ -1192,7 +1192,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   justifyContent: "center",
                                 }}
                               >
-                                <Text className="text-white text-[11px] font-bold">
+                                <Text className="text-white text-[12px] font-bold">
                                   g
                                 </Text>
                               </TouchableOpacity>
@@ -1225,7 +1225,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               </TouchableOpacity>
 
                               {/* Qty value */}
-                              <Text className="text-black font-bold text-[11px]">
+                              <Text className="text-black font-bold text-[12px]">
                                 {cartItem.weight} {cartItem.unit}
                               </Text>
 
@@ -1349,7 +1349,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               </TouchableOpacity>
 
                               {/* Qty value */}
-                              <Text className="text-black font-bold text-[11px]">
+                              <Text className="text-black font-bold text-[12px]">
                                 {cartPackage.quantity} Qty
                               </Text>
 

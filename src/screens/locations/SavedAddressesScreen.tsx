@@ -14,6 +14,7 @@ import LoadingPage from "@/component/common/LoadingPage";
 import customerService from "@/services/customer/customer.service";
 import { useFocusEffect } from "@react-navigation/native";
 import NoDataFound from "@/component/common/NoDataFound";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
 
 type SavedAddressesNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -105,38 +106,34 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
         }, [])
     );
 
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [addressToDelete, setAddressToDelete] = useState<{ id: number; buildingType?: string } | null>(null);
+
     const handleDelete = (id: number, buildingType?: string) => {
-        Alert.alert(
-            "Delete Address",
-            "Are you sure you want to delete this address?",
-            [
-                {
-                    text: "Cancel",
-                    style: "cancel",
-                },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            setDeleting(true);
-                            if (buildingType) {
-                                await customerService.deleteAddress(id, buildingType);
-                            }
-                            setAddresses((current) =>
-                                current.filter((item) => item.id !== id)
-                            );
-                            Alert.alert("Success", "Address deleted successfully.");
-                        } catch (error) {
-                            console.log("failed to delete address: ", error);
-                            Alert.alert("Error", "Failed to delete address. Please try again.");
-                        } finally {
-                            setDeleting(false);
-                        }
-                    },
-                },
-            ]
-        );
+        setAddressToDelete({ id, buildingType });
+        setDeleteModalVisible(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!addressToDelete) return;
+        const { id, buildingType } = addressToDelete;
+        setDeleteModalVisible(false);
+        try {
+            setDeleting(true);
+            if (buildingType) {
+                await customerService.deleteAddress(id, buildingType);
+            }
+            setAddresses((current) =>
+                current.filter((item) => item.id !== id)
+            );
+            Alert.alert("Success", "Address deleted successfully.");
+        } catch (error) {
+            console.log("failed to delete address: ", error);
+            Alert.alert("Error", "Failed to delete address. Please try again.");
+        } finally {
+            setDeleting(false);
+            setAddressToDelete(null);
+        }
     };
 
     const handleView = (address: Address) => {
@@ -173,8 +170,8 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
             ) : (
                 <ScrollView
                     showsVerticalScrollIndicator={false}
+                    className="px-6"
                     contentContainerStyle={{
-                        paddingHorizontal: 11,
                         paddingTop: 12,
                         paddingBottom: 30,
                     }}
@@ -555,6 +552,24 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                     <LoadingPage message="Deleting Address..." fullScreen={false} />
                 </View>
             )}
+
+            {/* Delete Address Confirmation Modal */}
+            <ConfirmationModal
+                visible={deleteModalVisible}
+                title="Delete Address"
+                message="Are you sure you want to delete this address?"
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                iconName="trash-outline"
+                iconColor="#DC2626"
+                iconBgColor="bg-red-50"
+                confirmButtonColor="#DC2626"
+                onConfirm={confirmDelete}
+                onCancel={() => {
+                    setDeleteModalVisible(false);
+                    setAddressToDelete(null);
+                }}
+            />
         </View>
     );
 };

@@ -4,10 +4,10 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Platform,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -93,7 +93,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
         >
           <Image
             source={require("@/assets/images/order/vegetable-basket.webp")}
-            style={{ width: 68, height: 68, marginRight: 14 }}
+            style={{ width: 88, height: 88, marginRight: 14 }}
             resizeMode="contain"
           />
 
@@ -186,7 +186,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
               >
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: "600",
                     color: "#1F2937",
                   }}
@@ -218,8 +218,8 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
           {/* Description */}
           <Text
             style={{
-              fontSize: 12,
-              lineHeight: 18,
+              fontSize: 13,
+              lineHeight: 19,
               color: "#55596D",
               marginTop: 12,
             }}
@@ -309,8 +309,8 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
           {/* Description */}
           <Text
             style={{
-              fontSize: 12,
-              lineHeight: 18,
+              fontSize: 13,
+              lineHeight: 19,
               color: "#55596D",
               marginTop: 12,
             }}

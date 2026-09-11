@@ -253,7 +253,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                     <View style={{ flex: 1 }}>
                         <Text
                             style={{
-                                fontSize: 10,
+                                fontSize: 13,
                                 color: "#888888",
                                 marginBottom: 2,
                             }}
@@ -262,7 +262,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         </Text>
                         <Text
                             style={{
-                                fontSize: 13,
+                                fontSize: 14,
                                 color: city ? "#000000" : "#A0A0A0",
                                 fontWeight: "500",
                             }}
@@ -281,7 +281,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                 <Text
                     style={{
                         color: "#FF3B30",
-                        fontSize: 11,
+                        fontSize: 12,
                         marginLeft: 20,
                         marginTop: 4,
                     }}
@@ -678,9 +678,9 @@ const EditAddress: React.FC<EditAddressProps> = ({
                         >
                             <Text
                                 style={{
-                                    fontSize: 11,
+                                    fontSize: 13,
                                     color: "#777",
-                                    lineHeight: 14,
+                                    lineHeight: 16,
                                 }}
                             >
                                 Geo Location
@@ -695,13 +695,13 @@ const EditAddress: React.FC<EditAddressProps> = ({
                             >
                                 <Ionicons
                                     name="checkmark-circle"
-                                    size={12}
+                                    size={13}
                                     color="#FF9518"
                                 />
 
                                 <Text
                                     style={{
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         color: "#FF9518",
                                         marginLeft: 4,
                                         fontWeight: "500",

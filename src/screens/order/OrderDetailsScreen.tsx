@@ -578,7 +578,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 >
                     <Text
                         style={{
-                            fontSize: 10,
+                            fontSize: 12,
                             color: "#747990",
                         }}
                     >
@@ -587,7 +587,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                     <Text
                         style={{
-                            fontSize: 12,
+                            fontSize: 15,
                             color: "#111",
                             fontWeight: "600",
                             marginTop: 3,
@@ -611,11 +611,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 
                             }}
                         >
-                            <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+                            <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
                             <FontAwesome6
                                 name="calendar"
                                 solid
-                                size={10}
+                                size={11}
                                 color="#FFFFFF"
                             
                             />
@@ -623,8 +623,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                             <Text
                                 style={{
-                                    fontSize: 10,
-                                    marginLeft: 3,
+                                    fontSize: 13,
+                                    marginLeft: 4,
                                 }}
                             >
                                 {formatDate(order?.sheduleDate || order?.scheduleDate)}
@@ -634,7 +634,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         <View
                             style={{
                                 width: 1,
-                                height: 13,
+                                height: 16,
                                 backgroundColor: "#DDE1E5",
                             }}
                         />
@@ -646,20 +646,20 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 paddingHorizontal: 7,
                             }}
                         >
-                             <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+                             <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
                             <FontAwesome6
                                 name="clock"
                                 solid
-                                size={8}
+                                size={10}
                                 color="#FFFFFF"
                             
                             />
-                            </View>
+                             </View>
 
                             <Text
                                 style={{
-                                    fontSize: 10,
-                                    marginLeft: 3,
+                                    fontSize: 13,
+                                    marginLeft: 4,
                                 }}
                             >
                                 {order?.sheduleTime || order?.scheduleTime || "N/A"}
@@ -669,7 +669,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         <View
                             style={{
                                 width: 1,
-                                height: 13,
+                                height: 16,
                                 backgroundColor: "#DDE1E5",
                             }}
                         />
@@ -682,7 +682,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         >
                             <Text
                                 style={{
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     color: "#747990",
                                 }}
                             >
@@ -691,7 +691,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                             <Text
                                 style={{
-                                    fontSize: 11,
+                                    fontSize: 14,
                                     fontWeight: "600",
                                 }}
                             >
@@ -798,7 +798,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                                     <Text
                                         style={{
-                                            fontSize: 12,
+                                            fontSize: 13,
                                             color: status.active ? "#111" : "#A5ABB9",
                                             fontWeight: "600",
                                         }}
@@ -809,7 +809,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     {status.date ? (
                                         <Text
                                             style={{
-                                                fontSize: 10,
+                                                fontSize: 11,
                                                 color: "#5A5859",
                                                 marginLeft: 5,
                                             }}
@@ -822,7 +822,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 {(status as any).description ? (
                                     <Text
                                         style={{
-                                            fontSize: 10,
+                                            fontSize: 11,
                                             color: "#5A5859",
                                             marginTop: 3,
                                         }}
@@ -851,26 +851,26 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         <Text style={{ fontSize: 14, fontWeight: "600", color: "#111", marginBottom: 8 }}>
                             Pickup Store Information
                         </Text>
-                        <Text style={{ fontSize: 12, fontWeight: "500", color: "#222" }}>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
                             Store: {order.pickupInfo.centerName}
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#5A5859", marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
                             Contact: {order.pickupInfo.contact01}
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#5A5859", marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
                             Address: {[
                                 order.pickupInfo.address?.street,
                                 order.pickupInfo.address?.city,
                                 order.pickupInfo.address?.district,
                             ].filter(Boolean).join(", ")}
                         </Text>
-                        <Text style={{ fontSize: 12, fontWeight: "500", color: "#222", marginTop: 10 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222", marginTop: 10 }}>
                             Pickup Person
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#5A5859", marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
                             Name: {order.pickupInfo.pickupPerson?.fullName}
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#5A5859", marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
                             Phone: {order.pickupInfo.pickupPerson?.phone1}
                         </Text>
                     </View>
@@ -889,13 +889,13 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         <Text style={{ fontSize: 14, fontWeight: "600", color: "#111", marginBottom: 8 }}>
                             Delivery Address
                         </Text>
-                        <Text style={{ fontSize: 12, fontWeight: "500", color: "#222" }}>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
                             {order.deliveryInfo.fullName || "--"}
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#5A5859", marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
                             Phone: {order.deliveryInfo.phone || "--"}
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#5A5859", marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
                             Address: {order.deliveryInfo.buildingType === "Apartment" ? (
                                 `Flat ${order.deliveryInfo.flatNo}, Floor ${order.deliveryInfo.floorNo}, Building ${order.deliveryInfo.buildingNo} (${order.deliveryInfo.buildingName}), ${order.deliveryInfo.street}, ${order.deliveryInfo.city}`
                             ) : (
@@ -929,7 +929,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         >
                             <Text
                                 style={{
-                                    fontSize: 12,
+                                    fontSize: 14,
                                     fontWeight: "600",
                                     marginBottom: 6,
                                 }}
@@ -943,7 +943,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                             >
                                 <Text
                                     style={{
-                                        fontSize: 10,
+                                        fontSize: 12,
                                         fontWeight: "600",
                                         textDecorationLine: "underline",
                                     }}
@@ -992,7 +992,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     >
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 13,
                                                 fontWeight:
                                                     "500",
                                             }}
@@ -1003,7 +1003,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 13,
                                                 marginTop: 2,
                                             }}
                                         >
@@ -1048,7 +1048,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                     >
                         <Text
                             style={{
-                                fontSize: 12,
+                                fontSize: 14,
                                 fontWeight: "600",
                                 marginBottom: 6,
                             }}
@@ -1088,7 +1088,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 >
                                     <Text
                                         style={{
-                                            fontSize: 12,
+                                            fontSize: 13,
                                             fontWeight:
                                                 "500",
                                         }}
@@ -1117,7 +1117,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     >
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 13,
                                                 fontWeight:
                                                     "600",
                                             }}
@@ -1131,7 +1131,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                         {item.oldPrice && (
                                             <Text
                                                 style={{
-                                                    fontSize: 10,
+                                                    fontSize: 11,
                                                     color:
                                                         "#5A5859",
                                                     textDecorationLine:
@@ -1455,16 +1455,16 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     >
                                         <Ionicons
                                             name="information-circle"
-                                            size={14}
+                                            size={16}
                                             color="#5A5859"
                                             style={{ marginTop: 1 }}
                                         />
                                         <Text
                                             style={{
                                                 flex: 1,
-                                                fontSize: 10,
+                                                fontSize: 12,
                                                 color: "#5A5859",
-                                                lineHeight: 14,
+                                                lineHeight: 16,
                                             }}
                                         >
                                             {restoredCredit < 0

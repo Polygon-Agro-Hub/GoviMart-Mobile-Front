@@ -188,21 +188,21 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
 
           {/* Title */}
           <Text className="text-white text-2xl font-bold text-center mb-2">
-            Why GoVi-Mart Uses Camera
+            Why Polygon Uses Camera
           </Text>
 
           {/* Intro */}
           <Text className="text-gray-300 text-sm text-center mb-5 leading-5">
-            GoVi-Mart requires camera access to enable the following features:
+            Polygon requires camera access to enable the following features:
           </Text>
 
           {/* Feature 1: Profile Photo Capture */}
           <View className="bg-[#1E1E1E] p-4 rounded-xl mb-3 border border-gray-800 flex-row items-start">
-            <View className="bg-[#F7CA21]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#F7CA21]/30">
+            <View className="bg-[#FF9114]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#FF9114]/30">
               <MaterialCommunityIcons
                 name="camera-account"
                 size={24}
-                color="#F7CA21"
+                color="#FF9114"
               />
             </View>
             <View className="flex-1">
@@ -210,18 +210,18 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                 Profile Photo Capture
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Capture a photo directly with your camera to personalize and update your GoVi-Mart account profile.
+                Capture a photo directly with your camera to personalize and update your Polygon account profile.
               </Text>
             </View>
           </View>
 
           {/* Feature 2: Complaint & Product Issues */}
           <View className="bg-[#1E1E1E] p-4 rounded-xl mb-4 border border-gray-800 flex-row items-start">
-            <View className="bg-[#F7CA21]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#F7CA21]/30">
+            <View className="bg-[#FF9114]/15 p-2.5 rounded-lg mr-3 mt-0.5 border border-[#FF9114]/30">
               <MaterialCommunityIcons
                 name="camera-outline"
                 size={24}
-                color="#F7CA21"
+                color="#FF9114"
               />
             </View>
             <View className="flex-1">
@@ -235,11 +235,11 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
           </View>
 
           {/* Privacy Note */}
-          <View className="bg-[#1F1E1A] p-3 rounded-lg mb-6 border border-[#F7CA21]/30 flex-row items-start">
+          <View className="bg-[#1F1E1A] p-3 rounded-lg mb-6 border border-[#FF9114]/30 flex-row items-start">
             <Ionicons
               name="shield-checkmark-outline"
               size={18}
-              color="#F7CA21"
+              color="#FF9114"
               style={{ marginTop: 2, marginRight: 8 }}
             />
             <Text className="text-gray-300 text-xs flex-1 leading-4">
@@ -261,7 +261,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
               style={{ borderRadius: 999, overflow: "hidden" }}
             >
               <LinearGradient
-                colors={["#F7CA21", "#FBBA2F"]}
+                colors={["#FF9114", "#FF7A00"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={{
@@ -276,10 +276,10 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                   <Ionicons
                     name="camera-outline"
                     size={20}
-                    color="#000000"
+                    color="#FFFFFF"
                     style={{ marginRight: 8 }}
                   />
-                  <Text className="text-black font-extrabold text-base tracking-wide">
+                  <Text className="text-white font-extrabold text-base tracking-wide">
                     {isLoading ? "Requesting..." : "Agree & Continue"}
                   </Text>
                 </View>

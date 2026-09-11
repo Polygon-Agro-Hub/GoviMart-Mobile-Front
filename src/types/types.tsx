@@ -64,6 +64,11 @@ export type RootStackParamList = {
     returnScreen?: keyof RootStackParamList;
     blockBackNavigation?: boolean;
   };
+  NotificationAccess?: {
+    returnScreen?: keyof RootStackParamList;
+    returnParams?: any;
+    blockBackNavigation?: boolean;
+  };
   Login: undefined;
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;

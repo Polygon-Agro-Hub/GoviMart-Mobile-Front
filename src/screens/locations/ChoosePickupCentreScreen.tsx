@@ -310,7 +310,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                             >
                                 <Text
                                     style={{
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         fontWeight: "700",
                                         color: "#111",
                                     }}
@@ -327,7 +327,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                 >
                                     <Text
                                         style={{
-                                            fontSize: 11,
+                                            fontSize: 12,
                                             color: "#FF8500",
                                             fontWeight: "700",
                                         }}
@@ -337,7 +337,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
 
                                     <Text
                                         style={{
-                                            fontSize: 11,
+                                            fontSize: 12,
                                             color: "#777",
                                             marginLeft: 6,
                                         }}
@@ -359,7 +359,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                             <Text
                                 style={{
                                     color: "#9A9A9A",
-                                    fontSize: 12,
+                                    fontSize: 13,
                                 }}
                             >
                                 Select a city to view pickup centre
@@ -419,22 +419,22 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                 {selectedCentre.name}
                             </Text>
 
-                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
                                 <Text style={{ color: "#494A65" }}>City : </Text>
                                 {selectedCentre.city || "N/A"}
                             </Text>
 
-                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
                                 <Text style={{ color: "#494A65" }}>District : </Text>
                                 {selectedCentre.district || "N/A"}
                             </Text>
 
-                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
                                 <Text style={{ color: "#494A65" }}>Province : </Text>
                                 {selectedCentre.province || "N/A"}
                             </Text>
 
-                            <Text style={{ fontSize: 12, color: "#000000", lineHeight: 18 }}>
+                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
                                 <Text style={{ color: "#494A65" }}>Country : </Text>
                                 {selectedCentre.country || "Sri Lanka"}
                             </Text>

@@ -270,7 +270,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                             >
                                 <Text
                                     style={{
-                                        fontSize: 10,
+                                        fontSize: 11.5,
                                         color: "#FF4B55",
                                         fontWeight: "600",
                                     }}
@@ -281,7 +281,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
                             <Text
                                 style={{
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     color: "#6B7280",
                                 }}
                             >
@@ -325,7 +325,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
                         <Text
                             style={{
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: "#6B7280",
                             }}
                         >
@@ -337,21 +337,21 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 {/* MESSAGE (with bold invoice number) */}
                 <Text
                     style={{
-                        fontSize: 12,
-                        lineHeight: 17,
+                        fontSize: 13,
+                        lineHeight: 18,
                         color: "#6B7280",
                     }}
                 >
                     {renderBoldInvoiceMessage(
                         item.message,
                         {
-                            fontSize: 12,
-                            lineHeight: 17,
+                            fontSize: 13,
+                            lineHeight: 18,
                             color: "#6B7280",
                         },
                         {
-                            fontSize: 12,
-                            lineHeight: 17,
+                            fontSize: 13,
+                            lineHeight: 18,
                             fontWeight: "700",
                             color: "#111827",
                         }

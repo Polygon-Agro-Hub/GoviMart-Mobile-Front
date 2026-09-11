@@ -369,7 +369,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                   </Text>
                 </View>
 
-                <Text className="text-[11px] text-[#5A5859] leading-relaxed mt-1">
+                <Text className="text-[12px] text-[#5A5859] leading-relaxed mt-1">
                   Use at least 8 characters with a mix of letters, numbers and
                   symbols.
                 </Text>

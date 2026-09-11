@@ -85,10 +85,10 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
                 <TimeBox value={String(mins).padStart(2, "0")} />
             </View>
             <View className="flex-row mt-1" style={{ width: 96 }}>
-                <Text className="flex-1 text-center text-[11px] text-[#8A8A8A]">
+                <Text className="flex-1 text-center text-[12px] text-[#8A8A8A]">
                     hrs
                 </Text>
-                <Text className="flex-1 text-center text-[11px] text-[#8A8A8A]">
+                <Text className="flex-1 text-center text-[12px] text-[#8A8A8A]">
                     min
                 </Text>
             </View>

@@ -141,7 +141,7 @@ export const InputField = ({
             {error ? (
                 <Text
                     style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "#FF3B30",
                         marginTop: 4,
                         marginLeft: 16,
@@ -331,7 +331,7 @@ export const DropdownField = ({
             {error ? (
                 <Text
                     style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "#FF3B30",
                         marginTop: 4,
                         marginLeft: 16,

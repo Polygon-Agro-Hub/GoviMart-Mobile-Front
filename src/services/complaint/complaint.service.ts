@@ -18,6 +18,13 @@ class ComplaintService {
                     ...headers,
                     "Content-Type": "multipart/form-data",
                 },
+                transformRequest: (data, requestHeaders) => {
+                    if (requestHeaders) {
+                        delete requestHeaders["Content-Type"];
+                        delete requestHeaders["content-type"];
+                    }
+                    return data;
+                },
             }
         );
     }
