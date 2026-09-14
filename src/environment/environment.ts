@@ -7,7 +7,7 @@ export const environment = {
   // API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",
 
   // UAT --------------------
-  // API_BASE_URL: "https://govimart-mobile-api-uat.vercel.app/polygon/",
+  // API_BASE_URL: "https://uat-mob-api.govimart.com/polygon/",
 
   // PROD --------------------
   // API_BASE_URL: "https://govimart-mobile-api-prod.vercel.app/polygon/"
