@@ -7,7 +7,6 @@ import {
   Platform,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -42,7 +41,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* ─── TOP HEADER: CLOSE BUTTON ON RIGHT ───────────────────────────── */}
       <View
         style={{
@@ -359,7 +358,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

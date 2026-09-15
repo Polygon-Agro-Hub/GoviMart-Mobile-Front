@@ -12,7 +12,6 @@ import {
   StatusBar,
   LayoutChangeEvent,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
@@ -58,7 +57,8 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
 
   const targetReturnScreen = route?.params?.returnScreen || returnScreen;
-  const isBackBlocked = route?.params?.blockBackNavigation ?? blockBackNavigation;
+  const isBackBlocked =
+    route?.params?.blockBackNavigation ?? blockBackNavigation;
 
   const isScreenTooLong =
     scrollViewHeight > 0 &&
@@ -96,10 +96,10 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
       };
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        handleHardwareBackPress
+        handleHardwareBackPress,
       );
       return () => subscription.remove();
-    }, [isBackBlocked, navigation, onClose, onBackPress, targetReturnScreen])
+    }, [isBackBlocked, navigation, onClose, onBackPress, targetReturnScreen]),
   );
 
   const requestLocationPermission = async () => {
@@ -131,7 +131,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
               text: "Open Settings",
               onPress: () => Linking.openSettings(),
             },
-          ]
+          ],
         );
       }
     } catch (error) {
@@ -145,7 +145,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
             onPress: handleNotNowPress,
           },
           { text: "OK" },
-        ]
+        ],
       );
     } finally {
       setIsLoading(false);
@@ -153,7 +153,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: "#121212" }}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView
         className="flex-1 px-5"
@@ -212,7 +212,8 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
                 Accurate Delivery Pinpoint
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Pin your home, office, or shop drop-off point directly on the map to ensure orders arrive right at your doorstep.
+                Pin your home, office, or shop drop-off point directly on the
+                map to ensure orders arrive right at your doorstep.
               </Text>
             </View>
           </View>
@@ -231,7 +232,8 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
                 Nearby Centres & Delivery Coverage
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Verify delivery service in your area and find the closest Polygon pickup centres for fast self-pickup.
+                Verify delivery service in your area and find the closest
+                Polygon pickup centres for fast self-pickup.
               </Text>
             </View>
           </View>
@@ -245,7 +247,9 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
               style={{ marginTop: 2, marginRight: 8 }}
             />
             <Text className="text-gray-300 text-xs flex-1 leading-4">
-              Location access is only requested in the foreground while detecting or setting your delivery address. Background location is never tracked.
+              Location access is only requested in the foreground while
+              detecting or setting your delivery address. Background location is
+              never tracked.
             </Text>
           </View>
 
@@ -300,7 +304,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

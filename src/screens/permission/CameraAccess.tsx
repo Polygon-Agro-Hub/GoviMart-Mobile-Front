@@ -12,7 +12,6 @@ import {
   StatusBar,
   LayoutChangeEvent,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { LinearGradient } from "expo-linear-gradient";
@@ -79,7 +78,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
     };
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      handleHardwareBackPress
+      handleHardwareBackPress,
     );
     return () => subscription.remove();
   }, [navigation, onClose, onBackPress, targetReturnScreen]);
@@ -93,7 +92,9 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
       if (onRequestPermission) {
         const response = await onRequestPermission();
         if (response && typeof response === "object") {
-          isGranted = Boolean(response.granted || response.status === "granted");
+          isGranted = Boolean(
+            response.granted || response.status === "granted",
+          );
           isDenied = !isGranted && response.status === "denied";
         } else {
           const check = await ImagePicker.getCameraPermissionsAsync();
@@ -135,7 +136,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
               text: "Open Settings",
               onPress: () => Linking.openSettings(),
             },
-          ]
+          ],
         );
       }
     } catch (error) {
@@ -143,7 +144,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
       Alert.alert(
         "Error",
         "Unable to request camera permission. Please try again.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     } finally {
       setIsLoading(false);
@@ -151,7 +152,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: "#121212" }}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView
         className="flex-1 px-5"
@@ -210,7 +211,8 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                 Profile Photo Capture
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Capture a photo directly with your camera to personalize and update your Polygon account profile.
+                Capture a photo directly with your camera to personalize and
+                update your Polygon account profile.
               </Text>
             </View>
           </View>
@@ -229,7 +231,8 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                 Delivery Verification & Complaints
               </Text>
               <Text className="text-gray-400 text-xs leading-4">
-                Capture real-time photos of received packages or damaged items when reporting issues for quick resolution.
+                Capture real-time photos of received packages or damaged items
+                when reporting issues for quick resolution.
               </Text>
             </View>
           </View>
@@ -243,7 +246,8 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
               style={{ marginTop: 2, marginRight: 8 }}
             />
             <Text className="text-gray-300 text-xs flex-1 leading-4">
-              Camera access is only active while taking photos. No photos or videos are captured without your explicit tap.
+              Camera access is only active while taking photos. No photos or
+              videos are captured without your explicit tap.
             </Text>
           </View>
 
@@ -298,7 +302,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

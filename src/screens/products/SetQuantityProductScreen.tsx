@@ -7,12 +7,12 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { useDispatch } from "react-redux";
 import { replacePackageProduct } from "@/store/packageReviewSlice";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type Props = StackScreenProps<RootStackParamList, "SetQauntity">;
 
@@ -235,25 +235,18 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
       {/* Header */}
-      <View className="flex-row items-center px-5 pt-3 pb-2">
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={22} color="#000" />
-        </TouchableOpacity>
-
-        <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
-          Set Quantity
-        </Text>
-      </View>
+      <CustomHeader
+        title="Set Quantity"
+        showBackButton={true}
+        navigation={navigation}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text className="text-[14px] text-[#6B6B6B] mx-6 mt-2">
+        <Text className="text-[14px] text-[#6B6B6B] text-center mx-6 mt-2">
           You are replacing {fromProduct.name} with {toProduct.name}.
         </Text>
 
@@ -277,7 +270,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
         </View>
 
         {/* Quantity Stepper */}
-        <View className="mx-6 mt-8 flex-row items-center justify-between rounded-full border-2 border-[#3B82F6] bg-[#F9F9F9] px-2 py-2">
+        <View className="mx-6 mt-8 flex-row items-center justify-between rounded-full border border-[#E1E7EE] bg-[#FBFBFB] px-2 py-2">
           <TouchableOpacity
             onPress={decrease}
             disabled={quantity <= minQty}
@@ -343,14 +336,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
         <TouchableOpacity
           onPress={onReplace}
           activeOpacity={0.85}
-          className="mx-6 mt-6 mb-8 bg-black rounded-2xl py-4 items-center"
+          className="mx-6 mt-6 mb-8 h-[54px] bg-black rounded-full justify-center items-center shadow-sm"
         >
           <Text className="text-white text-[16px] font-bold">
             Replace
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
