@@ -74,9 +74,9 @@ const ProductRow: React.FC<{
   subtitle: string;
   price: string;
 }> = ({ product, subtitle, price }) => (
-  <View className="flex-row items-center px-8 w-full">
+  <View className="flex-row items-center justify-center px-8 w-full">
     <ProductAvatar product={product} />
-    <View className="ml-4">
+    <View className="ml-4 items-start">
       <Text className="text-[16px] font-bold text-black">
         {product.name}
       </Text>
@@ -245,92 +245,100 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
         navigation={navigation}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text className="text-[14px] text-[#6B6B6B] text-center mx-6 mt-2">
-          You are replacing {fromProduct.name} with {toProduct.name}.
-        </Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "space-between",
+        }}
+      >
+        <View>
+          <Text className="text-[14px] text-[#6B6B6B] text-center mx-6 mt-2">
+            You are replacing {fromProduct.name} with {toProduct.name}.
+          </Text>
 
-        {/* From -> To */}
-        <View className="items-center mt-6">
-          <ProductRow
-            product={fromProduct}
-            subtitle={`${fromProduct.baseQty} kg`}
-            price={`Rs. ${fromPrice.toFixed(2)}`}
-          />
+          {/* From -> To */}
+          <View className="items-center mt-6">
+            <ProductRow
+              product={fromProduct}
+              subtitle={`${fromProduct.baseQty} kg`}
+              price={`Rs. ${fromPrice.toFixed(2)}`}
+            />
 
-          <View className="my-3">
-            <Ionicons name="arrow-down" size={22} color="#000" />
+            <View className="my-3">
+              <Ionicons name="arrow-down" size={22} color="#000" />
+            </View>
+
+            <ProductRow
+              product={toProduct}
+              subtitle={`${quantity} kg`}
+              price={`Rs. ${toPrice.toFixed(2)}`}
+            />
           </View>
 
-          <ProductRow
-            product={toProduct}
-            subtitle={`${quantity} kg`}
-            price={`Rs. ${toPrice.toFixed(2)}`}
-          />
-        </View>
+          {/* Quantity Stepper */}
+          <View className="mx-6 mt-8 flex-row items-center justify-between rounded-full border border-[#E1E7EE] bg-[#FBFBFB] px-2 py-2">
+            <TouchableOpacity
+              onPress={decrease}
+              disabled={quantity <= minQty}
+              activeOpacity={0.7}
+              className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#D9D9D9]"
+                }`}
+            >
+              <Ionicons name="remove" size={20} color="#374151" />
+            </TouchableOpacity>
 
-        {/* Quantity Stepper */}
-        <View className="mx-6 mt-8 flex-row items-center justify-between rounded-full border border-[#E1E7EE] bg-[#FBFBFB] px-2 py-2">
-          <TouchableOpacity
-            onPress={decrease}
-            disabled={quantity <= minQty}
-            activeOpacity={0.7}
-            className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#D9D9D9]"
-              }`}
-          >
-            <Ionicons name="remove" size={20} color="#374151" />
-          </TouchableOpacity>
+            <Text className="text-[16px] font-semibold text-black">
+              {quantity} kg
+            </Text>
 
-          <Text className="text-[16px] font-semibold text-black">
-            {quantity} kg
-          </Text>
+            <TouchableOpacity
+              onPress={increase}
+              disabled={quantity >= maxQty}
+              activeOpacity={0.7}
+              className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
+                }`}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            onPress={increase}
-            disabled={quantity >= maxQty}
-            activeOpacity={0.7}
-            className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
-              }`}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
+          {/* Price breakdown */}
+          <View className="mx-6 mt-8">
+            <SummaryRow
+              label={`${fromProduct.name} Price`}
+              value={`Rs. ${fromPrice.toFixed(2)}`}
+            />
+            <View className="h-[1px] bg-[#ECECEC]" />
+            <SummaryRow
+              label={`${toProduct.name} Price`}
+              value={`- Rs. ${toPrice.toFixed(2)}`}
+            />
+            <View className="h-[1px] bg-[#ECECEC]" />
+            <SummaryRow
+              label="Balance"
+              value={`${isCredit ? "" : "- "}Rs. ${Math.abs(balance).toFixed(
+                2
+              )}`}
+              bold
+              valueColor="#3B82F6"
+            />
+          </View>
 
-        {/* Price breakdown */}
-        <View className="mx-6 mt-8">
-          <SummaryRow
-            label={`${fromProduct.name} Price`}
-            value={`Rs. ${fromPrice.toFixed(2)}`}
-          />
-          <View className="h-[1px] bg-[#ECECEC]" />
-          <SummaryRow
-            label={`${toProduct.name} Price`}
-            value={`- Rs. ${toPrice.toFixed(2)}`}
-          />
-          <View className="h-[1px] bg-[#ECECEC]" />
-          <SummaryRow
-            label="Balance"
-            value={`${isCredit ? "" : "- "}Rs. ${Math.abs(balance).toFixed(
-              2
-            )}`}
-            bold
-            valueColor="#3B82F6"
-          />
-        </View>
-
-        {/* Note */}
-        <View className="mx-6 mt-6 bg-[#F5F5F5] rounded-2xl p-4">
-          <Text className="text-[14px] font-bold text-black mb-1">
-            Please Note :
-          </Text>
-          <Text className="text-[13px] text-[#6B6B6B] leading-5">
-            You have already paid for this order, so the remaining
-            balance of{" "}
-            <Text className="font-bold text-black">
-              Rs. {Math.abs(balance).toFixed(2)}
-            </Text>{" "}
-            will be credited to your account.
-          </Text>
+          {/* Note */}
+          <View className="mx-6 mt-6 bg-[#F5F5F5] rounded-2xl p-4">
+            <Text className="text-[14px] font-bold text-black mb-1">
+              Please Note :
+            </Text>
+            <Text className="text-[13px] text-[#6B6B6B] leading-5">
+              You have already paid for this order, so the remaining
+              balance of{" "}
+              <Text className="font-bold text-black">
+                Rs. {Math.abs(balance).toFixed(2)}
+              </Text>{" "}
+              will be credited to your account.
+            </Text>
+          </View>
         </View>
 
         <TouchableOpacity

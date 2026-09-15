@@ -256,7 +256,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     const currentHour = new Date().getHours();
     // Package review window is from 8:00 AM to 6:00 PM (08:00 - 18:00)
     // Past 6:00 PM (or before 8:00 AM), time ran out for the day
-    return currentHour >= 24 || currentHour < 8;
+    return currentHour >= 24 || currentHour < 0;
   }, []);
   // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
   const nextScheduleDateStr = useMemo(() => {
@@ -790,18 +790,34 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           },
         );
 
+        // Detect payment method for backend branching
+        const pMethod = (paymentMethod || "").trim().toLowerCase();
+        const isCard =
+          pMethod.includes("card") ||
+          pMethod.includes("payhere") ||
+          (isPaid && !pMethod.includes("cash"));
+
+        // Sum savings from packages where the user chose cheaper items
+        const totalSavings = packageSummaries
+          .filter((s) => s.diff < 0)
+          .reduce((sum, s) => sum + Math.abs(s.additionalChanges), 0);
+
         const confirmRes = await orderService.confirmPackageReview({
           orderId: actualOrderId || effectiveOrderId,
           processOrderId: processOrderId || undefined,
           lockNow: false,
           additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
           newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+          paymentMethod: paymentMethod || undefined,
+          newTotal: confirmGrandTotal,
+          creditToAdd: totalSavings > 0 ? totalSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
         });
         console.log(
           "[ReviewPackageScreen] confirmPackageReview response:",
           confirmRes.data,
+          { isCard, totalSavings, confirmGrandTotal },
         );
       } catch (err) {
         console.error("[ReviewPackageScreen] Confirm review API error:", err);
@@ -900,12 +916,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
-  // Package calculation for the final confirm step
   const packageSummaries = useMemo(() => {
     const list: {
       pkg: PackageMeta;
       stepIndex: number;
       originalPrice: number;
+      diff: number;
       additionalChanges: number;
       currentPrice: number;
     }[] = [];
@@ -922,23 +938,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           0,
         );
         const currentSum = prods.reduce((s, p) => s + p.price * p.quantity, 0);
-        let diff = currentSum - templateSum;
+        const diff = currentSum - templateSum;
 
-        const additionalChangesPerPkg = diff > 0 ? diff : 0;
+        // Full signed diff — positive means more expensive, negative means savings
         const originalPrice =
           (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty;
-        const additionalChanges = additionalChangesPerPkg * pkg.qty;
+        const additionalChanges = diff * pkg.qty; // signed
         const currentPrice =
-          (pkg.unitPrice +
-            pkg.serviceFee +
-            pkg.packingFee +
-            additionalChangesPerPkg) *
-          pkg.qty;
+          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee + diff) * pkg.qty;
 
         list.push({
           pkg,
           stepIndex: idx,
           originalPrice,
+          diff,
           additionalChanges,
           currentPrice,
         });
@@ -1841,17 +1854,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     </Text>
                     <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                       Additional Changes :{" "}
-                      <Text
-                        className={`font-bold ${
-                          item.additionalChanges > 0
-                            ? "text-[#F04438]"
-                            : "text-black"
-                        }`}
-                      >
-                        {item.additionalChanges > 0
-                          ? `+ Rs. ${formatPrice(item.additionalChanges)}`
-                          : "Rs. 0.00"}
-                      </Text>
+                      {item.diff === 0 ? (
+                        <Text className="font-bold text-black">Rs. 0.00</Text>
+                      ) : (
+                        <Text
+                          className="font-bold"
+                          style={{ color: item.diff > 0 ? "#FF2D55" : "#0088FF" }}
+                        >
+                          {item.diff > 0 ? "+" : ""}Rs.{" "}
+                          {formatPrice(Math.abs(item.additionalChanges))}
+                          {item.diff < 0 ? " (Saved)" : ""}
+                        </Text>
+                      )}
                     </Text>
                   </View>
                 </View>

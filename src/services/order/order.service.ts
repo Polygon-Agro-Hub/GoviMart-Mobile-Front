@@ -98,6 +98,9 @@ class OrderService {
         lockNow?: boolean;
         additionalAmount?: number;
         newScheduleDate?: string;
+        paymentMethod?: string;
+        newTotal?: number;
+        creditToAdd?: number;
         replacements?: Array<{
             orderPackageId: number;
             replceId?: number;
