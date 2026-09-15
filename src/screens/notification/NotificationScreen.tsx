@@ -182,6 +182,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         if (titleLower.includes("package finalization review") || titleLower.includes("review package") || titleLower.includes("package review")) {
             navigation.navigate("ReviewPackage", {
                 orderId: item.processOrderId || item.orderId,
+                invoiceNo: item.invNo,
             });
         } else if (item.processOrderId || item.orderId) {
             navigation.navigate("OrderDetails", {

@@ -126,7 +126,7 @@ export type RootStackParamList = {
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
-  ReviewPackage: { orderId?: string | number; replacedProduct?: any; targetStepIndex?: number; newScheduleDate?: string; } | undefined;
+  ReviewPackage: { orderId?: string | number; invoiceNo?: string; replacedProduct?: any; targetStepIndex?: number; newScheduleDate?: string; } | undefined;
   SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;

@@ -14,6 +14,7 @@ export interface PackageMeta {
 
 export interface AlacartSelectedProduct {
   id: number | string;
+  productId?: number | string;
   displayName: string;
   image?: any;
   price: number;
@@ -28,6 +29,7 @@ export interface AlacartSelectedProduct {
 export interface PackageReviewState {
   orderId: number | string | null;
   processOrderId: number | string | null;
+  actualOrderId: number | string | null;
   invoiceNo: string;
   scheduleDateStr: string;
   initialPaidAmount: number;
@@ -47,11 +49,13 @@ export interface PackageReviewState {
   targetLimit: number;
   isLimitReached: boolean;
   unreadReminderDays: number;
+  deliveryCharge?: number;
 }
 
 const initialState: PackageReviewState = {
   orderId: null,
   processOrderId: null,
+  actualOrderId: null,
   invoiceNo: "INV-2660000",
   scheduleDateStr: "14th August",
   initialPaidAmount: 0,
@@ -60,6 +64,7 @@ const initialState: PackageReviewState = {
   paymentMethod: "",
   isPaid: false,
   processOrderAmount: 0,
+  deliveryCharge: 0,
   packagesMeta: [],
   packageProducts: {},
   productTemplatesState: {},
@@ -101,6 +106,7 @@ export const packageReviewSlice = createSlice({
       action: PayloadAction<{
         orderId?: number | string;
         processOrderId?: number | string;
+        actualOrderId?: number | string;
         invoiceNo?: string;
         scheduleDateStr?: string;
         initialPaidAmount?: number;
@@ -119,11 +125,13 @@ export const packageReviewSlice = createSlice({
         targetLimit?: number;
         isLimitReached?: boolean;
         unreadReminderDays?: number;
+        deliveryCharge?: number;
       }>
     ) => {
       const payload = action.payload;
       state.orderId = payload.orderId ?? state.orderId;
       state.processOrderId = payload.processOrderId ?? state.processOrderId;
+      state.actualOrderId = payload.actualOrderId ?? state.actualOrderId;
       if (payload.invoiceNo) state.invoiceNo = payload.invoiceNo;
       if (payload.scheduleDateStr) state.scheduleDateStr = payload.scheduleDateStr;
       if (typeof payload.initialPaidAmount === "number") {
@@ -143,6 +151,9 @@ export const packageReviewSlice = createSlice({
       }
       if (typeof payload.processOrderAmount === "number") {
         state.processOrderAmount = payload.processOrderAmount;
+      }
+      if (typeof payload.deliveryCharge === "number") {
+        state.deliveryCharge = payload.deliveryCharge;
       }
       state.packagesMeta = payload.packagesMeta;
       state.productTemplatesState = payload.productTemplatesState;
@@ -186,12 +197,7 @@ export const packageReviewSlice = createSlice({
       });
       state.packageProducts = mergedProducts;
 
-      if (payload.alacartSelection && Object.keys(payload.alacartSelection).length > 0) {
-        state.alacartSelection = {
-          ...payload.alacartSelection,
-          ...state.alacartSelection,
-        };
-      }
+      state.alacartSelection = payload.alacartSelection ? { ...payload.alacartSelection } : {};
     },
     replacePackageProduct: (
       state,
@@ -322,12 +328,17 @@ export const packageReviewSlice = createSlice({
       const initialUnit = (product.unitType?.toLowerCase() === "kg" ? "kg" : "g") as "kg" | "g";
       const initialAmount = product.startValue ? parseFloat(product.startValue) : initialUnit === "kg" ? 1 : 500;
       const weightDisplay = `${initialAmount} ${initialUnit}`;
+      const newKey = `new-${product.id}`;
 
-      if (state.alacartSelection[product.id]) {
+      // Check if this product is already in alacartSelection as newly added
+      if (state.alacartSelection[newKey]) {
+        delete state.alacartSelection[newKey];
+      } else if (state.alacartSelection[product.id]?.isAddedNow) {
         delete state.alacartSelection[product.id];
       } else {
-        state.alacartSelection[product.id] = {
-          id: product.id,
+        state.alacartSelection[newKey] = {
+          id: newKey,
+          productId: product.id,
           displayName: product.displayName,
           image: product.image,
           price: basePrice,

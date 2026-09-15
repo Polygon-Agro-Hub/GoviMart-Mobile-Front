@@ -63,6 +63,7 @@ type PackageMeta = {
 
 type AlacartSelectedProduct = {
     id: number | string;
+    productId?: number | string;
     displayName: string;
     image?: any;
     price: number;
@@ -270,6 +271,8 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
 
 const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     const effectiveOrderId = route.params?.orderId || 3906;
+    // invoiceNo from route params acts as an initial display value before the API fetch completes
+    const routeInvoiceNo = route.params?.invoiceNo;
     const dispatch = useDispatch();
 
     const {
@@ -278,7 +281,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         productTemplatesState,
         orderPackageDbIds,
         alacartSelection,
-        invoiceNo,
+        invoiceNo: reduxInvoiceNo,
         scheduleDateStr,
         initialPaidAmount,
         moneyPaid,
@@ -287,13 +290,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         isPaid,
         processOrderAmount,
         processOrderId,
+        actualOrderId,
         isLocked,
         loadingReview,
         availableSlots,
         targetLimit,
         isLimitReached,
         unreadReminderDays,
+        deliveryCharge: reduxDeliveryCharge,
     } = useSelector((state: RootState) => state.packageReview);
+
+    // Prefer the API-fetched invoice number; fall back to the one passed via route params
+    const invoiceNo = reduxInvoiceNo || routeInvoiceNo || "";
 
     const [mode, setMode] = useState<ScreenMode>("overview");
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -310,7 +318,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         const currentHour = new Date().getHours();
         // Package review window is from 8:00 AM to 6:00 PM (08:00 - 18:00)
         // Past 6:00 PM (or before 8:00 AM), time ran out for the day
-        return currentHour >= 18 || currentHour < 8;
+        return currentHour >= 20 || currentHour < 8;
     }, []);
     // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
     const nextScheduleDateStr = useMemo(() => {
@@ -384,6 +392,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 let resolvedPaymentMethod = "";
                 let resolvedIsPaid = false;
                 let resolvedProcessOrderAmount = 0;
+                let resolvedDeliveryCharge = 0;
                 let resolvedDateStr = "14th August";
 
                 if (orderInfo) {
@@ -392,6 +401,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     if (orderInfo.amount) {
                         resolvedPaidAmount = parseFloat(orderInfo.amount) || 0;
                         resolvedProcessOrderAmount = parseFloat(orderInfo.amount) || 0;
+                    }
+                    if (orderInfo.deliveryCharge) {
+                        resolvedDeliveryCharge = parseFloat(orderInfo.deliveryCharge) || 0;
                     }
                     if (orderInfo.moneyPaid) {
                         resolvedMoneyPaid = parseFloat(orderInfo.moneyPaid) || 0;
@@ -419,8 +431,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         const price = parseFloat(item.price || item.normalPrice || 0);
                         const unit = (item.unit?.toLowerCase() === "g" ? "g" : "kg") as "kg" | "g";
                         const amount = parseFloat(item.qty || 1);
-                        loadedAlacart[prodId] = {
-                            id: prodId,
+                        const itemKey = `prev-${item.id || prodId}`;
+                        loadedAlacart[itemKey] = {
+                            id: itemKey,
+                            productId: prodId,
                             displayName: item.productName || item.cropNameEnglish || "Item",
                             image: item.productImage,
                             price: price,
@@ -469,7 +483,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             price: parseFloat(i.baseUnitPrice || i.price || 0),
                             quantity: parseFloat(i.qty || 1),
                             minQuantity: parseFloat(i.minQuantity || i.qty || 1),
-                            unit: (i.unitType?.toLowerCase() === "g" ? "g" : "kg") as "kg" | "g",
+                            // orderpackageitems.qty is always stored in kg — never use 'g' here
+                            unit: "kg" as "kg" | "g",
                             step: parseFloat(i.step || 0.5),
                             productType: i.productType,
                             productTypeId: i.productType || i.productTypeId,
@@ -485,8 +500,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 image: i.originalProduct.image,
                                 price: parseFloat(i.originalProduct.price || 0),
                                 quantity: parseFloat(i.originalProduct.quantity || 1),
-                                minQuantity: parseFloat(i.originalProduct.minQuantity || i.originalProduct.quantity || 1),
-                                unit: i.originalProduct.unit || "kg",
+                                unit: "kg" as "kg" | "g",
                                 step: 0.5,
                                 productType: i.originalProduct.productType,
                                 productTypeId: i.originalProduct.productType,
@@ -505,7 +519,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             price: parseFloat(b.baseUnitPrice || b.price || 0),
                             quantity: parseFloat(b.qty || 1),
                             minQuantity: parseFloat(b.minQuantity || b.qty || 1),
-                            unit: (b.unitType?.toLowerCase() === "g" ? "g" : "kg") as "kg" | "g",
+                            unit: "kg" as "kg" | "g",
                             step: 0.5,
                             productType: b.productType,
                             productTypeId: b.productType || b.productTypeId,
@@ -520,6 +534,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 dispatch(initReviewData({
                     orderId: effectiveOrderId,
                     processOrderId: resolvedProcessOrderId,
+                    actualOrderId: orderInfo?.actualOrderId,
                     invoiceNo: resolvedInvNo,
                     scheduleDateStr: resolvedDateStr,
                     initialPaidAmount: resolvedPaidAmount,
@@ -528,6 +543,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     paymentMethod: resolvedPaymentMethod,
                     isPaid: resolvedIsPaid,
                     processOrderAmount: resolvedProcessOrderAmount,
+                    deliveryCharge: resolvedDeliveryCharge,
                     packagesMeta: newMeta,
                     packageProducts: newProducts,
                     productTemplatesState: newTemplates,
@@ -610,7 +626,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     };
 
     // Build the step list: one "package" step per unique package type,
-    // then one "alacart" step, then one "confirm" step.
+    // then one "alacart" step (always displayed so user can add items),
+    // then one "confirm" step.
     const steps: FlowStep[] = useMemo(() => {
         const packageSteps: FlowStep[] = packagesMeta.map((pkg) => ({
             type: "package" as const,
@@ -688,7 +705,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     };
 
     const overviewTotal = packagesMeta.reduce(
-        (sum, p) => sum + p.qty * p.unitPrice,
+        (sum, p) => sum + p.qty * (p.unitPrice + p.serviceFee + p.packingFee),
         0
     );
 
@@ -720,12 +737,29 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
                     const orderPkgId = orderPackageDbIds[pkgKey];
                     if (orderPkgId) {
+                        const templateProds = productTemplatesState[pkgKey] || [];
                         prods.forEach((p) => {
-                            if (p.isReplaced) {
+                            const templateProd = templateProds.find(
+                                (t) =>
+                                    (t.productId && p.productId && t.productId === p.productId) ||
+                                    String(t.itemId || t.id) === String(p.itemId || p.id)
+                            );
+                            const baselineQty =
+                                templateProd?.quantity ??
+                                p.minQuantity ??
+                                p.originalProduct?.quantity;
+                            const isQtyChanged =
+                                baselineQty !== undefined
+                                    ? Number(p.quantity) !== Number(baselineQty)
+                                    : false;
+
+                            if (p.isReplaced || isQtyChanged) {
                                 const replceId =
                                     p.originalProduct?.itemId ||
                                     p.itemId ||
-                                    (p.originalProduct?.id ? parseInt(p.originalProduct.id) : undefined);
+                                    (p.originalProduct?.id ? parseInt(p.originalProduct.id) : undefined) ||
+                                    p.productId ||
+                                    (parseInt(p.id) || undefined);
                                 const newProdId = p.productId || parseInt(p.id) || 0;
                                 replacements.push({
                                     orderPackageId: orderPkgId,
@@ -733,7 +767,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                     newProductId: newProdId,
                                     productType: p.productTypeId || p.productType || p.category,
                                     newQty: p.quantity || 1,
-                                    newPrice: (p.price || 0) * (p.quantity || 1),
+                                    newPrice: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
                                 });
                             }
                         });
@@ -743,7 +777,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 const additionalItemsPayload = Object.values(alacartSelection)
                     .filter((item) => item.isAddedNow)
                     .map((item) => ({
-                        productId: typeof item.id === "number" ? item.id : parseInt(item.id) || 0,
+                        productId:
+                            typeof item.productId === "number"
+                                ? item.productId
+                                : parseInt(String(item.productId || item.id).replace(/[^0-9]/g, "")) || 0,
                         qty: item.amount,
                         unit: item.unit,
                         normalPrice: item.basePrice,
@@ -761,7 +798,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 });
 
                 const confirmRes = await orderService.confirmPackageReview({
-                    orderId: effectiveOrderId,
+                    orderId: actualOrderId || effectiveOrderId,
                     processOrderId: processOrderId || undefined,
                     lockNow: false,
                     additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
@@ -802,6 +839,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             image: p.image,
             qty: p.qty,
             unitPrice: p.unitPrice,
+            serviceFee: p.serviceFee,
+            packingFee: p.packingFee,
         }));
         const alacarts = Object.values(alacartSelection).map((item) => ({
             id: String(item.id),
@@ -818,7 +857,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
         const totalPaidCard = isCardOrOnline ? (moneyPaid > 0 ? moneyPaid : initialPaidAmount) : 0;
         const totalPaidCredit = creditPaid || 0;
-        const totalGrandFromPackages = pkgs.reduce((s, p) => s + p.qty * p.unitPrice, 0) + alacarts.reduce((s, i) => s + i.price, 0);
+        const totalGrandFromPackages = pkgs.reduce((s, p) => s + p.qty * (p.unitPrice + (p.serviceFee || 0) + (p.packingFee || 0)), 0) + alacarts.reduce((s, i) => s + i.price, 0);
         const processOrderTotal = processOrderAmount > 0 ? processOrderAmount : (initialPaidAmount || totalGrandFromPackages);
         const totalCashDue = isCashMethod && !isPaid ? Math.max(0, processOrderTotal - totalPaidCredit) : 0;
 
@@ -874,9 +913,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 let diff = currentSum - templateSum;
 
                 const additionalChangesPerPkg = diff > 0 ? diff : 0;
-                const originalPrice = pkg.unitPrice * pkg.qty;
+                const originalPrice = (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty;
                 const additionalChanges = additionalChangesPerPkg * pkg.qty;
-                const currentPrice = (pkg.unitPrice + additionalChangesPerPkg) * pkg.qty;
+                const currentPrice = (pkg.unitPrice + pkg.serviceFee + pkg.packingFee + additionalChangesPerPkg) * pkg.qty;
 
                 list.push({
                     pkg,
@@ -905,6 +944,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         (sum, item) => sum + item.price * item.quantity,
         0
     );
+    const newlyAddedAlacartTotal = Object.values(alacartSelection)
+        .filter((item) => item.isAddedNow)
+        .reduce((sum, item) => sum + item.price * item.quantity, 0);
     const grandTotal = packagesTotal + alacartTotal;
     const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
     const effectivePaidAmount = initialPaidAmount > 0 ? initialPaidAmount : overviewTotal;
@@ -1128,7 +1170,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 >
                     <View className="items-center mt-2">
                         <Text className="text-[17px] font-bold text-black">
-                            Order : #{effectiveOrderId}
+                            Order : #{invoiceNo || effectiveOrderId}
                         </Text>
                         <Text className="text-[14px] text-[#494A65] mt-1">
                             Schedule to : {scheduleDateStr}
@@ -1206,8 +1248,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                             <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                                                 Price :{" "}
                                                 <Text className="font-bold text-black">
-                                                    Rs.{pkg.unitPrice.toFixed(2)} x {pkg.qty} = Rs.
-                                                    {(pkg.unitPrice * pkg.qty).toFixed(2)}
+                                                    Rs.{(pkg.unitPrice + pkg.serviceFee + pkg.packingFee).toFixed(2)} x {pkg.qty} = Rs.
+                                                    {((pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty).toFixed(2)}
                                                 </Text>
                                             </Text>
                                         </View>
@@ -1396,7 +1438,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                             <AlacartProductCard
                                                 key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
                                                 product={product}
-                                                selected={product.id in alacartSelection}
+                                                selected={Object.values(alacartSelection).some(
+                                                    (item) =>
+                                                        String(item.productId || item.id) === String(product.id) &&
+                                                        Boolean(item.isAddedNow)
+                                                )}
                                                 onToggle={() => toggleAlacartProduct(product)}
                                             />
                                         ))}
@@ -1494,161 +1540,164 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         ))}
                     </View>
 
-                    {/* Divider */}
-                    <View className="h-[1px] bg-[#E5E5EA] my-3" />
+                    {/* Ala Carte Items Section (only if order has ala carte items or user added them) */}
+                    {Object.keys(alacartSelection).length > 0 && (
+                        <>
+                            <View className="h-[1px] bg-[#E5E5EA] my-3" />
 
-                    {/* Ala Carte Items Section */}
-                    <View className="mt-1">
-                        <Text className="text-[16px] font-bold text-black mx-5 mb-3">
-                            Ala Carte Items ({String(Object.keys(alacartSelection).length).padStart(2, "0")})
-                        </Text>
+                            <View className="mt-1">
+                                <Text className="text-[16px] font-bold text-black mx-5 mb-3">
+                                    Ala Carte Items ({String(Object.keys(alacartSelection).length).padStart(2, "0")})
+                                </Text>
 
-                        {Object.values(alacartSelection).map((item, aIdx) => (
-                            <View
-                                key={`alacart-item-${item.id}-${aIdx}`}
-                                className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
-                            >
-                                {/* Top row: Image, Name & Price, Trash, Added Now */}
-                                <View className="flex-row items-center justify-between">
-                                    <View className="flex-row items-center flex-1">
-                                        <View className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]">
-                                            {item.image ? (
-                                                typeof item.image === "string" ? (
-                                                    <Image
-                                                        source={{ uri: item.image }}
-                                                        className="w-12 h-12"
-                                                        resizeMode="contain"
+                                {Object.values(alacartSelection).map((item, aIdx) => (
+                                    <View
+                                        key={`alacart-item-${item.id}-${aIdx}`}
+                                        className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
+                                    >
+                                        {/* Top row: Image, Name & Price, Trash, Added Now */}
+                                        <View className="flex-row items-center justify-between">
+                                            <View className="flex-row items-center flex-1">
+                                                <View className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]">
+                                                    {item.image ? (
+                                                        typeof item.image === "string" ? (
+                                                            <Image
+                                                                source={{ uri: item.image }}
+                                                                className="w-12 h-12"
+                                                                resizeMode="contain"
+                                                            />
+                                                        ) : (
+                                                            <Image
+                                                                source={item.image}
+                                                                className="w-12 h-12"
+                                                                resizeMode="contain"
+                                                            />
+                                                        )
+                                                    ) : (
+                                                        <Ionicons
+                                                            name="leaf-outline"
+                                                            size={24}
+                                                            color="#92D01B"
+                                                        />
+                                                    )}
+                                                </View>
+                                                <View className="flex-1 pr-2">
+                                                    <Text
+                                                        className="text-[16px] font-bold text-black"
+                                                        numberOfLines={1}
+                                                    >
+                                                        {item.displayName}
+                                                    </Text>
+                                                    <Text
+                                                        className={`text-[15px] font-bold mt-0.5 ${item.isAddedNow
+                                                            ? "text-[#F04438]"
+                                                            : "text-black"
+                                                            }`}
+                                                    >
+                                                        Rs. {formatPrice(item.price)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <View className="items-end justify-between h-14">
+                                                <TouchableOpacity
+                                                    onPress={() => removeAlacartItem(item.id)}
+                                                    activeOpacity={0.7}
+                                                    className="w-8 h-8 rounded-full bg-[#F5F5F5] items-center justify-center"
+                                                >
+                                                    <Ionicons
+                                                        name="trash-outline"
+                                                        size={16}
+                                                        color="#000"
                                                     />
-                                                ) : (
-                                                    <Image
-                                                        source={item.image}
-                                                        className="w-12 h-12"
-                                                        resizeMode="contain"
+                                                </TouchableOpacity>
+
+                                                {item.isAddedNow && (
+                                                    <Text className="text-[12px] font-medium text-[#F04438]">
+                                                        Added Now
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        </View>
+
+                                        {/* Dashed line */}
+                                        <View className="border-b border-dashed border-[#E5E5EA] my-3.5" />
+
+                                        {/* Bottom row: Unit selector & Stepper */}
+                                        <View className="flex-row items-center justify-between">
+                                            <View className="flex-row items-center">
+                                                <Text className="text-[13px] text-[#6B6B6B] mr-2">
+                                                    Unit :
+                                                </Text>
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        toggleAlacartItemUnit(item.id, "kg")
+                                                    }
+                                                    activeOpacity={0.8}
+                                                    className={`px-3.5 py-1 rounded-full mr-1.5 ${item.unit === "kg"
+                                                        ? "bg-[#FF9114]"
+                                                        : "bg-[#FCE1C5]"
+                                                        }`}
+                                                >
+                                                    <Text className="text-white font-bold text-[12px]">
+                                                        kg
+                                                    </Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        toggleAlacartItemUnit(item.id, "g")
+                                                    }
+                                                    activeOpacity={0.8}
+                                                    className={`px-3.5 py-1 rounded-full ${item.unit === "g"
+                                                        ? "bg-[#FF9114]"
+                                                        : "bg-[#FCE1C5]"
+                                                        }`}
+                                                >
+                                                    <Text className="text-white font-bold text-[12px]">
+                                                        g
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            <View className="flex-row items-center">
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        updateAlacartItemQuantity(item.id, -1)
+                                                    }
+                                                    activeOpacity={0.7}
+                                                    className="w-6 h-6 rounded-full bg-[#D1D1D6] items-center justify-center"
+                                                >
+                                                    <Ionicons
+                                                        name="remove"
+                                                        size={14}
+                                                        color="#FFF"
                                                     />
-                                                )
-                                            ) : (
-                                                <Ionicons
-                                                    name="leaf-outline"
-                                                    size={24}
-                                                    color="#92D01B"
-                                                />
-                                            )}
-                                        </View>
-                                        <View className="flex-1 pr-2">
-                                            <Text
-                                                className="text-[16px] font-bold text-black"
-                                                numberOfLines={1}
-                                            >
-                                                {item.displayName}
-                                            </Text>
-                                            <Text
-                                                className={`text-[15px] font-bold mt-0.5 ${item.isAddedNow
-                                                    ? "text-[#F04438]"
-                                                    : "text-black"
-                                                    }`}
-                                            >
-                                                Rs. {formatPrice(item.price)}
-                                            </Text>
+                                                </TouchableOpacity>
+
+                                                <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
+                                                    {item.weightDisplay}
+                                                </Text>
+
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        updateAlacartItemQuantity(item.id, 1)
+                                                    }
+                                                    activeOpacity={0.7}
+                                                    className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                                >
+                                                    <Ionicons
+                                                        name="add"
+                                                        size={14}
+                                                        color="#FFF"
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
                                         </View>
                                     </View>
-
-                                    <View className="items-end justify-between h-14">
-                                        <TouchableOpacity
-                                            onPress={() => removeAlacartItem(item.id)}
-                                            activeOpacity={0.7}
-                                            className="w-8 h-8 rounded-full bg-[#F5F5F5] items-center justify-center"
-                                        >
-                                            <Ionicons
-                                                name="trash-outline"
-                                                size={16}
-                                                color="#000"
-                                            />
-                                        </TouchableOpacity>
-
-                                        {item.isAddedNow && (
-                                            <Text className="text-[12px] font-medium text-[#F04438]">
-                                                Added Now
-                                            </Text>
-                                        )}
-                                    </View>
-                                </View>
-
-                                {/* Dashed line */}
-                                <View className="border-b border-dashed border-[#E5E5EA] my-3.5" />
-
-                                {/* Bottom row: Unit selector & Stepper */}
-                                <View className="flex-row items-center justify-between">
-                                    <View className="flex-row items-center">
-                                        <Text className="text-[13px] text-[#6B6B6B] mr-2">
-                                            Unit :
-                                        </Text>
-                                        <TouchableOpacity
-                                            onPress={() =>
-                                                toggleAlacartItemUnit(item.id, "kg")
-                                            }
-                                            activeOpacity={0.8}
-                                            className={`px-3.5 py-1 rounded-full mr-1.5 ${item.unit === "kg"
-                                                ? "bg-[#FF9114]"
-                                                : "bg-[#FCE1C5]"
-                                                }`}
-                                        >
-                                            <Text className="text-white font-bold text-[12px]">
-                                                kg
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            onPress={() =>
-                                                toggleAlacartItemUnit(item.id, "g")
-                                            }
-                                            activeOpacity={0.8}
-                                            className={`px-3.5 py-1 rounded-full ${item.unit === "g"
-                                                ? "bg-[#FF9114]"
-                                                : "bg-[#FCE1C5]"
-                                                }`}
-                                        >
-                                            <Text className="text-white font-bold text-[12px]">
-                                                g
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    <View className="flex-row items-center">
-                                        <TouchableOpacity
-                                            onPress={() =>
-                                                updateAlacartItemQuantity(item.id, -1)
-                                            }
-                                            activeOpacity={0.7}
-                                            className="w-6 h-6 rounded-full bg-[#D1D1D6] items-center justify-center"
-                                        >
-                                            <Ionicons
-                                                name="remove"
-                                                size={14}
-                                                color="#FFF"
-                                            />
-                                        </TouchableOpacity>
-
-                                        <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
-                                            {item.weightDisplay}
-                                        </Text>
-
-                                        <TouchableOpacity
-                                            onPress={() =>
-                                                updateAlacartItemQuantity(item.id, 1)
-                                            }
-                                            activeOpacity={0.7}
-                                            className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                                        >
-                                            <Ionicons
-                                                name="add"
-                                                size={14}
-                                                color="#FFF"
-                                            />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
+                                ))}
                             </View>
-                        ))}
-                    </View>
+                        </>
+                    )}
 
                     {/* Please Note Box */}
                     <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
@@ -2015,7 +2064,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             For Ala Carte Items
                         </Text>
                         <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-                            Rs. {formatPrice(alacartTotal)}
+                            Rs. {formatPrice(newlyAddedAlacartTotal)}
                         </Text>
                     </View>
 
@@ -2074,29 +2123,32 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         </Text>
                     </View>
 
-                    <View
-                        style={{
-                            height: 1,
-                            backgroundColor: "#E1E7EE",
-                            marginVertical: 14,
-                        }}
-                    />
-
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            paddingVertical: 2,
-                        }}
-                    >
-                        <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
-                            Ala Carte Items
-                        </Text>
-                        <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
-                            Rs. {formatPrice(alacartTotal)}
-                        </Text>
-                    </View>
+                    {Object.keys(alacartSelection).length > 0 && (
+                        <>
+                            <View
+                                style={{
+                                    height: 1,
+                                    backgroundColor: "#E1E7EE",
+                                    marginVertical: 14,
+                                }}
+                            />
+                            <View
+                                style={{
+                                    flexDirection: "row",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    paddingVertical: 2,
+                                }}
+                            >
+                                <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
+                                    Ala Carte Items
+                                </Text>
+                                <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
+                                    Rs. {formatPrice(alacartTotal)}
+                                </Text>
+                            </View>
+                        </>
+                    )}
 
                     <View
                         style={{
