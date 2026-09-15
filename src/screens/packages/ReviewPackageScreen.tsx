@@ -795,12 +795,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         const isCard =
           pMethod.includes("card") ||
           pMethod.includes("payhere") ||
-          (isPaid && !pMethod.includes("cash"));
+          pMethod.includes("online") ||
+          (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
 
-        // Sum savings from packages where the user chose cheaper items
-        const totalSavings = packageSummaries
-          .filter((s) => s.diff < 0)
-          .reduce((sum, s) => sum + Math.abs(s.additionalChanges), 0);
+        // Accurate net refund: if order was paid and new total is less than paid amount
+        const effectivePaid = initialPaidAmount > 0 ? initialPaidAmount : overviewTotal;
+        const netRefundSavings = (isCard || isPaid) && effectivePaid > confirmGrandTotal
+          ? Number((effectivePaid - confirmGrandTotal).toFixed(2))
+          : 0;
 
         const confirmRes = await orderService.confirmPackageReview({
           orderId: actualOrderId || effectiveOrderId,
@@ -810,14 +812,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
           paymentMethod: paymentMethod || undefined,
           newTotal: confirmGrandTotal,
-          creditToAdd: totalSavings > 0 ? totalSavings : 0,
+          creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
         });
         console.log(
           "[ReviewPackageScreen] confirmPackageReview response:",
           confirmRes.data,
-          { isCard, totalSavings, confirmGrandTotal },
+          { isCard, netRefundSavings, confirmGrandTotal },
         );
       } catch (err) {
         console.error("[ReviewPackageScreen] Confirm review API error:", err);
@@ -996,19 +998,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         navigation={navigation}
         onBackPress={handleBackPress}
       />
-
-      {/* Fixed Top Section in Flow: Hurry Banner & Progress Dots */}
-      {mode === "flow" && (
-        <View className="bg-white pt-1 pb-3">
-          <HurryBanner
-            ordersLeft={availableSlots > 0 ? availableSlots : 30}
-            date={scheduleDateStr}
-            showCancelLink
-            onCancelOrder={onCancelOrder}
-          />
-          <ProgressDots total={steps.length} current={currentStepIndex} />
-        </View>
-      )}
 
       {/* Overview Full-Page Loading State */}
       {mode === "overview" && loadingReview ? (
@@ -1371,6 +1360,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               }}
             >
               <View>
+                <View className="bg-white pt-1 pb-3">
+                  <HurryBanner
+                    ordersLeft={availableSlots > 0 ? availableSlots : 30}
+                    date={scheduleDateStr}
+                    showCancelLink
+                    onCancelOrder={onCancelOrder}
+                  />
+                  <ProgressDots total={steps.length} current={currentStepIndex} />
+                </View>
+
                 <Text className="text-[19px] font-bold text-black mx-5 mt-4">
                   Package : {pkg.name}
                   {pkg.qty > 1 ? ` (x${pkg.qty})` : ""}
@@ -1684,6 +1683,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
         >
+          <View className="bg-white pt-1 pb-3">
+            <HurryBanner
+              ordersLeft={availableSlots > 0 ? availableSlots : 30}
+              date={scheduleDateStr}
+              showCancelLink
+              onCancelOrder={onCancelOrder}
+            />
+            <ProgressDots total={steps.length} current={currentStepIndex} />
+          </View>
+
           <Text className="text-[20px] font-bold text-black text-center mt-4">
             Ala Carte Items
           </Text>
@@ -1814,6 +1823,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 24 }}
         >
+          <View className="bg-white pt-1 pb-3">
+            <HurryBanner
+              ordersLeft={availableSlots > 0 ? availableSlots : 30}
+              date={scheduleDateStr}
+              showCancelLink
+              onCancelOrder={onCancelOrder}
+            />
+            <ProgressDots total={steps.length} current={currentStepIndex} />
+          </View>
+
           {/* Package Cards */}
           <View className="mt-3">
             {packageSummaries.map((item, sIdx) => (
@@ -1861,9 +1880,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                           className="font-bold"
                           style={{ color: item.diff > 0 ? "#FF2D55" : "#0088FF" }}
                         >
-                          {item.diff > 0 ? "+" : ""}Rs.{" "}
+                          {item.diff > 0 ? "+ " : "- "}Rs.{" "}
                           {formatPrice(Math.abs(item.additionalChanges))}
-                          {item.diff < 0 ? " (Saved)" : ""}
                         </Text>
                       )}
                     </Text>
