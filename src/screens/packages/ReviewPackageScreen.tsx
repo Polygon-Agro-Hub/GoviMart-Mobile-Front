@@ -811,7 +811,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
           newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
           paymentMethod: paymentMethod || undefined,
-          newTotal: confirmGrandTotal,
+          newTotal: finalOrderTotalWithDelivery,
           creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
@@ -819,7 +819,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         console.log(
           "[ReviewPackageScreen] confirmPackageReview response:",
           confirmRes.data,
-          { isCard, netRefundSavings, confirmGrandTotal },
+          { isCard, netRefundSavings, finalOrderTotalWithDelivery },
         );
       } catch (err) {
         console.error("[ReviewPackageScreen] Confirm review API error:", err);
@@ -829,7 +829,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       navigation.navigate("OrderConfirmed", {
         orderId: String(effectiveOrderId),
         invoiceNumber: invoiceNo,
-        total: confirmGrandTotal,
+        total: finalOrderTotalWithDelivery,
       });
     }
   };
@@ -981,8 +981,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     .filter((item) => item.isAddedNow)
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const grandTotal = packagesTotal + alacartTotal;
+  const deliveryCharge = Number(reduxDeliveryCharge || 0);
+  const grandTotal = packagesTotal + alacartTotal + deliveryCharge;
   const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
+  const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
   const additionalPayAmount = Math.max(
     0,
     confirmGrandTotal - packagesTotal,
@@ -2253,6 +2255,37 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             </>
           )}
 
+          {deliveryCharge > 0 && (
+            <>
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: "#E1E7EE",
+                  marginVertical: 14,
+                }}
+              />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}
+                >
+                  Delivery Charge
+                </Text>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}
+                >
+                  Rs. {formatPrice(deliveryCharge)}
+                </Text>
+              </View>
+            </>
+          )}
+
           <View
             style={{
               height: 1,
@@ -2274,7 +2307,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               Total
             </Text>
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(confirmGrandTotal)}
+              Rs. {formatPrice(finalOrderTotalWithDelivery)}
             </Text>
           </View>
 
