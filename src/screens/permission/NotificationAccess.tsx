@@ -13,7 +13,6 @@ import {
   LayoutChangeEvent,
   PermissionsAndroid,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -167,7 +166,7 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: "#121212" }}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView
         className="flex-1 px-5"
@@ -333,7 +332,7 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
