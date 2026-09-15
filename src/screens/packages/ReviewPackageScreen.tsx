@@ -798,10 +798,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           pMethod.includes("online") ||
           (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
 
-        // Accurate net refund: if order was paid and new total is less than paid amount
-        const effectivePaid = initialPaidAmount > 0 ? initialPaidAmount : overviewTotal;
-        const netRefundSavings = (isCard || isPaid) && effectivePaid > confirmGrandTotal
-          ? Number((effectivePaid - confirmGrandTotal).toFixed(2))
+        // Net package diff (pure package + alacart items, without delivery fee)
+        const netDiff = confirmGrandTotal - packagesTotal;
+        const netRefundSavings = (isCard || isPaid) && netDiff < 0
+          ? Number(Math.abs(netDiff).toFixed(2))
           : 0;
 
         const confirmRes = await orderService.confirmPackageReview({
@@ -980,13 +980,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const newlyAddedAlacartTotal = Object.values(alacartSelection)
     .filter((item) => item.isAddedNow)
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
+
   const grandTotal = packagesTotal + alacartTotal;
   const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
-  const effectivePaidAmount =
-    initialPaidAmount > 0 ? initialPaidAmount : overviewTotal;
   const additionalPayAmount = Math.max(
     0,
-    confirmGrandTotal - effectivePaidAmount,
+    confirmGrandTotal - packagesTotal,
   );
 
   return (
