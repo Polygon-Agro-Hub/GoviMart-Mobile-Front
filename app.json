@@ -104,11 +104,18 @@
         }
       ],
       "expo-location",
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/images/public/app-icon-ios.png",
+          "color": "#FFFFFF"
+        }
+      ],
       "./plugins/withCustomAndroidPermissions"
     ],
     "extra": {
       "eas": {
-        "projectId": "ed205ef8-ce38-4be4-a1e0-08ba15085639"
+        "projectId": ""
       }
     }
   }

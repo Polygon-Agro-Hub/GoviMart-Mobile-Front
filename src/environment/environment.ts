@@ -4,7 +4,7 @@ export const environment = {
   API_BASE_URL: "http://192.168.8.180:3000/polygon/",
 
   // DEV --------------------
-  // API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",
+  API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",
 
   // UAT --------------------
   // API_BASE_URL: "https://uat-mob-api.govimart.com/polygon/",
