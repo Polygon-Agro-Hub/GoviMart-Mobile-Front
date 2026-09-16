@@ -4,12 +4,12 @@ import {
     Text,
     TouchableOpacity,
     ScrollView,
-    SafeAreaView,
     Platform,
     Alert,
     Modal,
     Dimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -263,19 +263,19 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                    paddingHorizontal: 16,
-                    paddingTop: 5,
-                    paddingBottom: 340,
+                    flexGrow: 1,
+                    justifyContent: "space-between",
                 }}
             >
-                <Text
-                    style={{
-                        textAlign: "center",
-                        fontSize: 12,
-                        color: "#6B7280",
-                        marginBottom: 24,
-                    }}
-                >
+                <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 5 }}>
+                    <Text
+                        style={{
+                            textAlign: "center",
+                            fontSize: 12,
+                            color: "#6B7280",
+                            marginBottom: 24,
+                        }}
+                    >
                     We'll deliver your order within this time slot.
                 </Text>
 
@@ -667,26 +667,20 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                         </TouchableOpacity>
                     </>
                 )}
-            </ScrollView>
+                </View>
 
-            {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
-            <OrderSummary
-                packageTotal={orderContext?.packageTotal || 0}
-                productTotal={orderContext?.productTotal || 0}
-                discount={orderContext?.discount || 0}
-                deliveryFee={deliveryFee}
-                grandTotal={finalTotal}
-                buttonText="Proceed to Payment"
-                disabled={!isReady}
-                onCheckout={handleProceed}
-                containerStyle={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    marginBottom: 0,
-                }}
-            />
+                {/* ─── BOTTOM SUMMARY & BUTTON (docked to bottom when content is short, scrolls naturally when content is long) ──────────────────────────────── */}
+                <OrderSummary
+                    packageTotal={orderContext?.packageTotal || 0}
+                    productTotal={orderContext?.productTotal || 0}
+                    discount={orderContext?.discount || 0}
+                    deliveryFee={deliveryFee}
+                    grandTotal={finalTotal}
+                    buttonText="Proceed to Payment"
+                    disabled={!isReady}
+                    onCheckout={handleProceed}
+                />
+            </ScrollView>
 
             {/* ─── POPUP: SCHEDULE TYPE ─────────────────────────────────────── */}
             <GlobalSearchModal

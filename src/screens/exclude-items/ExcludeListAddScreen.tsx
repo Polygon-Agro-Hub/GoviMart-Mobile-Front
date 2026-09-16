@@ -24,6 +24,16 @@ import ToggleSwitch from "@/component/common/ToggleSwitch";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { environment } from "@/environment/environment";
+import { store } from "@/store";
+import { tokenStorage } from "@/utils/tokenStorage";
+
+const getEffectiveToken = async (): Promise<string | null> => {
+  return (
+    store.getState().auth.token ||
+    (await tokenStorage.getToken()) ||
+    (await AsyncStorage.getItem("userToken"))
+  );
+};
 
 type ExcludeListAddNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -182,16 +192,22 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   };
 
   const handleBackPress = useCallback(() => {
-    navigation.navigate("ChooseAuth");
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("ExcludeListSummery", {
+        customerId: Number(customerId),
+      });
+    }
     return true;
-  }, [navigation]);
+  }, [navigation, customerId]);
 
   const fetchCropsAndPreferences = useCallback(async () => {
     try {
       setListLoading(true);
       setCustomerDataLoading(true);
 
-      const token = await AsyncStorage.getItem("userToken");
+      const token = await getEffectiveToken();
       if (!token) {
         Alert.alert("Authentication Required", "Please log in to customize packages.");
         setCustomerDataLoading(false);
@@ -264,7 +280,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       setListLoading(false);
     }
   }, [customerId]);
-
+ 
   useEffect(() => {
     fetchCropsAndPreferences();
   }, [fetchCropsAndPreferences]);
@@ -290,7 +306,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   const handlesubmitexcludelist = async () => {
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem("userToken");
+      const token = await getEffectiveToken();
       if (token) {
         const addedIncludes = selectedIncludeCrops.filter(id => !initialIncludeIds.includes(id));
         const deletedIncludes = initialIncludeIds.filter(id => !selectedIncludeCrops.includes(id));

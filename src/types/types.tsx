@@ -57,6 +57,18 @@ export type RootStackParamList = {
   Splash: undefined;
   ChooseAuth: undefined;
   DeliveryLocation: undefined;
+  CameraAccess?: {
+    returnScreen?: keyof RootStackParamList;
+  };
+  LocationAccess?: {
+    returnScreen?: keyof RootStackParamList;
+    blockBackNavigation?: boolean;
+  };
+  NotificationAccess?: {
+    returnScreen?: keyof RootStackParamList;
+    returnParams?: any;
+    blockBackNavigation?: boolean;
+  };
   Login: undefined;
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
@@ -114,10 +126,37 @@ export type RootStackParamList = {
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
-  ReviewPackage: { replacedProduct?: any; targetStepIndex?: number; } | undefined;
-  SetQauntity: { fromProduct?: any; toProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
-  OrderCancelConfirmation: undefined;
-  ReplaceProduct: { fromProduct?: any; packageId?: string; stepIndex?: number; } | undefined;
+  ReviewPackage: { orderId?: string | number; invoiceNo?: string; replacedProduct?: any; targetStepIndex?: number; newScheduleDate?: string; } | undefined;
+  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
+  OrderCancelConfirmation: {
+    orderId?: string | number;
+    processOrderId?: string | number;
+    packages?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      qty: number;
+      unitPrice: number;
+    }>;
+    alaCarteItems?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      weight: string;
+      price: number;
+      originalPrice?: number;
+    }>;
+    totalPaid?: number;
+    totalPaidCard?: number;
+    totalPaidCredit?: number;
+    totalCashDue?: number;
+    processOrderTotal?: number;
+    paymentMethod?: string;
+    refundCreditAmount?: number;
+  } | undefined;
+  ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -258,6 +297,8 @@ export type PackageSummary = {
  
 export type ReviewProduct = {
     id: string;
+    itemId?: number;
+    productId?: number;
     category: string; // e.g. "Up Country Fruit (1)"
     name: string;
     icon: string;
@@ -266,9 +307,13 @@ export type ReviewProduct = {
     quantity: number;
     unit: "kg" | "g";
     step: number;
+    productType?: number | string;
+    productTypeId?: number | string;
+    productTypeName?: string;
     excludedWarning?: string;
     isReplaced?: boolean;
     originalProduct?: ReviewProduct;
+    minQuantity?: number;
 };
  
 export type PackageReview = {

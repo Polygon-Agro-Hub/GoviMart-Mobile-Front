@@ -52,6 +52,9 @@ import CheckoutScreen from "@/screens/checkout/CheckoutScreen";
 import ScheduleOrder from "@/screens/checkout/ScheduleOrderScreen";
 import InAppNotificationBanner from "@/component/common/InAppNotificationBanner";
 import pushNotificationService from "@/services/notification/pushNotification.service";
+import CameraAccess from "@/screens/permission/CameraAccess";
+import LocationAccess from "@/screens/permission/LocationAccess";
+import NotificationAccess from "@/screens/permission/NotificationAccess";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -69,6 +72,9 @@ function AppContent() {
             <Stack.Screen name="Splash" component={Splash} />
             <Stack.Screen name="ChooseAuth" component={ChooseAuth} />
             <Stack.Screen name="DeliveryLocation" component={DeliveryLocation} />
+            <Stack.Screen name="CameraAccess" component={CameraAccess} />
+            <Stack.Screen name="LocationAccess" component={LocationAccess} />
+            <Stack.Screen name="NotificationAccess" component={NotificationAccess} />
             <Stack.Screen name="Login" component={Login} />
             <Stack.Screen name="UpdatePassword" component={UpdatePassword} />
             <Stack.Screen name="SignUp" component={SignUp} />

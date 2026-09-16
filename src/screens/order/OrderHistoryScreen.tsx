@@ -9,7 +9,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import CustomCalendarModal from "@/component/common/CustomCalendarModal";
+import CustomHeader from "@/component/common/CustomHeader";
+import { AlertModal } from "@/component/common/AlertModal";
+import NoDataFound from "@/component/common/NoDataFound";
 import { useFocusEffect } from "@react-navigation/native";
 import LoadingPage from "@/component/common/LoadingPage";
 import orderService from "@/services/order/order.service";
@@ -35,14 +38,30 @@ interface Order {
     rawScheduleDate?: string;
 }
 
+
 const OrderHistory: React.FC<Props> = ({ navigation }) => {
     const [dateFilterOpen, setDateFilterOpen] = useState(false);
-
     const [selectedFilter, setSelectedFilter] = useState("Ordered Date");
-
     const [appliedFilter, setAppliedFilter] = useState(false);
     const [datePickerVisible, setDatePickerVisible] = useState(false);
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+
+    // AlertModal States
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertTitle, setAlertTitle] = useState("");
+    const [alertMessage, setAlertMessage] = useState("");
+    const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+    const showAlert = (
+        title: string,
+        message: string,
+        type: "success" | "error" = "error"
+    ) => {
+        setAlertTitle(title);
+        setAlertMessage(message);
+        setAlertType(type);
+        setAlertVisible(true);
+    };
 
     const filterOptions = [
         "Ordered Date",
@@ -120,63 +139,99 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             maximumFractionDigits: 2,
         });
 
+    const handleDateSelect = (dateStr: string) => {
+        if (selectedFilter === "Ordered Date") {
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            const picked = new Date(dateStr.replace(/\//g, "-"));
+            if (picked > today) {
+                showAlert(
+                    "Invalid Date",
+                    "Ordered date cannot be in the future. Please select today or an earlier date.",
+                    "error"
+                );
+                return;
+            }
+        }
+
+        setSelectedDateStr(dateStr);
+        setAppliedFilter(true);
+
+        const matches = orders.filter((order) => {
+            if (selectedFilter === "Ordered Date") {
+                return (
+                    isSameCalendarDate(order.rawOrderDate, dateStr) ||
+                    isSameCalendarDate(order.orderDate, dateStr)
+                );
+            } else if (selectedFilter === "Scheduled Date") {
+                return (
+                    isSameCalendarDate(order.rawScheduleDate, dateStr) ||
+                    isSameCalendarDate(order.deliveryDate, dateStr)
+                );
+            }
+            return true;
+        });
+
+        if (matches.length === 0) {
+            showAlert(
+                "No Orders Found",
+                `No orders found matching ${selectedFilter}: ${dateStr}.`,
+                "error"
+            );
+        }
+    };
+
     const handleApplyFilter = () => {
-        if (!selectedDate) {
-            setDatePickerVisible(true);
+        if (!selectedDateStr) {
+            showAlert(
+                "Date Required",
+                `Please select a date to filter by ${selectedFilter.toLowerCase()}.`,
+                "error"
+            );
             return;
         }
         setAppliedFilter(true);
+
+        const matches = getFilteredOrders();
+        if (matches.length === 0) {
+            showAlert(
+                "No Orders Found",
+                `No orders found matching ${selectedFilter}: ${selectedDateStr}.`,
+                "error"
+            );
+        }
     };
 
     const handleClearFilter = () => {
-        setSelectedDate(null);
+        setSelectedDateStr(null);
         setAppliedFilter(false);
     };
 
     const handleViewDetails = (order: Order) => {
-        console.log("Selected order:", order);
         navigation.navigate("OrderDetails", {
             orderId: order.id,
         });
     };
 
-    const handleDateChange = (
-        event: any,
-        date?: Date
-    ) => {
-        setDatePickerVisible(false);
-
-        if (event?.type === "dismissed") {
-            return;
-        }
-
-        if (date) {
-            setSelectedDate(date);
-            setAppliedFilter(true);
-        }
-    };
-
-    const formatDate = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const day = String(date.getDate()).padStart(2, "0");
-
-        return `${year}/${month}/${day}`;
-    };
-
     const isSameCalendarDate = (
         dateVal: string | Date | undefined | null,
-        targetDate: Date
+        targetDateStr: string | null
     ): boolean => {
-        if (!dateVal || dateVal === "N/A") return false;
+        if (!dateVal || dateVal === "N/A" || !targetDateStr) return false;
 
-        // 1. Check Date object conversion in device local timezone (handles UTC ISO strings like "2026-08-03T18:30:00.000Z")
+        const targetParts = targetDateStr.replace(/-/g, "/").split("/");
+        if (targetParts.length !== 3) return false;
+        const targetYear = parseInt(targetParts[0], 10);
+        const targetMonth = parseInt(targetParts[1], 10) - 1;
+        const targetDay = parseInt(targetParts[2], 10);
+
+        // 1. Check Date object conversion in device local timezone
         const d = new Date(dateVal);
         if (!isNaN(d.getTime())) {
             if (
-                d.getFullYear() === targetDate.getFullYear() &&
-                d.getMonth() === targetDate.getMonth() &&
-                d.getDate() === targetDate.getDate()
+                d.getFullYear() === targetYear &&
+                d.getMonth() === targetMonth &&
+                d.getDate() === targetDay
             ) {
                 return true;
             }
@@ -190,9 +245,9 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                 const month = parseInt(match[2], 10) - 1;
                 const day = parseInt(match[3], 10);
                 if (
-                    targetDate.getFullYear() === year &&
-                    targetDate.getMonth() === month &&
-                    targetDate.getDate() === day
+                    targetYear === year &&
+                    targetMonth === month &&
+                    targetDay === day
                 ) {
                     return true;
                 }
@@ -203,18 +258,18 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
     };
 
     const getFilteredOrders = () => {
-        if (!appliedFilter || !selectedDate) return orders;
+        if (!appliedFilter || !selectedDateStr) return orders;
 
         return orders.filter((order) => {
             if (selectedFilter === "Ordered Date") {
                 return (
-                    isSameCalendarDate(order.rawOrderDate, selectedDate) ||
-                    isSameCalendarDate(order.orderDate, selectedDate)
+                    isSameCalendarDate(order.rawOrderDate, selectedDateStr) ||
+                    isSameCalendarDate(order.orderDate, selectedDateStr)
                 );
             } else if (selectedFilter === "Scheduled Date") {
                 return (
-                    isSameCalendarDate(order.rawScheduleDate, selectedDate) ||
-                    isSameCalendarDate(order.deliveryDate, selectedDate)
+                    isSameCalendarDate(order.rawScheduleDate, selectedDateStr) ||
+                    isSameCalendarDate(order.deliveryDate, selectedDateStr)
                 );
             }
             return true;
@@ -229,28 +284,15 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             }}
         >
             {/* HEADER */}
-            <View
-                style={{
-                    height: 46,
-                    backgroundColor: "#FFFFFF",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    zIndex: 10,
-                }}
-            >
-                <Text
-                    style={{
-                        fontSize: 18,
-                        fontWeight: "800",
-                        color: "#111111",
-                    }}
-                >
-                    Order History
-                </Text>
-            </View>
+            <CustomHeader
+                title="Order History"
+                titleColor="black"
+                showBackButton={navigation.canGoBack()}
+                navigation={navigation}
+            />
 
             {loading ? (
-                /* LOADING STATE: Show only title + LoadingPage component */
+                /* LOADING STATE */
                 <View
                     style={{
                         flex: 1,
@@ -262,18 +304,17 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                     <LoadingPage message="Loading Orders..." fullScreen={false} />
                 </View>
             ) : (
-                /* FULLY LOADED STATE: Show filter inputs + order list */
+                /* FULLY LOADED STATE */
                 <>
                     {/* FILTER SECTION */}
                     <View
                         style={{
-                            paddingHorizontal: 38,
-                            paddingTop: 8,
-                            paddingBottom: 21,
+                            paddingHorizontal: 16,
+                            paddingTop: 6,
+                            paddingBottom: 16,
                         }}
                     >
                         {/* Ordered Date Dropdown */}
-
                         <View
                             style={{
                                 position: "relative",
@@ -283,44 +324,34 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() =>
-                                    setDateFilterOpen(
-                                        !dateFilterOpen
-                                    )
+                                    setDateFilterOpen(!dateFilterOpen)
                                 }
                                 style={{
-                                    height: 41,
-
+                                    height: 50,
                                     borderWidth: 1,
                                     borderColor: "#D7DDE4",
-
-                                    borderRadius: 24,
-
+                                    borderRadius: 25,
                                     flexDirection: "row",
                                     alignItems: "center",
-
-                                    paddingHorizontal: 7,
+                                    paddingHorizontal: 12,
+                                    backgroundColor: "#FFFFFF",
                                 }}
                             >
                                 {/* Icon */}
-
                                 <View
                                     style={{
-                                        width: 27,
-                                        height: 27,
-
-                                        borderRadius: 14,
-
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 16,
                                         backgroundColor: "#000000",
-
                                         justifyContent: "center",
                                         alignItems: "center",
-
-                                        marginRight: 8,
+                                        marginRight: 10,
                                     }}
                                 >
                                     <Ionicons
                                         name="time"
-                                        size={14}
+                                        size={16}
                                         color="#FFFFFF"
                                     />
                                 </View>
@@ -328,8 +359,9 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 <Text
                                     style={{
                                         flex: 1,
-                                        fontSize: 12,
-                                        color: "#222222",
+                                        fontSize: 15,
+                                        fontWeight: "500",
+                                        color: "#1E293B",
                                     }}
                                 >
                                     {selectedFilter}
@@ -341,152 +373,172 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                             ? "chevron-up"
                                             : "chevron-down"
                                     }
-                                    size={17}
+                                    size={18}
                                     color="#000000"
                                 />
                             </TouchableOpacity>
 
                             {/* Dropdown Options */}
-
                             {dateFilterOpen && (
                                 <View
                                     style={{
                                         position: "absolute",
-                                        top: 45,
+                                        top: 56,
                                         left: 0,
                                         right: 0,
-
-                                        backgroundColor:
-                                            "#FFFFFF",
-
+                                        backgroundColor: "#FFFFFF",
                                         borderWidth: 1,
-                                        borderColor:
-                                            "#E0E3E8",
-
-                                        borderRadius: 12,
-
+                                        borderColor: "#E2E8F0",
+                                        borderRadius: 16,
                                         shadowColor: "#000",
                                         shadowOffset: {
                                             width: 0,
-                                            height: 3,
+                                            height: 4,
                                         },
                                         shadowOpacity: 0.12,
-                                        shadowRadius: 5,
-
+                                        shadowRadius: 8,
                                         elevation: 6,
-
                                         overflow: "hidden",
+                                        zIndex: 30,
                                     }}
                                 >
-                                    {filterOptions.map(
-                                        (option) => (
-                                            <TouchableOpacity
-                                                key={option}
-                                                activeOpacity={
-                                                    0.7
+                                    {filterOptions.map((option) => (
+                                        <TouchableOpacity
+                                            key={option}
+                                            activeOpacity={0.7}
+                                            onPress={() => {
+                                                setSelectedFilter(option);
+                                                setDateFilterOpen(false);
+                                                if (selectedDateStr) {
+                                                    if (option === "Ordered Date") {
+                                                        const today = new Date();
+                                                        today.setHours(23, 59, 59, 999);
+                                                        const picked = new Date(selectedDateStr.replace(/\//g, "-"));
+                                                        if (picked > today) {
+                                                            showAlert(
+                                                                "Invalid Date",
+                                                                "Ordered date cannot be in the future. Please select today or an earlier date.",
+                                                                "error"
+                                                            );
+                                                            return;
+                                                        }
+                                                    }
+                                                    const matches = orders.filter((order) => {
+                                                        if (option === "Ordered Date") {
+                                                            return (
+                                                                isSameCalendarDate(order.rawOrderDate, selectedDateStr) ||
+                                                                isSameCalendarDate(order.orderDate, selectedDateStr)
+                                                            );
+                                                        } else if (option === "Scheduled Date") {
+                                                            return (
+                                                                isSameCalendarDate(order.rawScheduleDate, selectedDateStr) ||
+                                                                isSameCalendarDate(order.deliveryDate, selectedDateStr)
+                                                            );
+                                                        }
+                                                        return true;
+                                                    });
+                                                    if (matches.length === 0) {
+                                                        showAlert(
+                                                            "No Orders Found",
+                                                            `No orders found matching ${option}: ${selectedDateStr}.`,
+                                                            "error"
+                                                        );
+                                                    }
                                                 }
-                                                onPress={() => {
-                                                    setSelectedFilter(
-                                                        option
-                                                    );
-                                                    setDateFilterOpen(
-                                                        false
-                                                    );
-                                                }}
+                                            }}
+                                            style={{
+                                                height: 48,
+                                                justifyContent: "center",
+                                                paddingHorizontal: 16,
+                                                borderBottomWidth: 1,
+                                                borderBottomColor: "#F1F5F9",
+                                                backgroundColor:
+                                                    selectedFilter === option
+                                                        ? "#F8FAFC"
+                                                        : "#FFFFFF",
+                                            }}
+                                        >
+                                            <Text
                                                 style={{
-                                                    height: 38,
-                                                    justifyContent:
-                                                        "center",
-                                                    paddingHorizontal: 14,
-
-                                                    borderBottomWidth: 1,
-                                                    borderBottomColor:
-                                                        "#F0F0F0",
+                                                    fontSize: 14,
+                                                    color:
+                                                        selectedFilter === option
+                                                            ? "#000000"
+                                                            : "#475569",
+                                                    fontWeight:
+                                                        selectedFilter === option
+                                                            ? "700"
+                                                            : "500",
                                                 }}
                                             >
-                                                <Text
-                                                    style={{
-                                                        fontSize: 12,
-                                                        color:
-                                                            selectedFilter ===
-                                                                option
-                                                                ? "#000"
-                                                                : "#555",
-                                                        fontWeight:
-                                                            selectedFilter ===
-                                                                option
-                                                                ? "700"
-                                                                : "400",
-                                                    }}
-                                                >
-                                                    {option}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )
-                                    )}
+                                                {option}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
                                 </View>
                             )}
                         </View>
 
-                        {/* ================================================= */}
                         {/* DATE INPUT */}
-                        {/* ================================================= */}
-
                         <TouchableOpacity
                             activeOpacity={0.8}
                             onPress={() => {
                                 setDatePickerVisible(true);
                             }}
                             style={{
-                                height: 41,
-
-                                marginTop: 9,
-
+                                height: 50,
+                                marginTop: 10,
                                 borderWidth: 1,
                                 borderColor: "#D7DDE4",
-
-                                borderRadius: 24,
-
-                                backgroundColor: "#F2F2F6",
-
+                                borderRadius: 25,
+                                backgroundColor: "#F8FAFC",
                                 flexDirection: "row",
                                 alignItems: "center",
-
-                                paddingHorizontal: 7,
+                                paddingHorizontal: 12,
                             }}
                         >
                             <View
                                 style={{
-                                    width: 27,
-                                    height: 27,
-
-                                    borderRadius: 14,
-
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
                                     backgroundColor: "#000000",
-
                                     justifyContent: "center",
                                     alignItems: "center",
-
-                                    marginRight: 8,
+                                    marginRight: 10,
                                 }}
                             >
                                 <Ionicons
                                     name="calendar"
-                                    size={14}
+                                    size={16}
                                     color="#FFFFFF"
                                 />
                             </View>
 
                             <Text
                                 style={{
-                                    fontSize: 12,
-                                    color: selectedDate
-                                        ? "#111111"
-                                        : "#8E8E93",
+                                    flex: 1,
+                                    fontSize: 15,
+                                    fontWeight: "500",
+                                    color: selectedDateStr
+                                        ? "#0F172A"
+                                        : "#94A3B8",
                                 }}
                             >
-                                {selectedDate ? formatDate(selectedDate) : "YYYY/MM/DD"}
+                                {selectedDateStr || "Select Date (YYYY/MM/DD)"}
                             </Text>
+
+                            {selectedDateStr && (
+                                <TouchableOpacity
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        handleClearFilter();
+                                    }}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                                </TouchableOpacity>
+                            )}
                         </TouchableOpacity>
 
                         {/* APPLY / CLEAR FILTER BUTTON */}
@@ -494,33 +546,27 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                             activeOpacity={0.85}
                             onPress={appliedFilter ? handleClearFilter : handleApplyFilter}
                             style={{
-                                height: 42,
-
-                                marginTop: 15,
-
-                                borderRadius: 23,
-
-                                backgroundColor: "#000000",
-
+                                height: 50,
+                                marginTop: 12,
+                                borderRadius: 25,
+                                backgroundColor: appliedFilter ? "#DC2626" : "#000000",
                                 flexDirection: "row",
                                 justifyContent: "center",
                                 alignItems: "center",
-
                                 shadowColor: "#000",
                                 shadowOffset: {
                                     width: 0,
-                                    height: 3,
+                                    height: 2,
                                 },
-                                shadowOpacity: 0.16,
+                                shadowOpacity: 0.12,
                                 shadowRadius: 4,
-
-                                elevation: 4,
+                                elevation: 3,
                             }}
                         >
                             {appliedFilter && (
                                 <Ionicons
                                     name="close"
-                                    size={16}
+                                    size={18}
                                     color="#FFFFFF"
                                     style={{ marginRight: 6 }}
                                 />
@@ -528,7 +574,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                             <Text
                                 style={{
                                     color: "#FFFFFF",
-                                    fontSize: 12,
+                                    fontSize: 15,
                                     fontWeight: "600",
                                 }}
                             >
@@ -546,18 +592,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                     />
 
                     {/* ORDER LIST */}
-
-                    {loading ? (
-                        <View
-                            style={{
-                                flex: 1,
-                                justifyContent: "center",
-                                alignItems: "center",
-                            }}
-                        >
-                            <LoadingPage message="Loading Orders..." fullScreen={false} />
-                        </View>
-                    ) : getFilteredOrders().length === 0 ? (
+                    {getFilteredOrders().length == 0 ? (
                         <View
                             style={{
                                 flex: 1,
@@ -566,21 +601,13 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 paddingHorizontal: 30,
                             }}
                         >
-                            <Ionicons
-                                name="receipt-outline"
-                                size={46}
-                                color="#A0A5BA"
+                            <NoDataFound
+                                message={
+                                    appliedFilter
+                                        ? "No orders found for the selected date"
+                                        : "No orders found"
+                                }
                             />
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    color: "#747990",
-                                    marginTop: 12,
-                                    textAlign: "center",
-                                }}
-                            >
-                                No orders found.
-                            </Text>
                         </View>
                     ) : (
                         <ScrollView
@@ -596,20 +623,12 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                     key={order.id}
                                     style={{
                                         minHeight: 139,
-
                                         borderWidth: 1,
                                         borderColor: "#E0E5EA",
-
                                         borderRadius: 20,
-
                                         backgroundColor: "#FFFFFF",
-
                                         marginBottom: 20,
-
-                                        paddingHorizontal: 10,
-                                        paddingTop: 9,
-                                        paddingBottom: 8,
-
+                                        padding: 14,
                                         shadowColor: "#000",
                                         shadowOffset: {
                                             width: 0,
@@ -617,11 +636,9 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         },
                                         shadowOpacity: 0.08,
                                         shadowRadius: 4,
-
                                         elevation: 2,
                                     }}
                                 >
-
                                     {/* TOP ROW */}
                                     <View
                                         style={{
@@ -632,17 +649,13 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         }}
                                     >
                                         {/* Status */}
-
                                         <View
                                             style={{
                                                 backgroundColor:
                                                     "#F1F1F5",
-
                                                 borderRadius: 12,
-
                                                 paddingHorizontal: 6,
                                                 paddingVertical: 3,
-
                                                 flexDirection:
                                                     "row",
                                                 alignItems:
@@ -651,13 +664,12 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         >
                                             <Ionicons
                                                 name="star"
-                                                size={8}
+                                                size={10}
                                                 color="#111"
                                             />
-
                                             <Text
                                                 style={{
-                                                    fontSize: 10,
+                                                    fontSize: 12,
                                                     color: "#333",
                                                     marginLeft: 3,
                                                 }}
@@ -667,10 +679,9 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         </View>
 
                                         {/* Order Date */}
-
                                         <Text
                                             style={{
-                                                fontSize: 11,
+                                                fontSize: 13,
                                                 color: "#565B70",
                                             }}
                                         >
@@ -686,7 +697,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                     >
                                         <Text
                                             style={{
-                                                fontSize: 10,
+                                                fontSize: 12,
                                                 color: "#747990",
                                             }}
                                         >
@@ -695,13 +706,13 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
 
                                         <Text
                                             style={{
-                                                fontSize: 12,
+                                                fontSize: 15,
                                                 color: "#111111",
                                                 fontWeight: "600",
                                                 marginTop: 2,
                                             }}
                                         >
-                                             #{order.invoiceNumber}
+                                            #{order.invoiceNumber}
                                         </Text>
                                     </View>
 
@@ -710,43 +721,36 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         style={{
                                             flexDirection: "row",
                                             alignItems: "center",
-
                                             marginTop: 12,
                                         }}
                                     >
                                         {/* Delivery Date */}
-
                                         <View
                                             style={{
                                                 flexDirection:
                                                     "row",
                                                 alignItems:
                                                     "center",
-
                                                 paddingRight: 8,
                                             }}
                                         >
                                             <Ionicons
                                                 name="location"
-                                                size={13}
+                                                size={15}
                                                 color="#000"
                                             />
-
                                             <Text
                                                 style={{
-                                                    fontSize: 10,
+                                                    fontSize: 13,
                                                     color: "#222",
                                                     marginLeft: 4,
                                                 }}
                                             >
-                                                {
-                                                    order.deliveryDate
-                                                }
+                                                {order.deliveryDate}
                                             </Text>
                                         </View>
 
                                         {/* Divider */}
-
                                         <View
                                             style={{
                                                 width: 1,
@@ -757,26 +761,23 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         />
 
                                         {/* Time */}
-
                                         <View
                                             style={{
                                                 flexDirection:
                                                     "row",
                                                 alignItems:
                                                     "center",
-
                                                 paddingHorizontal: 8,
                                             }}
                                         >
                                             <Ionicons
                                                 name="time"
-                                                size={13}
+                                                size={15}
                                                 color="#000"
                                             />
-
                                             <Text
                                                 style={{
-                                                    fontSize: 10,
+                                                    fontSize: 13,
                                                     color: "#222",
                                                     marginLeft: 4,
                                                 }}
@@ -786,7 +787,6 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         </View>
 
                                         {/* Divider */}
-
                                         <View
                                             style={{
                                                 width: 1,
@@ -797,7 +797,6 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         />
 
                                         {/* Total */}
-
                                         <View
                                             style={{
                                                 flex: 1,
@@ -806,16 +805,15 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         >
                                             <Text
                                                 style={{
-                                                    fontSize: 10,
+                                                    fontSize: 11,
                                                     color: "#747990",
                                                 }}
                                             >
                                                 Total
                                             </Text>
-
                                             <Text
                                                 style={{
-                                                    fontSize: 11,
+                                                    fontSize: 14,
                                                     color: "#111",
                                                     fontWeight:
                                                         "700",
@@ -843,22 +841,20 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                 "row",
                                             alignItems:
                                                 "center",
-
                                             marginTop: 9,
                                         }}
                                     >
                                         <Text
                                             style={{
-                                                fontSize: 10,
+                                                fontSize: 13,
                                                 color: "#60647A",
                                             }}
                                         >
                                             View Details
                                         </Text>
-
                                         <Ionicons
                                             name="chevron-forward"
-                                            size={12}
+                                            size={14}
                                             color="#60647A"
                                             style={{
                                                 marginLeft: 3,
@@ -872,15 +868,28 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                 </>
             )}
 
-            {/* DatePicker */}
-            {datePickerVisible && (
-                <DateTimePicker
-                    value={selectedDate || new Date()}
-                    mode="date"
-                    display="default"
-                    onChange={handleDateChange}
-                />
-            )}
+            {/* Custom Calendar Modal */}
+            <CustomCalendarModal
+                visible={datePickerVisible}
+                onClose={() => setDatePickerVisible(false)}
+                selectedDate={selectedDateStr}
+                onSelectDate={handleDateSelect}
+                minDate={new Date(2020, 0, 1)}
+                maxDate={new Date(new Date().getFullYear() + 2, 11, 31)}
+                title={`Select ${selectedFilter}`}
+                showPreparationNotice={false}
+            />
+
+            {/* Alert Modal */}
+            <AlertModal
+                visible={alertVisible}
+                title={alertTitle}
+                message={alertMessage}
+                type={alertType}
+                onClose={() => setAlertVisible(false)}
+                autoClose={false}
+                showOkButton={true}
+            />
 
             {/* Floating Bottom Navigation Bar */}
             <BottomNavigation activeScreen="OrderHistory" navigation={navigation} />

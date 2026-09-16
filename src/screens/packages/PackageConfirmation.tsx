@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Platform,
   Image,
 } from "react-native";
@@ -42,7 +41,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* ─── TOP HEADER: CLOSE BUTTON ON RIGHT ───────────────────────────── */}
       <View
         style={{
@@ -93,7 +92,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
         >
           <Image
             source={require("@/assets/images/order/vegetable-basket.webp")}
-            style={{ width: 68, height: 68, marginRight: 14 }}
+            style={{ width: 88, height: 88, marginRight: 14 }}
             resizeMode="contain"
           />
 
@@ -186,7 +185,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
               >
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: "600",
                     color: "#1F2937",
                   }}
@@ -218,8 +217,8 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
           {/* Description */}
           <Text
             style={{
-              fontSize: 12,
-              lineHeight: 18,
+              fontSize: 13,
+              lineHeight: 19,
               color: "#55596D",
               marginTop: 12,
             }}
@@ -309,8 +308,8 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
           {/* Description */}
           <Text
             style={{
-              fontSize: 12,
-              lineHeight: 18,
+              fontSize: 13,
+              lineHeight: 19,
               color: "#55596D",
               marginTop: 12,
             }}
@@ -359,7 +358,7 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

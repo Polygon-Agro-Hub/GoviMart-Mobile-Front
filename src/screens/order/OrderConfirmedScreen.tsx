@@ -3,12 +3,12 @@ import {
     View,
     Text,
     TouchableOpacity,
-    SafeAreaView,
     ScrollView,
     Alert,
     Platform,
     ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -1000,12 +1000,12 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 >
                     <Ionicons
                         name="star"
-                        size={10}
+                        size={11}
                         color="#111111"
                     />
                     <Text
                         style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             color: "#222222",
                             fontWeight: "600",
                             marginLeft: 4,
@@ -1045,7 +1045,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 >
                     <Text
                         style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             color: "#747990",
                             fontWeight: "500",
                         }}
@@ -1066,7 +1066,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
 
                     <Text
                         style={{
-                            fontSize: 11.5,
+                            fontSize: 12,
                             color: "#747990",
                             marginTop: 4,
                         }}
@@ -1349,7 +1349,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
 
                     <Text
                         style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             color: "#555A68",
                             flex: 1,
                         }}
@@ -1418,12 +1418,12 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                             <>
                                 <Ionicons
                                     name="download-outline"
-                                    size={16}
+                                    size={17}
                                     color="#111111"
                                 />
                                 <Text
                                     style={{
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         color: "#111111",
                                         marginLeft: 6,
                                         fontWeight: "600",
@@ -1459,12 +1459,12 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                             <>
                                 <Ionicons
                                     name="share-outline"
-                                    size={16}
+                                    size={17}
                                     color="#111111"
                                 />
                                 <Text
                                     style={{
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         color: "#111111",
                                         marginLeft: 6,
                                         fontWeight: "600",

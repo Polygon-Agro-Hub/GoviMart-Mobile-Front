@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   Alert,
   TouchableOpacity,
   StyleSheet,
+  BackHandler,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
@@ -103,6 +104,22 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
     fetchDetails();
   }, [complaintId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        navigation.navigate("ComplaintHistory");
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack
+      );
+
+      return () => subscription.remove();
+    }, [navigation])
+  );
+
   if (loading) {
     return (
       <View className="flex-1 bg-white">
@@ -111,6 +128,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
+          onBackPress={() => navigation.navigate("ComplaintHistory")}
         />
         <View className="flex-1 justify-center items-center">
           <LoadingPage message="Loading..." fullScreen={false} />
@@ -127,6 +145,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
+          onBackPress={() => navigation.navigate("ComplaintHistory")}
         />
         <View className="flex-1 justify-center items-center px-8">
           <Text className="text-sm text-[#555555]">Complaint not found.</Text>
@@ -145,6 +164,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
+        onBackPress={() => navigation.navigate("ComplaintHistory")}
       />
 
       <ScrollView
@@ -161,15 +181,15 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           {/* Complaint ID */}
 
           <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
-            <Text className="text-xs text-[#676771] mb-[5px]">
+            <Text className="text-[13px] text-[#676771] mb-[4px]">
               Complaint ID
             </Text>
 
-            <Text className="text-sm text-black font-semibold mb-1">
+            <Text className="text-[15.5px] text-black font-bold mb-1">
               {complaint.refId}
             </Text>
 
-            <Text className="text-xs text-[#5A5859]">
+            <Text className="text-[13px] text-[#5A5859]">
               Sent : {formatDate(complaint.createdAt)}
             </Text>
           </View>
@@ -177,9 +197,9 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           {/* Category */}
 
           <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
-            <Text className="text-xs text-[#676771] mb-[5px]">Category</Text>
+            <Text className="text-[13px] text-[#676771] mb-[4px]">Category</Text>
 
-            <Text className="text-sm text-black font-semibold mb-1">
+            <Text className="text-[15.5px] text-black font-bold mb-1">
               {complaint.categoryEnglish || "Complaint"}
             </Text>
           </View>
@@ -187,9 +207,9 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           {/* Description */}
 
           <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
-            <Text className="text-xs text-[#676771] mb-[5px]">Description</Text>
+            <Text className="text-[13px] text-[#676771] mb-[4px]">Description</Text>
 
-            <Text className="text-sm leading-4 text-black font-medium">
+            <Text className="text-[14.5px] leading-5 text-black font-medium">
               {complaint.complain}
             </Text>
           </View>
@@ -197,7 +217,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           {/* Photos */}
 
           <View className="px-1.5 py-[7px] pb-0">
-            <Text className="text-xs text-[#676771] mb-[5px]">
+            <Text className="text-[13px] text-[#676771] mb-[5px]">
               Photos ({complaint.images?.length})
             </Text>
 
@@ -247,15 +267,15 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
             </View>
 
             <View className="flex-1 ml-2.5 pt-px">
-              <Text className="text-sm text-black font-semibold mb-[3px]">
+              <Text className="text-[15px] text-black font-bold mb-[3px]">
                 Complaint Submitted
               </Text>
 
-              <Text className="text-xs text-[#5A5859] leading-[14px]">
+              <Text className="text-[13px] text-[#5A5859] leading-[17px]">
                 Your complaint has been submitted.
               </Text>
 
-              <Text className="text-xs text-[#5A5859] mt-0.5">
+              <Text className="text-[12.5px] text-[#5A5859] mt-1">
                 At {formatTime(complaint.createdAt)} on{" "}
                 {formatDate(complaint.createdAt)}
               </Text>
@@ -270,11 +290,11 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
             </View>
 
             <View className="flex-1 ml-2.5 pt-px">
-              <Text className="text-sm text-black font-semibold mb-[3px]">
+              <Text className="text-[15px] text-black font-bold mb-[3px]">
                 Under Review
               </Text>
 
-              <Text className="text-xs text-[#5A5859] leading-[14px]">
+              <Text className="text-[13px] text-[#5A5859] leading-[17px]">
                 We are reviewing your complaint.
               </Text>
             </View>
@@ -296,11 +316,11 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
             </View>
 
             <View className="flex-1 ml-2.5 pt-px">
-              <Text className="text-sm text-black font-semibold mb-[3px]">
+              <Text className="text-[15px] text-black font-bold mb-[3px]">
                 {isClosed ? "Complaint Closed." : "Pending Resolution"}
               </Text>
 
-              <Text className="text-xs text-[#5A5859] leading-[14px]">
+              <Text className="text-[13px] text-[#5A5859] leading-[17px]">
                 {isClosed
                   ? "Please view the reply from our team for more details."
                   : "Our team will get back to you soon."}

@@ -1,12 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
     View,
     Text,
     TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { StackScreenProps } from "@react-navigation/stack";
-import { RootStackParamList } from "@/types/types";
 import { CountdownTimer } from "./CountDownTimer";
 
 export const HurryBanner: React.FC<{
@@ -43,6 +41,6 @@ export const HurryBanner: React.FC<{
             )}
         </View>
 
-        <CountdownTimer initialMinutes={5 * 60 + 40} />
+        <CountdownTimer startHour={8} endHour={18} endMinute={0} />
     </View>
-);
+);

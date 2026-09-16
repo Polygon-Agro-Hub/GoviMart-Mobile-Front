@@ -19,6 +19,16 @@ import ConfirmationModal from "@/component/common/ConfirmationModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { environment } from "@/environment/environment";
+import { store } from "@/store";
+import { tokenStorage } from "@/utils/tokenStorage";
+
+const getEffectiveToken = async (): Promise<string | null> => {
+  return (
+    store.getState().auth.token ||
+    (await tokenStorage.getToken()) ||
+    (await AsyncStorage.getItem("userToken"))
+  );
+};
 
 type ExcludeListSummeryNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -84,7 +94,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
 
   const fetchLists = useCallback(async () => {
     try {
-      const token = await AsyncStorage.getItem("userToken");
+      const token = await getEffectiveToken();
       if (!token) {
         Alert.alert("Authentication Required", "Please log in to view customize packages summary.");
         navigation.navigate("ChooseAuth");
@@ -208,7 +218,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     setDeleteModalVisible(false);
 
     const { id, type } = itemToDelete;
-    const token = await AsyncStorage.getItem("userToken");
+    const token = await getEffectiveToken();
 
     try {
       if (type === "prefer") {
@@ -276,12 +286,18 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     setItemToDelete(null);
   };
 
+  const handleBackNavigation = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("Profile");
+    }
+  }, [navigation]);
+
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        navigation.navigate("ExcludeListAdd", {
-          customerId: Number(customerId),
-        });
+        handleBackNavigation();
         return true;
       };
 
@@ -291,12 +307,12 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       );
 
       return () => backHandler.remove();
-    }, [navigation, customerId]),
+    }, [handleBackNavigation]),
   );
 
   const handleCompleteOnboarding = async () => {
     try {
-      const token = await AsyncStorage.getItem("userToken");
+      const token = await getEffectiveToken();
       if (token) {
         await axios.post(
           `${environment.API_BASE_URL}api/customer/update-user-status`,
@@ -356,11 +372,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
-        onBackPress={() =>
-          navigation.navigate("ExcludeListAdd", {
-            customerId: Number(customerId),
-          })
-        }
+        onBackPress={handleBackNavigation}
       />
 
       <View className="mx-auto w-full max-w-[500px]">

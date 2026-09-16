@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  useWindowDimensions,
+  BackHandler,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
@@ -46,6 +48,15 @@ interface ComplaintCategory {
 const MAX_IMAGES = 6;
 
 const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
+  const { width: windowWidth } = useWindowDimensions();
+  const CONTAINER_PADDING = 16;
+  const IMAGE_GAP = 10;
+  const NUM_COLUMNS = 3;
+  // Dynamically calculate size so 3 images perfectly fill the container edge to edge
+  const imageSize =
+    (windowWidth - CONTAINER_PADDING * 2 - IMAGE_GAP * (NUM_COLUMNS - 1)) /
+    NUM_COLUMNS;
+
   const [categories, setCategories] = useState<ComplaintCategory[]>([]);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
@@ -141,8 +152,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       return;
     }
 
-    if (!complain.trim()) {
-      Alert.alert("Required", "Please describe your complaint.");
+    if (!complain.trim() || complain.trim().length < 3) {
+      Alert.alert(
+        "Required",
+        "Please describe your complaint (at least 3 characters).",
+      );
       return;
     }
 
@@ -181,13 +195,35 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             "Failed to submit complaint. Please try again.",
         );
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.log("failed to create complaint response data: ", error?.response?.data);
       console.log("failed to create complaint: ", error);
-      Alert.alert("Error", "Failed to submit complaint. Please try again.");
+      const errorDetails = error?.response?.data?.errors;
+      const errorMessage =
+        (Array.isArray(errorDetails) ? errorDetails.join("\n") : null) ||
+        error?.response?.data?.message ||
+        "Failed to submit complaint. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        navigation.navigate("ComplaintHistory");
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack
+      );
+
+      return () => subscription.remove();
+    }, [navigation])
+  );
 
   if (loadingCategories) {
     return (
@@ -197,6 +233,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
+          onBackPress={() => navigation.navigate("ComplaintHistory")}
         />
         <View
           style={{
@@ -221,6 +258,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
+        onBackPress={() => navigation.navigate("ComplaintHistory")}
       />
 
       <ScrollView
@@ -263,12 +301,12 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           style={{
             textAlign: "center",
             color: "#666",
-            fontSize: 12,
-            lineHeight: 16,
+            fontSize: 13.5,
+            lineHeight: 19,
 
             marginTop: 16,
             marginHorizontal: 8,
-            marginBottom: 29,
+            marginBottom: 26,
           }}
         >
           We're here to help. Please provide the details{"\n"}
@@ -300,9 +338,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           >
             <Text
               style={{
-                fontSize: 14,
-                color: "#333",
-                marginBottom: 5,
+                fontSize: 13,
+                color: "#666",
+                marginBottom: 3,
               }}
             >
               Complaint Category
@@ -310,9 +348,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
             <Text
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 color: "#111",
-                fontWeight: "500",
+                fontWeight: "600",
               }}
             >
               {selectedCategoryName || "Select From Here"}
@@ -350,8 +388,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
         <Text
           style={{
-            fontSize: 14,
-            color: "#0000",
+            fontSize: 15,
+            fontWeight: "700",
+            color: "#111111",
             marginBottom: 8,
           }}
         >
@@ -383,9 +422,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             style={{
               flex: 1,
               padding: 0,
-              fontSize: 14,
-              lineHeight: 18,
-              color: "#0000",
+              fontSize: 14.5,
+              lineHeight: 20,
+              color: "#111111",
               fontWeight: "500",
             }}
           />
@@ -397,8 +436,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
         <Text
           style={{
-            fontSize: 14,
-            color: "#111",
+            fontSize: 15,
+            fontWeight: "700",
+            color: "#111111",
             marginBottom: 6,
           }}
         >
@@ -407,7 +447,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
         <Text
           style={{
-            fontSize: 11,
+            fontSize: 12.5,
             color: "#777",
             marginBottom: 12,
           }}
@@ -419,88 +459,83 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         {/* PHOTO LIST */}
         {/* ================================================= */}
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: IMAGE_GAP,
             paddingBottom: 10,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            {images.length < 6 && (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={pickImage}
+          {images.length < 6 && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={pickImage}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: "#D7DCE1",
+                backgroundColor: "#F9FAFB",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <FontAwesome6 name="camera" solid size={27} color="#000" />
+
+              <Text
                 style={{
-                  width: 110,
-                  height: 110,
-                  borderRadius: 15,
-                  borderWidth: 1,
-                  borderStyle: "dashed",
-                  borderColor: "#D7DCE1",
-                  backgroundColor: "#F9FAFB",
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#747990",
+                  marginTop: 5,
+                }}
+              >
+                Add Photo
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {images.map((img, index) => (
+            <View
+              key={index}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                overflow: "hidden",
+              }}
+            >
+              <Image
+                source={{ uri: img.uri }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                }}
+                resizeMode="cover"
+              />
+
+              <TouchableOpacity
+                onPress={() => removeImage(index)}
+                style={{
+                  position: "absolute",
+                  top: 5,
+                  right: 5,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  backgroundColor: "rgba(0,0,0,0.65)",
                   justifyContent: "center",
                   alignItems: "center",
                 }}
               >
-                <FontAwesome6 name="camera" solid size={27} color="#000" />
-
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#747990",
-                    marginTop: 5,
-                  }}
-                >
-                  Add Photo
-                </Text>
+                <Ionicons name="close" size={14} color="#FFF" />
               </TouchableOpacity>
-            )}
-
-            {images.map((img, index) => (
-              <View
-                key={index}
-                style={{
-                  width: 110,
-                  height: 110,
-                  borderRadius: 15,
-                  overflow: "hidden",
-                }}
-              >
-                <Image
-                  source={{ uri: img.uri }}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                  }}
-                  resizeMode="cover"
-                />
-
-                <TouchableOpacity
-                  onPress={() => removeImage(index)}
-                  style={{
-                    position: "absolute",
-                    top: 5,
-                    right: 5,
-                    width: 22,
-                    height: 22,
-                    borderRadius: 11,
-                    backgroundColor: "rgba(0,0,0,0.65)",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <Ionicons name="close" size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
+            </View>
+          ))}
+        </View>
       </ScrollView>
 
       {/* ================================================= */}
@@ -564,7 +599,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
               style={{
                 color: "#FFFFFF",
 
-                fontSize: 14,
+                fontSize: 15.5,
                 fontWeight: "800",
               }}
             >

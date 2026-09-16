@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
+  BackHandler,
 } from "react-native";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -25,6 +26,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import customerService from "@/services/customer/customer.service";
+import CameraAccess from "@/screens/permission/CameraAccess";
 
 interface PhoneCode {
   code: string;
@@ -107,6 +109,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   );
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
+  const [showCameraPermission, setShowCameraPermission] = useState(false);
   const [mobileCode, setMobileCode] = useState("+94");
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
@@ -129,6 +132,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [originalMobileCode, setOriginalMobileCode] = useState("");
   const [originalMobileNumber, setOriginalMobileNumber] = useState("");
+  const [originalAccountData, setOriginalAccountData] = useState<{
+    title: string;
+    firstName: string;
+    lastName: string;
+    mobileCode: string;
+    mobileNumber: string;
+    email: string;
+    companyName: string;
+    companyMobileCode: string;
+    companyMobile: string;
+  } | null>(null);
 
   const isWholesale =
     (buyerType || reduxBuyerType || "").toLowerCase() === "wholesale";
@@ -158,6 +172,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
             setOriginalMobileCode(data.phoneCode || "");
             setOriginalMobileNumber(data.phoneNumber || "");
+
+            setOriginalAccountData({
+              title: (data.title || "").trim(),
+              firstName: (data.firstName || "").trim(),
+              lastName: (data.lastName || "").trim(),
+              mobileCode: (data.phoneCode || "+94").trim(),
+              mobileNumber: (data.phoneNumber || "").trim(),
+              email: (data.email || "").trim(),
+              companyName: (data.companyName || "").trim(),
+              companyMobileCode: (data.companyPhoneCode || data.phoneCode || "+94").trim(),
+              companyMobile: (data.companyPhone || "").trim(),
+            });
           }
           console.log("acc details fetchihng success: ", response.data.data);
         } catch (error) {
@@ -168,6 +194,22 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       };
       fetchAcccountDetails();
     }, []),
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate("Profile");
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+
+      return () => subscription.remove();
+    }, [navigation]),
   );
 
   const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
@@ -248,6 +290,29 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       return;
     }
 
+    if (originalAccountData) {
+      const isUnchanged =
+        title.trim() === originalAccountData.title &&
+        firstName.trim() === originalAccountData.firstName &&
+        lastName.trim() === originalAccountData.lastName &&
+        mobileCode.trim() === originalAccountData.mobileCode &&
+        mobileNumber.trim() === originalAccountData.mobileNumber &&
+        email.trim().toLowerCase() === originalAccountData.email.toLowerCase() &&
+        (!isWholesale ||
+          (companyName.trim() === originalAccountData.companyName &&
+            (companyMobileCode || mobileCode).trim() === originalAccountData.companyMobileCode &&
+            compnayMobile.trim() === originalAccountData.companyMobile));
+
+      if (isUnchanged) {
+        Alert.alert(
+          "No Changes Detected",
+          "You haven't made any changes to your account details to update.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+    }
+
     try {
       setUpdating(true);
 
@@ -299,17 +364,36 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const response = await customerService.updateUserDetails(payload);
 
         if (response.data) {
-          Alert.alert("Success", "Your account information has been updated.", [
-            {
-              text: "OK",
-              onPress: () => navigation.goBack(),
-            },
-          ]);
+          setOriginalAccountData({
+            title: title.trim(),
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            mobileCode: mobileCode.trim(),
+            mobileNumber: mobileNumber.trim(),
+            email: email.trim(),
+            companyName: companyName.trim(),
+            companyMobileCode: (companyMobileCode || mobileCode).trim(),
+            companyMobile: compnayMobile.trim(),
+          });
+
+          Alert.alert(
+            "Success",
+            response.data.message || "Your account information has been updated.",
+            [
+              {
+                text: "OK",
+                onPress: () => navigation.navigate("Profile"),
+              },
+            ],
+          );
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log("failed to update account: ", error);
-      Alert.alert("Error", "Failed to update account. Please try again.");
+      const errorMessage =
+        error?.response?.data?.message ||
+        "Failed to update account. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setUpdating(false);
     }
@@ -345,19 +429,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     setImagePickerModalVisible(true);
   };
 
-  // TAKE PHOTO
-  const handleTakePhoto = async () => {
+  const launchCamera = async () => {
     try {
-      setImagePickerModalVisible(false);
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Camera access is required to take a profile photo.",
-        );
-        return;
-      }
-
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
@@ -371,6 +444,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     } catch (error) {
       console.log("Error taking photo:", error);
       Alert.alert("Error", "Could not take photo. Please try again.");
+    }
+  };
+
+  // TAKE PHOTO
+  const handleTakePhoto = async () => {
+    try {
+      setImagePickerModalVisible(false);
+      const { status } = await ImagePicker.getCameraPermissionsAsync();
+      if (status !== "granted") {
+        setShowCameraPermission(true);
+        return;
+      }
+
+      await launchCamera();
+    } catch (error) {
+      console.log("Error checking camera permission:", error);
+      setShowCameraPermission(true);
     }
   };
 
@@ -435,6 +525,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           navigation={navigation}
           title="My Account"
           showBackButton={true}
+          onBackPress={() => navigation.navigate("Profile")}
         />
 
         {/* Delete ellipsis */}
@@ -819,6 +910,45 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 </View>
               </>
             )}
+
+            {/* Temporary Button to preview Notification Access Screen */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() =>
+                navigation.navigate("NotificationAccess", {
+                  returnScreen: "MyAccount",
+                })
+              }
+              style={{
+                marginTop: 24,
+                marginBottom: 10,
+                height: 48,
+                borderRadius: 24,
+                borderWidth: 1.5,
+                borderColor: "#FF9114",
+                borderStyle: "dashed",
+                backgroundColor: "#FFF8F0",
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color="#FF9114"
+              />
+              <Text
+                style={{
+                  color: "#FF9114",
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                Preview Notification Access (Temp)
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}
@@ -1167,6 +1297,24 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* CAMERA PERMISSION MODAL */}
+      <Modal
+        visible={showCameraPermission}
+        animationType="slide"
+        onRequestClose={() => setShowCameraPermission(false)}
+      >
+        <CameraAccess
+          onRequestPermission={ImagePicker.requestCameraPermissionsAsync}
+          onPermissionGranted={() => {
+            setShowCameraPermission(false);
+            setTimeout(() => {
+              launchCamera();
+            }, 300);
+          }}
+          onClose={() => setShowCameraPermission(false)}
+        />
       </Modal>
     </KeyboardAvoidingView>
   );

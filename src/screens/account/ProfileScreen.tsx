@@ -11,6 +11,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { logoutSuccess, updateUserProfile } from "@/store/authSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { tokenStorage } from "@/utils/tokenStorage";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
@@ -98,7 +99,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
       console.log("Logout API call error:", e);
     } finally {
       try {
-        await AsyncStorage.removeItem("userToken");
+        await tokenStorage.clearTokens();
         await AsyncStorage.removeItem("userProfile");
         await AsyncStorage.removeItem("userLoginTime");
 
@@ -379,7 +380,13 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             icon="thumbs-up"
             title="My Package Preferences"
             onPress={() => {
-              // navigation.navigate("PackagePreferences");
+              navigation.navigate("ExcludeListSummery", {
+                customerId: user?.id || 1002,
+                name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || undefined,
+                title: user?.title || undefined,
+                phoneNumber: user?.phoneNumber || undefined,
+                cusId: String(user?.id || 1002),
+              });
             }}
           />
 

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons"
-import { Image, Modal, Text, TouchableOpacity, View } from "react-native"
+import { Image, Modal, ScrollView, Text, TouchableOpacity, View } from "react-native"
 interface PackageItem {
     itemName: string;
     quantity: string;
@@ -67,7 +67,7 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                                 "600",
                         }}
                     >
-                        Packages (03)
+                        Packages ({String(packages.length).padStart(2, '0')})
                     </Text>
 
                     <TouchableOpacity
@@ -96,113 +96,111 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                     </TouchableOpacity>
                 </View>
 
-                {/* Selected package */}
-
-                {packages && packages.map((pkg) => (
-                    <View
-                        key={pkg.id}
-                        style={{
-                            borderWidth: 1,
-                            borderColor:
-                                "#DDE3E8",
-                            borderRadius: 20,
-                            paddingHorizontal:
-                                10,
-                            paddingVertical:
-                                12,
-                            marginBottom: 13
-                        }}
-                    >
-                        <Text
+                {/* Selected packages list with ScrollView */}
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    {packages && packages.map((pkg) => (
+                        <View
+                            key={pkg.id}
                             style={{
-                                fontSize: 12,
-                                fontWeight:
-                                    "600",
-                                marginBottom:
-                                    8,
+                                borderWidth: 1,
+                                borderColor:
+                                    "#DDE3E8",
+                                borderRadius: 20,
+                                paddingHorizontal:
+                                    10,
+                                paddingVertical:
+                                    12,
+                                marginBottom: 13
                             }}
                         >
-                            {
-                                pkg.name
-                            }{" "}
-                            (x
-                            {
-                                pkg.quantity
-                            }
-                            )
-                        </Text>
+                            <Text
+                                style={{
+                                    fontSize: 13,
+                                    fontWeight:
+                                        "600",
+                                    marginBottom:
+                                        8,
+                                }}
+                            >
+                                {
+                                    pkg.name
+                                }{" "}
+                                (x
+                                {
+                                    pkg.quantity
+                                }
+                                )
+                            </Text>
 
-                        {pkg.items.map(
-                            (
-                                item,
-                                index
-                            ) => (
-                                <View
-                                    key={`${item.itemName}-${index}`}
-                                    style={{
-                                        flexDirection:
-                                            "row",
-                                        alignItems:
-                                            "center",
-                                        paddingVertical:
-                                            10,
-                                        borderTopWidth:
-                                            index ===
-                                                0
-                                                ? 1
-                                                : 1,
-                                        borderTopColor:
-                                            "#ECEFF2",
-                                    }}
-                                >
-                                    <Image
-                                        source={{
-                                            uri: item.image,
-                                        }}
-                                        style={{
-                                            width: 30,
-                                            height: 30,
-                                            borderRadius: 15,
-                                            marginRight: 12,
-                                        }}
-                                    />
-
+                            {pkg.items && pkg.items.map(
+                                (
+                                    item,
+                                    index
+                                ) => (
                                     <View
+                                        key={`${item.itemName}-${index}`}
                                         style={{
-                                            flex: 1,
+                                            flexDirection:
+                                                "row",
+                                            alignItems:
+                                                "center",
+                                            paddingVertical:
+                                                10,
+                                            borderTopWidth:
+                                                1,
+                                            borderTopColor:
+                                                "#ECEFF2",
                                         }}
                                     >
-                                        <Text
-                                            style={{
-                                                fontSize: 12,
-                                                fontWeight:
-                                                    "500",
+                                        <Image
+                                            source={{
+                                                uri: item.image,
                                             }}
-                                        >
-                                            {
-                                                item.itemName
-                                            }
-                                        </Text>
+                                            style={{
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 15,
+                                                marginRight: 12,
+                                            }}
+                                        />
 
-                                        <Text
+                                        <View
                                             style={{
-                                                fontSize: 12,
-                                                color:
-                                                    "#5A5859",
-                                                marginTop:
-                                                    1,
+                                                flex: 1,
                                             }}
                                         >
-                                            {
-                                                item.quantity
-                                            }
-                                        </Text>
+                                            <Text
+                                                style={{
+                                                    fontSize: 13,
+                                                    fontWeight:
+                                                        "500",
+                                                }}
+                                            >
+                                                {
+                                                    item.itemName
+                                                }
+                                            </Text>
+
+                                            <Text
+                                                style={{
+                                                    fontSize: 12,
+                                                    color:
+                                                        "#5A5859",
+                                                    marginTop:
+                                                        1,
+                                                }}
+                                            >
+                                                {
+                                                    item.quantity
+                                                }
+                                            </Text>
+                                        </View>
                                     </View>
-                                </View>
-                            )
-                        )}
-                    </View>
-                ))}
+                                )
+                            )}
+                        </View>
+                    ))}
+                </ScrollView>
             </View>
         </View>
     </Modal>)

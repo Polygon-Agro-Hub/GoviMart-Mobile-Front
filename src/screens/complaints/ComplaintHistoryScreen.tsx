@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
+  BackHandler,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -101,6 +102,22 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
     });
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        navigation.navigate("Profile");
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack
+      );
+
+      return () => subscription.remove();
+    }, [navigation])
+  );
+
   return (
     <View className="flex-1 bg-white">
       <CustomHeader
@@ -108,6 +125,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
+        onBackPress={() => navigation.navigate("Profile")}
       />
 
       {loading ? (
@@ -130,20 +148,20 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
           {complaints.map((complaint) => (
             <View
               key={complaint.id}
-              className="w-full min-h-[132px] border border-[#DCE2E8] rounded-[19px] px-[23px] pt-3 pb-2.5 mb-4 bg-white"
+              className="w-full min-h-[132px] border border-[#DCE2E8] rounded-[19px] p-4 mb-4 bg-white"
             >
               {/* Complaint ID */}
-              <Text className="text-[13px] text-[#111111] mb-[7px]">
+              <Text className="text-[14px] font-semibold text-[#111111] mb-[6px]">
                 #{complaint.refId}
               </Text>
 
               {/* Category */}
-              <Text className="text-sm font-bold text-[#111111] mb-2.5">
+              <Text className="text-[15.5px] font-bold text-[#111111] mb-2.5">
                 {complaint.categoryEnglish}
               </Text>
 
               {/* Sent Date */}
-              <Text className="text-xs text-[#666666] mb-2.5">
+              <Text className="text-[13px] text-[#666666] mb-2.5">
                 Sent : {formatDate(complaint.createdAt)}
               </Text>
 
@@ -153,14 +171,14 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
                 {!(complaint.status === "Closed") ? (
                   <View className="h-[25px] px-2 rounded-[5px] bg-[#F4F4F4] flex-row items-center gap-1">
                     <Ionicons name="hourglass" size={12} color="#111" />
-                    <Text className="text-[11px] text-[#333333]">
+                    <Text className="text-[12px] text-[#333333]">
                       Waiting..
                     </Text>
                   </View>
                 ) : (
                   <View className="h-[25px] px-2 rounded-[5px] bg-[#E3FFEA] flex-row items-center gap-1 mr-1.5">
                     <Ionicons name="checkmark-circle" size={13} color="#000" />
-                    <Text className="text-[11px] text-[#111111]">Closed</Text>
+                    <Text className="text-[12px] text-[#111111]">Closed</Text>
                   </View>
                 )}
 
@@ -171,7 +189,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
                   className="h-[25px] px-[9px] rounded-[5px] bg-black justify-center items-center shadow-md"
                   style={{ elevation: 3 }}
                 >
-                  <Text className="text-[11px] text-white font-medium">
+                  <Text className="text-[12px] text-white font-semibold">
                     View Complaint
                   </Text>
                 </TouchableOpacity>
@@ -188,7 +206,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
                     elevation: complaint.reply ? 3 : 0,
                   }}
                 >
-                  <Text className="text-[11px] text-white font-medium">
+                  <Text className="text-[12px] text-white font-semibold">
                     View Reply
                   </Text>
                 </TouchableOpacity>

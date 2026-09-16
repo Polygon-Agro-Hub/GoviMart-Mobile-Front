@@ -59,13 +59,17 @@ const cartSlice = createSlice({
     increaseProductWeight: (state, action: PayloadAction<number>) => {
       const product = state.products.find((p) => p.id === action.payload);
       if (product) {
-        product.weight += product.step;
+        product.weight = product.unit === "kg"
+          ? parseFloat((product.weight + product.step).toFixed(3))
+          : Math.round(product.weight + product.step);
       }
     },
     decreaseProductWeight: (state, action: PayloadAction<number>) => {
       const product = state.products.find((p) => p.id === action.payload);
       if (product) {
-        const newWeight = product.weight - product.step;
+        const newWeight = product.unit === "kg"
+          ? parseFloat((product.weight - product.step).toFixed(3))
+          : Math.round(product.weight - product.step);
         if (newWeight >= product.minimumWeight) {
           product.weight = newWeight;
         }
@@ -78,14 +82,14 @@ const cartSlice = createSlice({
       const product = state.products.find((p) => p.id === action.payload.id);
       if (product && product.unit !== action.payload.newUnit) {
         if (action.payload.newUnit === "kg") {
-          product.weight = product.weight / 1000;
-          product.minimumWeight = product.minimumWeight / 1000;
-          product.step = product.step / 1000;
+          product.weight = parseFloat((product.weight / 1000).toFixed(3));
+          product.minimumWeight = parseFloat((product.minimumWeight / 1000).toFixed(3));
+          product.step = 0.5;
           product.unit = "kg";
         } else {
-          product.weight = product.weight * 1000;
-          product.minimumWeight = product.minimumWeight * 1000;
-          product.step = product.step * 1000;
+          product.weight = Math.round(product.weight * 1000);
+          product.minimumWeight = Math.round(product.minimumWeight * 1000);
+          product.step = product.minimumWeight >= 500 ? 500 : 100;
           product.unit = "g";
         }
       }

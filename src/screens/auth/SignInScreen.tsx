@@ -21,6 +21,7 @@ import { useDispatch } from "react-redux";
 import { loginSuccess, setRememberMeDetails } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
 import * as SecureStore from "expo-secure-store";
+import { tokenStorage } from "@/utils/tokenStorage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -115,7 +116,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         const loginTime = Date.now();
 
         await AsyncStorage.setItem("userLoginTime", loginTime.toString());
-        await AsyncStorage.setItem("userToken", token);
+        await tokenStorage.setToken(token);
         const userProfile = {
           firstName,
           lastName,
@@ -134,7 +135,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           await AsyncStorage.setItem("rememberMeEnabled", "true");
           await AsyncStorage.setItem("rememberedIdentifier", identifier.trim());
           if (refreshToken) {
-            await AsyncStorage.setItem("userRefreshToken", refreshToken);
+            await tokenStorage.setRefreshToken(refreshToken);
           }
           await SecureStore.setItemAsync("rememberedPassword", password.trim());
           dispatch(
@@ -159,22 +160,50 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         Alert.alert("Success", "Login successful!", [
           {
             text: "OK",
-            onPress: () => {
+            onPress: async () => {
+              let targetScreen: keyof RootStackParamList = "Home";
+              let targetParams: any = undefined;
+
               if (isDashUser === 1 && isPswUpdated === 0) {
-                navigation.navigate("UpdatePassword", {
+                targetScreen = "UpdatePassword";
+                targetParams = {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
                   number: phoneNumber,
                   redirectTo: "ExcludeListAdd",
-                });
+                };
               } else if (firstTimeUser === 0) {
-                navigation.navigate("ExcludeListAdd", {
+                targetScreen = "ExcludeListAdd";
+                targetParams = {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
                   number: phoneNumber,
-                });
+                };
               } else {
-                navigation.navigate("Home");
+                targetScreen = "Home";
+              }
+
+              try {
+                const hasAsked = await AsyncStorage.getItem(
+                  "hasAskedNotificationPermission",
+                );
+
+                if (hasAsked !== "true") {
+                  navigation.navigate("NotificationAccess", {
+                    returnScreen: targetScreen,
+                    returnParams: targetParams,
+                    blockBackNavigation: true,
+                  });
+                  return;
+                }
+              } catch (err) {
+                console.warn("Error reading notification permission flag:", err);
+              }
+
+              if (targetParams) {
+                navigation.navigate(targetScreen as any, targetParams);
+              } else {
+                navigation.navigate(targetScreen as any);
               }
             },
           },
