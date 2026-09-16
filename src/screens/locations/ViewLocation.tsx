@@ -5,8 +5,8 @@ import {
     TouchableOpacity,
     StatusBar,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
+import OpenStreetMap from "@/component/common/OpenStreetMap";
 import { RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 
@@ -56,46 +56,19 @@ const ViewLocation: React.FC<Props> = ({
                     flex: 1,
                 }}
             >
-                <MapView
-                    style={{
-                        flex: 1,
-                    }}
-                    initialRegion={{
-                        latitude: latitude,
-                        longitude: longitude,
-                        latitudeDelta: 0.01,
-                        longitudeDelta: 0.01,
-                    }}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                    rotateEnabled={false}
-                    pitchEnabled={false}
-                    toolbarEnabled={false}
-                >
-                    <Marker
-                        coordinate={{
-                            latitude: latitude,
-                            longitude: longitude,
-                        }}
-                        anchor={{
-                            x: 0.5,
-                            y: 1,
-                        }}
-                    >
-                        <View
-                            style={{
-                                justifyContent: "center",
-                                alignItems: "center",
-                            }}
-                        >
-                            <Ionicons
-                                name="location-sharp"
-                                size={35}
-                                color="#000"
-                            />
-                        </View>
-                    </Marker>
-                </MapView>
+                <OpenStreetMap
+                    latitude={latitude}
+                    longitude={longitude}
+                    zoom={15}
+                    interactive={true}
+                    pinColor="#000000"
+                    markers={[{
+                        latitude,
+                        longitude,
+                        title: title || "Delivery Location",
+                        color: "#000000"
+                    }]}
+                />
             </View>
         </View>
     );

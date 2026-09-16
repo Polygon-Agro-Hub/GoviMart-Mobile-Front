@@ -4,7 +4,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  StatusBar,
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -229,10 +228,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View className="flex-1 bg-[#FCEFD9]">
-      <StatusBar backgroundColor="#FCEFD9" barStyle="dark-content" />
-
       {/* Close Button */}
-
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         className="absolute right-5 top-3 z-50 bg-white w-11 h-11 rounded-full items-center justify-center"

@@ -9,7 +9,6 @@ import {
   Linking,
   ScrollView,
   Platform,
-  StatusBar,
   LayoutChangeEvent,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -154,7 +153,6 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
 
   return (
     <View style={{ flex: 1, backgroundColor: "#121212" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView
         className="flex-1 px-5"
         onLayout={(e: LayoutChangeEvent) =>

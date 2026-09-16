@@ -7,7 +7,7 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import MapView, { Marker } from "react-native-maps";
+import OpenStreetMap from "@/component/common/OpenStreetMap";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../types/types";
@@ -46,7 +46,7 @@ interface PickupCentre {
     closingTime: string;
     latitude: number;
     longitude: number;
-    mapImage: string;
+    mapImage?: string;
 }
 
 const ChoosePickupCentre: React.FC<Props> = ({
@@ -81,7 +81,6 @@ const ChoosePickupCentre: React.FC<Props> = ({
                         closingTime: "09:00 PM",
                         latitude: parseFloat(item.latitude) || 6.9271,
                         longitude: parseFloat(item.longitude) || 79.8612,
-                        mapImage: `https://maps.googleapis.com/maps/api/staticmap?center=${item.latitude || 6.9271},${item.longitude || 79.8612}&zoom=14&size=600x400&maptype=roadmap`,
                     }));
                     setPickupCentres(mapped);
                     // Keep unselected by default so user sees "Select Your City"
@@ -240,52 +239,22 @@ const ChoosePickupCentre: React.FC<Props> = ({
                         </View>
                     ) : selectedCentre ? (
                         <>
-                            <MapView
+                            <OpenStreetMap
                                 key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                }}
-                                mapType="standard"
-                                initialRegion={{
+                                latitude={selectedCentre.latitude}
+                                longitude={selectedCentre.longitude}
+                                zoom={15}
+                                interactive={true}
+                                pinColor="#FF0000"
+                                markers={[{
+                                    id: selectedCentre.id,
                                     latitude: selectedCentre.latitude,
                                     longitude: selectedCentre.longitude,
-                                    latitudeDelta: 0.012,
-                                    longitudeDelta: 0.012,
-                                }}
-                                region={{
-                                    latitude: selectedCentre.latitude,
-                                    longitude: selectedCentre.longitude,
-                                    latitudeDelta: 0.012,
-                                    longitudeDelta: 0.012,
-                                }}
-                                showsUserLocation={false}
-                                showsMyLocationButton={false}
-                                showsCompass={true}
-                                toolbarEnabled={false}
-                            >
-                                <Marker
-                                    coordinate={{
-                                        latitude: selectedCentre.latitude,
-                                        longitude: selectedCentre.longitude,
-                                    }}
-                                    title={selectedCentre.name}
-                                    description={`${selectedCentre.city}, ${selectedCentre.district}`}
-                                >
-                                    <View
-                                        style={{
-                                            justifyContent: "center",
-                                            alignItems: "center",
-                                        }}
-                                    >
-                                        <Ionicons
-                                            name="location-sharp"
-                                            size={36}
-                                            color="#FF0000"
-                                        />
-                                    </View>
-                                </Marker>
-                            </MapView>
+                                    title: selectedCentre.name,
+                                    description: `${selectedCentre.city}, ${selectedCentre.district}`,
+                                    color: "#FF0000"
+                                }]}
+                            />
 
                             {/* Map centre popup badge overlay */}
                             <View

@@ -910,45 +910,6 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 </View>
               </>
             )}
-
-            {/* Temporary Button to preview Notification Access Screen */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() =>
-                navigation.navigate("NotificationAccess", {
-                  returnScreen: "MyAccount",
-                })
-              }
-              style={{
-                marginTop: 24,
-                marginBottom: 10,
-                height: 48,
-                borderRadius: 24,
-                borderWidth: 1.5,
-                borderColor: "#FF9114",
-                borderStyle: "dashed",
-                backgroundColor: "#FFF8F0",
-                flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color="#FF9114"
-              />
-              <Text
-                style={{
-                  color: "#FF9114",
-                  fontSize: 14,
-                  fontWeight: "700",
-                }}
-              >
-                Preview Notification Access (Temp)
-              </Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       )}

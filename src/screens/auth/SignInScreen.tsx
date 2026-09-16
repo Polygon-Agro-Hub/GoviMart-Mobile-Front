@@ -23,6 +23,7 @@ import authService from "@/services/auth/auth.service";
 import * as SecureStore from "expo-secure-store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import socketService from "@/services/socket/socket.service";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.4;
@@ -130,6 +131,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
 
         dispatch(loginSuccess({ token, userProfile, loginTime }));
+        if (userProfile.id) {
+          socketService.registerUser(userProfile.id, token);
+        }
 
         if (rememberMe) {
           await AsyncStorage.setItem("rememberMeEnabled", "true");

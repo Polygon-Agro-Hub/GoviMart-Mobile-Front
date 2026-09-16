@@ -9,9 +9,7 @@ import {
   Linking,
   ScrollView,
   Platform,
-  StatusBar,
   LayoutChangeEvent,
-  PermissionsAndroid,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -19,6 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RootStackParamList } from "@/types/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import pushNotificationService from "@/services/notification/pushNotification.service";
 
 type NotificationAccessNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -124,14 +123,8 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
   const requestNotificationAccess = async () => {
     setIsLoading(true);
     try {
-      let isGranted = true;
-
-      if (Platform.OS === "android" && Platform.Version >= 33) {
-        const result = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        );
-        isGranted = result === PermissionsAndroid.RESULTS.GRANTED;
-      }
+      const isGranted = await pushNotificationService.requestPermissions();
+      await pushNotificationService.init();
 
       await AsyncStorage.setItem("hasAskedNotificationPermission", "true");
 
@@ -167,7 +160,6 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
 
   return (
     <View style={{ flex: 1, backgroundColor: "#121212" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView
         className="flex-1 px-5"
         onLayout={(e: LayoutChangeEvent) =>

@@ -12,8 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
@@ -22,26 +21,19 @@ import CustomHeader from "@/component/common/CustomHeader";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
-import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
-import { PayHereAdapter } from "@/services/payment/payhere.adapter";
-import { PayHereCheckoutModal } from "@/component/payment/PayHereCheckoutModal";
+// Note: PayHere adapter and modal files are preserved in the codebase and can be relinked if needed.
 
 type PaymentScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
   "PaymentScreen"
 >;
 
-type PaymentScreenRouteProp = RouteProp<
-  RootStackParamList,
-  "PaymentScreen"
->;
+type PaymentScreenRouteProp = RouteProp<RootStackParamList, "PaymentScreen">;
 
 interface Props {
   navigation: PaymentScreenNavigationProp;
   route: PaymentScreenRouteProp;
 }
-
-type SelectedPaymentMethod = "payhere" | "card_form";
 
 const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   const initialAmount = route.params?.amount || 0;
@@ -52,17 +44,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   const [subTotal, setSubTotal] = useState<number>(initialAmount);
   const [loading, setLoading] = useState<boolean>(!initialAmount);
 
-  // Selected Gateway / Method
-  const [selectedMethod, setSelectedMethod] = useState<SelectedPaymentMethod>("payhere");
-
-  // ─── PAYHERE MODAL STATE (Via Adapter Pattern) ────────────────────────────
-  const [showPayHereModal, setShowPayHereModal] = useState(false);
-  const [payHereConfig, setPayHereConfig] = useState<any>(null);
-  const [payHereHtml, setPayHereHtml] = useState("");
-  const [payHereOrderId, setPayHereOrderId] = useState("");
-
-  // ─── CARD PAYMENT MODAL STATE ─────────────────────────────────────────────
-  const [showCardModal, setShowCardModal] = useState(false);
+  // ─── CARD PAYMENT STATE ───────────────────────────────────────────────────
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [nameOnCard, setNameOnCard] = useState("");
@@ -101,115 +83,6 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-  };
-
-  // ─── PAYHERE GATEWAY INITIATION VIA ADAPTER PATTERN ───────────────────────
-  const handlePayWithPayHere = async () => {
-    try {
-      setSubmitting(true);
-
-      // 1. Get PayHere Adapter from Factory
-      const payHereAdapter = PaymentGatewayFactory.getAdapter("payhere") as PayHereAdapter;
-
-      // 2. Initiate Payment Session (Fetches signed parameters & MD5 hash from API)
-      const paymentConfig = await payHereAdapter.initiatePayment({
-        amount: fullTotal,
-        itemsDescription: isClearBalanceFlow
-          ? "Clear Negative Credit Balance"
-          : "GoviMart Order Payment",
-        paymentType: isClearBalanceFlow ? "clear_balance" : "order",
-        orderId: isClearBalanceFlow
-          ? undefined
-          : orderContext?.cartId
-          ? `ORD_${orderContext.cartId}_${Date.now()}`
-          : undefined,
-      });
-
-      // 3. Build in-app checkout HTML form using Adapter
-      const html = payHereAdapter.generateHtmlForm(paymentConfig);
-
-      setPayHereConfig(paymentConfig);
-      setPayHereHtml(html);
-      setPayHereOrderId(paymentConfig.order_id);
-      setShowPayHereModal(true);
-    } catch (err: any) {
-      console.error("PayHere Adapter initiation error:", err);
-      Alert.alert(
-        "PayHere Error",
-        err?.response?.data?.message || err?.message || "Failed to launch PayHere checkout. Please try again."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ─── PAYHERE SUCCESS CALLBACK ─────────────────────────────────────────────
-  const handlePayHereSuccess = async (orderId: string) => {
-    console.log("[PayHere] Payment success callback for:", orderId);
-
-    if (isClearBalanceFlow) {
-      try {
-        setSubmitting(true);
-        // Clear user balance in backend
-        await customerService.updateCreditBalance(subTotal);
-        setShowSuccessModal(true);
-      } catch (err: any) {
-        console.error("Error clearing balance after PayHere:", err);
-        setShowSuccessModal(true); // Webhook will also process this as backup
-      } finally {
-        setSubmitting(false);
-      }
-    } else {
-      // Order payment flow
-      try {
-        setSubmitting(true);
-        const payload = {
-          cartId: orderContext?.cartId || 0,
-          paymentMethod: "card",
-          grandTotal: orderContext?.grandTotal || fullTotal,
-          discountAmount: orderContext?.discount || 0,
-          deliveryCharge: orderContext?.deliveryCharge || 0,
-          creditPaid: orderContext?.creditPaid || 0,
-          moneyPaid: orderContext?.moneyPaid || fullTotal,
-          isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
-          checkoutDetails: {
-            ...(orderContext?.checkoutDetails || {
-              deliveryMethod: orderContext?.deliveryMethod || "home",
-            }),
-            payhereOrderId: orderId,
-          },
-        };
-
-        const response = await orderService.createOrder(payload);
-        if (response.data && response.data.status && response.data.data) {
-          setShowPayHereModal(false);
-          dispatch(clearCart());
-          navigation.navigate("OrderConfirmed", {
-            orderId: response.data.data.orderId,
-            invoiceNumber: response.data.data.invoiceNumber,
-            total: response.data.data.total,
-            orderContext,
-          });
-        } else {
-          Alert.alert("Order Placed", response.data?.message || "Payment received, finalizing order...");
-        }
-      } catch (err: any) {
-        console.error("Error creating order after PayHere:", err);
-        dispatch(clearCart());
-        navigation.navigate("OrderConfirmed", {
-          total: fullTotal,
-          orderContext,
-        });
-      } finally {
-        setSubmitting(false);
-      }
-    }
-  };
-
-  // ─── PAYHERE CANCEL CALLBACK ─────────────────────────────────────────────
-  const handlePayHereCancel = (orderId: string) => {
-    console.log("[PayHere] Payment cancelled by user:", orderId);
-    Alert.alert("Payment Cancelled", "You cancelled the PayHere transaction. No charges were made.");
   };
 
   // ─── CARD INPUT FORMATTING ────────────────────────────────────────────────
@@ -292,17 +165,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     return true;
   };
 
-  // ─── PRIMARY BUTTON DISPATCHER ────────────────────────────────────────────
-  const handlePrimaryAction = () => {
-    if (selectedMethod === "payhere") {
-      handlePayWithPayHere();
-    } else {
-      setShowCardModal(true);
-    }
-  };
-
-  // ─── PROCESS DIRECT CARD PAYMENT ──────────────────────────────────────────
-  const handleExecuteClearBalance = async () => {
+  // ─── PROCESS CARD PAYMENT ─────────────────────────────────────────────────
+  const handleExecutePayment = async () => {
     if (!validateCardDetails()) {
       return;
     }
@@ -315,10 +179,11 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         const response = await customerService.updateCreditBalance(subTotal);
 
         if (response.data && response.data.status) {
-          setShowCardModal(false);
           setShowSuccessModal(true);
         } else {
-          setCardError(response.data?.message || "Failed to clear credit balance.");
+          setCardError(
+            response.data?.message || "Failed to clear credit balance.",
+          );
         }
       } else {
         // Direct card flow for order placement
@@ -340,7 +205,6 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
         const response = await orderService.createOrder(payload);
         if (response.data && response.data.status && response.data.data) {
-          setShowCardModal(false);
           dispatch(clearCart());
           navigation.navigate("OrderConfirmed", {
             orderId: response.data.data.orderId,
@@ -349,14 +213,19 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             orderContext,
           });
         } else {
-          setCardError(response.data?.message || "Failed to create order. Please try again.");
+          setCardError(
+            response.data?.message ||
+              "Failed to create order. Please try again.",
+          );
         }
       }
     } catch (err: any) {
       const errorData = err?.response?.data;
       const errorMsg =
         errorData?.message ||
-        (Array.isArray(errorData?.details) ? errorData.details.join("; ") : null) ||
+        (Array.isArray(errorData?.details)
+          ? errorData.details.join("; ")
+          : null) ||
         err?.message ||
         "Payment failed. Please check your card details and try again.";
       setCardError(errorMsg);
@@ -371,7 +240,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* ─── HEADER ──────────────────────────────────────────────────────── */}
       <CustomHeader
         title={headerTitle}
@@ -380,28 +249,33 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       />
 
       {loading ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
           <ActivityIndicator size="large" color="#000000" />
           <Text style={{ marginTop: 10, fontSize: 13, color: "#666" }}>
             Loading Payment Summary...
           </Text>
         </View>
       ) : (
-        <View style={{ flex: 1, justifyContent: "space-between" }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
+        >
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
               paddingTop: 10,
-              paddingBottom: 30,
+              paddingBottom: 40,
             }}
           >
             {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
-            <View style={{ alignItems: "center", marginVertical: 14 }}>
+            <View style={{ alignItems: "center", marginVertical: 10 }}>
               <Image
                 source={require("@/assets/images/payment/payment-summery.webp")}
                 style={{
-                  width: 170,
-                  height: 170,
+                  width: 140,
+                  height: 140,
                   resizeMode: "contain",
                 }}
               />
@@ -415,7 +289,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 borderColor: "#E5E7EB",
                 borderRadius: 20,
                 paddingHorizontal: 18,
-                paddingVertical: 18,
+                paddingVertical: 16,
                 marginHorizontal: 16,
               }}
             >
@@ -425,7 +299,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: 14,
+                  marginBottom: 12,
                 }}
               >
                 <Text
@@ -457,7 +331,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 style={{
                   height: 1,
                   backgroundColor: "#E5E7EB",
-                  marginBottom: 16,
+                  marginBottom: 12,
                 }}
               />
 
@@ -471,7 +345,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               >
                 <Text
                   style={{
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: "600",
                     color: "#111827",
                   }}
@@ -480,7 +354,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
                 <Text
                   style={{
-                    fontSize: 19,
+                    fontSize: 18,
                     fontWeight: "800",
                     color: "#000000",
                   }}
@@ -490,378 +364,46 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* ─── PAYMENT METHOD SELECTION (PayHere vs Card) ─────────────── */}
-            <View style={{ marginHorizontal: 16, marginTop: 18 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: "#0F172A",
-                  marginBottom: 10,
-                }}
-              >
-                Select Payment Option
-              </Text>
-
-              {/* Option 1: PayHere Payment Gateway */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setSelectedMethod("payhere")}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 14,
-                  borderRadius: 16,
-                  borderWidth: 1.5,
-                  borderColor: selectedMethod === "payhere" ? "#3E206D" : "#E2E8F0",
-                  backgroundColor: selectedMethod === "payhere" ? "#FAF5FF" : "#FFFFFF",
-                  marginBottom: 10,
-                }}
-              >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: 2,
-                    borderColor: selectedMethod === "payhere" ? "#3E206D" : "#94A3B8",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  {selectedMethod === "payhere" && (
-                    <View
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 5,
-                        backgroundColor: "#3E206D",
-                      }}
-                    />
-                  )}
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: "700",
-                        color: "#0F172A",
-                      }}
-                    >
-                      PayHere Online Gateway
-                    </Text>
-                    <View
-                      style={{
-                        backgroundColor: "#16A34A",
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>
-                        POPULAR
-                      </Text>
-                    </View>
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      color: "#64748B",
-                      marginTop: 2,
-                    }}
-                  >
-                    Visa, Mastercard, Frimi, Genie, EzCash, mCash
-                  </Text>
-                </View>
-
-                <Ionicons name="card" size={22} color="#3E206D" />
-              </TouchableOpacity>
-
-              {/* Option 2: Direct Card Input Form */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setSelectedMethod("card_form")}
+            {/* ─── CARD DETAILS SECTION ───────────────────────────────────── */}
+            <View
+              style={{
+                marginHorizontal: 16,
+                marginTop: 18,
+                backgroundColor: "#FFFFFF",
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                padding: 16,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 1,
+              }}
+            >
+              {/* Card Section Header */}
+              <View
                 style={{
                   flexDirection: "row",
+                  justifyContent: "space-between",
                   alignItems: "center",
-                  padding: 14,
-                  borderRadius: 16,
-                  borderWidth: 1.5,
-                  borderColor: selectedMethod === "card_form" ? "#3E206D" : "#E2E8F0",
-                  backgroundColor: selectedMethod === "card_form" ? "#FAF5FF" : "#FFFFFF",
+                  marginBottom: 14,
                 }}
               >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: 2,
-                    borderColor: selectedMethod === "card_form" ? "#3E206D" : "#94A3B8",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  {selectedMethod === "card_form" && (
-                    <View
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 5,
-                        backgroundColor: "#3E206D",
-                      }}
-                    />
-                  )}
-                </View>
-
-                <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Ionicons name="card" size={20} color="#3E206D" />
                   <Text
                     style={{
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: "700",
                       color: "#0F172A",
                     }}
                   >
-                    Direct Card Form
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      color: "#64748B",
-                      marginTop: 2,
-                    }}
-                  >
-                    Enter 16-digit card number directly in-app
+                    Card Details
                   </Text>
                 </View>
 
-                <Ionicons name="keypad" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* ─── SECURE PAYMENT BANNER ───────────────────────────────────── */}
-            <View
-              style={{
-                backgroundColor: "#EDFFF2",
-                borderRadius: 16,
-                paddingHorizontal: 14,
-                paddingVertical: 14,
-                marginHorizontal: 16,
-                marginTop: 16,
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#C6F6D5",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#2D5A3C",
-                  fontWeight: "500",
-                  flex: 1,
-                  lineHeight: 16,
-                }}
-              >
-                Your payment is 100% secure and processed through verified encryption standards.
-              </Text>
-            </View>
-          </ScrollView>
-
-          {/* ─── BOTTOM BUTTON ────────────────────────────────────────────── */}
-          <View
-            style={{
-              paddingHorizontal: 16,
-              paddingBottom: 24,
-              paddingTop: 10,
-              backgroundColor: "#FFFFFF",
-              borderTopWidth: 1,
-              borderColor: "#F1F5F9",
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={submitting ? 1 : 0.85}
-              disabled={submitting}
-              onPress={handlePrimaryAction}
-              style={{
-                height: 52,
-                backgroundColor: "#000000",
-                borderRadius: 28,
-                justifyContent: "center",
-                alignItems: "center",
-                flexDirection: "row",
-                gap: 8,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.15,
-                shadowRadius: 5,
-                elevation: 4,
-              }}
-            >
-              {submitting && !showCardModal && !showPayHereModal ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="lock-closed" size={17} color="#FFFFFF" />
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: 16,
-                      fontWeight: "700",
-                    }}
-                  >
-                    {selectedMethod === "payhere"
-                      ? `Pay Rs. ${formatAmount(fullTotal)} with PayHere`
-                      : `Enter Card Details (Rs. ${formatAmount(fullTotal)})`}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* ─── PAYHERE CHECKOUT MODAL (Via Adapter Pattern) ─────────────────── */}
-      <PayHereCheckoutModal
-        visible={showPayHereModal}
-        htmlForm={payHereHtml}
-        checkoutUrl={payHereConfig?.checkout_url}
-        postBody={payHereConfig?.post_body}
-        domain={payHereConfig?.domain}
-        orderId={payHereOrderId}
-        amount={fullTotal}
-        onSuccess={handlePayHereSuccess}
-        onCancel={handlePayHereCancel}
-        onClose={() => setShowPayHereModal(false)}
-      />
-
-      {/* ─── DIRECT CARD PAYMENT MODAL ────────────────────────────────────── */}
-      <Modal
-        visible={showCardModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => !submitting && setShowCardModal(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 20,
-              paddingTop: 20,
-              paddingBottom: 34,
-              maxHeight: "90%",
-            }}
-          >
-            {/* Modal Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 16,
-              }}
-            >
-              <View>
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "700",
-                    color: "#0F172A",
-                  }}
-                >
-                  Enter Card Details
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#64748B",
-                    marginTop: 2,
-                  }}
-                >
-                  Pay Rs. {formatAmount(fullTotal)} securely
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => !submitting && setShowCardModal(false)}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#F1F5F9",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Card Number Input */}
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: "#334155",
-                  marginBottom: 6,
-                  marginTop: 6,
-                }}
-              >
-                Card Number
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#CBD5E1",
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  height: 50,
-                }}
-              >
-                <TextInput
-                  value={cardNumber}
-                  onChangeText={handleCardNumberChange}
-                  placeholder="0000 0000 0000 0000"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
-                  maxLength={19}
-                  style={{
-                    flex: 1,
-                    fontSize: 15,
-                    color: "#0F172A",
-                    fontWeight: "500",
-                  }}
-                />
-
+                {/* Card Type Badges */}
                 <View style={{ flexDirection: "row", gap: 6 }}>
                   <View
                     style={{
@@ -874,7 +416,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text
                       style={{
                         color: "#FFFFFF",
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: "700",
                       }}
                     >
@@ -892,7 +434,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text
                       style={{
                         color: "#FFFFFF",
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: "700",
                       }}
                     >
@@ -902,14 +444,54 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               </View>
 
-              {/* Name on Card Input */}
+              {/* Card Number Input */}
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: "600",
                   color: "#334155",
                   marginBottom: 6,
-                  marginTop: 14,
+                }}
+              >
+                Card Number
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#CBD5E1",
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  height: 48,
+                  marginBottom: 12,
+                }}
+              >
+                <TextInput
+                  value={cardNumber}
+                  onChangeText={handleCardNumberChange}
+                  placeholder="0000 0000 0000 0000"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="number-pad"
+                  maxLength={19}
+                  style={{
+                    flex: 1,
+                    fontSize: 14.5,
+                    color: "#0F172A",
+                    fontWeight: "500",
+                  }}
+                />
+                <Ionicons name="card-outline" size={18} color="#94A3B8" />
+              </View>
+
+              {/* Name on Card Input */}
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: "600",
+                  color: "#334155",
+                  marginBottom: 6,
                 }}
               >
                 Name on Card
@@ -926,19 +508,20 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   borderColor: "#CBD5E1",
                   borderRadius: 12,
                   paddingHorizontal: 14,
-                  height: 50,
-                  fontSize: 15,
+                  height: 48,
+                  fontSize: 14.5,
                   color: "#0F172A",
                   fontWeight: "500",
+                  marginBottom: 12,
                 }}
               />
 
-              {/* Expiration Date & CVV */}
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 14 }}>
+              {/* Expiry Date & CVV */}
+              <View style={{ flexDirection: "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontWeight: "600",
                       color: "#334155",
                       marginBottom: 6,
@@ -959,8 +542,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       borderColor: "#CBD5E1",
                       borderRadius: 12,
                       paddingHorizontal: 14,
-                      height: 50,
-                      fontSize: 15,
+                      height: 48,
+                      fontSize: 14.5,
                       color: "#0F172A",
                       fontWeight: "500",
                     }}
@@ -970,7 +553,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontWeight: "600",
                       color: "#334155",
                       marginBottom: 6,
@@ -992,8 +575,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       borderColor: "#CBD5E1",
                       borderRadius: 12,
                       paddingHorizontal: 14,
-                      height: 50,
-                      fontSize: 15,
+                      height: 48,
+                      fontSize: 14.5,
                       color: "#0F172A",
                       fontWeight: "500",
                     }}
@@ -1008,59 +591,111 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     backgroundColor: "#FEF2F2",
                     borderRadius: 8,
                     padding: 10,
-                    marginTop: 14,
+                    marginTop: 12,
                     borderWidth: 1,
                     borderColor: "#FECACA",
                   }}
                 >
-                  <Text style={{ color: "#DC2626", fontSize: 13 }}>
+                  <Text style={{ color: "#DC2626", fontSize: 12.5 }}>
                     {cardError}
                   </Text>
                 </View>
               )}
+            </View>
 
-              {/* Submit Pay Now Button */}
-              <TouchableOpacity
-                activeOpacity={submitting ? 1 : 0.85}
-                disabled={submitting}
-                onPress={handleExecuteClearBalance}
+            {/* ─── SECURE PAYMENT BANNER ───────────────────────────────────── */}
+            <View
+              style={{
+                backgroundColor: "#EDFFF2",
+                borderRadius: 16,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                marginHorizontal: 16,
+                marginTop: 14,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <View
                 style={{
-                  height: 52,
-                  backgroundColor: "#3E206D",
-                  borderRadius: 26,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: "#C6F6D5",
                   justifyContent: "center",
                   alignItems: "center",
-                  marginTop: 22,
-                  flexDirection: "row",
-                  gap: 8,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 4,
-                  elevation: 3,
+                  marginRight: 10,
                 }}
               >
-                {submitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontSize: 16,
-                        fontWeight: "700",
-                      }}
-                    >
-                      Pay Rs. {formatAmount(fullTotal)} Now
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
+                <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
+              </View>
+
+              <Text
+                style={{
+                  fontSize: 11.5,
+                  color: "#2D5A3C",
+                  fontWeight: "500",
+                  flex: 1,
+                  lineHeight: 15,
+                }}
+              >
+                Your payment is 100% secure and processed through verified
+                encryption standards.
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* ─── BOTTOM SUBMIT BUTTON ─────────────────────────────────────── */}
+          <View
+            style={{
+              paddingHorizontal: 16,
+              paddingBottom: Platform.OS === "ios" ? 30 : 20,
+              paddingTop: 10,
+              backgroundColor: "#FFFFFF",
+              borderTopWidth: 1,
+              borderColor: "#F1F5F9",
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={submitting ? 1 : 0.85}
+              disabled={submitting}
+              onPress={handleExecutePayment}
+              style={{
+                height: 52,
+                backgroundColor: "#3E206D",
+                borderRadius: 28,
+                justifyContent: "center",
+                alignItems: "center",
+                flexDirection: "row",
+                gap: 8,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.15,
+                shadowRadius: 5,
+                elevation: 4,
+              }}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="lock-closed" size={17} color="#FFFFFF" />
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 16,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Pay Rs. {formatAmount(fullTotal)} Now
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
+      )}
+
 
       {/* ─── PAYMENT SUCCESS MODAL ────────────────────────────────────────── */}
       <Modal
@@ -1159,7 +794,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 

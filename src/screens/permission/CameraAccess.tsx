@@ -9,7 +9,6 @@ import {
   Linking,
   ScrollView,
   Platform,
-  StatusBar,
   LayoutChangeEvent,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -153,7 +152,6 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
 
   return (
     <View style={{ flex: 1, backgroundColor: "#121212" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView
         className="flex-1 px-5"
         onLayout={(e: LayoutChangeEvent) =>

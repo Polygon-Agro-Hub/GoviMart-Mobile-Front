@@ -7,16 +7,12 @@ import {
     ActivityIndicator,
     Platform,
 } from "react-native";
-import MapView, {
-    Marker,
-    MapPressEvent,
-    Region,
-} from "react-native-maps";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import OpenStreetMap from "@/component/common/OpenStreetMap";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import LocationAccess from "@/screens/permission/LocationAccess";
 
@@ -31,19 +27,16 @@ interface Props {
 
 const SetLocation: React.FC<Props> = ({ navigation }) => {
     // Default fallback location (Sri Lanka center)
-    const initialRegion: Region = {
+    const initialLocation = {
         latitude: 6.9271,
         longitude: 79.8612,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
     };
 
     const [selectedLocation, setSelectedLocation] = useState({
-        latitude: initialRegion.latitude,
-        longitude: initialRegion.longitude,
+        latitude: initialLocation.latitude,
+        longitude: initialLocation.longitude,
     });
 
-    const [region, setRegion] = useState<Region>(initialRegion);
     const [loadingLocation, setLoadingLocation] = useState(false);
     const [showPermissionUI, setShowPermissionUI] = useState(false);
 
@@ -81,14 +74,7 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
 
             if (location && location.coords) {
                 const { latitude, longitude } = location.coords;
-                const newRegion: Region = {
-                    latitude,
-                    longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                };
                 setSelectedLocation({ latitude, longitude });
-                setRegion(newRegion);
             }
         } catch (error) {
             console.error("Current location error:", error);
@@ -113,12 +99,6 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                     const lat = Number(storedLat);
                     const lng = Number(storedLng);
                     setSelectedLocation({ latitude: lat, longitude: lng });
-                    setRegion({
-                        latitude: lat,
-                        longitude: lng,
-                        latitudeDelta: 0.01,
-                        longitudeDelta: 0.01,
-                    });
                 } else {
                     const perm = await Location.getForegroundPermissionsAsync();
                     if (perm.status === "granted") {
@@ -134,10 +114,9 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
         initLocation();
     }, []);
 
-    // MAP PRESS
-    const handleMapPress = (event: MapPressEvent) => {
-        const { latitude, longitude } = event.nativeEvent.coordinate;
-        setSelectedLocation({ latitude, longitude });
+    // MAP LOCATION SELECT
+    const handleLocationSelect = (coord: { latitude: number; longitude: number }) => {
+        setSelectedLocation(coord);
     };
 
     // CURRENT LOCATION BUTTON
@@ -246,43 +225,14 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
                     flex: 1,
                 }}
             >
-                <MapView
-                    style={{
-                        flex: 1,
-                    }}
-                    initialRegion={initialRegion}
-                    region={region}
-                    onRegionChangeComplete={(newRegion) => {
-                        setRegion(newRegion);
-                    }}
-                    onPress={handleMapPress}
-                    showsUserLocation={false}
-                    showsMyLocationButton={false}
-                    showsCompass={false}
-                    toolbarEnabled={false}
-                >
-                    {/* Selected Location */}
-                    <Marker
-                        coordinate={selectedLocation}
-                        anchor={{
-                            x: 0.5,
-                            y: 1.0,
-                        }}
-                    >
-                        <View
-                            style={{
-                                justifyContent: "center",
-                                alignItems: "center",
-                            }}
-                        >
-                            <Ionicons
-                                name="location"
-                                size={36}
-                                color="#000000"
-                            />
-                        </View>
-                    </Marker>
-                </MapView>
+                <OpenStreetMap
+                    latitude={selectedLocation.latitude}
+                    longitude={selectedLocation.longitude}
+                    zoom={16}
+                    interactive={true}
+                    pinColor="#000000"
+                    onLocationSelect={handleLocationSelect}
+                />
             </View>
 
             {/* BOTTOM ACTIONS */}

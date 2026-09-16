@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { useSelector, useDispatch } from "react-redux";
@@ -159,9 +158,9 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#FCEFD9] items-center justify-center">
+      <View className="flex-1 bg-[#FCEFD9] items-center justify-center">
         <ActivityIndicator size="large" color="#000" />
-      </SafeAreaView>
+      </View>
     );
   }
 

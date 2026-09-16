@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Image, StatusBar, Text } from "react-native";
+import { View, Image, Text } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
@@ -8,6 +8,7 @@ import { useDispatch } from "react-redux";
 import { loginSuccess } from "@/store/authSlice";
 import authService from "@/services/auth/auth.service";
 import { tokenStorage } from "@/utils/tokenStorage";
+import socketService from "@/services/socket/socket.service";
 
 const logo = require("@/assets/images/public/polygon-logo.png");
 
@@ -36,6 +37,9 @@ const Splash: React.FC = () => {
             const userProfile = JSON.parse(profileStr);
             // Preload to Redux store
             dispatch(loginSuccess({ token, userProfile, loginTime }));
+            if (userProfile.id) {
+              socketService.registerUser(userProfile.id, token);
+            }
             navigation.replace("Home");
             return;
           } else {
@@ -55,6 +59,9 @@ const Splash: React.FC = () => {
 
                   // Preload to Redux store and navigate to Home
                   dispatch(loginSuccess({ token: newToken, userProfile, loginTime: newLoginTime }));
+                  if (userProfile.id) {
+                    socketService.registerUser(userProfile.id, newToken);
+                  }
                   navigation.replace("Home");
                   return;
                 }
@@ -79,7 +86,6 @@ const Splash: React.FC = () => {
 
   return (
     <View className="flex-1 bg-white justify-center items-center">
-      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
       <View className="items-center justify-center">
         <Image
           source={logo}
