@@ -256,7 +256,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     const currentHour = new Date().getHours();
     // Package review window is from 8:00 AM to 6:00 PM (08:00 - 18:00)
     // Past 6:00 PM (or before 8:00 AM), time ran out for the day
-    return currentHour >= 24 || currentHour < 0;
+    return currentHour >= 18 || currentHour < 8;
   }, []);
   // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
   const nextScheduleDateStr = useMemo(() => {
@@ -2250,37 +2250,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}
                 >
                   Rs. {formatPrice(alacartTotal)}
-                </Text>
-              </View>
-            </>
-          )}
-
-          {deliveryCharge > 0 && (
-            <>
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: "#E1E7EE",
-                  marginVertical: 14,
-                }}
-              />
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingVertical: 2,
-                }}
-              >
-                <Text
-                  style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}
-                >
-                  Delivery Charge
-                </Text>
-                <Text
-                  style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}
-                >
-                  Rs. {formatPrice(deliveryCharge)}
                 </Text>
               </View>
             </>
