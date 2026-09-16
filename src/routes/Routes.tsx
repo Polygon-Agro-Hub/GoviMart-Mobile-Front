@@ -203,6 +203,8 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "Notification", component: Notifications, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ExcludeListAdd", component: ExcludeListAdd, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ExcludeListSummery", component: ExcludeListSummery, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
 ];
 
 // ============================================================================
@@ -214,8 +216,6 @@ export const RETAIL_STACK_SCREENS: StackRouteConfig[] = [
   { name: "SetQauntity", component: ChangeProductQuantity, allowedRoles: [ROLES.RETAIL] },
   { name: "ReplaceProduct", component: ReplaceProduct, allowedRoles: [ROLES.RETAIL] },
   { name: "PackageConfirmation", component: PackageConfirmation, allowedRoles: [ROLES.RETAIL] },
-  { name: "ExcludeListAdd", component: ExcludeListAdd, allowedRoles: [ROLES.RETAIL] },
-  { name: "ExcludeListSummery", component: ExcludeListSummery, allowedRoles: [ROLES.RETAIL] },
 ];
 
 // ============================================================================
