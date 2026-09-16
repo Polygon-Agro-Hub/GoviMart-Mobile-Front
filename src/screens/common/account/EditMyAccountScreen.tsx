@@ -20,13 +20,13 @@ import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { updateUserProfileImage } from "@/store/authSlice";
 
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import { DropdownField, InputField } from "@/component/common/CustomField";
 import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import customerService from "@/services/customer/customer.service";
-import CameraAccess from "@/screens/permission/CameraAccess";
+import CameraAccess from "@/screens/common/permission/CameraAccess";
 
 interface PhoneCode {
   code: string;

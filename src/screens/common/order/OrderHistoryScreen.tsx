@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import CustomCalendarModal from "@/component/common/CustomCalendarModal";
 import CustomHeader from "@/component/common/CustomHeader";

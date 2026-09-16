@@ -10,56 +10,56 @@ import { RootStackParamList } from "@/types/types";
 // ============================================================================
 // --- Public / Common Screens ---
 // ============================================================================
-import Splash from "@/screens/splash/SplashScreen";
-import ChooseAuth from "@/screens/auth/ChooseAuth";
-import Login from "@/screens/auth/SignInScreen";
-import SignUp from "@/screens/auth/SignUpScreen";
-import SignUpOTP from "@/screens/auth/SignUpOTPScreen";
-import UpdatePassword from "@/screens/auth/UpdatePasswordScreen";
-import DeliveryLocation from "@/screens/locations/DeliveryLocationScreen";
-import CameraAccess from "@/screens/permission/CameraAccess";
-import LocationAccess from "@/screens/permission/LocationAccess";
-import NotificationAccess from "@/screens/permission/NotificationAccess";
+import Splash from "@/screens/common/splash/SplashScreen";
+import ChooseAuth from "@/screens/common/auth/ChooseAuth";
+import Login from "@/screens/common/auth/SignInScreen";
+import SignUp from "@/screens/common/auth/SignUpScreen";
+import SignUpOTP from "@/screens/common/auth/SignUpOTPScreen";
+import UpdatePassword from "@/screens/common/auth/UpdatePasswordScreen";
+import DeliveryLocation from "@/screens/common/locations/DeliveryLocationScreen";
+import CameraAccess from "@/screens/common/permission/CameraAccess";
+import LocationAccess from "@/screens/common/permission/LocationAccess";
+import NotificationAccess from "@/screens/common/permission/NotificationAccess";
 
 // ============================================================================
-// --- Customer & Shopping Screens (Retail & Wholesale) ---
+// --- Shared Customer Screens (Retail & Wholesale) ---
 // ============================================================================
-import Home from "@/screens/home/HomeScreen";
-import Profile from "@/screens/account/ProfileScreen";
-import MyAccount from "@/screens/account/EditMyAccountScreen";
-import DeleteAccount from "@/screens/account/DeleteAccountScreen";
-import ViewProduct from "@/screens/products/ViewProductScreen";
-import ViewPackage from "@/screens/packages/ViewPackageScreen";
-import ReviewPackage from "@/screens/packages/ReviewPackageScreen";
-import ChangeProductQuantity from "@/screens/products/SetQuantityProductScreen";
-import ReplaceProduct from "@/screens/products/ReplaceProductScreen";
-import PackageConfirmation from "@/screens/packages/PackageConfirmation";
-import MyCart from "@/screens/cart/MyCartScreen";
-import CheckoutScreen from "@/screens/checkout/CheckoutScreen";
-import ScheduleOrder from "@/screens/checkout/ScheduleOrderScreen";
-import PaymentMethod from "@/screens/payment/PaymentMethodScreen";
-import PaymentScreen from "@/screens/payment/PaymentScreen";
-import OrderDeliveryMethod from "@/screens/locations/OrderDeliveryMethodScreen";
-import OrderConfirmed from "@/screens/order/OrderConfirmedScreen";
-import SavedAddresses from "@/screens/locations/SavedAddressesScreen";
-import EditAddress from "@/screens/locations/EditAddressScreen";
-import AddNewAddress from "@/screens/locations/AddNewAddressScreen";
-import SetLocation from "@/screens/locations/SetLocationScreen";
-import ChoosePickupCentre from "@/screens/locations/ChoosePickupCentreScreen";
-import ViewLocation from "@/screens/locations/ViewLocation";
-import OrderHistory from "@/screens/order/OrderHistoryScreen";
-import OrderDetails from "@/screens/order/OrderDetailsScreen";
-import OrderCancelConfirmation from "@/screens/order/OrderCancelConfirmedScreen";
-import ReportComplaint from "@/screens/complaints/ReportComplaintScreen";
-import ComplaintHistory from "@/screens/complaints/ComplaintHistoryScreen";
-import ViewComplaint from "@/screens/complaints/ViewComplaintScreen";
-import Notifications from "@/screens/notification/NotificationScreen";
+import Home from "@/screens/common/home/HomeScreen";
+import Profile from "@/screens/common/account/ProfileScreen";
+import MyAccount from "@/screens/common/account/EditMyAccountScreen";
+import DeleteAccount from "@/screens/common/account/DeleteAccountScreen";
+import ViewProduct from "@/screens/common/products/ViewProductScreen";
+import MyCart from "@/screens/common/cart/MyCartScreen";
+import CheckoutScreen from "@/screens/common/checkout/CheckoutScreen";
+import ScheduleOrder from "@/screens/common/checkout/ScheduleOrderScreen";
+import PaymentMethod from "@/screens/common/payment/PaymentMethodScreen";
+import PaymentScreen from "@/screens/common/payment/PaymentScreen";
+import OrderDeliveryMethod from "@/screens/common/locations/OrderDeliveryMethodScreen";
+import OrderConfirmed from "@/screens/common/order/OrderConfirmedScreen";
+import SavedAddresses from "@/screens/common/locations/SavedAddressesScreen";
+import EditAddress from "@/screens/common/locations/EditAddressScreen";
+import AddNewAddress from "@/screens/common/locations/AddNewAddressScreen";
+import SetLocation from "@/screens/common/locations/SetLocationScreen";
+import ChoosePickupCentre from "@/screens/common/locations/ChoosePickupCentreScreen";
+import ViewLocation from "@/screens/common/locations/ViewLocation";
+import OrderHistory from "@/screens/common/order/OrderHistoryScreen";
+import OrderDetails from "@/screens/common/order/OrderDetailsScreen";
+import OrderCancelConfirmation from "@/screens/common/order/OrderCancelConfirmedScreen";
+import ReportComplaint from "@/screens/common/complaints/ReportComplaintScreen";
+import ComplaintHistory from "@/screens/common/complaints/ComplaintHistoryScreen";
+import ViewComplaint from "@/screens/common/complaints/ViewComplaintScreen";
+import Notifications from "@/screens/common/notification/NotificationScreen";
 
 // ============================================================================
-// --- Role-Protected / Exclude Items Screens ---
+// --- Retail-Only Screens (Package Review & Customization) ---
 // ============================================================================
-import ExcludeListAdd from "@/screens/exclude-items/ExcludeListAddScreen";
-import ExcludeListSummery from "@/screens/exclude-items/ExcludeListSummeryScreen";
+import ViewPackage from "@/screens/retail/packages/ViewPackageScreen";
+import ReviewPackage from "@/screens/retail/packages/ReviewPackageScreen";
+import PackageConfirmation from "@/screens/retail/packages/PackageConfirmation";
+import ChangeProductQuantity from "@/screens/retail/products/SetQuantityProductScreen";
+import ReplaceProduct from "@/screens/retail/products/ReplaceProductScreen";
+import ExcludeListAdd from "@/screens/retail/exclude-items/ExcludeListAddScreen";
+import ExcludeListSummery from "@/screens/retail/exclude-items/ExcludeListSummeryScreen";
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -175,55 +175,47 @@ export const PUBLIC_STACK_SCREENS: StackRouteConfig[] = [
 ];
 
 // ============================================================================
-// 2. CUSTOMER & SHOPPING ROUTES (Accessible by both Retail and Wholesale)
+// 2. SHARED CUSTOMER ROUTES (Accessible by both Retail and Wholesale)
 // ============================================================================
 export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
-  { name: "Home", component: Home, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "Profile", component: Profile, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "MyAccount", component: MyAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "DeleteAccount", component: DeleteAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ViewProduct", component: ViewProduct, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ViewPackage", component: ViewPackage, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ReviewPackage", component: ReviewPackage, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "SetQauntity", component: ChangeProductQuantity, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ReplaceProduct", component: ReplaceProduct, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "PackageConfirmation", component: PackageConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "MyCart", component: MyCart, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ScheduleOrder", component: ScheduleOrder, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "PaymentMethod", component: PaymentMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "PaymentScreen", component: PaymentScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "OrderDeliveryMethod", component: OrderDeliveryMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "OrderConfirmed", component: OrderConfirmed, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "SavedAddresses", component: SavedAddresses, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "EditAddress", component: EditAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "AddNewAddress", component: AddNewAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "SetLocation", component: SetLocation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ChoosePickupCentre", component: ChoosePickupCentre, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ViewLocation", component: ViewLocation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "OrderHistory", component: OrderHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "OrderDetails", component: OrderDetails, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "OrderCancelConfirmation", component: OrderCancelConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ReportComplaint", component: ReportComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
-  { name: "Notification", component: Notifications, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN] },
+  { name: "Home", component: Home, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "Profile", component: Profile, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "MyAccount", component: MyAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "DeleteAccount", component: DeleteAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ViewProduct", component: ViewProduct, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "MyCart", component: MyCart, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ScheduleOrder", component: ScheduleOrder, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "PaymentMethod", component: PaymentMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "PaymentScreen", component: PaymentScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderDeliveryMethod", component: OrderDeliveryMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderConfirmed", component: OrderConfirmed, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "SavedAddresses", component: SavedAddresses, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "EditAddress", component: EditAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "AddNewAddress", component: AddNewAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "SetLocation", component: SetLocation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ChoosePickupCentre", component: ChoosePickupCentre, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ViewLocation", component: ViewLocation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderHistory", component: OrderHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderDetails", component: OrderDetails, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderCancelConfirmation", component: OrderCancelConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ReportComplaint", component: ReportComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "Notification", component: Notifications, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
 ];
 
 // ============================================================================
-// 3. ROLE-PROTECTED SUBSCRIBER ROUTES (Exclusion Lists)
+// 3. RETAIL-ONLY ROUTES (Package Review & Customization - Retail Only)
 // ============================================================================
-export const PROTECTED_STACK_SCREENS: StackRouteConfig[] = [
-  {
-    name: "ExcludeListAdd",
-    component: ExcludeListAdd,
-    allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN],
-  },
-  {
-    name: "ExcludeListSummery",
-    component: ExcludeListSummery,
-    allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE, ROLES.ADMIN],
-  },
+export const RETAIL_STACK_SCREENS: StackRouteConfig[] = [
+  { name: "ViewPackage", component: ViewPackage, allowedRoles: [ROLES.RETAIL] },
+  { name: "ReviewPackage", component: ReviewPackage, allowedRoles: [ROLES.RETAIL] },
+  { name: "SetQauntity", component: ChangeProductQuantity, allowedRoles: [ROLES.RETAIL] },
+  { name: "ReplaceProduct", component: ReplaceProduct, allowedRoles: [ROLES.RETAIL] },
+  { name: "PackageConfirmation", component: PackageConfirmation, allowedRoles: [ROLES.RETAIL] },
+  { name: "ExcludeListAdd", component: ExcludeListAdd, allowedRoles: [ROLES.RETAIL] },
+  { name: "ExcludeListSummery", component: ExcludeListSummery, allowedRoles: [ROLES.RETAIL] },
 ];
 
 // ============================================================================
@@ -232,7 +224,7 @@ export const PROTECTED_STACK_SCREENS: StackRouteConfig[] = [
 const STACK_SCREENS_CONFIG: StackRouteConfig[] = [
   ...PUBLIC_STACK_SCREENS,
   ...CUSTOMER_STACK_SCREENS,
-  ...PROTECTED_STACK_SCREENS,
+  ...RETAIL_STACK_SCREENS,
 ];
 
 /**

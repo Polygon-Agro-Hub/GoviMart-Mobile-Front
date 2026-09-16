@@ -11,7 +11,7 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { PaymentOptionCard } from "@/component/payment/PaymentOptionCard";
 import PaymentMethodSummary from "@/component/payment/PaymentMethodSummary";

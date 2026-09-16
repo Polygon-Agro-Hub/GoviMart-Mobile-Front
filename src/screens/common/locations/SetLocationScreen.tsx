@@ -10,11 +10,11 @@ import {
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import OpenStreetMap from "@/component/common/OpenStreetMap";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import LocationAccess from "@/screens/permission/LocationAccess";
+import LocationAccess from "@/screens/common/permission/LocationAccess";
 
 type SetLocationNavigationProp = StackNavigationProp<
     RootStackParamList,

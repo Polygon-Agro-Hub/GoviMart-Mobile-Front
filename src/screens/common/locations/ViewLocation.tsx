@@ -10,7 +10,7 @@ import OpenStreetMap from "@/component/common/OpenStreetMap";
 import { RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 
 type ViewLocationRouteProp = RouteProp<

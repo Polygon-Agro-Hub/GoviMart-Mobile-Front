@@ -12,7 +12,7 @@ import {
 import { FontAwesome6} from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import customerService from "@/services/customer/customer.service";

@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import OpenStreetMap from "@/component/common/OpenStreetMap";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomHeader from "@/component/common/CustomHeader";

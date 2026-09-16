@@ -3,9 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StatusBar,
   ScrollView,
-  Image,
   Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -43,132 +41,6 @@ const normalizeToKg = (product: ProductType): ProductType => {
     unitType: "kg",
     startValue: product.startValue || "1",
   };
-};
-
-const FALLBACK_PRODUCTS_BY_TYPE: Record<string, ProductType[]> = {
-  fruit: [
-    {
-      id: 9101,
-      type: "product",
-      displayName: "Strawberry",
-      category: "Fruits",
-      cropNameEnglish: "Strawberry",
-      normalPrice: "1000",
-      startValue: "0.5",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400",
-    },
-    {
-      id: 9102,
-      type: "product",
-      displayName: "Lemon",
-      category: "Fruits",
-      cropNameEnglish: "Lemon",
-      normalPrice: "400",
-      startValue: "0.5",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1590502593747-42a996133562?w=400",
-    },
-    {
-      id: 9103,
-      type: "product",
-      displayName: "Grapes",
-      category: "Fruits",
-      cropNameEnglish: "Grapes",
-      normalPrice: "1200",
-      startValue: "0.5",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1537640538966-79f369143f8f?w=400",
-    },
-    {
-      id: 9104,
-      type: "product",
-      displayName: "Apple",
-      category: "Fruits",
-      cropNameEnglish: "Apple",
-      normalPrice: "600",
-      startValue: "0.5",
-      unitType: "kg",
-      image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400",
-    },
-  ],
-  veggie: [
-    {
-      id: 9001,
-      type: "product",
-      displayName: "Cantaloup",
-      category: "Vegetables",
-      cropNameEnglish: "Cantaloup",
-      normalPrice: "800",
-      startValue: "0.5",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=400",
-    },
-    {
-      id: 9002,
-      type: "product",
-      displayName: "Green Cornet",
-      category: "Vegetables",
-      cropNameEnglish: "Green Cornet",
-      normalPrice: "1200",
-      startValue: "1",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=400",
-    },
-    {
-      id: 9003,
-      type: "product",
-      displayName: "Lettuce",
-      category: "Vegetables",
-      cropNameEnglish: "Lettuce",
-      normalPrice: "800",
-      startValue: "0.1",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=400",
-    },
-    {
-      id: 9004,
-      type: "product",
-      displayName: "Luffa",
-      category: "Vegetables",
-      cropNameEnglish: "Luffa",
-      normalPrice: "1200",
-      startValue: "0.5",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=400",
-    },
-    {
-      id: 9005,
-      type: "product",
-      displayName: "Okra",
-      category: "Vegetables",
-      cropNameEnglish: "Okra",
-      normalPrice: "800",
-      startValue: "0.1",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1425543103986-22abb7d7e8d2?w=400",
-    },
-    {
-      id: 9006,
-      type: "product",
-      displayName: "Pumpkin",
-      category: "Vegetables",
-      cropNameEnglish: "Pumpkin",
-      normalPrice: "1200",
-      startValue: "0.5",
-      unitType: "kg",
-      image:
-        "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400",
-    },
-  ],
 };
 
 const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
@@ -232,7 +104,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
         }
       }
 
-      // 2. Fallback to category if productTypeId is empty or returned 0
+      // 2. Fallback to category query if productTypeId is empty or returned 0
       if (productsList.length === 0 && fromProduct?.category) {
         const cleanCategory = fromProduct.category
           .toLowerCase()
@@ -250,23 +122,6 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
         }
       }
 
-      // 3. Fallback to mock data if API returns empty
-      if (productsList.length === 0) {
-        const isFruit =
-          String(fromProduct?.name || fromProduct?.category)
-            .toLowerCase()
-            .includes("fruit") ||
-          String(fromProduct?.name || "")
-            .toLowerCase()
-            .includes("berry") ||
-          String(fromProduct?.name || "")
-            .toLowerCase()
-            .includes("lemon");
-        productsList = isFruit
-          ? FALLBACK_PRODUCTS_BY_TYPE.fruit
-          : FALLBACK_PRODUCTS_BY_TYPE.veggie;
-      }
-
       // Exclude fromProduct itself
       const fromIdStr = String(fromProduct?.id || "").toLowerCase();
       const fromNameStr = String(fromProduct?.name || "").toLowerCase();
@@ -282,17 +137,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
           return pid !== fromIdStr && pname !== fromNameStr;
         });
 
-      setAvailableProducts(formatted.length > 0 ? formatted : productsList);
+      setAvailableProducts(formatted);
     } catch (error) {
       console.log("Failed to fetch products for product type:", error);
-      const isFruit = String(fromProduct?.name || fromProduct?.category)
-        .toLowerCase()
-        .includes("fruit");
-      setAvailableProducts(
-        isFruit
-          ? FALLBACK_PRODUCTS_BY_TYPE.fruit
-          : FALLBACK_PRODUCTS_BY_TYPE.veggie,
-      );
+      setAvailableProducts([]);
     } finally {
       setLoadingProducts(false);
     }

@@ -10,7 +10,7 @@ import {
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { SummaryRow } from "@/component/order/SummaryRow";
 import { PackageModal } from "@/component/order/PackageModal";

@@ -31,29 +31,6 @@ type ProductInfo = {
 };
 
 /* ---------------------------------------------------------
-   Mock data — replace with route.params values
-   e.g. const { fromProduct, toProduct } = route.params;
---------------------------------------------------------- */
-
-const MOCK_FROM: ProductInfo = {
-  id: "strawberry",
-  name: "Strawberry",
-  icon: "🍓",
-  unit: "kg",
-  baseQty: 0.5,
-  pricePerBaseQty: 800,
-};
-
-const MOCK_TO: ProductInfo = {
-  id: "apple",
-  name: "Apple",
-  icon: "🍎",
-  unit: "kg",
-  baseQty: 1,
-  pricePerBaseQty: 500,
-};
-
-/* ---------------------------------------------------------
    Small presentational helpers
 --------------------------------------------------------- */
 
@@ -96,14 +73,12 @@ const SummaryRow: React.FC<{
 }> = ({ label, value, bold, valueColor }) => (
   <View className="flex-row justify-between items-center py-3">
     <Text
-      className={`text-[14px] ${bold ? "font-bold text-black" : "text-[#6B6B6B]"
-        }`}
+      className={`text-[14px] ${bold ? "font-bold text-black" : "text-[#6B6B6B]"}`}
     >
       {label}
     </Text>
     <Text
-      className={`text-[14px] ${bold ? "font-bold" : "font-semibold text-black"
-        }`}
+      className={`text-[14px] ${bold ? "font-bold" : "font-semibold text-black"}`}
       style={valueColor ? { color: valueColor } : undefined}
     >
       {value}
@@ -118,47 +93,41 @@ const SummaryRow: React.FC<{
 const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const rawFrom = route.params?.fromProduct;
   const rawTo = route.params?.toProduct;
-  const packageId = route.params?.packageId || "fruity";
+  const packageId = route.params?.packageId || "";
   const stepIndex = route.params?.stepIndex ?? 0;
 
   const fromProduct: ProductInfo = useMemo(() => {
-    if (rawFrom) {
-      const rawUnit = (rawFrom.unit || "kg").toLowerCase();
-      let rawQty = rawFrom.quantity || 1;
-      const rawPrice = rawFrom.price || 500;
-      if (rawUnit === "g") {
-        rawQty = Number((rawQty / 1000).toFixed(3));
-      }
-      return {
-        id: rawFrom.id?.toString() || "from",
-        name: rawFrom.name || "Original Product",
-        icon: rawFrom.icon || "🍓",
-        image: rawFrom.image,
-        unit: "kg",
-        baseQty: rawQty,
-        pricePerBaseQty: rawPrice,
-      };
+    const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
+    let rawQty = rawFrom?.quantity || 1;
+    const rawPrice = rawFrom?.price || 0;
+    if (rawUnit === "g") {
+      rawQty = Number((rawQty / 1000).toFixed(3));
     }
-    return MOCK_FROM;
+    return {
+      id: rawFrom?.id?.toString() || "from",
+      name: rawFrom?.name || "Original Product",
+      icon: rawFrom?.icon || "🥬",
+      image: rawFrom?.image,
+      unit: "kg",
+      baseQty: rawQty,
+      pricePerBaseQty: rawPrice,
+    };
   }, [rawFrom]);
 
   const toProduct: ProductInfo = useMemo(() => {
-    if (rawTo) {
-      const priceVal =
-        parseFloat(rawTo.normalPrice || rawTo.price || rawTo.pricePerBaseQty) ||
-        600;
+    const priceVal =
+      parseFloat(rawTo?.normalPrice || rawTo?.price || rawTo?.pricePerBaseQty) ||
+      0;
 
-      return {
-        id: rawTo.id?.toString() || "to",
-        name: rawTo.displayName || rawTo.name || "Replacement Product",
-        icon: rawTo.icon || "🥗",
-        image: rawTo.image,
-        unit: "kg",
-        baseQty: 1,
-        pricePerBaseQty: priceVal,
-      };
-    }
-    return MOCK_TO;
+    return {
+      id: rawTo?.id?.toString() || "to",
+      name: rawTo?.displayName || rawTo?.name || "Replacement Product",
+      icon: rawTo?.icon || "🥗",
+      image: rawTo?.image,
+      unit: "kg",
+      baseQty: 1,
+      pricePerBaseQty: priceVal,
+    };
   }, [rawTo]);
 
   const step = 0.5;

@@ -8,7 +8,7 @@ import {
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
-import { RootStackParamList } from "../../types/types";
+import { RootStackParamList } from "@/types/types";
 import LottieView from "lottie-react-native";
 import CustomHeader from "@/component/common/CustomHeader";
 
