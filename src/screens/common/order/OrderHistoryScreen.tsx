@@ -727,23 +727,22 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         {/* Delivery Date */}
                                         <View
                                             style={{
-                                                flexDirection:
-                                                    "row",
-                                                alignItems:
-                                                    "center",
-                                                paddingRight: 8,
+                                                flexDirection: "row",
+                                                alignItems: "center",
+                                                paddingRight: 5,
                                             }}
                                         >
                                             <Ionicons
                                                 name="location"
-                                                size={15}
-                                                color="#000"
+                                                size={11}
+                                                color="#000000"
                                             />
                                             <Text
                                                 style={{
-                                                    fontSize: 13,
-                                                    color: "#222",
-                                                    marginLeft: 4,
+                                                    fontSize: 9.5,
+                                                    color: "#334155",
+                                                    fontWeight: "500",
+                                                    marginLeft: 3,
                                                 }}
                                             >
                                                 {order.deliveryDate}
@@ -754,32 +753,30 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         <View
                                             style={{
                                                 width: 1,
-                                                height: 22,
-                                                backgroundColor:
-                                                    "#E1E4E8",
+                                                height: 14,
+                                                backgroundColor: "#E1E4E8",
                                             }}
                                         />
 
-                                        {/* Time */}
+                                        {/* Time Slot */}
                                         <View
                                             style={{
-                                                flexDirection:
-                                                    "row",
-                                                alignItems:
-                                                    "center",
-                                                paddingHorizontal: 8,
+                                                flexDirection: "row",
+                                                alignItems: "center",
+                                                paddingHorizontal: 5,
                                             }}
                                         >
                                             <Ionicons
                                                 name="time"
-                                                size={15}
-                                                color="#000"
+                                                size={11}
+                                                color="#000000"
                                             />
                                             <Text
                                                 style={{
-                                                    fontSize: 13,
-                                                    color: "#222",
-                                                    marginLeft: 4,
+                                                    fontSize: 9.5,
+                                                    color: "#334155",
+                                                    fontWeight: "500",
+                                                    marginLeft: 3,
                                                 }}
                                             >
                                                 {order.timeSlot}
@@ -790,9 +787,8 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         <View
                                             style={{
                                                 width: 1,
-                                                height: 22,
-                                                backgroundColor:
-                                                    "#E1E4E8",
+                                                height: 14,
+                                                backgroundColor: "#E1E4E8",
                                             }}
                                         />
 
@@ -800,23 +796,23 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                         <View
                                             style={{
                                                 flex: 1,
-                                                paddingLeft: 8,
+                                                paddingLeft: 5,
                                             }}
                                         >
                                             <Text
                                                 style={{
-                                                    fontSize: 11,
+                                                    fontSize: 8.5,
                                                     color: "#747990",
+                                                    fontWeight: "500",
                                                 }}
                                             >
                                                 Total
                                             </Text>
                                             <Text
                                                 style={{
-                                                    fontSize: 14,
-                                                    color: "#111",
-                                                    fontWeight:
-                                                        "700",
+                                                    fontSize: 10.5,
+                                                    color: "#111827",
+                                                    fontWeight: "700",
                                                     marginTop: 1,
                                                 }}
                                                 numberOfLines={1}

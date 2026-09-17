@@ -122,6 +122,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: deliveryMethod === "pickup" ? 3 : 1,
+            overflow: "hidden",
           }}
         >
           {/* Radio Checkmark */}
@@ -138,6 +139,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
               borderColor: "#CBD5E1",
               justifyContent: "center",
               alignItems: "center",
+              zIndex: 1,
             }}
           >
             {deliveryMethod === "pickup" && (
@@ -151,11 +153,11 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
               alignItems: "center",
             }}
           >
-            {/* Lottie Illustration — Made bigger */}
+            {/* Lottie Illustration */}
             <View
               style={{
-                width: 75,
-                height: 75,
+                width: 70,
+                height: 70,
                 justifyContent: "center",
                 alignItems: "center",
                 marginRight: 12,
@@ -165,7 +167,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                 source={require("@/assets/json/pickup.json")}
                 autoPlay
                 loop={true}
-                style={{ width: 75, height: 75 }}
+                style={{ width: 70, height: 70 }}
               />
             </View>
 
@@ -173,7 +175,6 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
             <View
               style={{
                 flex: 1,
-                paddingRight: 24,
               }}
             >
               <Text
@@ -181,6 +182,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                   fontSize: 16,
                   fontWeight: "700",
                   color: "#0F172A",
+                  paddingRight: 26,
                 }}
               >
                 Pick up from Centre
@@ -201,6 +203,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
               <View
                 style={{
                   flexDirection: "row",
+                  flexWrap: "wrap",
                   marginTop: 8,
                   gap: 6,
                 }}
@@ -272,6 +275,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: deliveryMethod === "delivery" ? 3 : 1,
+            overflow: "hidden",
           }}
         >
           {/* Radio Checkmark */}
@@ -289,6 +293,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
               borderColor: "#CBD5E1",
               justifyContent: "center",
               alignItems: "center",
+              zIndex: 1,
             }}
           >
             {deliveryMethod === "delivery" && (
@@ -302,11 +307,11 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
               alignItems: "center",
             }}
           >
-            {/* Lottie Illustration — Made bigger */}
+            {/* Lottie Illustration */}
             <View
               style={{
-                width: 75,
-                height: 75,
+                width: 70,
+                height: 70,
                 justifyContent: "center",
                 alignItems: "center",
                 marginRight: 12,
@@ -316,7 +321,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                 source={require("@/assets/json/delivery.json")}
                 autoPlay
                 loop={true}
-                style={{ width: 75, height: 75 }}
+                style={{ width: 70, height: 70 }}
               />
             </View>
 
@@ -324,7 +329,6 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
             <View
               style={{
                 flex: 1,
-                paddingRight: 24,
               }}
             >
               <Text
@@ -332,6 +336,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
                   fontSize: 16,
                   fontWeight: "700",
                   color: "#0F172A",
+                  paddingRight: 26,
                 }}
               >
                 Deliver to My Location
@@ -352,6 +357,7 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
               <View
                 style={{
                   flexDirection: "row",
+                  flexWrap: "wrap",
                   marginTop: 8,
                   gap: 6,
                 }}

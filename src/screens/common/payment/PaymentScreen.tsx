@@ -252,7 +252,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
-          <ActivityIndicator size="large" color="#000000" />
+          <ActivityIndicator size="large" color="#FF8A00" />
           <Text style={{ marginTop: 10, fontSize: 13, color: "#666" }}>
             Loading Payment Summary...
           </Text>
@@ -260,13 +260,19 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       ) : (
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
           style={{ flex: 1 }}
         >
           <ScrollView
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets={true}
+            nestedScrollEnabled={true}
             contentContainerStyle={{
+              flexGrow: 1,
               paddingTop: 10,
-              paddingBottom: 40,
+              paddingBottom: 60,
             }}
           >
             {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
@@ -391,7 +397,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="card" size={20} color="#3E206D" />
+                  <Ionicons name="card" size={20} color="#FF8A00" />
                   <Text
                     style={{
                       fontSize: 15,
@@ -474,6 +480,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   placeholder="0000 0000 0000 0000"
                   placeholderTextColor="#94A3B8"
                   keyboardType="number-pad"
+                  returnKeyType="next"
                   maxLength={19}
                   style={{
                     flex: 1,
@@ -502,6 +509,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 placeholder="JOHN DOE"
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="characters"
+                returnKeyType="next"
                 style={{
                   backgroundColor: "#F8FAFC",
                   borderWidth: 1,
@@ -535,6 +543,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     placeholder="MM/YY"
                     placeholderTextColor="#94A3B8"
                     keyboardType="number-pad"
+                    returnKeyType="next"
                     maxLength={5}
                     style={{
                       backgroundColor: "#F8FAFC",
@@ -567,6 +576,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     placeholder="123"
                     placeholderTextColor="#94A3B8"
                     keyboardType="number-pad"
+                    returnKeyType="done"
                     maxLength={3}
                     secureTextEntry={true}
                     style={{
@@ -649,8 +659,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           <View
             style={{
               paddingHorizontal: 16,
-              paddingBottom: Platform.OS === "ios" ? 30 : 20,
-              paddingTop: 10,
+              paddingBottom: Platform.OS === "ios" ? 34 : 20,
+              paddingTop: 12,
               backgroundColor: "#FFFFFF",
               borderTopWidth: 1,
               borderColor: "#F1F5F9",
@@ -661,17 +671,17 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               disabled={submitting}
               onPress={handleExecutePayment}
               style={{
-                height: 52,
-                backgroundColor: "#3E206D",
-                borderRadius: 28,
+                height: 54,
+                backgroundColor: "#FF8A00",
+                borderRadius: 27,
                 justifyContent: "center",
                 alignItems: "center",
                 flexDirection: "row",
                 gap: 8,
-                shadowColor: "#000",
+                shadowColor: "#FF8A00",
                 shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.15,
-                shadowRadius: 5,
+                shadowOpacity: 0.3,
+                shadowRadius: 6,
                 elevation: 4,
               }}
             >
@@ -679,7 +689,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
-                  <Ionicons name="lock-closed" size={17} color="#FFFFFF" />
+                  <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
                   <Text
                     style={{
                       color: "#FFFFFF",

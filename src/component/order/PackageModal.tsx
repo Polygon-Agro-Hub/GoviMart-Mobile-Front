@@ -10,6 +10,8 @@ interface Package {
     name: string;
     quantity: number;
     price: number;
+    image?: string;
+    packageImage?: string;
     items: PackageItem[];
 }
 interface PackageModalProps {

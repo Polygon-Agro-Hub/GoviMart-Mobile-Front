@@ -40,6 +40,8 @@ interface Package {
     name: string;
     quantity: number;
     price: number;
+    image?: string;
+    packageImage?: string;
     items: PackageItem[];
 }
 
@@ -135,6 +137,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                             name: p.displayName,
                             quantity: 1,
                             price: priceNum,
+                            image: p.packageImage || p.image || (p.products && p.products[0]?.image) || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
+                            packageImage: p.packageImage || p.image,
                             items: (p.products || []).map((prod: any) => ({
                                 itemName: prod.itemName || prod.typeName || "Item",
                                 quantity: prod.quantity || `${prod.qty} units`,
@@ -600,31 +604,28 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         style={{
                             flexDirection: "row",
                             alignItems: "center",
-                            marginTop: 7,
+                            marginTop: 8,
                         }}
                     >
+                        {/* Delivery Date */}
                         <View
                             style={{
                                 flexDirection: "row",
                                 alignItems: "center",
-                                paddingRight: 7,
-                                
+                                paddingRight: 4,
                             }}
                         >
-                            <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
-                            <FontAwesome6
-                                name="calendar"
-                                solid
+                            <Ionicons
+                                name="calendar-outline"
                                 size={11}
-                                color="#FFFFFF"
-                            
+                                color="#64748B"
                             />
-                            </View>
-
                             <Text
                                 style={{
-                                    fontSize: 13,
-                                    marginLeft: 4,
+                                    fontSize: 9,
+                                    color: "#475569",
+                                    fontWeight: "500",
+                                    marginLeft: 3,
                                 }}
                             >
                                 {formatDate(order?.sheduleDate || order?.scheduleDate)}
@@ -634,32 +635,30 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         <View
                             style={{
                                 width: 1,
-                                height: 16,
-                                backgroundColor: "#DDE1E5",
+                                height: 12,
+                                backgroundColor: "#E2E8F0",
                             }}
                         />
 
+                        {/* Time Slot */}
                         <View
                             style={{
                                 flexDirection: "row",
                                 alignItems: "center",
-                                paddingHorizontal: 7,
+                                paddingHorizontal: 4,
                             }}
                         >
-                             <View style={{ backgroundColor:"#000000", padding: 4, borderRadius: 999, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
-                            <FontAwesome6
-                                name="clock"
-                                solid
-                                size={10}
-                                color="#FFFFFF"
-                            
+                            <Ionicons
+                                name="time-outline"
+                                size={11}
+                                color="#64748B"
                             />
-                             </View>
-
                             <Text
                                 style={{
-                                    fontSize: 13,
-                                    marginLeft: 4,
+                                    fontSize: 9,
+                                    color: "#475569",
+                                    fontWeight: "500",
+                                    marginLeft: 3,
                                 }}
                             >
                                 {order?.sheduleTime || order?.scheduleTime || "N/A"}
@@ -669,21 +668,23 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         <View
                             style={{
                                 width: 1,
-                                height: 16,
-                                backgroundColor: "#DDE1E5",
+                                height: 12,
+                                backgroundColor: "#E2E8F0",
                             }}
                         />
 
+                        {/* Total */}
                         <View
                             style={{
                                 flex: 1,
-                                paddingLeft: 7,
+                                paddingLeft: 4,
                             }}
                         >
                             <Text
                                 style={{
-                                    fontSize: 11,
-                                    color: "#747990",
+                                    fontSize: 8,
+                                    color: "#64748B",
+                                    fontWeight: "500",
                                 }}
                             >
                                 Total
@@ -691,9 +692,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                             <Text
                                 style={{
-                                    fontSize: 14,
-                                    fontWeight: "600",
+                                    fontSize: 10,
+                                    color: "#0F172A",
+                                    fontWeight: "700",
                                 }}
+                                numberOfLines={1}
                             >
                                 Rs. {formatAmount(order?.fulltotal || order?.fullTotal || 0)}
                             </Text>
@@ -975,7 +978,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     <Image
                                         source={{
                                             uri:
-                                                pkg.items[0]?.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
+                                                pkg.image || pkg.packageImage || pkg.items[0]?.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
                                         }}
                                         style={{
                                             width: 50,
