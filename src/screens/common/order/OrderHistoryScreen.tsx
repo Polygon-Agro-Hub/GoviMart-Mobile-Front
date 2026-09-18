@@ -105,7 +105,17 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                         response.data.orderHistory
                     ) {
                         const mappedOrders: Order[] = response.data.orderHistory.map((bo: any) => {
-                            const totalVal = bo.fullTotal || 0;
+                            const rawTotal = bo.fullTotal != null ? bo.fullTotal : (bo.total || 0);
+                            const totalVal =
+                                typeof rawTotal === "number"
+                                    ? rawTotal
+                                    : parseFloat(
+                                          String(rawTotal)
+                                              .replace(/Rs\.?/gi, "")
+                                              .replace(/LKR/gi, "")
+                                              .replace(/,/g, "")
+                                              .trim()
+                                      ) || 0;
                             return {
                                 id: bo.orderId ? String(bo.orderId) : 'N/A',
                                 status: bo.processStatus || 'Pending',
@@ -133,11 +143,22 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         }, [])
     );
 
-    const formatAmount = (amount: number) =>
-        amount.toLocaleString("en-US", {
+    const formatAmount = (amount: number | string) => {
+        const num =
+            typeof amount === "number"
+                ? amount
+                : parseFloat(
+                      String(amount || "")
+                          .replace(/Rs\.?/gi, "")
+                          .replace(/LKR/gi, "")
+                          .replace(/,/g, "")
+                          .trim()
+                  ) || 0;
+        return num.toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
+    };
 
     const handleDateSelect = (dateStr: string) => {
         if (selectedFilter === "Ordered Date") {
@@ -817,7 +838,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                 }}
                                                 numberOfLines={1}
                                             >
-                                                {formatAmount(
+                                                Rs. {formatAmount(
                                                     order.total
                                                 )}
                                             </Text>
