@@ -100,7 +100,7 @@ export const renderBoldInvoiceMessage = (
   // - #[INV-2026-001]
   // - #2609030012
   // - #[2609030012]
-  const regex = /(#\[?[A-Za-z0-9_\-\.\s]+\]?)/g;
+  const regex = /(#(?:\[[^\]\r\n]+\]|[A-Za-z0-9_-]+))/g;
 
   const parts = message.split(regex);
 

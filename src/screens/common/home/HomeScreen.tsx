@@ -844,7 +844,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 6, gap: 12 }}
             className="flex-row"
           >
             {visibleCategories.map((category) => {
@@ -870,6 +870,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     justifyContent: "center",
                     paddingTop: 4,
                     paddingBottom: 4,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
                   }}
                 >
                   {/* Circular image wrapper */}
@@ -931,12 +936,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           searchQuery.trim().length > 0 ? (
             <View className="items-center justify-center py-10 px-6">
               <NoDataFound message={`No products found matching "${searchQuery.trim()}"`} />
-              <TouchableOpacity
-                onPress={handleClearSearch}
-                activeOpacity={0.8}
-                className="mt-2 bg-black px-6 py-2.5 rounded-full"
-              >
-              </TouchableOpacity>
             </View>
           ) : (
             <View className="items-center justify-center py-10 px-6">
@@ -1163,13 +1162,33 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   justifyContent: "center",
                                 }}
                               >
-                                <Text className="text-white text-[12px] font-bold">
+                                <Text
+                                  style={{
+                                    color: "#FFFFFF",
+                                    fontSize: 12,
+                                    fontWeight: "bold",
+                                    textAlign: "center",
+                                    textAlignVertical: "center",
+                                    includeFontPadding: false,
+                                  }}
+                                >
                                   kg
                                 </Text>
                               </TouchableOpacity>
 
                               {/* Arrow icon */}
-                              <Text className="text-black font-black text-xs mx-1.5">
+                              <Text
+                                style={{
+                                  fontSize: 18,
+                                  fontWeight: "900",
+                                  color: "#000000",
+                                  marginHorizontal: 6,
+                                  textAlign: "center",
+                                  textAlignVertical: "center",
+                                  includeFontPadding: false,
+                                  lineHeight: 22,
+                                }}
+                              >
                                 ↔
                               </Text>
 
@@ -1192,7 +1211,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   justifyContent: "center",
                                 }}
                               >
-                                <Text className="text-white text-[12px] font-bold">
+                                <Text
+                                  style={{
+                                    color: "#FFFFFF",
+                                    fontSize: 12,
+                                    fontWeight: "bold",
+                                    textAlign: "center",
+                                    textAlignVertical: "center",
+                                    includeFontPadding: false,
+                                  }}
+                                >
                                   g
                                 </Text>
                               </TouchableOpacity>
@@ -1348,9 +1376,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                 )}
                               </TouchableOpacity>
 
-                              {/* Qty value */}
+                              {/* Quantity value */}
                               <Text className="text-black font-bold text-[12px]">
-                                {cartPackage.quantity} Qty
+                                {cartPackage.quantity}
                               </Text>
 
                               {/* Plus Button */}
@@ -1382,7 +1410,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {isPackage && cartPackage && !isExpanded && (
                           <>
                             <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                              {snapshot?.quantity ?? cartPackage.quantity} Qty
+                              {snapshot?.quantity ?? cartPackage.quantity}
                             </Text>
 
                             <Text className="text-black font-extrabold text-sm mt-0.5 text-center">

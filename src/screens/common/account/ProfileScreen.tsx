@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
+  BackHandler,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
@@ -22,6 +23,8 @@ import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
+
+const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 
 type ProfileNavigationProp = StackNavigationProp<RootStackParamList, "Profile">;
 
@@ -75,10 +78,22 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
     }
   };
 
+  const handleBackPress = useCallback(() => {
+    navigation.navigate("Home");
+    return true;
+  }, [navigation]);
+
   useFocusEffect(
     useCallback(() => {
       fetchAcccountDetails();
-    }, [])
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        handleBackPress,
+      );
+
+      return () => subscription.remove();
+    }, [handleBackPress])
   );
 
   const handleLogoutPress = () => {
@@ -115,12 +130,8 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
     }
   };
 
-  const placeholderImage =
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200";
-
-  const userImage = (!imageError && user?.image && user.image.trim() !== "")
-    ? user.image
-    : placeholderImage;
+  const hasValidUserImage =
+    !imageError && user?.image && user.image.trim() !== "";
 
   const titlePrefix = user?.title ? `${user.title}. ` : "";
   const fullName = user
@@ -141,6 +152,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
+        onBackPress={handleBackPress}
       />
 
       <ScrollView
@@ -170,9 +182,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             }}
           >
             <Image
-              source={{
-                uri: userImage,
-              }}
+              source={hasValidUserImage ? { uri: user.image } : defaultUserIcon}
               onError={() => setImageError(true)}
               style={{
                 width: 110,

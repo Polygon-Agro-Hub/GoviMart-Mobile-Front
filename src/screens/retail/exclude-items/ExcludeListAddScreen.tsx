@@ -386,7 +386,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       setFilteredCrops(filtered);
 
       if (filtered.length === 0) {
-        setSearchError("No products found matching your search");
+        setSearchError("No product found matching your search");
       }
     }
   };
@@ -490,54 +490,62 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
             </View>
           </View>
 
-          {searchError && (
+          {searchError ? (
             <View className="flex-1 justify-center items-center">
               <NoDataFound message={searchError} />
             </View>
-          )}
-
-          {/* Column headers */}
-          <View className="flex-row justify-between items-center px-6 mb-2">
-            <Text className="text-black text-sm font-semibold">Product</Text>
-            <View className="flex-row items-center" style={{ gap: 20 }}>
-              <View style={{ width: 52, alignItems: "center" }}>
-                <Text className="text-green-600 text-sm font-semibold" style={{ textAlign: "center" }}>
-                  Include
-                </Text>
+          ) : (
+            <>
+              {/* Column headers */}
+              <View className="flex-row justify-between items-center px-6 mb-2">
+                <Text className="text-black text-sm font-semibold">Product</Text>
+                <View className="flex-row items-center" style={{ gap: 20 }}>
+                  <View style={{ width: 52, alignItems: "center" }}>
+                    <Text
+                      className="text-green-600 text-sm font-semibold"
+                      style={{ textAlign: "center" }}
+                    >
+                      Include
+                    </Text>
+                  </View>
+                  <View style={{ width: 52, alignItems: "center" }}>
+                    <Text
+                      className="text-red-500 text-sm font-semibold"
+                      style={{ textAlign: "center" }}
+                    >
+                      Exclude
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={{ width: 52, alignItems: "center" }}>
-                <Text className="text-red-500 text-sm font-semibold" style={{ textAlign: "center" }}>
-                  Exclude
-                </Text>
-              </View>
-            </View>
-          </View>
 
-          <View className="flex-1">
-            <FlatList
-              keyboardShouldPersistTaps="handled"
-              data={filteredCrops}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={{ paddingBottom: 100 }}
-              renderItem={({ item }) => (
-                <CropRow
-                  item={item}
-                  isIncluded={selectedIncludeCrops.includes(item.id)}
-                  isExcluded={selectedExcludeCrops.includes(item.id)}
-                  onToggleInclude={toggleInclude}
-                  onToggleExclude={toggleExclude}
+              <View className="flex-1">
+                <FlatList
+                  keyboardShouldPersistTaps="handled"
+                  data={filteredCrops}
+                  keyExtractor={(item) => item.id.toString()}
+                  contentContainerStyle={{ paddingBottom: 100 }}
+                  renderItem={({ item }) => (
+                    <CropRow
+                      item={item}
+                      isIncluded={selectedIncludeCrops.includes(item.id)}
+                      isExcluded={selectedExcludeCrops.includes(item.id)}
+                      onToggleInclude={toggleInclude}
+                      onToggleExclude={toggleExclude}
+                    />
+                  )}
+                  initialNumToRender={12}
+                  maxToRenderPerBatch={12}
+                  windowSize={7}
+                  removeClippedSubviews={Platform.OS === "android"}
                 />
-              )}
-              initialNumToRender={12}
-              maxToRenderPerBatch={12}
-              windowSize={7}
-              removeClippedSubviews={Platform.OS === "android"}
-            />
-          </View>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
-      {!isKeyboardVisible && (
+      {!isKeyboardVisible && !searchError && (
         <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
           <TouchableOpacity
             onPress={handlesubmitexcludelist}

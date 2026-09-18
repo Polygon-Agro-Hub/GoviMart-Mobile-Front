@@ -25,6 +25,11 @@ import {
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
 import CustomHeader from "@/component/common/CustomHeader";
+import { useDispatch } from "react-redux";
+import { logoutSuccess } from "@/store/authSlice";
+import { clearCart } from "@/store/cartSlice";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { tokenStorage } from "@/utils/tokenStorage";
 
 type UpdatePasswordNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -41,6 +46,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   navigation,
   route,
 }) => {
+  const dispatch = useDispatch();
   const scrollViewRef = useRef<ScrollView>(null);
   const { customerId, name, number, redirectTo } = route.params || {};
 
@@ -92,14 +98,18 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     if (!newPassword) {
       newErrors.newPassword = "New password is required";
     } else {
+      const hasUppercase = /[A-Z]/.test(newPassword);
+      const hasNumber = /[0-9]/.test(newPassword);
+      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+
       if (newPassword.length < 8) {
         newErrors.newPassword =
-          "New password must have at least 8 characters with a mix of letters, numbers and symbols.";
-      } else if (!/[a-zA-Z]/.test(newPassword)) {
-        newErrors.newPassword = "Must contain at least 1 letter";
-      } else if (!/[0-9]/.test(newPassword)) {
+          "Use at least 8 characters, including 1 uppercase letter, 1 number, and 1 special character.";
+      } else if (!hasUppercase) {
+        newErrors.newPassword = "Must contain at least 1 uppercase letter";
+      } else if (!hasNumber) {
         newErrors.newPassword = "Must contain at least 1 number";
-      } else if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+      } else if (!hasSpecialChar) {
         newErrors.newPassword = "Must contain at least 1 special character";
       }
     }
@@ -128,22 +138,50 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       if (response.data && response.data.status) {
         Alert.alert(
           "Success",
-          "Password updated successfully!",
+          "Password updated successfully! Please log in again with your new password.",
           [
             {
               text: "OK",
-              onPress: () => {
-                // Navigate to Customize Packages (ExcludeListAdd screen)
-                if (redirectTo == "Profile") {
-                  navigation.navigate("Profile");
-                } else if (redirectTo == "ExcludeListAdd") {
+              onPress: async () => {
+                if (redirectTo === "ExcludeListAdd") {
                   navigation.navigate("ExcludeListAdd", {
                     customerId: customerId || 0,
                     name: name,
                     number: number,
                   });
                 } else {
-                  navigation.goBack();
+                  // Automatically log out and redirect to login screen
+                  try {
+                    await authService.logout().catch((err) => {
+                      console.log(
+                        "Server logout failed, proceeding with local logout:",
+                        err,
+                      );
+                    });
+                  } catch (e) {
+                    console.log("Logout API call error:", e);
+                  } finally {
+                    try {
+                      await tokenStorage.clearTokens();
+                      await AsyncStorage.removeItem("userToken");
+                      await AsyncStorage.removeItem("userProfile");
+                      await AsyncStorage.removeItem("userLoginTime");
+
+                      dispatch(clearCart());
+                      dispatch(logoutSuccess());
+
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: "Login" }],
+                      });
+                    } catch (e) {
+                      console.error("Logout error:", e);
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: "Login" }],
+                      });
+                    }
+                  }
                 }
               },
             },
@@ -211,11 +249,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* Current Password Field */}
             <View>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.currentPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.currentPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -260,11 +297,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* New Password Field */}
             <View>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.newPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.newPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -309,11 +345,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* Confirm New Password Field */}
             <View>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.confirmNewPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.confirmNewPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -369,9 +404,15 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                   </Text>
                 </View>
 
-                <Text className="text-[12px] text-[#5A5859] leading-relaxed mt-1">
+
+
+                <Text className="text-[11px] text-[#5A5859] leading-relaxed mt-1">
                   Use at least 8 characters with a mix of letters, numbers and
                   symbols.
+                </Text>
+                <Text className="text-[12px] text-[#5A5859] leading-relaxed mt-1">
+                  Use at least 8 characters, including 1 uppercase letter, 1
+                  number, and 1 special character.
                 </Text>
               </View>
             </View>
@@ -385,9 +426,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
           onPress={handleUpdatePassword}
           disabled={loading || !isValid}
           activeOpacity={isValid ? 0.8 : 1}
-          className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
-            isValid ? "bg-black" : "bg-[#7F919C]"
-          }`}
+          className={`rounded-full items-center justify-center h-[50px] shadow-sm ${isValid ? "bg-black" : "bg-[#7F919C]"
+            }`}
         >
           {loading ? (
             <ActivityIndicator color="white" size="small" />

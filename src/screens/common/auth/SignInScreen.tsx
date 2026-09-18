@@ -264,7 +264,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               className="w-48 h-12"
               resizeMode="contain"
             />
-            <Text className="text-2xl font-black text-black mt-2">
+            <Text className="text-2xl  font-bold text-[#001535] mt-2">
               Welcome to Polygon
             </Text>
           </View>
@@ -280,11 +280,11 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 <TextInput
                   value={identifier}
                   onChangeText={setIdentifier}
-                  placeholder="Mobile Number (7XXXXXXXX) / Email"
+                  placeholder="Mobile Number / Email"
                   placeholderTextColor="black"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  className="flex-1 text-sm text-black font-semibold p-0"
+                  className="flex-1 text-sm text-black p-0"
                 />
               </View>
             </View>
@@ -302,7 +302,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   placeholderTextColor="black"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  className="flex-1 text-sm text-black font-semibold p-0"
+                  className="flex-1 text-sm text-black p-0"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}

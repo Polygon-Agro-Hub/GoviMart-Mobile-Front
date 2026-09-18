@@ -18,6 +18,11 @@ export const ProductReviewCard: React.FC<{
 }> = ({ product, onIncrease, onDecrease, onChangeProduct, onResetToOriginal }) => {
     const minQuantity = product.minQuantity ?? product.step ?? 1;
     const isMin = product.quantity <= minQuantity;
+    const formatPrice = (value: number | string) =>
+        (Number(value) || 0).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
 
     return (
         <View className="mx-5 mt-4 border border-[#EEEEEE] rounded-2xl p-4 bg-white">
@@ -46,7 +51,7 @@ export const ProductReviewCard: React.FC<{
                     <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                         Price :{" "}
                         <Text className="font-bold text-black">
-                            Rs. {product.price.toFixed(2)}
+                            Rs. {formatPrice(product.price)}
                         </Text>
                     </Text>
                 </View>

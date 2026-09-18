@@ -3,6 +3,8 @@ import { View, Text, Image, TouchableOpacity } from "react-native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store";
 
+const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
+
 interface HomeHeaderProps {
   onPressProfile: () => void;
 }
@@ -15,13 +17,8 @@ const HomeHeader: React.FC<HomeHeaderProps> = ({ onPressProfile }) => {
     setImageError(false);
   }, [user?.image]);
 
-  const placeholderImage =
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200";
-
-  const userImage =
-    !imageError && user?.image && user.image.trim() !== ""
-      ? user.image
-      : placeholderImage;
+  const hasValidUserImage =
+    !imageError && user?.image && user.image.trim() !== "";
 
   // Format display name with title, e.g. "Mr. Pasan"
   let displayName = "Guest User";
@@ -35,7 +32,7 @@ const HomeHeader: React.FC<HomeHeaderProps> = ({ onPressProfile }) => {
       <View className="flex-row items-center">
         <TouchableOpacity onPress={onPressProfile} activeOpacity={0.8}>
           <Image
-            source={{ uri: userImage }}
+            source={hasValidUserImage ? { uri: user.image } : defaultUserIcon}
             onError={() => setImageError(true)}
             className="w-14 h-14 rounded-full border-2 border-gray-200 bg-[#EAEFF5]"
           />

@@ -280,14 +280,14 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
 
         {/* Already have an account link */}
         <View className="flex-row items-center justify-center mt-6 mb-8">
-          <Text className="text-xs text-[#3F3F3F]">
+          <Text className="text-[14px] text-[#3F3F3F]">
             Already have an account?{" "}
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => navigation.navigate("Login")}
           >
-            <Text className="text-xs font-bold text-[#0085FF] underline">
+            <Text className="text-[12px] font-bold text-[#0085FF] underline">
               Sign in
             </Text>
           </TouchableOpacity>

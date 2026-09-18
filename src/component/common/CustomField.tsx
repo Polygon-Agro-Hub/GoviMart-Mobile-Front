@@ -18,31 +18,35 @@ export const InputField = ({
     placeholder,
     maxLength,
     error,
-    prefix
+    prefix,
+    autoCapitalize,
+    secureTextEntry,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
-    isIconThemeDark?: boolean,
+    isIconThemeDark?: boolean;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
     keyboardType?: "default" | "phone-pad" | "email-address";
     placeholder?: string;
     maxLength?: number;
-    error?: string
-    prefix?: string
+    error?: string;
+    prefix?: string;
+    autoCapitalize?: "none" | "sentences" | "words" | "characters";
+    secureTextEntry?: boolean;
 }) => {
     const handleIconColor = () => {
         if (isIconThemeDark) {
-            return "#00000"
+            return "#000000";
         }
-        return "#F2F2F6"
-    }
+        return "#F2F2F6";
+    };
     const handleBackgroundColor = () => {
         if (isIconThemeDark) {
-            return "#FFFFF"
+            return "#FFFFFF";
         }
-        return "#00000"
-    }
+        return "#000000";
+    };
     return (
         <View
             style={{
@@ -104,6 +108,7 @@ export const InputField = ({
                     <View style={{
                         flexDirection: "row",
                         alignItems: "center",
+                        width: "100%",
                     }}>
                         {prefix && (
                             <Text
@@ -125,13 +130,18 @@ export const InputField = ({
                             placeholder={placeholder}
                             placeholderTextColor="#9CA3AF"
                             maxLength={maxLength}
+                            autoCapitalize={autoCapitalize}
+                            secureTextEntry={secureTextEntry}
                             style={{
-                                height: 21,
+                                flex: 1,
+                                height: 24,
                                 paddingVertical: 0,
+                                paddingHorizontal: 0,
                                 fontSize: 14,
-                                color: "#111",
+                                color: "#111111",
                                 fontWeight: "500",
-                                paddingLeft: 0
+                                textAlignVertical: "center",
+                                includeFontPadding: false,
                             }}
                         />
                     </View>
