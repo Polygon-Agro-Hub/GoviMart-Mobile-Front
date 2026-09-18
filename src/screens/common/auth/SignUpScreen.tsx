@@ -244,15 +244,23 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     // Password validations
     if (!password) newErrors.password = "Password is required";
     else {
+      const hasUppercase = /[A-Z]/.test(password);
       const hasNumber = /[0-9]/.test(password);
       const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
-      if (password.length < 6) {
-        newErrors.password = "Must be at least 6 characters";
-      } else if (!/[A-Z]/.test(password)) {
-        newErrors.password = "Must have 1 uppercase letter";
+      if (password.length < 8) {
+        newErrors.password = "Must be at least 8 characters";
+      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
+        newErrors.password =
+          "Must have 1 uppercase letter, 1 number & 1 special character";
+      } else if (!hasUppercase && !hasSpecialChar) {
+        newErrors.password = "Must have 1 uppercase letter & 1 special character";
+      } else if (!hasUppercase && !hasNumber) {
+        newErrors.password = "Must have 1 uppercase letter & 1 number";
       } else if (!hasNumber && !hasSpecialChar) {
         newErrors.password = "Must have 1 number & 1 special character";
+      } else if (!hasUppercase) {
+        newErrors.password = "Must have 1 uppercase letter";
       } else if (!hasNumber) {
         newErrors.password = "Must have 1 number";
       } else if (!hasSpecialChar) {
@@ -972,7 +980,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 Your password must have:
               </Text>
               <Text className="text-xs text-[#5A5859] leading-relaxed">
-                • At least 6 characters{"\n"}• 1 uppercase letter{"\n"}• 1
+                • At least 8 characters{"\n"}• 1 uppercase letter{"\n"}• 1
                 number & 1 special character
               </Text>
             </View>
