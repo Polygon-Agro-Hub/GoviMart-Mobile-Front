@@ -1,29 +1,20 @@
 export const environment = {
 
   // LOCAL --------------------
-  //API_BASE_URL: "http://172.20.10.3:3000/polygon/",
+  // API_BASE_URL: "http://192.168.8.180:3000/polygon/",
 
   // DEV --------------------
   API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",
 
   // UAT --------------------
-  // API_BASE_URL: "https://govimart-mobile-api-uat.vercel.app/polygon/",
+  // API_BASE_URL: "https://uat-mob-api.govimart.com/polygon/",
 
   // PROD --------------------
   // API_BASE_URL: "https://govimart-mobile-api-prod.vercel.app/polygon/"
 
-  /**
-   * Shoutout SMS API key — injected at build time via expo-constants.
-   * Set SHOUTOUT_API_KEY in your .env file (see .env.example).
-   * The value is exposed through app.json `extra.shoutoutApiKey`.
-   */
-  get SHOUTOUT_API_KEY(): string {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Constants = require("expo-constants").default;
-      return (Constants.expoConfig?.extra?.shoutoutApiKey as string) ?? "";
-    } catch {
-      return "";
-    }
-  },
+  // DEV --------------------
+  SHOUTOUT_API_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwYjUxMWUzMC1mMjZjLTExZWYtOGQyZi1jNzhmOWJkMzU4NzciLCJzdWIiOiJTSE9VVE9VVF9BUElfVVNFUiIsImlhdCI6MTc0MDM3MzEzMywiZXhwIjoyMDU1OTA1OTMzLCJzY29wZXMiOnsiYWN0aXZpdGllcyI6WyJyZWFkIiwid3JpdGUiXSwibWVzc2FnZXMiOlsicmVhZCIsIndyaXRlIl0sImNvbnRhY3RzIjpbInJlYWQiLCJ3cml0ZSJdfSwic29fdXNlcl9pZCI6IjgzOTkzIiwic29fdXNlcl9yb2xlIjoidXNlciIsInNvX3Byb2ZpbGUiOiJhbGwiLCJzb191c2VyX25hbWUiOiIiLCJzb19hcGlrZXkiOiJub25lIn0.jqSNF1mJTmWHem1ZfjRQ1WKgsmB5N4tN8OOw7J9h6qI",
+
+  // PROD --------------------
+  // SHOUTOUT_API_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwMDU2MjExMC0xNjk4LTExZjAtOGY3Mi05MWZhM2QzZDhmODYiLCJzdWIiOiJTSE9VVE9VVF9BUElfVVNFUiIsImlhdCI6MTc0NDM1MDI1NCwiZXhwIjoyMDU5ODgzMDU0LCJzY29wZXMiOnsiYWN0aXZpdGllcyI6WyJyZWFkIiwid3JpdGUiXSwibWVzc2FnZXMiOlsicmVhZCIsIndyaXRlIl0sImNvbnRhY3RzIjpbInJlYWQiLCJ3cml0ZSJdfSwic29fdXNlcl9pZCI6IjgzOTkzIiwic29fdXNlcl9yb2xlIjoidXNlciIsInNvX3Byb2ZpbGUiOiJhbGwiLCJzb191c2VyX25hbWUiOiIiLCJzb19hcGlrZXkiOiJub25lIn0.cw29Ns80bCYCSuzgTX7qF1ZJzNteXi_hGD6MJ-tcoQg",
 };

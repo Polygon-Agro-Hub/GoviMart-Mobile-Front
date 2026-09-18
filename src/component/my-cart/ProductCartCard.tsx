@@ -31,9 +31,7 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
     const isMinimum = item.weight <= item.minimumWeight;
     const isUnavailable = !!item.isUnavailable;
 
-    const currentWeightInG = item.unit === "kg" ? item.weight * 1000 : item.weight;
-    const minWeightInG = item.unit === "kg" ? item.minimumWeight * 1000 : item.minimumWeight;
-    const weightMultiplier = minWeightInG > 0 ? currentWeightInG / minWeightInG : 1;
+    const weightMultiplier = item.unit === "kg" ? item.weight : item.weight / 1000;
     const itemTotalPrice = item.price * weightMultiplier;
 
     const formatPrice = (value: number) =>

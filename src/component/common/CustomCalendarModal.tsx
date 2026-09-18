@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Modal,
-  SafeAreaView,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +15,8 @@ interface CustomCalendarModalProps {
   onSelectDate: (dateStr: string) => void;
   minDate?: Date;
   maxDate?: Date;
+  title?: string;
+  showPreparationNotice?: boolean;
 }
 
 // ─── WEB VALIDATION LOGIC REPLICATED ──────────────────────────────────────────
@@ -81,6 +82,8 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   onSelectDate,
   minDate: customMinDate,
   maxDate: customMaxDate,
+  title,
+  showPreparationNotice,
 }) => {
   const minDate = useMemo(() => customMinDate || getMinDeliveryDate(), [customMinDate]);
   const maxDate = useMemo(() => {
@@ -91,14 +94,29 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
     return max;
   }, [customMaxDate]);
 
-  // Parse initially selected date or fallback to minDate
-  const initialDate = useMemo(() => {
+  const shouldShowNotice =
+    showPreparationNotice !== undefined
+      ? showPreparationNotice
+      : !customMinDate;
+
+  const modalTitle = title || "Select Schedule Date";
+
+  // Determine default display date (selectedDate -> today if valid -> fallback)
+  const getDefaultDate = useCallback(() => {
     if (selectedDate) {
       const parsed = new Date(selectedDate.replace(/\//g, "-"));
       if (!isNaN(parsed.getTime())) return parsed;
     }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (today >= minDate && today <= maxDate) {
+      return today;
+    }
+    if (today > maxDate) return maxDate;
     return minDate;
-  }, [selectedDate, minDate]);
+  }, [selectedDate, minDate, maxDate]);
+
+  const initialDate = useMemo(() => getDefaultDate(), [getDefaultDate]);
 
   const [currentYear, setCurrentYear] = useState<number>(initialDate.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(initialDate.getMonth());
@@ -117,10 +135,12 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           return;
         }
       }
-      setCurrentYear(minDate.getFullYear());
-      setCurrentMonth(minDate.getMonth());
+      setInternalSelectedDate(null);
+      const def = getDefaultDate();
+      setCurrentYear(def.getFullYear());
+      setCurrentMonth(def.getMonth());
     }
-  }, [visible, selectedDate, minDate]);
+  }, [visible, selectedDate, getDefaultDate]);
 
   const canGoPrev = useMemo(() => {
     const prevMonthDate = new Date(currentYear, currentMonth, 0);
@@ -207,6 +227,19 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
       });
     }
 
+    // Trailing empty spaces so the last row completes the 7-day week without gaps
+    const remainingDays = (7 - (days.length % 7)) % 7;
+    for (let i = 0; i < remainingDays; i++) {
+      days.push({
+        day: 0,
+        date: new Date(0),
+        isCurrentMonth: false,
+        isDisabled: true,
+        isSelected: false,
+        isToday: false,
+      });
+    }
+
     return days;
   }, [currentYear, currentMonth, minDate, maxDate, internalSelectedDate]);
 
@@ -273,7 +306,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                 color: "#111827",
               }}
             >
-              Select Schedule Date
+              {modalTitle}
             </Text>
 
             <TouchableOpacity
@@ -293,37 +326,39 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           </View>
 
           {/* Web Validation Info Badge */}
-          <View
-            style={{
-              backgroundColor: "#FFF7ED",
-              borderColor: "#FFEDD5",
-              borderWidth: 1,
-              borderRadius: 12,
-              paddingVertical: 7,
-              paddingHorizontal: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
-          >
-            <Ionicons
-              name="information-circle"
-              size={17}
-              color="#EA580C"
-              style={{ marginRight: 6 }}
-            />
-            <Text
+          {shouldShowNotice && (
+            <View
               style={{
-                fontSize: 11,
-                color: "#C2410C",
-                flex: 1,
-                lineHeight: 15,
-                fontWeight: "500",
+                backgroundColor: "#FFF7ED",
+                borderColor: "#FFEDD5",
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingVertical: 7,
+                paddingHorizontal: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 16,
               }}
             >
-              Orders require 3 days preparation (4 days after 6:00 PM cutoff).
-            </Text>
-          </View>
+              <Ionicons
+                name="information-circle"
+                size={17}
+                color="#EA580C"
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: "#C2410C",
+                  flex: 1,
+                  lineHeight: 16,
+                  fontWeight: "500",
+                }}
+              >
+                Orders require 3 days preparation (4 days after 6:00 PM cutoff).
+              </Text>
+            </View>
+          )}
 
           {/* Month & Year Navigator */}
           <View
@@ -388,17 +423,16 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           <View
             style={{
               flexDirection: "row",
-              justifyContent: "space-between",
               marginBottom: 8,
-              paddingHorizontal: 4,
             }}
           >
             {DAYS_OF_WEEK.map((d) => (
               <View
                 key={d}
                 style={{
-                  width: 40,
+                  width: "14.285%",
                   alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text
@@ -419,8 +453,6 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
             style={{
               flexDirection: "row",
               flexWrap: "wrap",
-              justifyContent: "space-between",
-              paddingHorizontal: 4,
             }}
           >
             {calendarDays.map((item, index) => {
@@ -429,7 +461,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                   <View
                     key={`blank-${index}`}
                     style={{
-                      width: 40,
+                      width: "14.285%",
                       height: 40,
                       marginVertical: 2,
                     }}
@@ -438,39 +470,48 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
               }
 
               return (
-                <TouchableOpacity
+                <View
                   key={`day-${item.day}`}
-                  activeOpacity={item.isDisabled ? 1 : 0.7}
-                  disabled={item.isDisabled}
-                  onPress={() => handleDayPress(item)}
                   style={{
-                    width: 40,
+                    width: "14.285%",
                     height: 40,
                     marginVertical: 2,
-                    borderRadius: 20,
                     justifyContent: "center",
                     alignItems: "center",
-                    backgroundColor: item.isSelected
-                      ? "#000000"
-                      : "transparent",
-                    borderWidth: item.isToday && !item.isSelected ? 1 : 0,
-                    borderColor: "#111827",
                   }}
                 >
-                  <Text
+                  <TouchableOpacity
+                    activeOpacity={item.isDisabled ? 1 : 0.7}
+                    disabled={item.isDisabled}
+                    onPress={() => handleDayPress(item)}
                     style={{
-                      fontSize: 13,
-                      fontWeight: item.isSelected ? "700" : "500",
-                      color: item.isDisabled
-                        ? "#D1D5DB"
-                        : item.isSelected
-                        ? "#FFFFFF"
-                        : "#111827",
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: item.isSelected
+                        ? "#000000"
+                        : "transparent",
+                      borderWidth: item.isToday && !item.isSelected ? 1 : 0,
+                      borderColor: "#111827",
                     }}
                   >
-                    {String(item.day)}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: item.isSelected ? "700" : "500",
+                        color: item.isDisabled
+                          ? "#D1D5DB"
+                          : item.isSelected
+                          ? "#FFFFFF"
+                          : "#111827",
+                      }}
+                    >
+                      {String(item.day)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </View>

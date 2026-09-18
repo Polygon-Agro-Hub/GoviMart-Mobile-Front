@@ -10,6 +10,7 @@ export const PaymentOptionCard = ({
     iconColor,
     selected,
     onPress,
+    disabled = false,
 }: {
     title: string;
     description: string;
@@ -18,28 +19,31 @@ export const PaymentOptionCard = ({
     iconColor: string;
     selected: boolean;
     onPress: () => void;
+    disabled?: boolean;
 }) => {
     return (
         <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onPress}
+            activeOpacity={disabled ? 1 : 0.85}
+            disabled={disabled}
+            onPress={disabled ? undefined : onPress}
             style={{
                marginHorizontal: 15,
                 minHeight: 96,
                 borderWidth: 1.5,
-                borderColor: selected ? "#FF8A00" : "#E1E7EE",
+                borderColor: selected && !disabled ? "#FF8A00" : "#E1E7EE",
                 borderRadius: 20,
                 paddingHorizontal: 16,
                 paddingVertical: 14,
                 backgroundColor: "#FFFFFF",
+                opacity: disabled ? 0.38 : 1,
                 shadowColor: "#000",
                 shadowOffset: {
                     width: 0,
                     height: 2,
                 },
-                shadowOpacity: selected ? 0.08 : 0.03,
+                shadowOpacity: selected && !disabled ? 0.08 : 0.03,
                 shadowRadius: 4,
-                elevation: selected ? 3 : 1,
+                elevation: selected && !disabled ? 3 : 1,
             }}
         >
             {/* Radio / Check Circle */}
@@ -51,14 +55,14 @@ export const PaymentOptionCard = ({
                     width: 22,
                     height: 22,
                     borderRadius: 90,
-                    borderWidth: selected ? 0 : 2,
-                    borderColor: "#BAC2C7",
-                    backgroundColor: selected ? "#000000" : "#FFFFFF",
+                    borderWidth: selected && !disabled ? 0 : 2,
+                    borderColor: disabled ? "#CBD5E1" : "#BAC2C7",
+                    backgroundColor: selected && !disabled ? "#000000" : "#FFFFFF",
                     justifyContent: "center",
                     alignItems: "center",
                 }}
             >
-                {selected && (
+                {selected && !disabled && (
                     <Ionicons
                         name="checkmark"
                         size={14}

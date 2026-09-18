@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
@@ -52,7 +51,7 @@ export const PayHereCheckoutModal: React.FC<Props> = ({
             onClose();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -102,7 +101,7 @@ export const PayHereCheckoutModal: React.FC<Props> = ({
       transparent={false}
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
         {/* Modal Header */}
         <View
           style={{
@@ -133,7 +132,8 @@ export const PayHereCheckoutModal: React.FC<Props> = ({
                 marginTop: 2,
               }}
             >
-              LKR {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} • Sandbox / Test
+              LKR {amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
+              • Sandbox / Test
             </Text>
           </View>
 
@@ -198,7 +198,7 @@ export const PayHereCheckoutModal: React.FC<Props> = ({
             </View>
           )}
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 };

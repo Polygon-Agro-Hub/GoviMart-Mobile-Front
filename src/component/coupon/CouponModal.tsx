@@ -544,10 +544,10 @@ const CouponModal: React.FC<CouponModalProps> = ({
                       </Text>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: 12,
                           color: "#4B5563",
                           marginTop: 2,
-                          lineHeight: 15,
+                          lineHeight: 16,
                         }}
                       >
                         {getCouponDescription(item)}
@@ -601,7 +601,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
           >
             <Text
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "#4B5563",
                 fontWeight: "500",
               }}

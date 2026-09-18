@@ -73,6 +73,9 @@ const authSlice = createSlice({
         state.userProfile = action.payload as UserProfile;
       }
     },
+    updateToken: (state, action: PayloadAction<string>) => {
+      state.token = action.payload;
+    },
   },
 });
 
@@ -83,6 +86,7 @@ export const {
   updateUserProfileFlag,
   updateUserProfileImage,
   updateUserProfile,
+  updateToken,
 } = authSlice.actions;
 
 export default authSlice.reducer;

@@ -1,122 +1,157 @@
 import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 import socketService from "../socket/socket.service";
 import { ServerNotificationItem } from "./notification.service";
+import { navigationRef } from "../../../navigationRef";
 
-let NotificationsModule: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  NotificationsModule = require("expo-notifications");
-} catch (e) {
-  console.warn("[PushNotificationService] expo-notifications module could not be loaded statically:", e);
-}
-
-// Configure how notifications are displayed when app is in foreground / background
-if (NotificationsModule?.setNotificationHandler) {
-  NotificationsModule.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-}
+// Configure how notifications should be handled when the app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 class PushNotificationService {
   private isInitialized = false;
+  private responseListenerSubscription: Notifications.Subscription | null = null;
+  private socketUnsubscribe: (() => void) | null = null;
 
-  private getNotifications() {
-    if (!NotificationsModule) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        NotificationsModule = require("expo-notifications");
-      } catch (e) {
-        // silent fallback
-      }
-    }
-    return NotificationsModule;
-  }
-
+  /**
+   * Initialize System Notifications, Android Channels, and real-time Socket listeners.
+   */
   async init() {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
     try {
-      const Notifications = this.getNotifications();
-      if (!Notifications) {
-        console.warn("[PushNotificationService] expo-notifications not yet resolved by bundler");
-        return;
-      }
-
-      // Configure Android channel
-      if (Platform.OS === "android" && Notifications.setNotificationChannelAsync) {
-        await Notifications.setNotificationChannelAsync("polygon-orders", {
-          name: "Polygon Order Notifications",
-          importance: Notifications.AndroidImportance?.MAX ?? 5,
+      // 1. Setup Android Notification Channel
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "Polygon Notifications",
+          description: "Live notifications for orders, packages, and deliveries.",
+          importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
-          lightColor: "#3E206D",
+          lightColor: "#FF8A00",
           sound: "default",
           enableVibrate: true,
           showBadge: true,
         });
       }
 
-      // Request notification permissions
-      if (Notifications.getPermissionsAsync) {
-        const { status: existingStatus } =
-          await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
+      // 2. Add listener for when user taps on an OS system notification
+      this.responseListenerSubscription =
+        Notifications.addNotificationResponseReceivedListener((response) => {
+          try {
+            const data = response.notification.request.content.data;
+            this.handleNotificationNavigation(data);
+          } catch (e) {
+            console.warn("[PushNotificationService] Error handling response tap:", e);
+          }
+        });
 
-        if (existingStatus !== "granted" && Notifications.requestPermissionsAsync) {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-
-        if (finalStatus !== "granted") {
-          console.warn("[PushNotificationService] Notification permission not granted");
-        }
-      }
-
-      // Listen to real-time socket events to trigger local OS notification
+      // 3. Connect to Socket.IO and listen for new notifications to trigger OS alerts
       socketService.connect();
-      socketService.onNewNotification((item: ServerNotificationItem) => {
+      this.socketUnsubscribe = socketService.onNewNotification((item: ServerNotificationItem) => {
         this.displayLocalNotification(item);
       });
+
+      console.log("[PushNotificationService] Initialized successfully");
     } catch (error) {
-      console.error("[PushNotificationService] Init error:", error);
+      console.warn("[PushNotificationService] Init error:", error);
     }
   }
 
   /**
-   * Triggers an OS-level notification banner (in background / foreground tray)
+   * Request OS System Notification Permissions
    */
-  async displayLocalNotification(item: ServerNotificationItem) {
+  async requestPermissions(): Promise<boolean> {
     try {
-      const Notifications = this.getNotifications();
-      if (!Notifications?.scheduleNotificationAsync) {
-        return;
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
       }
+
+      return finalStatus === "granted";
+    } catch (error) {
+      console.warn("[PushNotificationService] requestPermissions error:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Display a native OS System Notification (shows in status bar, lock screen, and tray)
+   */
+  async displayLocalNotification(item: ServerNotificationItem | any) {
+    if (!item) return;
+
+    try {
+      const title = item.title || "Polygon Notification";
+      const body = item.message || "";
 
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: "Polygon",
-          subtitle: item.title,
-          body: `${item.title}\n${item.message}`,
+          title,
+          body,
+          data: item,
           sound: "default",
-          data: {
-            notificationId: item.id,
-            orderId: item.orderId || item.processOrderId,
-            title: item.title,
-          },
+          badge: 1,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          color: "#FF8A00",
         },
-        trigger: null, // deliver immediately
+        trigger: null, // trigger immediately
       });
-    } catch (e) {
-      console.warn("[PushNotificationService] Could not schedule local notification:", e);
+
+      console.log("[PushNotificationService] OS System Notification posted:", title);
+    } catch (error) {
+      console.warn("[PushNotificationService] displayLocalNotification error:", error);
     }
+  }
+
+  /**
+   * Route user to the appropriate screen based on notification content when clicked
+   */
+  handleNotificationNavigation(data: any) {
+    if (!data) return;
+
+    const titleLower = (data.title || "").toLowerCase();
+    const orderId = data.orderId || data.processOrderId;
+    const invoiceNo = data.invNo || data.invoiceNo;
+
+    if (titleLower.includes("package finalization review")) {
+      (navigationRef.current as any)?.navigate("ReviewPackage", {
+        orderId,
+        invoiceNo,
+      });
+    } else if (orderId) {
+      (navigationRef.current as any)?.navigate("OrderDetails", {
+        orderId: String(orderId),
+      });
+    } else {
+      (navigationRef.current as any)?.navigate("Notification");
+    }
+  }
+
+  /**
+   * Cleanup listeners
+   */
+  cleanup() {
+    if (this.responseListenerSubscription) {
+      this.responseListenerSubscription.remove();
+      this.responseListenerSubscription = null;
+    }
+    if (this.socketUnsubscribe) {
+      this.socketUnsubscribe();
+      this.socketUnsubscribe = null;
+    }
+    this.isInitialized = false;
   }
 }
 
 export default new PushNotificationService();
-

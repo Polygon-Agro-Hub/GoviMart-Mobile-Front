@@ -37,10 +37,10 @@ const HomeHeader: React.FC<HomeHeaderProps> = ({ onPressProfile }) => {
           <Image
             source={{ uri: userImage }}
             onError={() => setImageError(true)}
-            className="w-16 h-16 rounded-full border-2 border-gray-200 bg-[#EAEFF5]"
+            className="w-14 h-14 rounded-full border-2 border-gray-200 bg-[#EAEFF5]"
           />
         </TouchableOpacity>
-        <Text className="text-black text-lg font-bold ml-4">
+        <Text className="text-black text-xl font-bold ml-4">
           {displayName}
         </Text>
       </View>
