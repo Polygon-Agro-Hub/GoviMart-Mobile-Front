@@ -25,18 +25,16 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
 }) => {
   return (
     <View
-      className={`flex-row items-center justify-between px-4 py-4 ${
-        dark ? "bg-black" : "bg-white"
-      }`}
+      className={`flex-row items-center justify-between px-4 py-4 ${dark ? "bg-black" : "bg-white"
+        }`}
     >
       {/* Left section for Back Button */}
       <View className="w-12">
         {showBackButton && navigation && (
           <TouchableOpacity
             onPress={onBackPress ?? (() => navigation.goBack())}
-            className={`w-14 h-14 rounded-full items-center justify-center shadow-sm border ${
-              dark ? "bg-[#1F1F1F] border-gray-800" : "bg-white border-gray-200"
-            }`}
+            className={`w-14 h-14 rounded-full items-center justify-center shadow-sm border ${dark ? "bg-[#1F1F1F] border-gray-800" : "bg-white border-gray-200"
+              }`}
             activeOpacity={0.7}
           >
             <Entypo

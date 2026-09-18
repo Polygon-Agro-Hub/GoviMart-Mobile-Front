@@ -71,7 +71,16 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         useState<Package | null>(null);
 
     const formatAmount = (amount: number | string) => {
-        const num = typeof amount === "number" ? amount : parseFloat(String(amount).replace(/[^\d.]/g, "")) || 0;
+        const num =
+            typeof amount === "number"
+                ? amount
+                : parseFloat(
+                      String(amount || "")
+                          .replace(/Rs\.?/gi, "")
+                          .replace(/LKR/gi, "")
+                          .replace(/,/g, "")
+                          .trim()
+                  ) || 0;
         return num.toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,

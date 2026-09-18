@@ -352,9 +352,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   }) => (
     <TouchableOpacity onPress={onPress} hitSlop={8}>
       <View
-        className={`w-[22px] h-[22px] rounded-md border-[1.5px] items-center justify-center ${
-          checked ? "border-[#374151] bg-[#374151]" : "border-[#9CA3AF] bg-white"
-        }`}
+        className={`w-[22px] h-[22px] rounded-md border-[1.5px] items-center justify-center ${checked ? "border-[#374151] bg-[#374151]" : "border-[#9CA3AF] bg-white"
+          }`}
       >
         {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
       </View>
@@ -600,7 +599,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
           className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
         >
           <Text className="text-white text-base font-bold">
-            Select Order Type
+            Continue
           </Text>
         </TouchableOpacity>
       </View>
