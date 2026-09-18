@@ -86,6 +86,12 @@ const SummaryRow: React.FC<{
   </View>
 );
 
+const formatPrice = (value: number | string) =>
+  (Number(value) || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 /* ---------------------------------------------------------
    Screen
 --------------------------------------------------------- */
@@ -231,7 +237,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             <ProductRow
               product={fromProduct}
               subtitle={`${fromProduct.baseQty} kg`}
-              price={`Rs. ${fromPrice.toFixed(2)}`}
+              price={`Rs. ${formatPrice(fromPrice)}`}
             />
 
             <View className="my-3">
@@ -241,7 +247,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             <ProductRow
               product={toProduct}
               subtitle={`${quantity} kg`}
-              price={`Rs. ${toPrice.toFixed(2)}`}
+              price={`Rs. ${formatPrice(toPrice)}`}
             />
           </View>
 
@@ -276,19 +282,17 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           <View className="mx-6 mt-8">
             <SummaryRow
               label={`${fromProduct.name} Price`}
-              value={`Rs. ${fromPrice.toFixed(2)}`}
+              value={`Rs. ${formatPrice(fromPrice)}`}
             />
             <View className="h-[1px] bg-[#ECECEC]" />
             <SummaryRow
               label={`${toProduct.name} Price`}
-              value={`- Rs. ${toPrice.toFixed(2)}`}
+              value={`- Rs. ${formatPrice(toPrice)}`}
             />
             <View className="h-[1px] bg-[#ECECEC]" />
             <SummaryRow
               label="Balance"
-              value={`${isCredit ? "" : "- "}Rs. ${Math.abs(balance).toFixed(
-                2
-              )}`}
+              value={`${isCredit ? "" : "- "}Rs. ${formatPrice(Math.abs(balance))}`}
               bold
               valueColor="#3B82F6"
             />
@@ -303,7 +307,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               You have already paid for this order, so the remaining
               balance of{" "}
               <Text className="font-bold text-black">
-                Rs. {Math.abs(balance).toFixed(2)}
+                Rs. {formatPrice(Math.abs(balance))}
               </Text>{" "}
               will be credited to your account.
             </Text>

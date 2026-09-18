@@ -192,7 +192,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         Alert.alert(
           "Error",
           response.data?.message ||
-            "Failed to submit complaint. Please try again.",
+          "Failed to submit complaint. Please try again.",
         );
       }
     } catch (error: any) {
@@ -348,9 +348,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
             <Text
               style={{
-                fontSize: 15,
-                color: "#111",
-                fontWeight: "600",
+                fontSize: 14,
+                color: selectedCategoryName ? "#111" : "#747990",
+                fontWeight: selectedCategoryName ? "600" : "500",
               }}
             >
               {selectedCategoryName || "Select From Here"}

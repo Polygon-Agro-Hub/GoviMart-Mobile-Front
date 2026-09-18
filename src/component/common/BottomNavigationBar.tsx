@@ -285,7 +285,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                             marginLeft: 6,
                         }}
                     >
-                        Profile
+                        Account
                     </Text>
                 )}
             </TouchableOpacity>

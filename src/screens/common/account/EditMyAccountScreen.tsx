@@ -22,6 +22,8 @@ import { updateUserProfileImage } from "@/store/authSlice";
 
 import { RootStackParamList } from "@/types/types";
 import { DropdownField, InputField } from "@/component/common/CustomField";
+
+const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
@@ -104,9 +106,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [title, setTitle] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [profileImage, setProfileImage] = useState<string | null>(
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
-  );
+  const [profileImage, setProfileImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
   const [showCameraPermission, setShowCameraPermission] = useState(false);
@@ -654,7 +654,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               >
                 {uploadingImage ? (
                   <ActivityIndicator size="small" color="#000000" />
-                ) : profileImage ? (
+                ) : profileImage && profileImage.trim() !== "" ? (
                   <Image
                     source={{ uri: profileImage }}
                     style={{
@@ -664,7 +664,14 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     resizeMode="cover"
                   />
                 ) : (
-                  <FontAwesome6 name="user" size={40} color="#8B9DA7" solid />
+                  <Image
+                    source={defaultUserIcon}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                    }}
+                    resizeMode="cover"
+                  />
                 )}
               </TouchableOpacity>
 

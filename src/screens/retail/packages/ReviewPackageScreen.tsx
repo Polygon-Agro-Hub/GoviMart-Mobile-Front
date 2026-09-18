@@ -165,8 +165,8 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-const formatPrice = (value: number) =>
-  value.toLocaleString("en-US", {
+const formatPrice = (value: number | string) =>
+  (Number(value) || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -1288,17 +1288,17 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                       <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                         Price :{" "}
                         <Text className="font-bold text-black">
-                          Rs.
-                          {(
+                          Rs.{" "}
+                          {formatPrice(
                             pkg.unitPrice +
                             pkg.serviceFee +
                             pkg.packingFee
-                          ).toFixed(2)}{" "}
-                          x {pkg.qty} = Rs.
-                          {(
+                          )}{" "}
+                          x {pkg.qty} = Rs.{" "}
+                          {formatPrice(
                             (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
                             pkg.qty
-                          ).toFixed(2)}
+                          )}
                         </Text>
                       </Text>
                     </View>
@@ -2101,7 +2101,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               Total
             </Text>
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {overviewTotal.toFixed(2)}
+              Rs. {formatPrice(overviewTotal)}
             </Text>
           </View>
 

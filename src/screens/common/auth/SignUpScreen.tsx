@@ -68,6 +68,37 @@ const sanitizeName = (text: string): string => {
     .replace(/\s{2,}/g, " ");
 };
 
+const sanitizeNIC = (text: string): string => {
+  // Allow only digits (0-9) and 'v'/'V'
+  let cleaned = text.replace(/[^0-9vV]/g, "").toUpperCase();
+
+  // Allow at most one 'V'
+  const vIndex = cleaned.indexOf("V");
+  if (vIndex !== -1) {
+    cleaned =
+      cleaned.slice(0, vIndex + 1) +
+      cleaned.slice(vIndex + 1).replace(/V/g, "");
+  }
+
+  return cleaned;
+};
+
+const isValidEmail = (emailStr: string): boolean => {
+  if (!emailStr) return false;
+  const trimmed = emailStr.trim();
+  if (
+    trimmed.includes(" ") ||
+    trimmed.includes("..") ||
+    trimmed.startsWith(".") ||
+    trimmed.endsWith(".")
+  ) {
+    return false;
+  }
+  const emailRegex =
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+  return emailRegex.test(trimmed);
+};
+
 const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [tab, setTab] = useState<"home" | "business">("home");
@@ -161,8 +192,9 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       }
     }
 
-    if (!email.trim()) newErrors.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (!email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!isValidEmail(email)) {
       newErrors.email = "Invalid email address";
     }
 
@@ -212,15 +244,19 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     // Password validations
     if (!password) newErrors.password = "Password is required";
     else {
+      const hasNumber = /[0-9]/.test(password);
+      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
       if (password.length < 6) {
         newErrors.password = "Must be at least 6 characters";
       } else if (!/[A-Z]/.test(password)) {
         newErrors.password = "Must have 1 uppercase letter";
-      } else if (
-        !/[0-9]/.test(password) ||
-        !/[!@#$%^&*(),.?":{}|<>]/.test(password)
-      ) {
+      } else if (!hasNumber && !hasSpecialChar) {
         newErrors.password = "Must have 1 number & 1 special character";
+      } else if (!hasNumber) {
+        newErrors.password = "Must have 1 number";
+      } else if (!hasSpecialChar) {
+        newErrors.password = "Must have 1 special character";
       }
     }
 
@@ -239,7 +275,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   };
 
   const handleSignUp = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
 
     try {
       const cleanedPhone =
@@ -289,44 +328,81 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           );
         }
       } else {
-        const msg = response.data?.message || "Failed to register.";
+        const data = response.data;
+        const msg = data?.message || "Failed to register.";
+        const allErrors = Array.isArray(data?.errors) ? data.errors.join(" ") : "";
+        const combined = `${msg} ${allErrors}`.toLowerCase();
+
+        let fieldErrorFound = false;
         if (
-          msg.toLowerCase().includes("company phone") ||
-          msg.toLowerCase().includes("company number")
+          combined.includes("company phone") ||
+          combined.includes("company number")
         ) {
           setErrors((prev) => ({ ...prev, companyNumber: msg }));
+          fieldErrorFound = true;
         } else if (
-          msg.toLowerCase().includes("mobile") ||
-          msg.toLowerCase().includes("phone")
+          combined.includes("mobile") ||
+          combined.includes("phone")
         ) {
           setErrors((prev) => ({ ...prev, phoneNumber: msg }));
-        } else if (msg.toLowerCase().includes("email")) {
-          setErrors((prev) => ({ ...prev, email: msg }));
-        } else if (msg.toLowerCase().includes("nic")) {
+          fieldErrorFound = true;
+        } else if (combined.includes("email")) {
+          setErrors((prev) => ({
+            ...prev,
+            email: combined.includes("already")
+              ? "Email already in use"
+              : "Invalid email address",
+          }));
+          fieldErrorFound = true;
+        } else if (combined.includes("nic")) {
           setErrors((prev) => ({ ...prev, nic: msg }));
+          fieldErrorFound = true;
         }
-        showAlert("Signup Failed", msg);
+
+        if (fieldErrorFound) {
+          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        } else {
+          showAlert("Signup Failed", msg);
+        }
       }
     } catch (err: any) {
       console.error("Signup error:", err);
-      const msg =
-        err.response?.data?.message || "An unexpected error occurred.";
+      const data = err.response?.data;
+      const msg = data?.message || "An unexpected error occurred.";
+      const allErrors = Array.isArray(data?.errors) ? data.errors.join(" ") : "";
+      const combined = `${msg} ${allErrors}`.toLowerCase();
+
+      let fieldErrorFound = false;
       if (
-        msg.toLowerCase().includes("company phone") ||
-        msg.toLowerCase().includes("company number")
+        combined.includes("company phone") ||
+        combined.includes("company number")
       ) {
         setErrors((prev) => ({ ...prev, companyNumber: msg }));
+        fieldErrorFound = true;
       } else if (
-        msg.toLowerCase().includes("mobile") ||
-        msg.toLowerCase().includes("phone")
+        combined.includes("mobile") ||
+        combined.includes("phone")
       ) {
         setErrors((prev) => ({ ...prev, phoneNumber: msg }));
-      } else if (msg.toLowerCase().includes("email")) {
-        setErrors((prev) => ({ ...prev, email: msg }));
-      } else if (msg.toLowerCase().includes("nic")) {
+        fieldErrorFound = true;
+      } else if (combined.includes("email")) {
+        setErrors((prev) => ({
+          ...prev,
+          email: combined.includes("already")
+            ? "Email already in use"
+            : "Invalid email address",
+        }));
+        fieldErrorFound = true;
+      } else if (combined.includes("nic")) {
         setErrors((prev) => ({ ...prev, nic: msg }));
+        fieldErrorFound = true;
       }
-      showAlert("Signup Error", msg);
+
+      if (fieldErrorFound) {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      } else {
+        showAlert("Signup Error", msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -684,7 +760,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 autoCapitalize="characters"
                 value={nic}
                 onChangeText={(text) => {
-                  setNic(text);
+                  const sanitized = sanitizeNIC(text);
+                  setNic(sanitized);
                   if (errors.nic) setErrors((prev) => ({ ...prev, nic: "" }));
                 }}
                 maxLength={12}
@@ -1013,14 +1090,14 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
         {/* Sign In Redirect Link */}
         <View className="flex-row items-center justify-center mt-3">
-          <Text className="text-xs text-gray-500">
+          <Text className="text-[14px] text-gray-500">
             Already have an account?{" "}
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => navigation.navigate("Login")}
           >
-            <Text className="text-xs font-bold text-[#0085FF] underline">
+            <Text className="text-[12px] font-bold text-[#0085FF] underline">
               Sign in
             </Text>
           </TouchableOpacity>

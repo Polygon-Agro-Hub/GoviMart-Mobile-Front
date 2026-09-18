@@ -6,7 +6,9 @@ import {
     TouchableOpacity,
     RefreshControl,
     ActivityIndicator,
+    BackHandler,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import CustomHeader from "@/component/common/CustomHeader";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
@@ -113,6 +115,27 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
     const [showMenu, setShowMenu] = useState<boolean>(false);
+
+    // Handle system back button with context-aware dismissal of action menu
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                if (showMenu) {
+                    setShowMenu(false);
+                    return true;
+                }
+                navigation.navigate("Home");
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener(
+                "hardwareBackPress",
+                onBackPress
+            );
+
+            return () => subscription.remove();
+        }, [showMenu, navigation])
+    );
 
     // Fetch notifications from API
     const loadNotifications = useCallback(async (showLoadingSpinner = true) => {

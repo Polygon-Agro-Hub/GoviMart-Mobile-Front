@@ -133,8 +133,23 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
           <LoadingPage message="Loading Complaints..." fullScreen={false} />
         </View>
       ) : complaints.length === 0 ? (
-        <View className="flex-1 justify-center items-center px-8">
-          <NoDataFound message={"No Complain Found"} />
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 24,
+            width: "100%",
+          }}
+        >
+          <NoDataFound
+            message="No Complaint Found"
+            containerStyle={{
+              justifyContent: "center",
+              alignItems: "center",
+              width: "100%",
+            }}
+          />
         </View>
       ) : (
         <ScrollView
