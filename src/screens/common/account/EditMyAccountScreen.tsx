@@ -4,14 +4,13 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  ScrollView,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Modal,
   ActivityIndicator,
   BackHandler,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -507,10 +506,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-white"
-    >
+    <View className="flex-1 bg-white">
       {/* HEADER */}
       <View
         style={{
@@ -613,12 +609,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           <LoadingPage message="Loading Account..." fullScreen={false} />
         </View>
       ) : (
-        <ScrollView
+        <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          enableAutomaticScroll={true}
+          extraScrollHeight={120}
+          extraHeight={120}
+          keyboardOpeningTime={0}
+          enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: 200,
+            paddingBottom: 140,
           }}
         >
           {/* PROFILE IMAGE */}
@@ -918,7 +920,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               </>
             )}
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
 
       {updating && (
@@ -1284,7 +1286,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           onClose={() => setShowCameraPermission(false)}
         />
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
