@@ -815,8 +815,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
       const dbUnitType = (product.unitType || "g").toLowerCase();
 
-      let initialUnit: "g" | "kg" = dbUnitType === "kg" && rawStartValue < 1 ? "g" : (dbUnitType as "g" | "kg");
-      let initialWeight = dbUnitType === "kg" && rawStartValue < 1 ? Math.round(rawStartValue * 1000) : rawStartValue;
+      let initialUnit: "g" | "kg" = (dbUnitType === "kg" && rawStartValue < 1) || dbUnitType === "g" ? "g" : "kg";
+      let initialWeight = initialUnit === "g"
+        ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
+        : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
 
       const rawChangeBy =
         product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
@@ -824,14 +826,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           : rawStartValue;
 
       const step =
-        initialUnit === "kg"
-          ? (dbUnitType === "kg" ? rawChangeBy : (rawChangeBy < 1 ? rawChangeBy : parseFloat((rawChangeBy / 1000).toFixed(3))))
-          : (dbUnitType === "kg" ? Math.round(rawChangeBy * 1000) : (rawChangeBy < 1 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy)));
+        initialUnit === "g"
+          ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
+          : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
 
       const minWeight =
-        initialUnit === "kg"
-          ? (dbUnitType === "kg" ? rawStartValue : (rawStartValue < 1 ? rawStartValue : parseFloat((rawStartValue / 1000).toFixed(3))))
-          : (dbUnitType === "kg" ? Math.round(rawStartValue * 1000) : (rawStartValue < 1 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue)));
+        initialUnit === "g"
+          ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
+          : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
 
       const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
       const discountedPerUnit =

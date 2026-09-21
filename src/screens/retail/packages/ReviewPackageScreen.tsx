@@ -386,14 +386,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 ? parseFloat(String(item.changeby))
                 : (item.startValue ? parseFloat(String(item.startValue)) : 0.5);
 
-              const step = unit === "kg"
-                ? (dbUnitType === "kg" ? rawChangeBy : (rawChangeBy < 1 ? rawChangeBy : parseFloat((rawChangeBy / 1000).toFixed(3))))
-                : (dbUnitType === "kg" ? Math.round(rawChangeBy * 1000) : (rawChangeBy < 1 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy)));
+              const step = unit === "g"
+                ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
+                : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
 
               const rawStart = parseFloat(item.startValue) > 0 ? parseFloat(item.startValue) : rawChangeBy;
-              const minQuantity = unit === "kg"
-                ? (dbUnitType === "kg" ? rawStart : (rawStart < 1 ? rawStart : parseFloat((rawStart / 1000).toFixed(3))))
-                : (dbUnitType === "kg" ? Math.round(rawStart * 1000) : (rawStart < 1 ? Math.round(rawStart * 1000) : Math.round(rawStart)));
+              const minQuantity = unit === "g"
+                ? (dbUnitType === "kg" || rawStart <= 10 ? Math.round(rawStart * 1000) : Math.round(rawStart))
+                : (dbUnitType === "kg" || rawStart <= 10 ? parseFloat(rawStart.toFixed(3)) : parseFloat((rawStart / 1000).toFixed(3)));
 
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {

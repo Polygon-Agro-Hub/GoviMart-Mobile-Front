@@ -137,23 +137,23 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [rawTo]);
 
-  const rawStep =
+  const rawStepVal =
     rawTo?.changeby != null && String(rawTo.changeby).trim() !== "" && parseFloat(String(rawTo.changeby)) > 0
       ? parseFloat(String(rawTo.changeby))
       : (rawTo?.step != null && parseFloat(String(rawTo.step)) > 0 ? parseFloat(String(rawTo.step)) : (parseFloat(String(rawTo?.startValue)) || 0.5));
 
-  const rawMin =
+  const rawMinVal =
     rawTo?.startValue != null && String(rawTo.startValue).trim() !== "" && parseFloat(String(rawTo.startValue)) > 0
       ? parseFloat(String(rawTo.startValue))
-      : rawStep;
+      : rawStepVal;
 
-  const step = rawStep;
-  const minQty = rawMin;
+  const step = rawStepVal > 10 ? parseFloat((rawStepVal / 1000).toFixed(3)) : parseFloat(rawStepVal.toFixed(3));
+  const minQty = rawMinVal > 10 ? parseFloat((rawMinVal / 1000).toFixed(3)) : parseFloat(rawMinVal.toFixed(3));
   const maxQty = 10;
 
   const [quantity, setQuantity] = useState(() => {
     const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
-    const parsedQty = parseFloat(String(rawFrom?.quantity ?? rawMin));
+    const parsedQty = parseFloat(String(rawFrom?.quantity ?? minQty));
     if (!isNaN(parsedQty) && parsedQty > 0) {
       const initialInKg = rawUnit === "g" ? Number((parsedQty / 1000).toFixed(3)) : parsedQty;
       return Math.max(minQty, initialInKg);

@@ -89,14 +89,14 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
       : rawStartValue;
 
   const minQuantity =
-    unit === "kg"
-      ? (baseUnit === "kg" ? rawStartValue : (rawStartValue < 1 ? rawStartValue : parseFloat((rawStartValue / 1000).toFixed(3))))
-      : (baseUnit === "kg" ? Math.round(rawStartValue * 1000) : (rawStartValue < 1 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue)));
+    unit === "g"
+      ? (baseUnit === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
+      : (baseUnit === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
 
   const stepSize =
-    unit === "kg"
-      ? (baseUnit === "kg" ? rawChangeBy : (rawChangeBy < 1 ? rawChangeBy : parseFloat((rawChangeBy / 1000).toFixed(3))))
-      : (baseUnit === "kg" ? Math.round(rawChangeBy * 1000) : (rawChangeBy < 1 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy)));
+    unit === "g"
+      ? (baseUnit === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
+      : (baseUnit === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
 
   const currentWeightInG = unit === "kg" ? quantity * 1000 : quantity;
   const startWeightInG =
@@ -155,8 +155,8 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   const changeUnit = (value: "kg" | "g") => {
     if (unit === value) return;
     setUnit(value);
-    const minKg = baseUnit === "kg" ? rawStartValue : (rawStartValue < 1 ? rawStartValue : parseFloat((rawStartValue / 1000).toFixed(3)));
-    const minG = baseUnit === "kg" ? Math.round(rawStartValue * 1000) : (rawStartValue < 1 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue));
+    const minKg = baseUnit === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3));
+    const minG = baseUnit === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue);
 
     if (value === "kg") {
       const newQty = parseFloat((quantity / 1000).toFixed(3));
