@@ -25,6 +25,7 @@ import ProductCartCard from "@/component/my-cart/ProductCartCard";
 import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
 import AuthPromptModal from "@/component/common/AuthPromptModal";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
 import customerService from "@/services/customer/customer.service";
@@ -45,6 +46,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const { packages, products } = useSelector((state: RootState) => state.cart);
     const [cartId, setCartId] = useState<number | null>(null);
     const [authModalVisible, setAuthModalVisible] = useState(false);
+    const [isNegativeCreditModalVisible, setIsNegativeCreditModalVisible] = useState(false);
 
     // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ON FOCUS ─────────────────────
     useFocusEffect(
@@ -205,20 +207,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             const accRes = await customerService.getAccountDetails();
             const bal = parseFloat(accRes?.data?.data?.creditBalance || 0);
             if (bal < 0) {
-                Alert.alert(
-                    "Negative Credit Balance",
-                    "You have an outstanding negative credit balance. Please settle your balance in your account before placing an order.",
-                    [
-                        {
-                            text: "Go to Account",
-                            onPress: () => navigation.navigate("Profile" as any),
-                        },
-                        {
-                            text: "Cancel",
-                            style: "cancel",
-                        },
-                    ]
-                );
+                setIsNegativeCreditModalVisible(true);
                 return;
             }
         } catch (err) {
@@ -342,6 +331,24 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 navigation={navigation}
                 title="Sign In to Checkout"
                 subtitle="Please sign in or create an account to proceed to delivery selection and complete your order."
+            />
+
+            <ConfirmationModal
+                visible={isNegativeCreditModalVisible}
+                title="Negative Credit Balance"
+                message="You have an outstanding negative credit balance. Please settle your balance in your account before placing an order."
+                confirmLabel="Go to Account"
+                cancelLabel="Cancel"
+                confirmButtonColor="#FF9114"
+                iconName="wallet-outline"
+                iconColor="#FF9114"
+                iconBgColor="bg-orange-50"
+                buttonLayout="column"
+                onConfirm={() => {
+                    setIsNegativeCreditModalVisible(false);
+                    navigation.navigate("Profile" as any);
+                }}
+                onCancel={() => setIsNegativeCreditModalVisible(false)}
             />
         </View>
     );

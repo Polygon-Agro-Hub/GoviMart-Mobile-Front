@@ -7,12 +7,16 @@ import { ServerNotificationItem } from "../notification/notification.service";
 type NotificationCallback = (notification: ServerNotificationItem) => void;
 type CityAvailabilityCallback = (cities: any[]) => void;
 type UnreadCountCallback = (unreadCount: number) => void;
+type CatalogUpdateCallback = (data?: any) => void;
+type BannerUpdateCallback = (data?: any) => void;
 
 class SocketService {
   private socket: Socket | null = null;
   private notificationListeners: Set<NotificationCallback> = new Set();
   private cityListeners: Set<CityAvailabilityCallback> = new Set();
   private unreadCountListeners: Set<UnreadCountCallback> = new Set();
+  private catalogListeners: Set<CatalogUpdateCallback> = new Set();
+  private bannerListeners: Set<BannerUpdateCallback> = new Set();
   private isConnecting: boolean = false;
   private currentUserId: number | null = null;
   private currentToken: string | null = null;
@@ -98,6 +102,42 @@ class SocketService {
         });
       });
 
+      const handleCatalogUpdate = (data: any) => {
+        console.log("📦 [SocketService] Received catalog/product/package update via socket:", data);
+        this.catalogListeners.forEach((listener) => {
+          try {
+            listener(data);
+          } catch (e) {
+            console.error("[SocketService] Catalog listener error:", e);
+          }
+        });
+      };
+
+      this.socket.on("catalog_updated", handleCatalogUpdate);
+      this.socket.on("products_updated", handleCatalogUpdate);
+      this.socket.on("packages_updated", handleCatalogUpdate);
+      this.socket.on("products_changed", handleCatalogUpdate);
+      this.socket.on("packages_changed", handleCatalogUpdate);
+      this.socket.on("item_status_changed", handleCatalogUpdate);
+      this.socket.on("product_status_changed", handleCatalogUpdate);
+      this.socket.on("package_status_changed", handleCatalogUpdate);
+
+      const handleBannerUpdate = (data: any) => {
+        console.log("🎨 [SocketService] Received banner update via socket:", data);
+        this.bannerListeners.forEach((listener) => {
+          try {
+            listener(data);
+          } catch (e) {
+            console.error("[SocketService] Banner listener error:", e);
+          }
+        });
+      };
+
+      this.socket.on("banners_updated", handleBannerUpdate);
+      this.socket.on("banner_updated", handleBannerUpdate);
+      this.socket.on("slides_updated", handleBannerUpdate);
+      this.socket.on("banner_position_updated", handleBannerUpdate);
+
       this.socket.on("connect_error", (err) => {
         this.isConnecting = false;
         console.warn("[SocketService] Connection error:", err.message);
@@ -178,6 +218,20 @@ class SocketService {
     this.cityListeners.add(callback);
     return () => {
       this.cityListeners.delete(callback);
+    };
+  }
+
+  onCatalogUpdate(callback: CatalogUpdateCallback): () => void {
+    this.catalogListeners.add(callback);
+    return () => {
+      this.catalogListeners.delete(callback);
+    };
+  }
+
+  onBannerUpdate(callback: BannerUpdateCallback): () => void {
+    this.bannerListeners.add(callback);
+    return () => {
+      this.bannerListeners.delete(callback);
     };
   }
 

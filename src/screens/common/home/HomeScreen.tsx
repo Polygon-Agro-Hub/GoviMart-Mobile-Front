@@ -50,6 +50,7 @@ import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
 import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
+import socketService from "@/services/socket/socket.service";
 
 export type { ProductType, PackageType } from "@/types/types";
 
@@ -389,9 +390,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         const matchingSlides = fetchedSlides.filter(
           (slide: any) => slide.type?.toLowerCase() === buyerType.toLowerCase(),
         );
-        setBannerSlides(
-          matchingSlides.length > 0 ? matchingSlides : fetchedSlides,
-        );
+        const slidesToUse = (
+          matchingSlides.length > 0 ? matchingSlides : fetchedSlides
+        ).slice();
+        slidesToUse.sort((a: any, b: any) => {
+          const indexA = a.indexId != null ? Number(a.indexId) : 999999;
+          const indexB = b.indexId != null ? Number(b.indexId) : 999999;
+          return indexA - indexB;
+        });
+        setBannerSlides(slidesToUse);
       }
     } catch (err) {
       console.error("Failed to load banner slides from backend:", err);
@@ -560,6 +567,68 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       getSelectedCategoryProducts("Vegetables", buyerType);
     }
   }, [buyerType, isRetail]);
+
+  // Real-time Home Screen updates for Products, Packages & Banners via Socket.IO
+  useEffect(() => {
+    const handleRefreshItems = () => {
+      const query = searchQuery.trim();
+      if (query) {
+        productService
+          .getProductsByCategory("", buyerType, query)
+          .then(async (response) => {
+            let matchingProducts: ShopItem[] = [];
+            if (response.data?.status && response.data.products) {
+              matchingProducts = response.data.products.map((item: any) => ({
+                ...item,
+                type: "product",
+              }));
+            }
+            if (isRetail) {
+              try {
+                const pkgResponse = await productService.getAllPackages(buyerType);
+                if (pkgResponse.data?.status && pkgResponse.data.product) {
+                  const matchingPkgs = pkgResponse.data.product
+                    .filter((pkg: any) =>
+                      (pkg.displayName || pkg.packageName || "")
+                        .toLowerCase()
+                        .includes(query.toLowerCase()),
+                    )
+                    .map((item: any) => ({
+                      ...item,
+                      type: "package",
+                    }));
+                  matchingProducts = [...matchingPkgs, ...matchingProducts];
+                }
+              } catch {}
+            }
+            setShopItems(matchingProducts);
+          })
+          .catch(() => {});
+      } else {
+        if (selectedCategoryId === "Packages" && isRetail) {
+          fetchPackages();
+        } else {
+          getSelectedCategoryProducts(selectedCategoryId, buyerType);
+        }
+      }
+    };
+
+    const unsubscribeCatalog = socketService.onCatalogUpdate((data) => {
+      console.log("📦 [HomeScreen] Real-time catalog update received via Socket.IO:", data);
+      fetchBanners();
+      handleRefreshItems();
+    });
+
+    const unsubscribeBanner = socketService.onBannerUpdate((data) => {
+      console.log("🎨 [HomeScreen] Real-time banner update received via Socket.IO:", data);
+      fetchBanners();
+    });
+
+    return () => {
+      unsubscribeCatalog();
+      unsubscribeBanner();
+    };
+  }, [selectedCategoryId, buyerType, isRetail, searchQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

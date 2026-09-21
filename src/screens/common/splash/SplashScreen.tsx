@@ -26,13 +26,14 @@ const Splash: React.FC = () => {
         const profileStr = await AsyncStorage.getItem("userProfile");
         const loginTimeStr = await AsyncStorage.getItem("userLoginTime");
 
-        // Only auto-login if the user clicked "Remember Me"
-        if (isRemembered === "true" && token && profileStr && loginTimeStr) {
+        // Check if there is an active session
+        if (token && profileStr && loginTimeStr) {
           const loginTime = parseInt(loginTimeStr, 10);
           const currentTime = Date.now();
           const elapsed = currentTime - loginTime;
           const eightHours = 8 * 60 * 60 * 1000;
 
+          // If within the 8-hour session window, automatically log in
           if (elapsed < eightHours) {
             const userProfile = JSON.parse(profileStr);
             // Preload to Redux store
@@ -42,8 +43,8 @@ const Splash: React.FC = () => {
             }
             navigation.replace("Home");
             return;
-          } else {
-            // Access token expired, attempt to refresh it silently using the Refresh Token
+          } else if (isRemembered === "true") {
+            // If session expired and user enabled "Remember Me", attempt silent token refresh
             const refreshToken = await tokenStorage.getRefreshToken();
             if (refreshToken) {
               try {
@@ -75,6 +76,14 @@ const Splash: React.FC = () => {
                 ]).catch(() => {});
               }
             }
+          } else {
+            // Session expired (>= 8 hours) and Remember Me not enabled: clear session
+            await tokenStorage.clearTokens().catch(() => {});
+            await AsyncStorage.multiRemove([
+              "userProfile",
+              "userLoginTime",
+              "rememberMeEnabled",
+            ]).catch(() => {});
           }
         }
       } catch (e) {

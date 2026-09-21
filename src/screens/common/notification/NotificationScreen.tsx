@@ -98,21 +98,15 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     let messageText = item.message || "";
     const returnReason = (item as any).returnReason;
     const returnNote = (item as any).returnNote || (item as any).otherReason;
-    if (returnReason && (returnReason.toLowerCase() === "other" || returnNote)) {
-        const effectiveReason =
-            returnReason.toLowerCase() === "other" && returnNote
-                ? returnNote
-                : returnNote || returnReason;
-        if (effectiveReason) {
-            messageText = messageText.replace(
-                /Reason\s*:\s*[“"']Other[”"']/gi,
-                `Reason : “${effectiveReason}”`
-            );
-        }
-    } else if (returnNote) {
+    const effectiveReason =
+        returnReason && returnReason.toLowerCase() === "other" && returnNote
+            ? returnNote
+            : returnNote || (returnReason && returnReason.toLowerCase() !== "other" ? returnReason : "");
+
+    if (effectiveReason) {
         messageText = messageText.replace(
-            /Reason\s*:\s*[“"']Other[”"']/gi,
-            `Reason : “${returnNote}”`
+            /Reason\s*:\s*[“"'\`\u201C\u201D\u2018\u2019]?Other[”"'\`\u201C\u201D\u2018\u2019]?/gi,
+            `Reason : “${effectiveReason}”`
         );
     }
 
