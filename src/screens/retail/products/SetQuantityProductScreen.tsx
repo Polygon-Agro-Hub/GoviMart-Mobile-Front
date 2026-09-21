@@ -137,17 +137,28 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [rawTo]);
 
-  const step = 0.5;
-  const minQty = 0.5;
+  const rawStep =
+    rawTo?.changeby != null && String(rawTo.changeby).trim() !== "" && parseFloat(String(rawTo.changeby)) > 0
+      ? parseFloat(String(rawTo.changeby))
+      : (rawTo?.step != null && parseFloat(String(rawTo.step)) > 0 ? parseFloat(String(rawTo.step)) : (parseFloat(String(rawTo?.startValue)) || 0.5));
+
+  const rawMin =
+    rawTo?.startValue != null && String(rawTo.startValue).trim() !== "" && parseFloat(String(rawTo.startValue)) > 0
+      ? parseFloat(String(rawTo.startValue))
+      : rawStep;
+
+  const step = rawStep;
+  const minQty = rawMin;
   const maxQty = 10;
 
   const [quantity, setQuantity] = useState(() => {
     const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
-    const parsedQty = parseFloat(String(rawFrom?.quantity ?? 0.5));
+    const parsedQty = parseFloat(String(rawFrom?.quantity ?? rawMin));
     if (!isNaN(parsedQty) && parsedQty > 0) {
-      return rawUnit === "g" ? Number((parsedQty / 1000).toFixed(3)) || 0.5 : parsedQty;
+      const initialInKg = rawUnit === "g" ? Number((parsedQty / 1000).toFixed(3)) : parsedQty;
+      return Math.max(minQty, initialInKg);
     }
-    return 0.5;
+    return minQty;
   });
 
   const fromUnitPrice = fromProduct.pricePerBaseQty;
@@ -163,10 +174,10 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const isCredit = balance >= 0;
 
   const decrease = () =>
-    setQuantity((q: number) => Math.max(minQty, Number((q - step).toFixed(2))));
+    setQuantity((q: number) => Math.max(minQty, parseFloat((q - step).toFixed(3))));
 
   const increase = () =>
-    setQuantity((q: number) => Math.min(maxQty, Number((q + step).toFixed(2))));
+    setQuantity((q: number) => Math.min(maxQty, parseFloat((q + step).toFixed(3))));
 
   const dispatch = useDispatch();
 
@@ -181,7 +192,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       image: toProduct.image,
       price: toUnitPrice,
       quantity: quantity,
-      minQuantity: step || 0.5,
+      minQuantity: minQty,
       unit: "kg" as const,
       step: step,
       productType: rawFrom?.productType || rawTo?.productTypeId,

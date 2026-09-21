@@ -24,6 +24,11 @@ export interface AlacartSelectedProduct {
   amount: number;
   quantity: number;
   isAddedNow?: boolean;
+  step?: number;
+  minQuantity?: number;
+  changeby?: string | number;
+  startValue?: string | number;
+  unitType?: string;
 }
 
 export interface PackageReviewState {
@@ -312,10 +317,14 @@ export const packageReviewSlice = createSlice({
       if (state.packageProducts[packageId]) {
         state.packageProducts[packageId] = state.packageProducts[packageId].map((prod) => {
           if (prod.id === productId) {
-            const minAllowed = prod.minQuantity ?? prod.originalProduct?.quantity ?? prod.step ?? 1;
+            const stepVal = prod.step && prod.step > 0 ? prod.step : 0.5;
+            const minAllowed = prod.minQuantity ?? prod.originalProduct?.quantity ?? stepVal;
+            const nextQty = prod.unit === "kg"
+              ? parseFloat((prod.quantity + delta * stepVal).toFixed(3))
+              : Math.round(prod.quantity + delta * stepVal);
             return {
               ...prod,
-              quantity: Math.max(minAllowed, Number((prod.quantity + delta * prod.step).toFixed(2))),
+              quantity: Math.max(minAllowed, nextQty),
             };
           }
           return prod;
@@ -325,9 +334,23 @@ export const packageReviewSlice = createSlice({
     toggleAlacartProduct: (state, action: PayloadAction<ProductType>) => {
       const product = action.payload;
       const basePrice = parseFloat(product.normalPrice) || 0;
-      const initialUnit = (product.unitType?.toLowerCase() === "kg" ? "kg" : "g") as "kg" | "g";
-      const parsedAmount = product.startValue ? parseFloat(String(product.startValue)) : initialUnit === "kg" ? 1 : 500;
-      const initialAmount = isNaN(parsedAmount) ? (initialUnit === "kg" ? 1 : 500) : parsedAmount;
+      const dbUnitType = (product.unitType || "g").toLowerCase();
+      const rawStartValue = product.startValue ? parseFloat(String(product.startValue)) : (dbUnitType === "kg" ? 1 : 500);
+      const initialUnit = (dbUnitType === "kg" && rawStartValue < 1 ? "g" : (dbUnitType as "kg" | "g"));
+      const initialAmount = dbUnitType === "kg" && rawStartValue < 1 ? Math.round(rawStartValue * 1000) : rawStartValue;
+
+      const rawChangeBy = product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
+        ? parseFloat(String(product.changeby))
+        : rawStartValue;
+
+      const step = initialUnit === "kg"
+        ? (dbUnitType === "kg" ? rawChangeBy : (rawChangeBy < 1 ? rawChangeBy : parseFloat((rawChangeBy / 1000).toFixed(3))))
+        : (dbUnitType === "kg" ? Math.round(rawChangeBy * 1000) : (rawChangeBy < 1 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy)));
+
+      const minQuantity = initialUnit === "kg"
+        ? (dbUnitType === "kg" ? rawStartValue : (rawStartValue < 1 ? rawStartValue : parseFloat((rawStartValue / 1000).toFixed(3))))
+        : (dbUnitType === "kg" ? Math.round(rawStartValue * 1000) : (rawStartValue < 1 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue)));
+
       const weightDisplay = `${initialAmount} ${initialUnit}`;
       const newKey = `new-${product.id}`;
 
@@ -349,6 +372,11 @@ export const packageReviewSlice = createSlice({
           amount: initialAmount,
           quantity: 1,
           isAddedNow: true,
+          step,
+          minQuantity,
+          changeby: product.changeby,
+          startValue: product.startValue,
+          unitType: product.unitType,
         };
       }
     },
@@ -363,21 +391,20 @@ export const packageReviewSlice = createSlice({
       const item = state.alacartSelection[id];
       if (!item || item.unit === newUnit) return;
 
-      let newAmount = item.amount;
-      let newPrice = item.price;
-      if (newUnit === "kg") {
-        newAmount = Math.max(1, Math.round(item.amount / 1000) || 1);
-        newPrice = item.basePrice * (newAmount * 2);
-      } else {
-        newAmount = item.amount >= 1 && item.amount <= 10 ? item.amount * 1000 : 500;
-        newPrice = item.basePrice * (newAmount / 500);
-      }
-      const cleanAmount = parseFloat(String(newAmount));
+      const newAmount = newUnit === "kg" ? parseFloat((item.amount / 1000).toFixed(3)) : Math.round(item.amount * 1000);
+      const newStep = item.step ? (newUnit === "kg" ? parseFloat((item.step / 1000).toFixed(3)) : Math.round(item.step * 1000)) : undefined;
+      const newMin = item.minQuantity ? (newUnit === "kg" ? parseFloat((item.minQuantity / 1000).toFixed(3)) : Math.round(item.minQuantity * 1000)) : undefined;
+
+      const weightMultiplier = newUnit === "kg" ? newAmount : newAmount / 1000;
+      const newPrice = Number((item.basePrice * weightMultiplier).toFixed(2));
+
       state.alacartSelection[id] = {
         ...item,
         unit: newUnit,
-        amount: cleanAmount,
-        weightDisplay: `${cleanAmount} ${newUnit}`,
+        amount: newAmount,
+        step: newStep,
+        minQuantity: newMin,
+        weightDisplay: `${newAmount} ${newUnit}`,
         price: newPrice,
       };
     },
@@ -389,13 +416,17 @@ export const packageReviewSlice = createSlice({
       const item = state.alacartSelection[id];
       if (!item) return;
 
-      const step = item.unit === "kg" ? 1 : 250;
-      const min = item.unit === "kg" ? 1 : 250;
-      const newAmount = Math.max(min, item.amount + delta * step);
-      const cleanAmount = parseFloat(String(newAmount));
-      const newPrice = Number(
-        (item.basePrice * (item.unit === "kg" ? cleanAmount * 2 : cleanAmount / 500)).toFixed(2)
-      );
+      const step = item.step && item.step > 0 ? item.step : (item.unit === "kg" ? 0.5 : 500);
+      const min = item.minQuantity && item.minQuantity > 0 ? item.minQuantity : step;
+
+      const rawNewAmount = item.unit === "kg"
+        ? parseFloat((item.amount + delta * step).toFixed(3))
+        : Math.round(item.amount + delta * step);
+      const cleanAmount = Math.max(min, rawNewAmount);
+
+      const weightMultiplier = item.unit === "kg" ? cleanAmount : cleanAmount / 1000;
+      const newPrice = Number((item.basePrice * weightMultiplier).toFixed(2));
+
       state.alacartSelection[id] = {
         ...item,
         amount: cleanAmount,

@@ -51,6 +51,7 @@ const cartSlice = createSlice({
           normalPrice: action.payload.normalPrice ?? state.products[existingIndex].normalPrice,
           discountedPrice: action.payload.discountedPrice ?? state.products[existingIndex].discountedPrice,
           comPrice: action.payload.comPrice ?? state.products[existingIndex].comPrice,
+          minimumWeight: action.payload.minimumWeight ?? state.products[existingIndex].minimumWeight,
           step: action.payload.step ?? state.products[existingIndex].step,
           isUnavailable: false,
         };

@@ -31,17 +31,25 @@ const normalizeToKg = (product: ProductType): ProductType => {
     const rawVal = parseFloat(product.startValue || "500");
     const kgVal = Number((rawVal / 1000).toFixed(3));
     const cleanKg = parseFloat(String(kgVal));
+
+    const rawChange = product.changeby != null && String(product.changeby).trim() !== "" ? parseFloat(String(product.changeby)) : rawVal;
+    const kgChange = Number((rawChange / 1000).toFixed(3));
+    const cleanKgChange = parseFloat(String(kgChange));
+
     return {
       ...product,
       unitType: "kg",
       startValue: (isNaN(cleanKg) ? 0.5 : cleanKg).toString(),
+      changeby: (isNaN(cleanKgChange) ? (isNaN(cleanKg) ? 0.5 : cleanKg) : cleanKgChange).toString(),
     };
   }
   const cleanVal = product.startValue ? parseFloat(String(product.startValue)) : 1;
+  const cleanChange = product.changeby ? parseFloat(String(product.changeby)) : cleanVal;
   return {
     ...product,
     unitType: "kg",
     startValue: (isNaN(cleanVal) ? (product.startValue || "1") : cleanVal.toString()),
+    changeby: (isNaN(cleanChange) ? (product.changeby || "1") : cleanChange.toString()),
   };
 };
 

@@ -50,6 +50,13 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const [isNegativeCreditModalVisible, setIsNegativeCreditModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
+    const productsRef = React.useRef(products);
+    const packagesRef = React.useRef(packages);
+    React.useEffect(() => {
+        productsRef.current = products;
+        packagesRef.current = packages;
+    }, [products, packages]);
+
     // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ─────────────────────────────
     const syncAndCheckCart = useCallback(async () => {
         try {
@@ -66,8 +73,8 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 }
             } else {
                 // For guest / unauthenticated users, check availability of local Redux items
-                const productIds = products.map((p) => p.id);
-                const packageIds = packages.map((p) => p.id);
+                const productIds = productsRef.current.map((p) => p.id);
+                const packageIds = packagesRef.current.map((p) => p.id);
 
                 if (productIds.length > 0 || packageIds.length > 0) {
                     const response = await productService.checkAvailability(productIds, packageIds);
@@ -84,7 +91,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         } catch (error) {
             console.error("Cart sync/availability check error:", error);
         }
-    }, [dispatch, token, products, packages]);
+    }, [dispatch, token]);
 
     useFocusEffect(
         useCallback(() => {
@@ -103,9 +110,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
     // ─── HANDLERS ─────────────────────────────────────────────────────────────
     const increaseWeight = (id: number) => {
-        dispatch(increaseProductWeight(id));
         const item = products.find((p) => p.id === id);
-        if (item && token) {
+        if (!item) return;
+        dispatch(increaseProductWeight(id));
+        if (token) {
             const newWeight = item.unit === "kg"
                 ? parseFloat((item.weight + item.step).toFixed(3))
                 : Math.round(item.weight + item.step);
@@ -116,9 +124,14 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     };
 
     const decreaseWeight = (id: number) => {
-        dispatch(decreaseProductWeight(id));
         const item = products.find((p) => p.id === id);
-        if (item && token) {
+        if (!item) return;
+        if (item.weight <= item.minimumWeight) {
+            deleteProduct(id);
+            return;
+        }
+        dispatch(decreaseProductWeight(id));
+        if (token) {
             const decremented = item.unit === "kg"
                 ? parseFloat((item.weight - item.step).toFixed(3))
                 : Math.round(item.weight - item.step);
@@ -139,9 +152,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     };
 
     const changeProductUnitHandler = (id: number, newUnit: "g" | "kg") => {
-        dispatch(changeProductUnit({ id, newUnit }));
         const item = products.find((p) => p.id === id);
-        if (item && token) {
+        if (!item || item.unit === newUnit) return;
+        dispatch(changeProductUnit({ id, newUnit }));
+        if (token) {
             const newWeight = newUnit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
             cartService.syncCartProduct(id, newWeight, newUnit).catch((err) =>
                 console.error("Failed DB sync for changeProductUnit:", err)
@@ -150,9 +164,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     };
 
     const increasePackage = (id: number) => {
-        dispatch(increasePackageQuantity(id));
         const pkg = packages.find((p) => p.id === id);
-        if (pkg && token) {
+        if (!pkg) return;
+        dispatch(increasePackageQuantity(id));
+        if (token) {
             cartService.syncCartPackage(id, pkg.quantity + 1).catch((err) =>
                 console.error("Failed DB sync for increasePackage:", err)
             );
@@ -160,9 +175,14 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     };
 
     const decreasePackage = (id: number) => {
-        dispatch(decreasePackageQuantity(id));
         const pkg = packages.find((p) => p.id === id);
-        if (pkg && token && pkg.quantity > 1) {
+        if (!pkg) return;
+        if (pkg.quantity <= 1) {
+            deletePackage(id);
+            return;
+        }
+        dispatch(decreasePackageQuantity(id));
+        if (token) {
             cartService.syncCartPackage(id, pkg.quantity - 1).catch((err) =>
                 console.error("Failed DB sync for decreasePackage:", err)
             );

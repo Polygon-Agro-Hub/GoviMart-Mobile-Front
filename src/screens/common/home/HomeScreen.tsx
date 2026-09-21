@@ -741,16 +741,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleToggleUnit = useCallback(
     (productId: number, unit: "g" | "kg") => {
+      const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+      if (!item || item.unit === unit) return;
       dispatch(changeProductUnit({ id: productId, newUnit: unit }));
       showToast("Cart Updated");
       if (userToken) {
-        const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
-        if (item) {
-          const newWeight = unit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
-          cartService.syncCartProduct(productId, newWeight, unit).catch((err) =>
-            console.error("Cart DB sync error:", err)
-          );
-        }
+        const newWeight = unit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
+        cartService.syncCartProduct(productId, newWeight, unit).catch((err) =>
+          console.error("Cart DB sync error:", err)
+        );
       }
     },
     [dispatch, showToast, userToken, cartProducts],
@@ -814,14 +813,25 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const handleAddProduct = useCallback(
     (product: ProductType) => {
       const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
-      const unitType = (product.unitType || "g").toLowerCase() as "g" | "kg";
+      const dbUnitType = (product.unitType || "g").toLowerCase();
 
-      let initialUnit: "g" | "kg" = unitType;
-      let initialWeight = rawStartValue;
-      if (rawStartValue < 1) {
-        initialUnit = "g";
-        initialWeight = Math.round(rawStartValue * 1000);
-      }
+      let initialUnit: "g" | "kg" = dbUnitType === "kg" && rawStartValue < 1 ? "g" : (dbUnitType as "g" | "kg");
+      let initialWeight = dbUnitType === "kg" && rawStartValue < 1 ? Math.round(rawStartValue * 1000) : rawStartValue;
+
+      const rawChangeBy =
+        product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
+          ? parseFloat(String(product.changeby))
+          : rawStartValue;
+
+      const step =
+        initialUnit === "kg"
+          ? (dbUnitType === "kg" ? rawChangeBy : (rawChangeBy < 1 ? rawChangeBy : parseFloat((rawChangeBy / 1000).toFixed(3))))
+          : (dbUnitType === "kg" ? Math.round(rawChangeBy * 1000) : (rawChangeBy < 1 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy)));
+
+      const minWeight =
+        initialUnit === "kg"
+          ? (dbUnitType === "kg" ? rawStartValue : (rawStartValue < 1 ? rawStartValue : parseFloat((rawStartValue / 1000).toFixed(3))))
+          : (dbUnitType === "kg" ? Math.round(rawStartValue * 1000) : (rawStartValue < 1 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue)));
 
       const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
       const discountedPerUnit =
@@ -838,19 +848,18 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         ? discountedPerUnit
         : normalPerUnit;
 
-      const step =
-        initialUnit === "kg" ? 0.5 : initialWeight >= 500 ? 500 : 100;
-
       dispatch(
         addProduct({
           id: product.id,
           name: product.displayName,
           image: product.image,
-          price: effectiveUnitPrice,
+          price: normalPerUnit,
           normalPrice: normalPerUnit,
+          discountedPrice: discountedPerUnit || undefined,
+          comPrice: product.comPrice != null ? parseFloat(String(product.comPrice)) : undefined,
           weight: initialWeight,
           unit: initialUnit,
-          minimumWeight: initialWeight,
+          minimumWeight: minWeight,
           step: step,
         }),
       );

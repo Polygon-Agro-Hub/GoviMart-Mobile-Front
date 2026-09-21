@@ -34,6 +34,8 @@ import {
   toggleAlacartItemUnit as toggleAlacartItemUnitAction,
   updateAlacartItemQuantity as updateAlacartItemQuantityAction,
   revertReviewChanges,
+  AlacartSelectedProduct,
+  PackageMeta,
 } from "@/store/packageReviewSlice";
 import { RootStackParamList, ProductType, ReviewProduct } from "@/types/types";
 import productService from "@/services/product/product.service";
@@ -54,31 +56,6 @@ type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 --------------------------------------------------------- */
 
 type ScreenMode = "overview" | "flow";
-
-type PackageMeta = {
-  id: string;
-  name: string;
-  icon?: string;
-  image?: string;
-  qty: number;
-  unitPrice: number;
-  serviceFee: number;
-  packingFee: number;
-};
-
-type AlacartSelectedProduct = {
-  id: number | string;
-  productId?: number | string;
-  displayName: string;
-  image?: any;
-  price: number;
-  basePrice: number;
-  weightDisplay: string;
-  unit: "kg" | "g";
-  amount: number;
-  quantity: number;
-  isAddedNow?: boolean;
-};
 
 const getPackageImage = (pkgId: string, image?: any) => {
   if (image) {
@@ -397,12 +374,27 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const prodId = item.productId || item.additionalItemId;
               const basePrice = parseFloat(item.normalPrice || item.price || 0);
               const price = parseFloat(item.price || item.normalPrice || 0);
-              const unit = (item.unit?.toLowerCase() === "g" ? "g" : "kg") as
+              const dbUnitType = (item.unitType || "g").toLowerCase();
+              const unit = (item.unit?.toLowerCase() === "g" ? "g" : (dbUnitType === "g" ? "g" : "kg")) as
                 | "kg"
                 | "g";
               const rawQty = item.qty || item.quantity || item.weight || 1;
               const parsedAmount = parseFloat(String(rawQty));
               const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
+
+              const rawChangeBy = item.changeby != null && String(item.changeby).trim() !== "" && parseFloat(String(item.changeby)) > 0
+                ? parseFloat(String(item.changeby))
+                : (item.startValue ? parseFloat(String(item.startValue)) : 0.5);
+
+              const step = unit === "kg"
+                ? (dbUnitType === "kg" ? rawChangeBy : (rawChangeBy < 1 ? rawChangeBy : parseFloat((rawChangeBy / 1000).toFixed(3))))
+                : (dbUnitType === "kg" ? Math.round(rawChangeBy * 1000) : (rawChangeBy < 1 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy)));
+
+              const rawStart = parseFloat(item.startValue) > 0 ? parseFloat(item.startValue) : rawChangeBy;
+              const minQuantity = unit === "kg"
+                ? (dbUnitType === "kg" ? rawStart : (rawStart < 1 ? rawStart : parseFloat((rawStart / 1000).toFixed(3))))
+                : (dbUnitType === "kg" ? Math.round(rawStart * 1000) : (rawStart < 1 ? Math.round(rawStart * 1000) : Math.round(rawStart)));
+
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {
                 id: itemKey,
@@ -416,6 +408,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 amount: amount,
                 quantity: 1,
                 isAddedNow: false,
+                step: step,
+                minQuantity: minQuantity,
+                changeby: item.changeby,
+                startValue: item.startValue,
+                unitType: item.unitType,
               };
             });
           }
@@ -447,79 +444,87 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
               // Map active items
               const activeItems: ReviewProduct[] = (pkg.items || []).map(
-                (i: any, itemIdx: number) => ({
-                  id: String(i.productId || i.itemId || `${pkgKey}-${itemIdx}`),
-                  itemId: i.itemId ? Number(i.itemId) : undefined,
-                  productId: i.productId ? Number(i.productId) : undefined,
-                  category:
-                    i.categoryName || i.productTypeName || "Package Item",
-                  name: i.productName || "Product",
-                  icon: "🥗",
-                  image: i.productImage,
-                  price: parseFloat(i.baseUnitPrice || i.price || 0),
-                  quantity: parseFloat(i.qty || 1),
-                  minQuantity: parseFloat(i.minQuantity || i.qty || 1),
-                  // orderpackageitems.qty is always stored in kg — never use 'g' here
-                  unit: "kg" as "kg" | "g",
-                  step: parseFloat(i.step || 0.5),
-                  productType: i.productType,
-                  productTypeId: i.productType || i.productTypeId,
-                  productTypeName: i.productTypeName,
-                  isReplaced: !!i.isReplaced,
-                  originalProduct: i.originalProduct
-                    ? {
-                        id: String(i.originalProduct.id),
-                        itemId: i.originalProduct.itemId
-                          ? Number(i.originalProduct.itemId)
-                          : i.itemId
-                            ? Number(i.itemId)
-                            : undefined,
-                        productId: i.originalProduct.productId
-                          ? Number(i.originalProduct.productId)
-                          : i.productId
-                            ? Number(i.productId)
-                            : undefined,
-                        category: i.originalProduct.category || "Original Item",
-                        name: i.originalProduct.name,
-                        icon: "🥗",
-                        image: i.originalProduct.image,
-                        price: parseFloat(i.originalProduct.price || 0),
-                        quantity: parseFloat(i.originalProduct.quantity || 1),
-                        unit: "kg" as "kg" | "g",
-                        step: 0.5,
-                        productType: i.originalProduct.productType,
-                        productTypeId: i.originalProduct.productType,
-                      }
-                    : undefined,
-                }),
+                (i: any, itemIdx: number) => {
+                  const itemStep = parseFloat(i.step || i.changeby || 0.5);
+                  const itemMin = parseFloat(i.minQuantity || i.startValue || i.qty || itemStep);
+                  return {
+                    id: String(i.productId || i.itemId || `${pkgKey}-${itemIdx}`),
+                    itemId: i.itemId ? Number(i.itemId) : undefined,
+                    productId: i.productId ? Number(i.productId) : undefined,
+                    category:
+                      i.categoryName || i.productTypeName || "Package Item",
+                    name: i.productName || "Product",
+                    icon: "🥗",
+                    image: i.productImage,
+                    price: parseFloat(i.baseUnitPrice || i.price || 0),
+                    quantity: parseFloat(i.qty || 1),
+                    minQuantity: itemMin,
+                    // orderpackageitems.qty is always stored in kg — never use 'g' here
+                    unit: "kg" as "kg" | "g",
+                    step: itemStep,
+                    productType: i.productType,
+                    productTypeId: i.productType || i.productTypeId,
+                    productTypeName: i.productTypeName,
+                    isReplaced: !!i.isReplaced,
+                    originalProduct: i.originalProduct
+                      ? {
+                          id: String(i.originalProduct.id),
+                          itemId: i.originalProduct.itemId
+                            ? Number(i.originalProduct.itemId)
+                            : i.itemId
+                              ? Number(i.itemId)
+                              : undefined,
+                          productId: i.originalProduct.productId
+                            ? Number(i.originalProduct.productId)
+                            : i.productId
+                              ? Number(i.productId)
+                              : undefined,
+                          category: i.originalProduct.category || "Original Item",
+                          name: i.originalProduct.name,
+                          icon: "🥗",
+                          image: i.originalProduct.image,
+                          price: parseFloat(i.originalProduct.price || 0),
+                          quantity: parseFloat(i.originalProduct.quantity || 1),
+                          unit: "kg" as "kg" | "g",
+                          step: parseFloat(i.originalProduct.step || i.originalProduct.changeby || itemStep),
+                          productType: i.originalProduct.productType,
+                          productTypeId: i.originalProduct.productType,
+                        }
+                      : undefined,
+                  };
+                },
               );
 
               // Map baseline templates
               const baseItems: ReviewProduct[] = (
                 pkg.baselineProducts || []
-              ).map((b: any, bIdx: number) => ({
-                id: String(
-                  b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
-                ),
-                itemId:
-                  b.itemId || b.baselineId
-                    ? Number(b.itemId || b.baselineId)
-                    : undefined,
-                productId: b.productId ? Number(b.productId) : undefined,
-                category:
-                  b.categoryName || b.productTypeName || "Baseline Item",
-                name: b.productName || "Product",
-                icon: "🥗",
-                image: b.productImage,
-                price: parseFloat(b.baseUnitPrice || b.price || 0),
-                quantity: parseFloat(b.qty || 1),
-                minQuantity: parseFloat(b.minQuantity || b.qty || 1),
-                unit: "kg" as "kg" | "g",
-                step: 0.5,
-                productType: b.productType,
-                productTypeId: b.productType || b.productTypeId,
-                productTypeName: b.productTypeName,
-              }));
+              ).map((b: any, bIdx: number) => {
+                const baseStep = parseFloat(b.step || b.changeby || 0.5);
+                const baseMin = parseFloat(b.minQuantity || b.startValue || b.qty || baseStep);
+                return {
+                  id: String(
+                    b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
+                  ),
+                  itemId:
+                    b.itemId || b.baselineId
+                      ? Number(b.itemId || b.baselineId)
+                      : undefined,
+                  productId: b.productId ? Number(b.productId) : undefined,
+                  category:
+                    b.categoryName || b.productTypeName || "Baseline Item",
+                  name: b.productName || "Product",
+                  icon: "🥗",
+                  image: b.productImage,
+                  price: parseFloat(b.baseUnitPrice || b.price || 0),
+                  quantity: parseFloat(b.qty || 1),
+                  minQuantity: baseMin,
+                  unit: "kg" as "kg" | "g",
+                  step: baseStep,
+                  productType: b.productType,
+                  productTypeId: b.productType || b.productTypeId,
+                  productTypeName: b.productTypeName,
+                };
+              });
 
               newProducts[pkgKey] = activeItems;
               newTemplates[pkgKey] =
