@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -108,8 +108,27 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [streetNameError, setStreetNameError] = useState("");
   const [cityError, setCityError] = useState("");
 
+  const isLocationRequestedRef = useRef<boolean>(false);
+
+  // Clear any leftover selected coordinates on initial mount and unmount
+  useEffect(() => {
+    AsyncStorage.multiRemove(["selectedLatitude", "selectedLongitude"]).catch(
+      (err) => console.error("Error clearing stale location on mount:", err)
+    );
+    return () => {
+      AsyncStorage.multiRemove(["selectedLatitude", "selectedLongitude"]).catch(
+        (err) => console.error("Error clearing stale location on unmount:", err)
+      );
+    };
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
+      // Geo Location should ONLY be attached after user's explicit action
+      if (!isLocationRequestedRef.current) {
+        return;
+      }
+
       const getSelectedLocation = async () => {
         try {
           const storedLatitude = await AsyncStorage.getItem("selectedLatitude");
@@ -119,9 +138,15 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           if (storedLatitude && storedLongitude) {
             setLatitude(Number(storedLatitude));
             setLongitude(Number(storedLongitude));
+            await AsyncStorage.multiRemove([
+              "selectedLatitude",
+              "selectedLongitude",
+            ]);
           }
         } catch (error) {
           console.error("Error getting location:", error);
+        } finally {
+          isLocationRequestedRef.current = false;
         }
       };
 
@@ -193,9 +218,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   ) => (
     <TouchableOpacity
       key={item.value}
-      className={`px-5 py-3.5 flex-row items-center justify-between ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row items-center justify-between ${!isLast ? "border-b border-gray-100" : ""
+        }`}
       onPress={() => {
         if (!item.isAvailable) {
           Alert.alert(
@@ -218,9 +242,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       </View>
       <View className="flex-row items-center gap-x-2">
         <Text
-          className={`text-xs font-bold ${
-            item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
-          }`}
+          className={`text-xs font-bold ${item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
+            }`}
         >
           {item.isAvailable ? "Available" : "Coming soon"}
         </Text>
@@ -401,11 +424,11 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         buildingType === "House"
           ? basePayload
           : {
-              ...basePayload,
-              buildingName: apartmentName,
-              unitNo,
-              floorNo,
-            };
+            ...basePayload,
+            buildingName: apartmentName,
+            unitNo,
+            floorNo,
+          };
 
       const req = await customerService.addNewAddress(payload);
 
@@ -623,7 +646,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 }}
               >
                 <FontAwesome6
-                  name="building"
+                  name="house"
                   solid
                   size={17}
                   color="#000000"
@@ -674,7 +697,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           {buildingType === "Apartment" && (
             <>
               <InputField
-                icon="road"
+                icon="building"
                 label="Apartment / Building No"
                 value={buildingNo}
                 onChangeText={handleBuildingNo}
@@ -682,28 +705,28 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 error={buildingNoError}
               />
               <InputField
-                icon="road"
+                icon="tag"
                 label="Apartment / Building Name"
                 value={apartmentName}
                 onChangeText={setApartmentName}
                 placeholder="e.g 14/B"
               />
               <InputField
-                icon="road"
+                icon="hotel"
                 label="Flat / Unit Number"
                 value={unitNo}
                 onChangeText={setUnitNo}
                 placeholder="Type Here"
               />
               <InputField
-                icon="road"
+                icon="stairs"
                 label="Floor Number"
                 value={floorNo}
                 onChangeText={setFloorNo}
                 placeholder="e.g. 3rd Floor"
               />
               <InputField
-                icon="road"
+                icon="house"
                 label="Street Name"
                 value={streetName}
                 onChangeText={handleStreetName}
@@ -740,7 +763,16 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
 
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => {
+            onPress={async () => {
+              try {
+                await AsyncStorage.multiRemove([
+                  "selectedLatitude",
+                  "selectedLongitude",
+                ]);
+              } catch (e) {
+                console.error("Error clearing coords before navigating:", e);
+              }
+              isLocationRequestedRef.current = true;
               navigation.navigate("SetLocation");
             }}
             style={{
@@ -786,13 +818,17 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 {latitude !== null && longitude !== null && (
                   <View
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
+                      width: 13,
+                      height: 13,
+                      borderRadius: 100,
                       backgroundColor: "#FF9518",
                       marginRight: 6,
+                      alignItems: "center",
+                      justifyContent: "center"
                     }}
-                  />
+                  >
+                    <FontAwesome6 solid name="check" size={9} color="#FFFFFF" />
+                  </View>
                 )}
                 <Text
                   style={{
@@ -816,14 +852,14 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  borderWidth: 1,
+
                   borderColor: "#FF9518",
                   justifyContent: "center",
                   alignItems: "center",
                   marginRight: 6,
                 }}
               >
-                <Ionicons name="pencil" size={15} color="#FF9518" />
+                <FontAwesome6 solid name="pen" size={17} color="#FF9518" />
               </View>
             ) : (
               <Ionicons name="chevron-forward" size={20} color="#FF9518" style={{ marginRight: 6 }} />

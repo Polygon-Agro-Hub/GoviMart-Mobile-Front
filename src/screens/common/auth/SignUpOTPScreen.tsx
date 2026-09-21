@@ -536,7 +536,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               >
                 <AntDesign name="reload" size={14} color="#FF9114" />
                 <Text className="text-sm font-bold text-[#FF9114] underline">
-                  {isResending ? "Resending..." : "Resend SMS"}
+                  {isResending
+                    ? "Resending..."
+                    : method === "email"
+                      ? "Resend Email"
+                      : "Resend SMS"}
                 </Text>
               </TouchableOpacity>
             )}

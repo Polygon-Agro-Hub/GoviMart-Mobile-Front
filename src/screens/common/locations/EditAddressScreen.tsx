@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     View,
     Text,
@@ -97,8 +97,14 @@ const EditAddress: React.FC<EditAddressProps> = ({
         loadCities();
     }, []);
 
+    const isLocationRequestedRef = useRef<boolean>(false);
+
     useFocusEffect(
         useCallback(() => {
+            if (!isLocationRequestedRef.current) {
+                return;
+            }
+
             const getSelectedLocation = async () => {
                 try {
                     const storedLatitude = await AsyncStorage.getItem(
@@ -111,9 +117,15 @@ const EditAddress: React.FC<EditAddressProps> = ({
                     if (storedLatitude && storedLongitude) {
                         setLatitude(Number(storedLatitude));
                         setLongitude(Number(storedLongitude));
+                        await AsyncStorage.multiRemove([
+                            "selectedLatitude",
+                            "selectedLongitude",
+                        ]);
                     }
                 } catch (error) {
                     console.error("Error getting location in EditAddress:", error);
+                } finally {
+                    isLocationRequestedRef.current = false;
                 }
             };
 
@@ -394,6 +406,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
 
             const payload: any = {
                 buildingType,
+                originalBuildingType: addressParam.buildingType || "House",
                 saveAs: saveAddressAs,
                 title,
                 fullName: firstName,
@@ -418,6 +431,10 @@ const EditAddress: React.FC<EditAddressProps> = ({
             );
 
             if (response.data) {
+                await AsyncStorage.multiRemove([
+                    "selectedLatitude",
+                    "selectedLongitude",
+                ]);
                 Alert.alert(
                     "Success",
                     "Address updated successfully.",
@@ -429,12 +446,12 @@ const EditAddress: React.FC<EditAddressProps> = ({
                     ]
                 );
             }
-        } catch (error) {
+        } catch (error: any) {
             console.log("failed to update address: ", error);
-            Alert.alert(
-                "Error",
-                "Failed to update address. Please try again."
-            );
+            const msg =
+                error?.response?.data?.message ||
+                "Failed to update address. Please try again.";
+            Alert.alert("Error", msg);
         } finally {
             setUpdating(false);
         }
@@ -629,7 +646,14 @@ const EditAddress: React.FC<EditAddressProps> = ({
 
                     <TouchableOpacity
                         activeOpacity={0.85}
-                        onPress={() => {
+                        onPress={async () => {
+                            try {
+                                await AsyncStorage.multiRemove([
+                                    "selectedLatitude",
+                                    "selectedLongitude",
+                                ]);
+                            } catch {}
+                            isLocationRequestedRef.current = true;
                             navigation.navigate("SetLocation");
                         }}
                         style={{

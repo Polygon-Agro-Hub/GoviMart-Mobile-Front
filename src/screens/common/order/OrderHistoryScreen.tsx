@@ -4,8 +4,9 @@ import {
     Text,
     TouchableOpacity,
     ScrollView,
+    BackHandler,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
@@ -93,6 +94,23 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         });
     };
 
+    const handleBackPress = useCallback(() => {
+        if (datePickerVisible) {
+            setDatePickerVisible(false);
+            return true;
+        }
+        if (dateFilterOpen) {
+            setDateFilterOpen(false);
+            return true;
+        }
+        if (alertVisible) {
+            setAlertVisible(false);
+            return true;
+        }
+        navigation.navigate("Home");
+        return true;
+    }, [datePickerVisible, dateFilterOpen, alertVisible, navigation]);
+
     useFocusEffect(
         useCallback(() => {
             const fetchOrderHistory = async () => {
@@ -110,12 +128,12 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 typeof rawTotal === "number"
                                     ? rawTotal
                                     : parseFloat(
-                                          String(rawTotal)
-                                              .replace(/Rs\.?/gi, "")
-                                              .replace(/LKR/gi, "")
-                                              .replace(/,/g, "")
-                                              .trim()
-                                      ) || 0;
+                                        String(rawTotal)
+                                            .replace(/Rs\.?/gi, "")
+                                            .replace(/LKR/gi, "")
+                                            .replace(/,/g, "")
+                                            .trim()
+                                    ) || 0;
                             return {
                                 id: bo.orderId ? String(bo.orderId) : 'N/A',
                                 status: bo.processStatus || 'Pending',
@@ -140,7 +158,14 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                 }
             };
             fetchOrderHistory();
-        }, [])
+
+            const subscription = BackHandler.addEventListener(
+                "hardwareBackPress",
+                handleBackPress
+            );
+
+            return () => subscription.remove();
+        }, [handleBackPress])
     );
 
     const formatAmount = (amount: number | string) => {
@@ -148,12 +173,12 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             typeof amount === "number"
                 ? amount
                 : parseFloat(
-                      String(amount || "")
-                          .replace(/Rs\.?/gi, "")
-                          .replace(/LKR/gi, "")
-                          .replace(/,/g, "")
-                          .trim()
-                  ) || 0;
+                    String(amount || "")
+                        .replace(/Rs\.?/gi, "")
+                        .replace(/LKR/gi, "")
+                        .replace(/,/g, "")
+                        .trim()
+                ) || 0;
         return num.toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -308,8 +333,9 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             <CustomHeader
                 title="Order History"
                 titleColor="black"
-                showBackButton={navigation.canGoBack()}
+                showBackButton={true}
                 navigation={navigation}
+                onBackPress={handleBackPress}
             />
 
             {loading ? (
@@ -570,7 +596,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 height: 50,
                                 marginTop: 12,
                                 borderRadius: 25,
-                                backgroundColor: appliedFilter ? "#DC2626" : "#000000",
+                                backgroundColor: "#000000",
                                 flexDirection: "row",
                                 justifyContent: "center",
                                 alignItems: "center",
@@ -753,11 +779,23 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                 paddingRight: 5,
                                             }}
                                         >
-                                            <Ionicons
-                                                name="location"
-                                                size={11}
-                                                color="#000000"
-                                            />
+                                            <View
+                                                style={{
+                                                    width: 14,
+                                                    height: 14,
+                                                    borderRadius: 99,
+                                                    backgroundColor: "#000000",
+                                                    justifyContent: "center",
+                                                    alignItems: "center",
+
+                                                }}
+                                            >
+                                                <Ionicons
+                                                    name="time"
+                                                    size={8}
+                                                    color="#FFFFFF"
+                                                />
+                                            </View>
                                             <Text
                                                 style={{
                                                     fontSize: 9.5,
@@ -787,11 +825,24 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                 paddingHorizontal: 5,
                                             }}
                                         >
-                                            <Ionicons
-                                                name="time"
-                                                size={11}
-                                                color="#000000"
-                                            />
+                                            <View
+                                                style={{
+                                                    width: 14,
+                                                    height: 14,
+                                                    borderRadius: 99,
+                                                    backgroundColor: "#000000",
+                                                    justifyContent: "center",
+                                                    alignItems: "center",
+
+                                                }}
+                                            >
+                                                <FontAwesome6
+                                                    name="calendar"
+                                                    size={6}
+                                                    color="#FFFFFF"
+                                                    solid
+                                                />
+                                            </View>
                                             <Text
                                                 style={{
                                                     fontSize: 9.5,

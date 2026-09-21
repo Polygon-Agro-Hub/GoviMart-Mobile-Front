@@ -4,14 +4,13 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Alert,
   Modal,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -258,21 +257,19 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           </Text>
         </View>
       ) : (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-          style={{ flex: 1 }}
-        >
-          <ScrollView
+        <View style={{ flex: 1 }}>
+          <KeyboardAwareScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            automaticallyAdjustKeyboardInsets={true}
-            nestedScrollEnabled={true}
+            enableOnAndroid={true}
+            enableAutomaticScroll={true}
+            extraScrollHeight={Platform.OS === "ios" ? 120 : 140}
+            extraHeight={Platform.OS === "ios" ? 120 : 140}
+            keyboardOpeningTime={0}
+            enableResetScrollToCoords={false}
             contentContainerStyle={{
-              flexGrow: 1,
               paddingTop: 10,
-              paddingBottom: 60,
+              paddingBottom: 110,
             }}
           >
             {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
@@ -653,17 +650,29 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 encryption standards.
               </Text>
             </View>
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
           {/* ─── BOTTOM SUBMIT BUTTON ─────────────────────────────────────── */}
           <View
             style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
               paddingHorizontal: 16,
-              paddingBottom: Platform.OS === "ios" ? 34 : 20,
+              paddingBottom: Platform.OS === "ios" ? 34 : 16,
               paddingTop: 12,
               backgroundColor: "#FFFFFF",
               borderTopWidth: 1,
               borderColor: "#F1F5F9",
+              shadowColor: "#000",
+              shadowOffset: {
+                width: 0,
+                height: -2,
+              },
+              shadowOpacity: 0.08,
+              shadowRadius: 5,
+              elevation: 8,
             }}
           >
             <TouchableOpacity
@@ -703,7 +712,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               )}
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       )}
 
 

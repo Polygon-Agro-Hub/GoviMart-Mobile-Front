@@ -9,6 +9,7 @@ import {
   Modal,
   ActivityIndicator,
   BackHandler,
+  Linking,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -404,9 +405,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       setUploadingImage(true);
       const filename = uri.split("/").pop() || "profile.jpg";
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1].toLowerCase()}` : `image/jpeg`;
+      const ext = match ? match[1].toLowerCase() : "jpg";
+      const type = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+      const cleanName = filename.includes(".") ? filename : `${filename}.${ext}`;
 
-      const response = await customerService.uploadProfileImage(uri, filename, type);
+      const response = await customerService.uploadProfileImage(uri, cleanName, type);
       if (response.data && response.data.status && response.data.data?.imageUrl) {
         const uploadedUrl = response.data.data.imageUrl;
         setProfileImage(uploadedUrl);
@@ -415,9 +418,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       } else {
         Alert.alert("Upload Failed", response.data?.message || "Failed to upload image.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log("Error uploading profile image:", error);
-      Alert.alert("Error", "Failed to upload profile photo. Please try again.");
+      const errorMsg =
+        error?.response?.data?.message ||
+        "Failed to upload profile photo. Please try again.";
+      Alert.alert("Error", errorMsg);
     } finally {
       setUploadingImage(false);
     }
@@ -467,14 +473,21 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const handleChooseFromGallery = async () => {
     try {
       setImagePickerModalVisible(false);
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Photo library access is required to choose a profile photo.",
-        );
-        return;
+
+      if (Platform.OS === "ios") {
+        const { status } =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission Required",
+            "Photo library access is required to choose a profile photo.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -1249,6 +1262,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               onPress={() => setImagePickerModalVisible(false)}
               style={{
                 marginTop: 14,
+                marginBottom: Platform.OS === "ios" ? 33 : 26,
                 paddingVertical: 14,
                 borderRadius: 14,
                 backgroundColor: "#F3F4F6",

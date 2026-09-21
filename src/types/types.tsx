@@ -256,6 +256,7 @@ export interface UpdateUserDetailsPayload {
 
 export interface AddressPayload {
   buildingType: string;
+  originalBuildingType?: string;
   saveAs?: string;
   billingTitle?: string;
   billingName?: string;

@@ -171,6 +171,25 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
+const formatWeightDisplay = (
+  display?: string,
+  amount?: number,
+  unit?: string
+): string => {
+  if (amount != null && !isNaN(Number(amount)) && unit) {
+    return `${parseFloat(String(amount))} ${unit.toLowerCase()}`;
+  }
+  if (display) {
+    const match = display.match(/^([\d.]+)\s*(.*)$/);
+    if (match) {
+      const cleanNum = parseFloat(match[1]);
+      return isNaN(cleanNum) ? display : `${cleanNum} ${match[2]}`.trim();
+    }
+    return display;
+  }
+  return "";
+};
+
 /* ---------------------------------------------------------
    Small pieces
 --------------------------------------------------------- */
@@ -381,7 +400,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const unit = (item.unit?.toLowerCase() === "g" ? "g" : "kg") as
                 | "kg"
                 | "g";
-              const amount = parseFloat(item.qty || 1);
+              const rawQty = item.qty || item.quantity || item.weight || 1;
+              const parsedAmount = parseFloat(String(rawQty));
+              const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {
                 id: itemKey,
@@ -860,7 +881,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       id: String(item.id),
       name: item.displayName,
       image: item.image,
-      weight: item.weightDisplay,
+      weight: formatWeightDisplay(item.weightDisplay, item.amount, item.unit),
       price: item.price,
       originalPrice: item.basePrice,
     }));
@@ -2037,7 +2058,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         </TouchableOpacity>
 
                         <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
-                          {item.weightDisplay}
+                          {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}
                         </Text>
 
                         <TouchableOpacity

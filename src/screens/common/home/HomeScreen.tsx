@@ -11,6 +11,7 @@ import {
   BackHandler,
   ToastAndroid,
   Platform,
+  RefreshControl,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -289,6 +290,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -559,6 +561,102 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     }
   }, [buyerType, isRetail]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const promises: Promise<any>[] = [fetchBanners()];
+
+      if (userToken) {
+        promises.push(
+          customerService
+            .getAccountDetails()
+            .then(async (response) => {
+              if (response.data && response.data.data) {
+                const data = response.data.data;
+                const updatedProfile = {
+                  firstName: data.firstName || userProfile?.firstName || "",
+                  lastName: data.lastName || userProfile?.lastName || "",
+                  title: data.title || userProfile?.title,
+                  image: data.image !== undefined ? data.image : userProfile?.image,
+                  buyerType: data.buyerType || userProfile?.buyerType || "Retail",
+                  email: data.email || userProfile?.email || "",
+                  phoneNumber: data.phoneNumber || userProfile?.phoneNumber || "",
+                  firstTimeUser: userProfile?.firstTimeUser ?? 0,
+                  id: data.id || userProfile?.id,
+                };
+                dispatch(updateUserProfile(updatedProfile));
+                await AsyncStorage.setItem(
+                  "userProfile",
+                  JSON.stringify(updatedProfile),
+                );
+              }
+            })
+            .catch(() => {}),
+        );
+      }
+
+      const query = searchQuery.trim();
+      if (query) {
+        promises.push(
+          productService
+            .getProductsByCategory("", buyerType, query)
+            .then(async (response) => {
+              let matchingProducts: ShopItem[] = [];
+              if (response.data?.status && response.data.products) {
+                matchingProducts = response.data.products.map((item: any) => ({
+                  ...item,
+                  type: "product",
+                }));
+              }
+              if (isRetail) {
+                try {
+                  const pkgResponse =
+                    await productService.getAllPackages(buyerType);
+                  if (pkgResponse.data?.status && pkgResponse.data.product) {
+                    const matchingPkgs = pkgResponse.data.product
+                      .filter((pkg: any) =>
+                        (pkg.displayName || pkg.packageName || "")
+                          .toLowerCase()
+                          .includes(query.toLowerCase()),
+                      )
+                      .map((item: any) => ({
+                        ...item,
+                        type: "package",
+                      }));
+                    matchingProducts = [...matchingPkgs, ...matchingProducts];
+                  }
+                } catch {}
+              }
+              setShopItems(matchingProducts);
+            })
+            .catch(() => {}),
+        );
+      } else {
+        if (selectedCategoryId === "Packages" && isRetail) {
+          promises.push(fetchPackages());
+        } else {
+          promises.push(
+            getSelectedCategoryProducts(selectedCategoryId, buyerType),
+          );
+        }
+      }
+
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("Failed to refresh home screen:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    buyerType,
+    isRetail,
+    selectedCategoryId,
+    searchQuery,
+    userToken,
+    userProfile,
+    dispatch,
+  ]);
+
   const itemRows: ShopItem[][] = [];
   for (let i = 0; i < shopItems?.length; i += 2) {
     itemRows.push(shopItems?.slice(i, i + 2));
@@ -798,6 +896,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
         className="flex-1"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#FF9114"]}
+            tintColor="#FF9114"
+          />
+        }
       >
         {/* Top Header */}
         <HomeHeader onPressProfile={handleProfileNavigation} />
@@ -903,7 +1009,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   {/* Text inside the card */}
                   <Text
                     style={{
-                      fontSize: 12,
                       fontWeight: "bold",
                       color: isActive ? "#FFFFFF" : "#1E1E1E",
                       textAlign: "center",

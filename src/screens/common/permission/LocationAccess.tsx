@@ -24,7 +24,7 @@ type LocationAccessNavigationProp = StackNavigationProp<
 >;
 
 interface LocationAccessProps {
-  navigation?: LocationAccessNavigationProp;
+  navigation?: any;
   route?: {
     params?: {
       returnScreen?: keyof RootStackParamList;
@@ -69,6 +69,10 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
       onClose();
     } else if (onBackPress) {
       onBackPress();
+    } else if (route?.params?.returnScreen) {
+      navigation?.navigate(route.params.returnScreen as any);
+    } else if (isBackBlocked) {
+      navigation?.navigate(targetReturnScreen as any);
     } else if (navigation?.canGoBack && navigation.canGoBack()) {
       navigation.goBack();
     } else if (navigation) {
@@ -110,7 +114,11 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
         if (onPermissionGranted) {
           onPermissionGranted();
         } else if (navigation) {
-          if (navigation.canGoBack()) {
+          if (route?.params?.returnScreen) {
+            navigation.navigate(route.params.returnScreen as any);
+          } else if (isBackBlocked) {
+            navigation.navigate(targetReturnScreen as any);
+          } else if (navigation.canGoBack()) {
             navigation.goBack();
           } else {
             navigation.navigate(targetReturnScreen as any);

@@ -30,16 +30,18 @@ const normalizeToKg = (product: ProductType): ProductType => {
   if (rawUnit === "g") {
     const rawVal = parseFloat(product.startValue || "500");
     const kgVal = Number((rawVal / 1000).toFixed(3));
+    const cleanKg = parseFloat(String(kgVal));
     return {
       ...product,
       unitType: "kg",
-      startValue: kgVal.toString(),
+      startValue: (isNaN(cleanKg) ? 0.5 : cleanKg).toString(),
     };
   }
+  const cleanVal = product.startValue ? parseFloat(String(product.startValue)) : 1;
   return {
     ...product,
     unitType: "kg",
-    startValue: product.startValue || "1",
+    startValue: (isNaN(cleanVal) ? (product.startValue || "1") : cleanVal.toString()),
   };
 };
 
@@ -153,7 +155,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
   const toggleAlacartProduct = (product: ProductType) => {
     const normalized = normalizeToKg(product);
     const price = parseFloat(normalized.normalPrice) || 0;
-    const weightDisplay = `${normalized.startValue} kg`;
+    const cleanStartVal = parseFloat(String(normalized.startValue || "1")) || 1;
+    const weightDisplay = `${cleanStartVal} kg`;
 
     setAlacartSelection((prev) => {
       if (prev[normalized.id]) {
