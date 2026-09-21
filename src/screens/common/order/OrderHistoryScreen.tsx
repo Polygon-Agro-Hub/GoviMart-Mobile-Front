@@ -134,9 +134,15 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                             .replace(/,/g, "")
                                             .trim()
                                     ) || 0;
+                            const rawStatus = bo.processStatus || 'Pending';
+                            const formattedStatus =
+                                rawStatus.toLowerCase() === 'return received' ||
+                                rawStatus.toLowerCase().includes('return')
+                                    ? 'Return'
+                                    : rawStatus;
                             return {
                                 id: bo.orderId ? String(bo.orderId) : 'N/A',
-                                status: bo.processStatus || 'Pending',
+                                status: formattedStatus,
                                 orderDate: formatOrderDate(bo.createdAt),
                                 invoiceNumber: bo.invoiceNo || 'N/A',
                                 deliveryDate: formatDeliveryDate(bo.scheduleDate || bo.sheduleDate),

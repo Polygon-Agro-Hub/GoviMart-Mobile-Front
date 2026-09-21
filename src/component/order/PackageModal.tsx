@@ -124,14 +124,7 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                                         8,
                                 }}
                             >
-                                {
-                                    pkg.name
-                                }{" "}
-                                (x
-                                {
-                                    pkg.quantity
-                                }
-                                )
+                                {pkg.name} {pkg.quantity > 1 ? `(${String(pkg.quantity).padStart(2, '0')})` : ""}
                             </Text>
 
                             {pkg.items && pkg.items.map(

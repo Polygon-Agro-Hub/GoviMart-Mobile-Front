@@ -133,7 +133,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const isFreeDelivery = Boolean(appliedCoupon?.isFreeDelivery);
     const couponVal = appliedCoupon
       ? appliedCoupon.isFreeDelivery
-        ? initialDeliveryCharge
+        ? 0
         : appliedCoupon.discount
       : 0;
     const deliveryChargeToSave = isFreeDelivery ? 0 : effectiveDeliveryCharge;

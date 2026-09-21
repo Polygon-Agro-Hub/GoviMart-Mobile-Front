@@ -71,6 +71,19 @@ class PushNotificationService {
   }
 
   /**
+   * Check if OS Notification Permission is currently granted
+   */
+  async hasPermission(): Promise<boolean> {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      return status === "granted";
+    } catch (error) {
+      console.warn("[PushNotificationService] hasPermission check error:", error);
+      return false;
+    }
+  }
+
+  /**
    * Request OS System Notification Permissions
    */
   async requestPermissions(): Promise<boolean> {

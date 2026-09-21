@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Feather from '@expo/vector-icons/Feather';
 import notificationService from "@/services/notification/notification.service";
 import socketService from "@/services/socket/socket.service";
+import pushNotificationService from "@/services/notification/pushNotification.service";
 
 type BottomScreen =
     | "Home"
@@ -178,7 +179,21 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* NOTIFICATIONS / ALERTS */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("Notification")}
+                onPress={async () => {
+                    if (activeScreen === "Notification") return;
+                    try {
+                        const hasPerm = await pushNotificationService.hasPermission();
+                        if (hasPerm) {
+                            navigation.navigate("Notification");
+                        } else {
+                            navigation.navigate("NotificationAccess", {
+                                returnScreen: "Notification",
+                            });
+                        }
+                    } catch (e) {
+                        navigation.navigate("Notification");
+                    }
+                }}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",

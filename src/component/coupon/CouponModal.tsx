@@ -80,6 +80,42 @@ const CouponModal: React.FC<CouponModalProps> = ({
     });
   };
 
+  const isValidCoupon = (item: CouponItem) => {
+    const statusOk =
+      item.status &&
+      (item.status.toLowerCase() === "enabled" ||
+        item.status.toLowerCase() === "active");
+    if (!statusOk) return false;
+
+    const now = new Date();
+    if (item.startDate) {
+      const start = new Date(item.startDate);
+      start.setHours(0, 0, 0, 0);
+      if (now < start) return false;
+    }
+    if (item.endDate) {
+      const end = new Date(item.endDate);
+      end.setHours(23, 59, 59, 999);
+      if (now > end) return false;
+    }
+    return true;
+  };
+
+  const displayedCoupons = React.useMemo(() => {
+    return coupons.filter((item) => {
+      if (!isValidCoupon(item)) return false;
+      const isFreeDelivery =
+        item.type === "Free Delivery" ||
+        item.type === "Free Delivary" ||
+        (item.type?.toLowerCase().includes("free") &&
+          item.type?.toLowerCase().includes("deliv"));
+      if (deliveryMethod?.toLowerCase() === "pickup" && isFreeDelivery) {
+        return false;
+      }
+      return true;
+    });
+  }, [coupons, deliveryMethod]);
+
   const getCouponDescription = (item: CouponItem) => {
     const isFreeDel =
       item.type === "Free Delivery" || item.type === "Free Delivary";
@@ -477,7 +513,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
                   Loading available offers...
                 </Text>
               </View>
-            ) : coupons.length === 0 ? (
+            ) : displayedCoupons.length === 0 ? (
               <View style={{ paddingVertical: 20, alignItems: "center" }}>
                 <Text
                   style={{
@@ -489,7 +525,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
                 </Text>
               </View>
             ) : (
-              coupons.map((item) => {
+              displayedCoupons.map((item) => {
                 const theme = getCouponTheme(item.type);
                 const isApplyingThis = applyingCode === item.code;
 

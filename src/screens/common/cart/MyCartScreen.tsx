@@ -27,6 +27,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import AuthPromptModal from "@/component/common/AuthPromptModal";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
+import customerService from "@/services/customer/customer.service";
 import { RootStackParamList, OrderContext } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
@@ -183,7 +184,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         return total + (product.normalPrice - product.price) * weightMultiplier;
     }, 0);
 
-    const handleCheckout = () => {
+    const handleCheckout = async () => {
         if (!token) {
             setAuthModalVisible(true);
             return;
@@ -198,6 +199,30 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         if (hasUnavailable) {
             Alert.alert("Unavailable Items", "Some items in your cart are currently unavailable. Please remove them before proceeding.");
             return;
+        }
+
+        try {
+            const accRes = await customerService.getAccountDetails();
+            const bal = parseFloat(accRes?.data?.data?.creditBalance || 0);
+            if (bal < 0) {
+                Alert.alert(
+                    "Negative Credit Balance",
+                    "You have an outstanding negative credit balance. Please settle your balance in your account before placing an order.",
+                    [
+                        {
+                            text: "Go to Account",
+                            onPress: () => navigation.navigate("Profile" as any),
+                        },
+                        {
+                            text: "Cancel",
+                            style: "cancel",
+                        },
+                    ]
+                );
+                return;
+            }
+        } catch (err) {
+            console.log("Error checking credit balance in cart:", err);
         }
 
         const grandTotal = Math.max(0, packageTotal + productTotal - totalDiscount);

@@ -111,6 +111,20 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         });
     };
 
+    const getProcessingDateAndTimeString = (deliveryDateString?: string | Date | null) => {
+        if (!deliveryDateString) return "07:00 PM";
+        const date = new Date(deliveryDateString);
+        if (isNaN(date.getTime())) return "07:00 PM";
+        const procDate = new Date(date);
+        procDate.setDate(procDate.getDate() - 3);
+        const formattedDate = procDate.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+        });
+        return `${formattedDate}, 07:00 PM`;
+    };
+
     const openPackageDetails = () => {
         setPackageModalVisible(true);
     };
@@ -135,27 +149,39 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 }
 
                 if (packagesRes.data && packagesRes.data.status) {
-                    const mappedPackages: Package[] = packagesRes.data.data.map((p: any, idx: number) => {
+                    const rawPackages: any[] = packagesRes.data.data;
+                    const packageMap = new Map<string, Package>();
+
+                    rawPackages.forEach((p: any) => {
+                        const key = String(p.packageId || p.displayName);
                         const priceNum = typeof p.priceNum === "number"
                             ? p.priceNum
                             : (typeof p.productPrice === "number"
                                 ? p.productPrice
                                 : parseFloat(String(p.productPrice || "").replace(/Rs\.?/i, "").replace(/,/g, "").trim()) || 0);
-                        return {
-                            id: idx + 1,
-                            name: p.displayName,
-                            quantity: 1,
-                            price: priceNum,
-                            image: p.packageImage || p.image || (p.products && p.products[0]?.image) || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
-                            packageImage: p.packageImage || p.image,
-                            items: (p.products || []).map((prod: any) => ({
-                                itemName: prod.itemName || prod.typeName || "Item",
-                                quantity: prod.quantity || `${prod.qty} units`,
-                                image: prod.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
-                            })),
-                        };
+                        const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
+
+                        if (packageMap.has(key)) {
+                            const existing = packageMap.get(key)!;
+                            existing.quantity += qty;
+                        } else {
+                            packageMap.set(key, {
+                                id: packageMap.size + 1,
+                                name: p.displayName,
+                                quantity: qty,
+                                price: priceNum,
+                                image: p.packageImage || p.image || (p.products && p.products[0]?.image) || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
+                                packageImage: p.packageImage || p.image,
+                                items: (p.products || []).map((prod: any) => ({
+                                    itemName: prod.itemName || prod.typeName || "Item",
+                                    quantity: prod.quantity || `${prod.qty} units`,
+                                    image: prod.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
+                                })),
+                            });
+                        }
                     });
-                    setPackages(mappedPackages);
+
+                    setPackages(Array.from(packageMap.values()));
                 }
 
                 if (itemsRes.data && itemsRes.data.status) {
@@ -197,6 +223,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         const status = order?.processStatus || "Pending";
         const updateTime = formatStatusDate(order?.updatedAt || order?.createdAt);
         const orderTime = formatStatusDate(order?.createdAt);
+        const processingTime = getProcessingDateAndTimeString(order?.sheduleDate || order?.scheduleDate || order?.deliveryDate);
         const packTimeFormatted = formatStatusDate(order?.packTime);
         const outForDeliveryTime = packTimeFormatted || updateTime;
         const returnTime = formatStatusDate(order?.returnTime || order?.updatedAt);
@@ -238,7 +265,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                     },
                     {
                         title: "Processing",
-                        date: updateTime,
+                        date: processingTime,
                         icon: "box-open",
                         active: true,
                     },
@@ -268,7 +295,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                     },
                     {
                         title: "Processing",
-                        date: updateTime,
+                        date: processingTime,
                         icon: "box-open",
                         active: true,
                     },
@@ -290,7 +317,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 },
                 {
                     title: "Processing",
-                    date: isPickupActive("Processing") ? updateTime : "",
+                    date: isPickupActive("Processing") ? processingTime : "",
                     icon: "box-open",
                     active: isPickupActive("Processing"),
                 },
@@ -331,7 +358,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 },
                 {
                     title: "Processing",
-                    date: updateTime,
+                    date: processingTime,
                     icon: "box-open",
                     active: true,
                 },
@@ -438,7 +465,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 },
                 {
                     title: "Processing",
-                    date: updateTime,
+                    date: processingTime,
                     icon: "box-open",
                     active: true,
                 },
@@ -480,7 +507,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 },
                 {
                     title: "Processing",
-                    date: updateTime,
+                    date: processingTime,
                     icon: "box-open",
                     active: true,
                 },
@@ -492,8 +519,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 },
             ];
         }
-
-
 
         const isActive = (stage: string) => {
             let normalizedStatus = status;
@@ -515,7 +540,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             },
             {
                 title: "Processing",
-                date: isActive("Processing") ? updateTime : "",
+                date: isActive("Processing") ? processingTime : "",
                 icon: "box-open",
                 active: isActive("Processing"),
             },
@@ -1009,8 +1034,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                                     "500",
                                             }}
                                         >
-                                            {pkg.name} (x
-                                            {pkg.quantity})
+                                            {pkg.name} {pkg.quantity > 1 ? `(${String(pkg.quantity).padStart(2, "0")})` : ""}
                                         </Text>
 
                                         <Text
@@ -1022,21 +1046,22 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                             Rs.{" "}
                                             {formatAmount(
                                                 pkg.price
-                                            )} x{" "}
-                                            {pkg.quantity} =
-                                            {" "}
-                                            <Text
-                                                style={{
-                                                    fontWeight:
-                                                        "600",
-                                                }}
-                                            >
-                                                Rs.{" "}
-                                                {formatAmount(
-                                                    pkg.price *
-                                                    pkg.quantity
-                                                )}
-                                            </Text>
+                                            )}
+                                            {pkg.quantity > 1 ? ` x ${pkg.quantity} = ` : ""}
+                                            {pkg.quantity > 1 ? (
+                                                <Text
+                                                    style={{
+                                                        fontWeight:
+                                                            "600",
+                                                    }}
+                                                >
+                                                    Rs.{" "}
+                                                    {formatAmount(
+                                                        pkg.price *
+                                                        pkg.quantity
+                                                    )}
+                                                </Text>
+                                            ) : null}
                                         </Text>
                                     </View>
                                 </View>
