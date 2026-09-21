@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   BackHandler,
+  Linking,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -106,13 +107,19 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   };
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Please allow access to your photo library.",
-      );
-      return;
+    if (Platform.OS === "ios") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo library.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({

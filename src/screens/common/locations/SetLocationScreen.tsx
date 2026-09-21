@@ -172,12 +172,25 @@ const SetLocation: React.FC<Props> = ({ navigation }) => {
     if (showPermissionUI) {
         return (
             <LocationAccess
+                navigation={navigation}
                 onPermissionGranted={async () => {
                     setShowPermissionUI(false);
                     await fetchLocation(true);
                 }}
-                onClose={() => setShowPermissionUI(false)}
-                onNotNow={() => setShowPermissionUI(false)}
+                onClose={() => {
+                    if (navigation.canGoBack()) {
+                        navigation.goBack();
+                    } else {
+                        setShowPermissionUI(false);
+                    }
+                }}
+                onNotNow={() => {
+                    if (navigation.canGoBack()) {
+                        navigation.goBack();
+                    } else {
+                        setShowPermissionUI(false);
+                    }
+                }}
             />
         );
     }

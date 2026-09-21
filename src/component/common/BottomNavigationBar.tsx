@@ -59,7 +59,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
         <View
             style={{
                 position: "absolute",
-                bottom: Platform.OS === "ios" ? 10 : 24,
+                bottom: Platform.OS === "ios" ? 10 : 18,
                 left: 24, // mx-6
                 right: 24, // mx-6
 

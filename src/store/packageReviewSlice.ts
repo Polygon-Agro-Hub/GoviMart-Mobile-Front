@@ -326,7 +326,8 @@ export const packageReviewSlice = createSlice({
       const product = action.payload;
       const basePrice = parseFloat(product.normalPrice) || 0;
       const initialUnit = (product.unitType?.toLowerCase() === "kg" ? "kg" : "g") as "kg" | "g";
-      const initialAmount = product.startValue ? parseFloat(product.startValue) : initialUnit === "kg" ? 1 : 500;
+      const parsedAmount = product.startValue ? parseFloat(String(product.startValue)) : initialUnit === "kg" ? 1 : 500;
+      const initialAmount = isNaN(parsedAmount) ? (initialUnit === "kg" ? 1 : 500) : parsedAmount;
       const weightDisplay = `${initialAmount} ${initialUnit}`;
       const newKey = `new-${product.id}`;
 
@@ -371,11 +372,12 @@ export const packageReviewSlice = createSlice({
         newAmount = item.amount >= 1 && item.amount <= 10 ? item.amount * 1000 : 500;
         newPrice = item.basePrice * (newAmount / 500);
       }
+      const cleanAmount = parseFloat(String(newAmount));
       state.alacartSelection[id] = {
         ...item,
         unit: newUnit,
-        amount: newAmount,
-        weightDisplay: `${newAmount} ${newUnit}`,
+        amount: cleanAmount,
+        weightDisplay: `${cleanAmount} ${newUnit}`,
         price: newPrice,
       };
     },
@@ -390,13 +392,14 @@ export const packageReviewSlice = createSlice({
       const step = item.unit === "kg" ? 1 : 250;
       const min = item.unit === "kg" ? 1 : 250;
       const newAmount = Math.max(min, item.amount + delta * step);
+      const cleanAmount = parseFloat(String(newAmount));
       const newPrice = Number(
-        (item.basePrice * (item.unit === "kg" ? newAmount * 2 : newAmount / 500)).toFixed(2)
+        (item.basePrice * (item.unit === "kg" ? cleanAmount * 2 : cleanAmount / 500)).toFixed(2)
       );
       state.alacartSelection[id] = {
         ...item,
-        amount: newAmount,
-        weightDisplay: `${newAmount} ${item.unit}`,
+        amount: cleanAmount,
+        weightDisplay: `${cleanAmount} ${item.unit}`,
         price: newPrice,
       };
     },

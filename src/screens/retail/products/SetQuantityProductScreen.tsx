@@ -104,18 +104,19 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const fromProduct: ProductInfo = useMemo(() => {
     const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
-    let rawQty = rawFrom?.quantity || 1;
+    let rawQty = parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
     const rawPrice = rawFrom?.price || 0;
     if (rawUnit === "g") {
       rawQty = Number((rawQty / 1000).toFixed(3));
     }
+    const cleanBaseQty = parseFloat(String(rawQty)) || 1;
     return {
       id: rawFrom?.id?.toString() || "from",
       name: rawFrom?.name || "Original Product",
       icon: rawFrom?.icon || "🥬",
       image: rawFrom?.image,
       unit: "kg",
-      baseQty: rawQty,
+      baseQty: cleanBaseQty,
       pricePerBaseQty: rawPrice,
     };
   }, [rawFrom]);
@@ -140,11 +141,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const minQty = 0.5;
   const maxQty = 10;
 
-  const [quantity, setQuantity] = useState(
-    typeof rawFrom?.quantity === "number" && rawFrom.quantity > 0
-      ? (rawFrom.unit === "g" ? Number((rawFrom.quantity / 1000).toFixed(2)) || 0.5 : rawFrom.quantity)
-      : 0.5
-  );
+  const [quantity, setQuantity] = useState(() => {
+    const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
+    const parsedQty = parseFloat(String(rawFrom?.quantity ?? 0.5));
+    if (!isNaN(parsedQty) && parsedQty > 0) {
+      return rawUnit === "g" ? Number((parsedQty / 1000).toFixed(3)) || 0.5 : parsedQty;
+    }
+    return 0.5;
+  });
 
   const fromUnitPrice = fromProduct.pricePerBaseQty;
   const fromPrice = fromUnitPrice * fromProduct.baseQty;
@@ -236,7 +240,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           <View className="items-center mt-6">
             <ProductRow
               product={fromProduct}
-              subtitle={`${fromProduct.baseQty} kg`}
+              subtitle={`${parseFloat(String(fromProduct.baseQty))} kg`}
               price={`Rs. ${formatPrice(fromPrice)}`}
             />
 
@@ -246,7 +250,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
             <ProductRow
               product={toProduct}
-              subtitle={`${quantity} kg`}
+              subtitle={`${parseFloat(String(quantity))} kg`}
               price={`Rs. ${formatPrice(toPrice)}`}
             />
           </View>
@@ -264,7 +268,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             </TouchableOpacity>
 
             <Text className="text-[16px] font-semibold text-black">
-              {quantity} kg
+              {parseFloat(String(quantity))} kg
             </Text>
 
             <TouchableOpacity

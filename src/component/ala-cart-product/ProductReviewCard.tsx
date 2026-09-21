@@ -68,7 +68,7 @@ export const ProductReviewCard: React.FC<{
                 </TouchableOpacity>
 
                 <Text className="text-[15px] font-semibold text-black">
-                    {product.quantity} {product.unit}
+                    {parseFloat(String(product.quantity))} {product.unit}
                 </Text>
 
                 <TouchableOpacity

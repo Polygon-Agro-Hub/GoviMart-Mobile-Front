@@ -15,6 +15,7 @@ import customerService from "@/services/customer/customer.service";
 import { useFocusEffect } from "@react-navigation/native";
 import NoDataFound from "@/component/common/NoDataFound";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type SavedAddressesNavigationProp = StackNavigationProp<
     RootStackParamList,
@@ -180,7 +181,13 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
 
                     <TouchableOpacity
                         activeOpacity={0.85}
-                        onPress={() => {
+                        onPress={async () => {
+                            try {
+                                await AsyncStorage.multiRemove([
+                                    "selectedLatitude",
+                                    "selectedLongitude",
+                                ]);
+                            } catch {}
                             navigation.navigate("AddNewAddress");
                         }}
                         style={{

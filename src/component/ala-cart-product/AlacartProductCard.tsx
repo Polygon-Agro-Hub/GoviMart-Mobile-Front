@@ -14,7 +14,12 @@ export const AlacartProductCard: React.FC<{
     onToggle: () => void;
 }> = ({ product, selected, onToggle }) => {
     const price = parseFloat(product.normalPrice) || 0;
-    const weightDisplay = `${product.startValue ?? "500"} ${(product.unitType || "g").toLowerCase()}`;
+    const rawWeight =
+        product.startValue != null && product.startValue !== ""
+            ? parseFloat(String(product.startValue))
+            : 500;
+    const cleanWeight = isNaN(rawWeight) ? (product.startValue ?? "500") : rawWeight;
+    const weightDisplay = `${cleanWeight} ${(product.unitType || "g").toLowerCase()}`;
     const formatPrice = (value: number) =>
         value.toLocaleString("en-US", {
             minimumFractionDigits: 2,

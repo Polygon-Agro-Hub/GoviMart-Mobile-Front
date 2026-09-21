@@ -75,12 +75,12 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             typeof amount === "number"
                 ? amount
                 : parseFloat(
-                      String(amount || "")
-                          .replace(/Rs\.?/gi, "")
-                          .replace(/LKR/gi, "")
-                          .replace(/,/g, "")
-                          .trim()
-                  ) || 0;
+                    String(amount || "")
+                        .replace(/Rs\.?/gi, "")
+                        .replace(/LKR/gi, "")
+                        .replace(/,/g, "")
+                        .trim()
+                ) || 0;
         return num.toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -1290,14 +1290,14 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     </>
                                 )}
 
-                                <SummaryRow
+                                {order?.delivaryMethod === 'PICKUP' && <SummaryRow
                                     label="Delivery Fee"
                                     value={
                                         order?.delivaryMethod === 'PICKUP'
                                             ? "Rs. 0.00"
                                             : (isFreeDeliveryCoupon ? "+ Rs. 0.00" : `+ Rs. ${formatAmount(parseFloat(order?.delivaryCharge || order?.deliveryCharge) || 0)}`)
                                     }
-                                />
+                                />}
 
                                 {isFreeDeliveryCoupon && (
                                     <Text
