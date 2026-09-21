@@ -633,7 +633,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: 140,
+            paddingBottom: 20,
           }}
         >
           {/* PROFILE IMAGE */}
