@@ -1,3 +1,4 @@
+import React from "react";
 import {
     View,
     Text,
@@ -8,12 +9,14 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 // INPUT FIELD
 
-export const InputField = ({
+export const InputField = React.memo(({
     isIconThemeDark,
     icon,
     label,
     value,
     onChangeText,
+    onBlur,
+    onFocus,
     keyboardType = "default",
     placeholder,
     maxLength,
@@ -27,6 +30,8 @@ export const InputField = ({
     label: string;
     value: string;
     onChangeText: (text: string) => void;
+    onBlur?: () => void;
+    onFocus?: () => void;
     keyboardType?: "default" | "phone-pad" | "email-address";
     placeholder?: string;
     maxLength?: number;
@@ -126,6 +131,8 @@ export const InputField = ({
                         <TextInput
                             value={value}
                             onChangeText={onChangeText}
+                            onBlur={onBlur}
+                            onFocus={onFocus}
                             keyboardType={keyboardType}
                             placeholder={placeholder}
                             placeholderTextColor="#9CA3AF"
@@ -162,7 +169,7 @@ export const InputField = ({
             ) : null}
         </View>
     );
-};
+});
 
 // DROPDOWN
 

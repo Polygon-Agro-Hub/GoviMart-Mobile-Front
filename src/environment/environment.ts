@@ -1,7 +1,10 @@
+import { getDevServerHostIp } from "./getHostIp";
+const devHostIp = getDevServerHostIp();
+
 export const environment = {
 
   // LOCAL --------------------
-  // API_BASE_URL: "http://192.168.8.180:3000/polygon/",
+  // API_BASE_URL: `http://${devHostIp}:3000/polygon/`,
 
   // DEV --------------------
   API_BASE_URL: "https://dev-mob-api.govimart.com/polygon/",

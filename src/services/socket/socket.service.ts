@@ -6,11 +6,13 @@ import { ServerNotificationItem } from "../notification/notification.service";
 
 type NotificationCallback = (notification: ServerNotificationItem) => void;
 type CityAvailabilityCallback = (cities: any[]) => void;
+type UnreadCountCallback = (unreadCount: number) => void;
 
 class SocketService {
   private socket: Socket | null = null;
   private notificationListeners: Set<NotificationCallback> = new Set();
   private cityListeners: Set<CityAvailabilityCallback> = new Set();
+  private unreadCountListeners: Set<UnreadCountCallback> = new Set();
   private isConnecting: boolean = false;
   private currentUserId: number | null = null;
   private currentToken: string | null = null;
@@ -69,6 +71,18 @@ class SocketService {
             listener(data);
           } catch (e) {
             console.error("[SocketService] Listener error:", e);
+          }
+        });
+      });
+
+      this.socket.on("notification_unread_count", (data: { unreadCount: number } | number) => {
+        const count = typeof data === "number" ? data : (data?.unreadCount ?? 0);
+        console.log("🔢 [SocketService] Received notification_unread_count:", count);
+        this.unreadCountListeners.forEach((listener) => {
+          try {
+            listener(count);
+          } catch (e) {
+            console.error("[SocketService] Unread count listener error:", e);
           }
         });
       });
@@ -141,6 +155,23 @@ class SocketService {
     return () => {
       this.notificationListeners.delete(callback);
     };
+  }
+
+  onUnreadCountUpdate(callback: UnreadCountCallback): () => void {
+    this.unreadCountListeners.add(callback);
+    return () => {
+      this.unreadCountListeners.delete(callback);
+    };
+  }
+
+  emitLocalUnreadCount(count: number) {
+    this.unreadCountListeners.forEach((listener) => {
+      try {
+        listener(count);
+      } catch (e) {
+        console.error("[SocketService] Local count emit error:", e);
+      }
+    });
   }
 
   onCityAvailabilityUpdated(callback: CityAvailabilityCallback): () => void {

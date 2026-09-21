@@ -66,13 +66,19 @@ const Splash: React.FC = () => {
                   return;
                 }
               } catch (refreshError) {
-                console.warn("Silent token refresh failed, user must sign in:", refreshError);
+                // Refresh token expired / invalid: clear tokens silently and proceed to sign-in
+                await tokenStorage.clearTokens().catch(() => {});
+                await AsyncStorage.multiRemove([
+                  "userProfile",
+                  "userLoginTime",
+                  "rememberMeEnabled",
+                ]).catch(() => {});
               }
             }
           }
         }
       } catch (e) {
-        console.error("Failed to check login status:", e);
+        // Fallback silently to auth selection
       }
       navigation.replace("ChooseAuth");
     };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ interface GlobalSearchModalProps {
     onPress: (value: string) => void
   ) => React.ReactNode;
   searchKeys?: string[];
+  showSearch?: boolean;
 }
 
 const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
@@ -43,20 +44,29 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   multiSelect = false,
   renderItem,
   searchKeys = ["label"],
+  showSearch = true,
 }) => {
   const [searchValue, setSearchValue] = useState("");
   const [filteredData, setFilteredData] = useState(data);
   const [selectedValues, setSelectedValues] = useState<string[]>(selectedItems);
 
-  // Initialize selected values and reset search
+  const prevVisibleRef = useRef(visible);
+
+  // Initialize selected values and reset search ONLY when opening modal
   useEffect(() => {
-    setSelectedValues(selectedItems);
-    setSearchValue("");
-  }, [selectedItems, visible]);
+    if (visible && !prevVisibleRef.current) {
+      setSelectedValues(selectedItems);
+      setSearchValue("");
+    }
+    prevVisibleRef.current = visible;
+  }, [visible, selectedItems]);
+
+  const dataKey = JSON.stringify(data);
+  const searchKeysKey = JSON.stringify(searchKeys);
 
   // Filter data based on search
   useEffect(() => {
-    if (!searchValue.trim()) {
+    if (!showSearch || !searchValue.trim()) {
       setFilteredData(data);
       return;
     }
@@ -72,7 +82,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       });
     });
     setFilteredData(filtered);
-  }, [searchValue, data, searchKeys]);
+  }, [searchValue, dataKey, searchKeysKey, showSearch]);
 
   const handleItemPress = (value: string) => {
     let newSelectedValues: string[];
@@ -177,8 +187,8 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
-          {renderSearchInput()}
+          {/* Search Bar - Conditional Rendering */}
+          {showSearch && renderSearchInput()}
 
           {/* List */}
           <FlatList

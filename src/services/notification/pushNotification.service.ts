@@ -30,23 +30,28 @@ class PushNotificationService {
     try {
       // 1. Setup Android Notification Channel
       if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("default", {
-          name: "Polygon Notifications",
-          description: "Live notifications for orders, packages, and deliveries.",
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: "#FF8A00",
-          sound: "default",
-          enableVibrate: true,
-          showBadge: true,
-        });
+        try {
+          await Notifications.setNotificationChannelAsync("default", {
+            name: "Polygon Notifications",
+            description: "Live notifications for orders, packages, and deliveries.",
+            importance: Notifications.AndroidImportance.MAX,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: "#FF8A00",
+            sound: "default",
+            enableVibrate: true,
+            showBadge: true,
+          });
+        } catch (channelErr) {
+          // Fallback if not supported
+        }
       }
 
       // 2. Add listener for when user taps on an OS system notification
       this.responseListenerSubscription =
         Notifications.addNotificationResponseReceivedListener((response) => {
           try {
-            const data = response.notification.request.content.data;
+            const data = response?.notification?.request?.content?.data;
             this.handleNotificationNavigation(data);
           } catch (e) {
             console.warn("[PushNotificationService] Error handling response tap:", e);
@@ -86,27 +91,62 @@ class PushNotificationService {
   }
 
   /**
-   * Display a native OS System Notification (shows in status bar, lock screen, and tray)
+   * Display a native OS System Notification (shows in status bar, lock screen, and heads-up banner)
    */
   async displayLocalNotification(item: ServerNotificationItem | any) {
-    if (!item) return;
+    if (!item || !item.title) return;
 
     try {
+      if (Platform.OS === "android") {
+        try {
+          await Notifications.setNotificationChannelAsync("default", {
+            name: "Polygon Notifications",
+            importance: Notifications.AndroidImportance.MAX,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+            vibrationPattern: [0, 250, 250, 250],
+            sound: "default",
+            enableVibrate: true,
+            showBadge: true,
+          });
+        } catch (_) {}
+      }
+
       const title = item.title || "Polygon Notification";
       const body = item.message || "";
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          data: item,
-          sound: "default",
-          badge: 1,
-          priority: Notifications.AndroidNotificationPriority.MAX,
-          color: "#FF8A00",
-        },
-        trigger: null, // trigger immediately
-      });
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title,
+            body,
+            data: {
+              orderId: item.orderId || item.processOrderId,
+              invNo: item.invNo,
+              ...item,
+            },
+            sound: "default",
+            badge: 1,
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            color: "#FF8A00",
+          },
+          trigger: (Platform.OS === "android" ? { channelId: "default" } : null) as any,
+        });
+      } catch (_) {
+        // Fallback without channelId trigger
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title,
+            body,
+            data: {
+              orderId: item.orderId || item.processOrderId,
+              invNo: item.invNo,
+              ...item,
+            },
+            sound: "default",
+          },
+          trigger: null,
+        });
+      }
 
       console.log("[PushNotificationService] OS System Notification posted:", title);
     } catch (error) {

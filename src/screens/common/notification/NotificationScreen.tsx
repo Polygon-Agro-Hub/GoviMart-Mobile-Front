@@ -95,13 +95,34 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     const isReadBool = Number(item.isRead) === 1 || Boolean(item.isRead);
     const actionRequired = isActionRequiredNotification(item.title);
 
+    let messageText = item.message || "";
+    const returnReason = (item as any).returnReason;
+    const returnNote = (item as any).returnNote || (item as any).otherReason;
+    if (returnReason && (returnReason.toLowerCase() === "other" || returnNote)) {
+        const effectiveReason =
+            returnReason.toLowerCase() === "other" && returnNote
+                ? returnNote
+                : returnNote || returnReason;
+        if (effectiveReason) {
+            messageText = messageText.replace(
+                /Reason\s*:\s*[“"']Other[”"']/gi,
+                `Reason : “${effectiveReason}”`
+            );
+        }
+    } else if (returnNote) {
+        messageText = messageText.replace(
+            /Reason\s*:\s*[“"']Other[”"']/gi,
+            `Reason : “${returnNote}”`
+        );
+    }
+
     return {
         id: item.id,
         processOrderId: item.processOrderId,
         orderId: item.orderId,
         invNo: item.invNo,
         title: item.title,
-        message: item.message,
+        message: messageText,
         time,
         group,
         isRead: isReadBool,
@@ -161,7 +182,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         socketService.connect();
 
         // Listen for live socket notifications
-        const unsubscribe = socketService.onNewNotification((serverItem) => {
+        const unsubscribeNotif = socketService.onNewNotification((serverItem) => {
             const uiItem = mapServerItemToUi(serverItem);
             setNotifications((prev) => {
                 // Avoid duplicates
@@ -172,8 +193,18 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             });
         });
 
+        // Listen for unread count updates
+        const unsubscribeCount = socketService.onUnreadCountUpdate((count) => {
+            if (count === 0) {
+                setNotifications((prev) =>
+                    prev.map((n) => (n.isRead ? n : { ...n, isRead: true }))
+                );
+            }
+        });
+
         return () => {
-            unsubscribe();
+            unsubscribeNotif();
+            unsubscribeCount();
         };
     }, [loadNotifications]);
 
@@ -186,13 +217,14 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     const handleNotificationPress = async (item: UiNotificationItem) => {
         // Optimistic UI update
         if (!item.isRead) {
-            setNotifications((previous) =>
-                previous.map((n) =>
-                    n.id === item.id
-                        ? { ...n, isRead: true }
-                        : n
-                )
-            );
+            setNotifications((previous) => {
+                const nextList = previous.map((n) =>
+                    n.id === item.id ? { ...n, isRead: true } : n
+                );
+                const unread = nextList.filter((n) => !n.isRead).length;
+                socketService.emitLocalUnreadCount(unread);
+                return nextList;
+            });
             try {
                 await notificationService.markAsRead(item.id);
             } catch (err) {
@@ -216,7 +248,6 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
     // MARK ALL NOTIFICATIONS AS READ
     const handleMarkAllAsRead = async () => {
-        // navigation.navigate("ReviewPackage"); //testing purpose-remove this after testing 
         setShowMenu(false);
         setNotifications((previous) =>
             previous.map((n) => ({
@@ -224,6 +255,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 isRead: true,
             }))
         );
+        socketService.emitLocalUnreadCount(0);
         try {
             await notificationService.markAllAsRead();
         } catch (err) {

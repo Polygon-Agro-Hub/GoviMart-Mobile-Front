@@ -3,21 +3,22 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Alert,
+  Keyboard,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
-import { DropdownField, InputField } from "@/component/common/CustomField";
+import { InputField } from "@/component/common/CustomField";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import axios from "axios";
 
 type AddAddressNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -42,11 +43,31 @@ interface CityResult {
   isAvailable: boolean;
 }
 
+const SAVE_ADDRESS_AS_MAX_LENGTH = 20;
+
+const FIELD_LABELS = {
+  saveAddressAs: "Save Address As",
+  title: "Title",
+  billingName: "Billing Name",
+  mobileNumber1: "Mobile Number 1",
+  mobileNumber2: "Mobile Number 2",
+  buildingType: "Building Type",
+  houseNo: "Building / House No",
+  streetName: "Street Name",
+  city: "Your City",
+  buildingNo: "Apartment / Building No",
+  buildingName: "Apartment / Building Name",
+  unitNo: "Flat / Unit Number",
+  floorNo: "Floor Number",
+} as const;
+
+const requiredMessage = (label: string) => `${label} is required`;
+
 const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const fromCheckout = route.params?.fromCheckout;
 
   const [saveAddressAs, setSaveAddressAs] = useState("");
-  const [title, setTitle] = useState("Mr");
+  const [title, setTitle] = useState("");
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [billingName, setBillingName] = useState("");
   const [mobileNumber1, setMobileNumber1] = useState("");
@@ -66,9 +87,27 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [cityModalOpen, setCityModalOpen] = useState(false);
   const [allCities, setAllCities] = useState<CityResult[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
   const buildingTypes = ["House", "Apartment"];
+
+  // Error States
+  const [saveAddressAsError, setSaveAddressAsError] = useState("");
+  const [titleError, setTitleError] = useState("");
+  const [billingNameError, setBillingNameError] = useState("");
+  const [mobileNumber1Error, setMobileNumber1Error] = useState("");
+  const [mobileNumber2Error, setMobileNumber2Error] = useState("");
+  const [buildingTypeError, setBuildingTypeError] = useState("");
+  const [buildingNoError, setBuildingNoError] = useState("");
+  const [buildingNameError, setBuildingNameError] = useState("");
+  const [unitNoError, setUnitNoError] = useState("");
+  const [floorNoError, setFloorNoError] = useState("");
+  const [streetNameError, setStreetNameError] = useState("");
+  const [cityError, setCityError] = useState("");
+  const [geoLocationError, setGeoLocationError] = useState("");
+
+  const isLocationRequestedRef = useRef<boolean>(false);
 
   useEffect(() => {
     const loadCities = async () => {
@@ -98,18 +137,6 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     loadCities();
   }, []);
 
-  const [saveAddressAsError, setSaveAddressAsError] = useState("");
-  const [titleError, setTitleError] = useState("");
-  const [billingNameError, setBillingNameError] = useState("");
-  const [mobileNumber1Error, setMobileNumber1Error] = useState("");
-  const [mobileNumber2Error, setMobileNumber2Error] = useState("");
-  const [buildingTypeError, setBuildingTypeError] = useState("");
-  const [buildingNoError, setBuildingNoError] = useState("");
-  const [streetNameError, setStreetNameError] = useState("");
-  const [cityError, setCityError] = useState("");
-
-  const isLocationRequestedRef = useRef<boolean>(false);
-
   // Clear any leftover selected coordinates on initial mount and unmount
   useEffect(() => {
     AsyncStorage.multiRemove(["selectedLatitude", "selectedLongitude"]).catch(
@@ -124,7 +151,6 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
 
   useFocusEffect(
     useCallback(() => {
-      // Geo Location should ONLY be attached after user's explicit action
       if (!isLocationRequestedRef.current) {
         return;
       }
@@ -138,6 +164,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           if (storedLatitude && storedLongitude) {
             setLatitude(Number(storedLatitude));
             setLongitude(Number(storedLongitude));
+            setGeoLocationError("");
             await AsyncStorage.multiRemove([
               "selectedLatitude",
               "selectedLongitude",
@@ -154,51 +181,142 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     }, []),
   );
 
-  // HANDLERS
+  // String Helpers
+  const stripLeadingSpace = (text: string) => text.replace(/^\s+/, "");
 
-  const handleSaveAddressAs = (text: string) => {
-    setSaveAddressAs(text);
-    if (saveAddressAsError) setSaveAddressAsError("");
+  const capitalizeWords = (text: string) =>
+    stripLeadingSpace(text).replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const validatePhone = (phone: string) => {
+    const clean = phone.replace(/[^0-9]/g, "");
+    return /^(0\d{9}|\d{9})$/.test(clean);
   };
 
-  const handleBillingName = (text: string) => {
-    // Alphabetic characters and spaces only
-    const cleaned = text.replace(/[^A-Za-z ]/g, "");
-    setBillingName(cleaned);
-    if (billingNameError) setBillingNameError("");
+  // Field Level Blur & Change Handlers
+  const handleRequiredFieldBlur = (
+    value: string,
+    setError: (msg: string) => void,
+    fieldLabel: string
+  ) => {
+    if (!value.trim()) {
+      setError(requiredMessage(fieldLabel));
+    }
   };
 
-  const handleMobileNumber1 = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
+  const handleSaveAddressAsChange = (text: string) => {
+    const stripped = stripLeadingSpace(text).slice(0, SAVE_ADDRESS_AS_MAX_LENGTH);
+    const capitalized = capitalizeWords(stripped);
+    setSaveAddressAs(capitalized);
+    if (capitalized.trim()) {
+      setSaveAddressAsError("");
+    }
+  };
+
+  const handleBillingNameChange = (text: string) => {
+    const stripped = stripLeadingSpace(text);
+    const cleaned = stripped.replace(/[^A-Za-z\s]/g, "");
+    const capitalized = capitalizeWords(cleaned);
+    setBillingName(capitalized);
+    if (capitalized.trim()) {
+      setBillingNameError("");
+    }
+  };
+
+  const handleMobile1Change = (text: string) => {
+    const stripped = stripLeadingSpace(text);
+    const cleaned = stripped.replace(/[^0-9]/g, "").slice(0, 10);
     setMobileNumber1(cleaned);
-    if (mobileNumber1Error) setMobileNumber1Error("");
+    if (cleaned.trim()) {
+      if (validatePhone(cleaned)) {
+        setMobileNumber1Error("");
+      }
+    }
   };
 
-  const handleMobileNumber2 = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
+  const handleMobile1Blur = () => {
+    if (!mobileNumber1.trim()) {
+      setMobileNumber1Error(requiredMessage(FIELD_LABELS.mobileNumber1));
+    } else if (!validatePhone(mobileNumber1)) {
+      setMobileNumber1Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
+    } else {
+      setMobileNumber1Error("");
+    }
+  };
+
+  const handleMobile2Change = (text: string) => {
+    const stripped = stripLeadingSpace(text);
+    const cleaned = stripped.replace(/[^0-9]/g, "").slice(0, 10);
     setMobileNumber2(cleaned);
-    if (mobileNumber2Error) setMobileNumber2Error("");
+    if (cleaned.trim()) {
+      if (validatePhone(cleaned)) {
+        setMobileNumber2Error("");
+      }
+    } else {
+      setMobileNumber2Error("");
+    }
   };
 
-  const handleStreetName = (text: string) => {
-    setStreetName(text);
-    if (streetNameError) setStreetNameError("");
+  const handleMobile2Blur = () => {
+    if (mobileNumber2.trim() && !validatePhone(mobileNumber2)) {
+      setMobileNumber2Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
+    } else {
+      setMobileNumber2Error("");
+    }
   };
 
-  const handleBuildingNo = (text: string) => {
-    setBuildingNo(text);
-    if (buildingNoError) setBuildingNoError("");
+  const handleStreetNameChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setStreetName(nextVal);
+    if (nextVal.trim()) {
+      setStreetNameError("");
+    }
+  };
+
+  const handleBuildingNoChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setBuildingNo(nextVal);
+    if (nextVal.trim()) {
+      setBuildingNoError("");
+    }
+  };
+
+  const handleApartmentNameChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setApartmentName(nextVal);
+    if (nextVal.trim()) {
+      setBuildingNameError("");
+    }
+  };
+
+  const handleUnitNoChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setUnitNo(nextVal);
+    if (nextVal.trim()) {
+      setUnitNoError("");
+    }
+  };
+
+  const handleFloorNoChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setFloorNo(nextVal);
+    if (nextVal.trim()) {
+      setFloorNoError("");
+    }
   };
 
   const handleSelectTitle = (value: string) => {
     setTitle(value);
-    if (titleError) setTitleError("");
+    setTitleError("");
   };
 
   const handleSelectBuildingType = (value: string) => {
     setBuildingType(value);
-    if (buildingTypeError) setBuildingTypeError("");
+    setBuildingTypeError("");
     setBuildingNoError("");
+    setBuildingNameError("");
+    setUnitNoError("");
+    setFloorNoError("");
+    setStreetNameError("");
   };
 
   const cityModalData = allCities.map((item) => ({
@@ -218,8 +336,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   ) => (
     <TouchableOpacity
       key={item.value}
-      className={`px-5 py-3.5 flex-row items-center justify-between ${!isLast ? "border-b border-gray-100" : ""
-        }`}
+      className={`px-5 py-3.5 flex-row items-center justify-between ${
+        !isLast ? "border-b border-gray-100" : ""
+      }`}
       onPress={() => {
         if (!item.isAvailable) {
           Alert.alert(
@@ -242,8 +361,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       </View>
       <View className="flex-row items-center gap-x-2">
         <Text
-          className={`text-xs font-bold ${item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
-            }`}
+          className={`text-xs font-bold ${
+            item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
+          }`}
         >
           {item.isAvailable ? "Available" : "Coming soon"}
         </Text>
@@ -256,7 +376,13 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     <View style={{ marginBottom: cityError ? 4 : 12 }}>
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() => setCityModalOpen(true)}
+        onPress={() => {
+          Keyboard.dismiss();
+          if (!city.trim()) {
+            setCityError(requiredMessage(FIELD_LABELS.city));
+          }
+          setCityModalOpen(true);
+        }}
         style={{
           height: 67,
           borderWidth: cityError ? 1.5 : 1,
@@ -325,9 +451,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     </View>
   );
 
-  // SAVE BUTTON
-
+  // SAVE BUTTON HANDLER
   const handleSaveAddress = async () => {
+    let hasError = false;
+    let alertTitle = "Required";
+    let alertMessage = "Please fill in all required fields.";
+
     setSaveAddressAsError("");
     setTitleError("");
     setBillingNameError("");
@@ -335,71 +464,153 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     setMobileNumber2Error("");
     setBuildingTypeError("");
     setBuildingNoError("");
+    setBuildingNameError("");
+    setUnitNoError("");
+    setFloorNoError("");
     setStreetNameError("");
     setCityError("");
-
-    let hasError = false;
+    setGeoLocationError("");
 
     if (!saveAddressAs.trim()) {
-      setSaveAddressAsError("Save Address As is required.");
+      setSaveAddressAsError(requiredMessage(FIELD_LABELS.saveAddressAs));
       hasError = true;
+      alertTitle = "Required";
+      alertMessage = "Please enter a save address name.";
     }
 
     if (!title.trim()) {
-      setTitleError("Title is required.");
+      setTitleError(requiredMessage(FIELD_LABELS.title));
       hasError = true;
+      alertTitle = "Required";
+      alertMessage = "Please select a title.";
     }
 
     if (!billingName.trim()) {
-      setBillingNameError("Billing Name is required.");
+      setBillingNameError(requiredMessage(FIELD_LABELS.billingName));
       hasError = true;
+      alertTitle = "Required";
+      alertMessage = "Please enter the billing name.";
     }
 
     const p1 = mobileNumber1.trim();
     if (!p1) {
-      setMobileNumber1Error("Mobile Number 1 is required.");
+      setMobileNumber1Error(requiredMessage(FIELD_LABELS.mobileNumber1));
       hasError = true;
-    } else if (!/^(0\d{9}|\d{9})$/.test(p1)) {
-      setMobileNumber1Error("Invalid phone number. e.g. 07XXXXXXXX");
+      alertTitle = "Required";
+      alertMessage = "Mobile Number 1 is required.";
+    } else if (!validatePhone(p1)) {
+      setMobileNumber1Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
       hasError = true;
+      alertTitle = "Invalid Phone Number";
+      alertMessage = "Please enter a valid mobile number (format: 07XXXXXXXX).";
     }
 
     const p2 = mobileNumber2.trim();
-    if (p2 && !/^(0\d{9}|\d{9})$/.test(p2)) {
-      setMobileNumber2Error("Invalid phone number. e.g. 07XXXXXXXX");
+    if (p2 && !validatePhone(p2)) {
+      setMobileNumber2Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
       hasError = true;
+      alertTitle = "Invalid Phone Number";
+      alertMessage = "Please enter a valid second mobile number (format: 07XXXXXXXX).";
     }
 
     if (!buildingType.trim()) {
-      setBuildingTypeError("Building Type is required.");
+      setBuildingTypeError(requiredMessage(FIELD_LABELS.buildingType));
       hasError = true;
+      alertTitle = "Required";
+      alertMessage = "Please select a building type.";
     }
 
-    if (!buildingNo.trim()) {
-      setBuildingNoError("Building / House No is required.");
-      hasError = true;
-    }
-
-    if (!streetName.trim()) {
-      setStreetNameError("Street Name is required.");
-      hasError = true;
-    }
-
-    if (!city.trim()) {
-      setCityError("Your City is required.");
-      hasError = true;
-    }
-
-    if (hasError) {
-      return;
+    if (buildingType === "House") {
+      if (!buildingNo.trim()) {
+        setBuildingNoError(requiredMessage(FIELD_LABELS.houseNo));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the house or building number.";
+      }
+      if (!streetName.trim()) {
+        setStreetNameError(requiredMessage(FIELD_LABELS.streetName));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the street name.";
+      }
+      if (!city.trim()) {
+        setCityError(requiredMessage(FIELD_LABELS.city));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please select your city.";
+      }
+    } else if (buildingType === "Apartment") {
+      if (!buildingNo.trim()) {
+        setBuildingNoError(requiredMessage(FIELD_LABELS.buildingNo));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the apartment or building number.";
+      }
+      if (!apartmentName.trim()) {
+        setBuildingNameError(requiredMessage(FIELD_LABELS.buildingName));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the apartment or building name.";
+      }
+      if (!unitNo.trim()) {
+        setUnitNoError(requiredMessage(FIELD_LABELS.unitNo));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the flat or unit number.";
+      }
+      if (!floorNo.trim()) {
+        setFloorNoError(requiredMessage(FIELD_LABELS.floorNo));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the floor number.";
+      }
+      if (!streetName.trim()) {
+        setStreetNameError(requiredMessage(FIELD_LABELS.streetName));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the street name.";
+      }
+      if (!city.trim()) {
+        setCityError(requiredMessage(FIELD_LABELS.city));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please select your city.";
+      }
     }
 
     if (latitude === null || longitude === null) {
-      Alert.alert("Required", "Please attach your Geo Location.");
+      setGeoLocationError("Geo location is required. Please pin your location before submitting.");
+      hasError = true;
+      if (!alertTitle || alertTitle === "Required") {
+        alertTitle = "Geo Location Required";
+        alertMessage = "Please add a geo location before submitting.";
+      }
+    }
+
+    if (hasError) {
+      const hasSpecificRequiredFieldError =
+        !saveAddressAs.trim() ||
+        !title.trim() ||
+        !billingName.trim() ||
+        !p1 ||
+        !buildingType.trim() ||
+        !buildingNo.trim() ||
+        !streetName.trim() ||
+        !city.trim() ||
+        (buildingType === "Apartment" &&
+          (!apartmentName.trim() || !unitNo.trim() || !floorNo.trim()));
+
+      Alert.alert(
+        hasSpecificRequiredFieldError ? "Required" : alertTitle,
+        hasSpecificRequiredFieldError
+          ? "Please fill in all required fields."
+          : alertMessage
+      );
       return;
     }
 
     try {
+      setSaving(true);
       const cleanPhone1 = p1.startsWith("0") ? p1.slice(1) : p1;
       const cleanPhone2 = p2 ? (p2.startsWith("0") ? p2.slice(1) : p2) : "";
 
@@ -412,8 +623,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         phone1: cleanPhone1,
         phonecode2: phoneCode2,
         phone2: cleanPhone2,
-        longitude,
-        latitude,
+        longitude: longitude!,
+        latitude: latitude!,
         buildingNo,
         houseNo: buildingNo,
         streetName,
@@ -424,16 +635,15 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         buildingType === "House"
           ? basePayload
           : {
-            ...basePayload,
-            buildingName: apartmentName,
-            unitNo,
-            floorNo,
-          };
+              ...basePayload,
+              buildingName: apartmentName,
+              unitNo,
+              floorNo,
+            };
 
       const req = await customerService.addNewAddress(payload);
 
       if (req.data) {
-        console.log("Address added successfully:", req.data.insertId);
         await AsyncStorage.multiRemove([
           "selectedLatitude",
           "selectedLongitude",
@@ -447,29 +657,27 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       }
     } catch (error) {
       console.log("error from add new address: ", error);
+      if (axios.isAxiosError(error) && error.response) {
+        if (error.response.status === 409) {
+          setSaveAddressAsError(
+            "This name is already used. Please choose a different name."
+          );
+          Alert.alert(
+            "Duplicate Name",
+            "An address with this name already exists. Please use a different name."
+          );
+          return;
+        }
+      }
+      Alert.alert("Error", "Failed to save address. Please try again.");
+    } finally {
+      setSaving(false);
     }
-  };
-
-  const setBackgroundColor = () => {
-    if (
-      saveAddressAs.trim() &&
-      title.trim() &&
-      billingName.trim() &&
-      mobileNumber1.trim() &&
-      buildingType.trim() &&
-      buildingNo.trim() &&
-      streetName.trim() &&
-      city.trim()
-    ) {
-      return "black";
-    }
-    return "#8FA1AA";
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* HEADER */}
-
       <CustomHeader
         title="Add New Address"
         titleColor="black"
@@ -477,331 +685,209 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         navigation={navigation}
       />
 
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        contentContainerStyle={{
+          paddingHorizontal: 11,
+          paddingTop: 10,
+          paddingBottom: 120,
+          flexGrow: 1,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={Platform.select({ ios: 20, android: 80 })}
+        extraHeight={Platform.select({ ios: 75, android: 120 })}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            paddingHorizontal: 11,
-            paddingTop: 10,
-            paddingBottom: 220,
-          }}
-        >
-          {/* SAVE ADDRESS AS */}
+        {/* SAVE ADDRESS AS */}
+        <InputField
+          icon="bookmark"
+          label="Save Address As *"
+          value={saveAddressAs}
+          onChangeText={handleSaveAddressAsChange}
+          onBlur={() =>
+            handleRequiredFieldBlur(
+              saveAddressAs,
+              setSaveAddressAsError,
+              FIELD_LABELS.saveAddressAs
+            )
+          }
+          placeholder="(e.g.: Home , Work..)"
+          maxLength={SAVE_ADDRESS_AS_MAX_LENGTH}
+          error={saveAddressAsError}
+        />
 
-          <InputField
-            icon="bookmark"
-            label="Save Address As"
-            value={saveAddressAs}
-            onChangeText={handleSaveAddressAs}
-            placeholder="(e.g.: Home , Work..)"
-            error={saveAddressAsError}
-          />
-
-          {/* TITLE + BILLING NAME */}
-
-          <View style={{ flexDirection: "row", gap: 5 }}>
-            {/* TITLE */}
-            <View style={{ flex: 0.7 }}>
-              <View style={{ marginBottom: titleError ? 4 : 12 }}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setTitleModalOpen(true)}
+        {/* TITLE + BILLING NAME */}
+        <View style={{ flexDirection: "row", gap: 5 }}>
+          {/* TITLE */}
+          <View style={{ flex: 0.7 }}>
+            <View style={{ marginBottom: titleError ? 4 : 12 }}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  if (!title.trim()) {
+                    setTitleError(requiredMessage(FIELD_LABELS.title));
+                  }
+                  setTitleModalOpen(true);
+                }}
+                style={{
+                  height: 67,
+                  borderWidth: titleError ? 1.5 : 1,
+                  borderColor: titleError ? "#FF3B30" : "#D9DEE5",
+                  borderRadius: 40,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 11,
+                  backgroundColor: "#FFFFFF",
+                }}
+              >
+                <View
                   style={{
-                    height: 67,
-                    borderWidth: titleError ? 1.5 : 1,
-                    borderColor: titleError ? "#FF3B30" : "#D9DEE5",
-                    borderRadius: 40,
-                    flexDirection: "row",
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: "#F2F2F6",
+                    justifyContent: "center",
                     alignItems: "center",
-                    paddingHorizontal: 11,
-                    backgroundColor: "#FFFFFF",
                   }}
                 >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: "#F2F2F6",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <FontAwesome6
-                      name="user"
-                      solid
-                      size={17}
-                      color="#000000"
-                    />
-                  </View>
+                  <FontAwesome6
+                    name="user"
+                    solid
+                    size={17}
+                    color="#000000"
+                  />
+                </View>
 
-                  <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color: "#555555",
-                        lineHeight: 19,
-                        marginBottom: 4,
-                      }}
-                    >
-                      Title *
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        lineHeight: 18,
-                        color: title ? "#111111" : "#9CA3AF",
-                        fontWeight: "500",
-                      }}
-                    >
-                      {title || "Select"}
-                    </Text>
-                  </View>
-
-                  <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
-                </TouchableOpacity>
-                {titleError ? (
+                <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
                   <Text
                     style={{
-                      fontSize: 12,
-                      color: "#FF3B30",
-                      marginTop: 4,
-                      marginLeft: 16,
+                      fontSize: 14,
+                      color: "#555555",
+                      lineHeight: 19,
+                      marginBottom: 4,
                     }}
                   >
-                    {titleError}
+                    Title *
                   </Text>
-                ) : null}
-              </View>
-            </View>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 18,
+                      color: title ? "#111111" : "#9CA3AF",
+                      fontWeight: title ? "500" : "400",
+                    }}
+                  >
+                    {title || "Select Title"}
+                  </Text>
+                </View>
 
-            {/* BILLING NAME */}
-            <View style={{ flex: 1 }}>
-              <InputField
-                icon="user"
-                label="Billing Name"
-                value={billingName}
-                onChangeText={handleBillingName}
-                placeholder="Type Here"
-                error={billingNameError}
-              />
+                <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+              </TouchableOpacity>
+              {titleError ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#FF3B30",
+                    marginTop: 4,
+                    marginLeft: 16,
+                  }}
+                >
+                  {titleError}
+                </Text>
+              ) : null}
             </View>
           </View>
 
-          {/* MOBILE 1 */}
-
-          <InputField
-            icon="phone"
-            label="Mobile Number - 1 *"
-            value={mobileNumber1}
-            onChangeText={handleMobileNumber1}
-            placeholder="07XXXXXXXX"
-            keyboardType="phone-pad"
-            maxLength={10}
-            error={mobileNumber1Error}
-          />
-
-          {/* MOBILE 2 */}
-
-          <InputField
-            icon="phone"
-            label="Mobile Number - 2 (Optional)"
-            value={mobileNumber2}
-            onChangeText={handleMobileNumber2}
-            placeholder="07XXXXXXXX"
-            keyboardType="phone-pad"
-            maxLength={10}
-            error={mobileNumber2Error}
-          />
-
-          {/* BUILDING TYPE */}
-
-          <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setBuildingTypeModalOpen(true)}
-              style={{
-                height: 67,
-                borderWidth: buildingTypeError ? 1.5 : 1,
-                borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
-                borderRadius: 40,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 11,
-                backgroundColor: "#FFFFFF",
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: "#F2F2F6",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <FontAwesome6
-                  name="house"
-                  solid
-                  size={17}
-                  color="#000000"
-                />
-              </View>
-
-              <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: "#555555",
-                    lineHeight: 19,
-                    marginBottom: 4,
-                  }}
-                >
-                  Building Type *
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    lineHeight: 18,
-                    color: buildingType ? "#111111" : "#9CA3AF",
-                    fontWeight: buildingType ? "500" : "400",
-                  }}
-                >
-                  {buildingType || "Select From Here"}
-                </Text>
-              </View>
-
-              <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
-            </TouchableOpacity>
-            {buildingTypeError ? (
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#FF3B30",
-                  marginTop: 4,
-                  marginLeft: 16,
-                }}
-              >
-                {buildingTypeError}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* type == apartment => specific fields (only rendered AFTER a building type is picked) */}
-
-          {buildingType === "Apartment" && (
-            <>
-              <InputField
-                icon="building"
-                label="Apartment / Building No"
-                value={buildingNo}
-                onChangeText={handleBuildingNo}
-                placeholder="Type Here"
-                error={buildingNoError}
-              />
-              <InputField
-                icon="tag"
-                label="Apartment / Building Name"
-                value={apartmentName}
-                onChangeText={setApartmentName}
-                placeholder="e.g 14/B"
-              />
-              <InputField
-                icon="hotel"
-                label="Flat / Unit Number"
-                value={unitNo}
-                onChangeText={setUnitNo}
-                placeholder="Type Here"
-              />
-              <InputField
-                icon="stairs"
-                label="Floor Number"
-                value={floorNo}
-                onChangeText={setFloorNo}
-                placeholder="e.g. 3rd Floor"
-              />
-              <InputField
-                icon="house"
-                label="Street Name"
-                value={streetName}
-                onChangeText={handleStreetName}
-                placeholder="Type Here"
-                error={streetNameError}
-              />
-              {renderCityField()}
-            </>
-          )}
-
-          {buildingType === "House" && (
-            <>
-              <InputField
-                icon="house"
-                label="Building / House No"
-                value={buildingNo}
-                onChangeText={handleBuildingNo}
-                placeholder="e.g 14/B"
-                error={buildingNoError}
-              />
-              <InputField
-                icon="road"
-                label="Street Name"
-                value={streetName}
-                onChangeText={handleStreetName}
-                placeholder="Type Here"
-                error={streetNameError}
-              />
-              {renderCityField()}
-            </>
-          )}
-
-          {/* GEO LOCATION */}
-
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={async () => {
-              try {
-                await AsyncStorage.multiRemove([
-                  "selectedLatitude",
-                  "selectedLongitude",
-                ]);
-              } catch (e) {
-                console.error("Error clearing coords before navigating:", e);
+          {/* BILLING NAME */}
+          <View style={{ flex: 1 }}>
+            <InputField
+              icon="user"
+              label="Billing Name *"
+              value={billingName}
+              onChangeText={handleBillingNameChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  billingName,
+                  setBillingNameError,
+                  FIELD_LABELS.billingName
+                )
               }
-              isLocationRequestedRef.current = true;
-              navigation.navigate("SetLocation");
+              placeholder="Type Here"
+              autoCapitalize="words"
+              error={billingNameError}
+            />
+          </View>
+        </View>
+
+        {/* MOBILE 1 */}
+        <InputField
+          icon="phone"
+          label="Mobile Number - 1 *"
+          value={mobileNumber1}
+          onChangeText={handleMobile1Change}
+          onBlur={handleMobile1Blur}
+          placeholder="07XXXXXXXX"
+          keyboardType="phone-pad"
+          maxLength={10}
+          error={mobileNumber1Error}
+        />
+
+        {/* MOBILE 2 */}
+        <InputField
+          icon="phone"
+          label="Mobile Number - 2 (Optional)"
+          value={mobileNumber2}
+          onChangeText={handleMobile2Change}
+          onBlur={handleMobile2Blur}
+          placeholder="07XXXXXXXX"
+          keyboardType="phone-pad"
+          maxLength={10}
+          error={mobileNumber2Error}
+        />
+
+        {/* BUILDING TYPE */}
+        <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              Keyboard.dismiss();
+              if (!buildingType.trim()) {
+                setBuildingTypeError(requiredMessage(FIELD_LABELS.buildingType));
+              }
+              setBuildingTypeModalOpen(true);
             }}
             style={{
               height: 67,
+              borderWidth: buildingTypeError ? 1.5 : 1,
+              borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
               borderRadius: 40,
-              backgroundColor: "#FFF5E9",
               flexDirection: "row",
               alignItems: "center",
               paddingHorizontal: 11,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: "#FFE0B2",
+              backgroundColor: "#FFFFFF",
             }}
           >
-            {/* Location Icon */}
             <View
               style={{
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: "#FF9518",
+                backgroundColor: "#F2F2F6",
                 justifyContent: "center",
                 alignItems: "center",
               }}
             >
-              <Ionicons name="location" size={19} color="#FFFFFF" />
+              <FontAwesome6
+                name="house"
+                solid
+                size={17}
+                color="#000000"
+              />
             </View>
 
-            {/* Text */}
             <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
               <Text
                 style={{
@@ -811,106 +897,322 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                   marginBottom: 4,
                 }}
               >
-                Geo Location
+                Building Type *
               </Text>
-
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {latitude !== null && longitude !== null && (
-                  <View
-                    style={{
-                      width: 13,
-                      height: 13,
-                      borderRadius: 100,
-                      backgroundColor: "#FF9518",
-                      marginRight: 6,
-                      alignItems: "center",
-                      justifyContent: "center"
-                    }}
-                  >
-                    <FontAwesome6 solid name="check" size={9} color="#FFFFFF" />
-                  </View>
-                )}
-                <Text
-                  style={{
-                    fontSize: 14,
-                    lineHeight: 18,
-                    color: "#FF9518",
-                    fontWeight: "600",
-                  }}
-                >
-                  {latitude !== null && longitude !== null
-                    ? "Attached"
-                    : "Click Here"}
-                </Text>
-              </View>
-            </View>
-
-            {/* Trailing icon: pencil when attached, chevron otherwise */}
-            {latitude !== null && longitude !== null ? (
-              <View
+              <Text
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-
-                  borderColor: "#FF9518",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginRight: 6,
+                  fontSize: 14,
+                  lineHeight: 18,
+                  color: buildingType ? "#111111" : "#9CA3AF",
+                  fontWeight: buildingType ? "500" : "400",
                 }}
               >
-                <FontAwesome6 solid name="pen" size={17} color="#FF9518" />
-              </View>
-            ) : (
-              <Ionicons name="chevron-forward" size={20} color="#FF9518" style={{ marginRight: 6 }} />
-            )}
+                {buildingType || "Select From Here"}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
           </TouchableOpacity>
-        </ScrollView>
-
-        {/* SAVE BUTTON */}
-
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            paddingHorizontal: 11,
-            paddingTop: 8,
-            paddingBottom: Platform.OS === "ios" ? 18 : 10,
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleSaveAddress}
-            style={{
-              height: 50,
-              borderRadius: 26,
-              backgroundColor: setBackgroundColor(),
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.15,
-              shadowRadius: 5,
-              elevation: 4,
-            }}
-          >
+          {buildingTypeError ? (
             <Text
               style={{
-                color: "#FFFFFF",
-                fontSize: 14,
-                fontWeight: "700",
+                fontSize: 12,
+                color: "#FF3B30",
+                marginTop: 4,
+                marginLeft: 16,
               }}
             >
-              {fromCheckout ? "Save & Continue" : "Save Address"}
+              {buildingTypeError}
             </Text>
-          </TouchableOpacity>
+          ) : null}
         </View>
-      </KeyboardAvoidingView>
 
-      {/* TITLE SEARCH MODAL */}
+        {/* ================= APARTMENT SPECIFIC FIELDS ================= */}
+        {buildingType === "Apartment" && (
+          <>
+            <InputField
+              icon="building"
+              label="Apartment / Building No *"
+              value={buildingNo}
+              onChangeText={handleBuildingNoChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  buildingNo,
+                  setBuildingNoError,
+                  FIELD_LABELS.buildingNo
+                )
+              }
+              placeholder="Type Here"
+              error={buildingNoError}
+            />
+            <InputField
+              icon="tag"
+              label="Apartment / Building Name *"
+              value={apartmentName}
+              onChangeText={handleApartmentNameChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  apartmentName,
+                  setBuildingNameError,
+                  FIELD_LABELS.buildingName
+                )
+              }
+              placeholder="e.g. Lotus Residencies"
+              error={buildingNameError}
+            />
+            <InputField
+              icon="hotel"
+              label="Flat / Unit Number *"
+              value={unitNo}
+              onChangeText={handleUnitNoChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  unitNo,
+                  setUnitNoError,
+                  FIELD_LABELS.unitNo
+                )
+              }
+              placeholder="Type Here"
+              error={unitNoError}
+            />
+            <InputField
+              icon="stairs"
+              label="Floor Number *"
+              value={floorNo}
+              onChangeText={handleFloorNoChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  floorNo,
+                  setFloorNoError,
+                  FIELD_LABELS.floorNo
+                )
+              }
+              placeholder="e.g. 3rd Floor"
+              error={floorNoError}
+            />
+            <InputField
+              icon="house"
+              label="Street Name *"
+              value={streetName}
+              onChangeText={handleStreetNameChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  streetName,
+                  setStreetNameError,
+                  FIELD_LABELS.streetName
+                )
+              }
+              placeholder="Type Here"
+              error={streetNameError}
+            />
+            {renderCityField()}
+          </>
+        )}
+
+        {/* ================= HOUSE SPECIFIC FIELDS ================= */}
+        {buildingType === "House" && (
+          <>
+            <InputField
+              icon="house"
+              label="Building / House No *"
+              value={buildingNo}
+              onChangeText={handleBuildingNoChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  buildingNo,
+                  setBuildingNoError,
+                  FIELD_LABELS.houseNo
+                )
+              }
+              placeholder="e.g 14/B"
+              error={buildingNoError}
+            />
+            <InputField
+              icon="road"
+              label="Street Name *"
+              value={streetName}
+              onChangeText={handleStreetNameChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  streetName,
+                  setStreetNameError,
+                  FIELD_LABELS.streetName
+                )
+              }
+              placeholder="Type Here"
+              error={streetNameError}
+            />
+            {renderCityField()}
+          </>
+        )}
+
+        {/* GEO LOCATION */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={async () => {
+            try {
+              await AsyncStorage.multiRemove([
+                "selectedLatitude",
+                "selectedLongitude",
+              ]);
+            } catch (e) {
+              console.error("Error clearing coords before navigating:", e);
+            }
+            isLocationRequestedRef.current = true;
+            navigation.navigate("SetLocation");
+          }}
+          style={{
+            height: 67,
+            borderRadius: 40,
+            backgroundColor: "#FFF5E9",
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 11,
+            marginBottom: geoLocationError ? 4 : 12,
+            borderWidth: 1,
+            borderColor: geoLocationError ? "#FF3B30" : "#FFE0B2",
+          }}
+        >
+          {/* Location Icon */}
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: "#FF9518",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Ionicons name="location" size={19} color="#FFFFFF" />
+          </View>
+
+          {/* Text */}
+          <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#555555",
+                lineHeight: 19,
+                marginBottom: 4,
+              }}
+            >
+              Geo Location *
+            </Text>
+
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {latitude !== null && longitude !== null && (
+                <View
+                  style={{
+                    width: 13,
+                    height: 13,
+                    borderRadius: 100,
+                    backgroundColor: "#FF9518",
+                    marginRight: 6,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <FontAwesome6 solid name="check" size={9} color="#FFFFFF" />
+                </View>
+              )}
+              <Text
+                style={{
+                  fontSize: 14,
+                  lineHeight: 18,
+                  color: "#FF9518",
+                  fontWeight: "600",
+                }}
+              >
+                {latitude !== null && longitude !== null
+                  ? "Attached"
+                  : "Click Here"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Trailing icon: pencil when attached, chevron otherwise */}
+          {latitude !== null && longitude !== null ? (
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                borderColor: "#FF9518",
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 6,
+              }}
+            >
+              <FontAwesome6 solid name="pen" size={17} color="#FF9518" />
+            </View>
+          ) : (
+            <Ionicons name="chevron-forward" size={20} color="#FF9518" style={{ marginRight: 6 }} />
+          )}
+        </TouchableOpacity>
+        {geoLocationError ? (
+          <Text
+            style={{
+              color: "#FF3B30",
+              fontSize: 12,
+              marginLeft: 16,
+              marginBottom: 12,
+            }}
+          >
+            {geoLocationError}
+          </Text>
+        ) : null}
+      </KeyboardAwareScrollView>
+
+      {/* SAVE BUTTON (ALWAYS ENABLED & CLEARLY VISIBLE) */}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          paddingHorizontal: 11,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === "ios" ? 22 : 12,
+          backgroundColor: "#FFFFFF",
+          borderTopWidth: 1,
+          borderTopColor: "#F1F5F9",
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={handleSaveAddress}
+          disabled={saving}
+          style={{
+            height: 50,
+            borderRadius: 26,
+            backgroundColor: "#000000",
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.15,
+            shadowRadius: 5,
+            elevation: 4,
+          }}
+        >
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 15,
+              fontWeight: "700",
+            }}
+          >
+            {saving
+              ? "Saving..."
+              : fromCheckout
+              ? "Save & Continue"
+              : "Save Address"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* TITLE SEARCH MODAL (SEARCH HIDDEN) */}
       <GlobalSearchModal
         visible={titleModalOpen}
         onClose={() => setTitleModalOpen(false)}
@@ -922,13 +1224,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             handleSelectTitle(items[0]);
           }
         }}
-        searchPlaceholder="Search title..."
+        showSearch={false}
         noResultsText="No titles found"
         multiSelect={false}
-        searchKeys={["label"]}
       />
 
-      {/* BUILDING TYPE SEARCH MODAL */}
+      {/* BUILDING TYPE SEARCH MODAL (SEARCH HIDDEN) */}
       <GlobalSearchModal
         visible={buildingTypeModalOpen}
         onClose={() => setBuildingTypeModalOpen(false)}
@@ -940,13 +1241,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             handleSelectBuildingType(items[0]);
           }
         }}
-        searchPlaceholder="Search building type..."
+        showSearch={false}
         noResultsText="No building types found"
         multiSelect={false}
-        searchKeys={["label"]}
       />
 
-      {/* CITY SEARCH MODAL */}
+      {/* CITY SEARCH MODAL (SEARCH ACTIVE) */}
       <GlobalSearchModal
         visible={cityModalOpen}
         onClose={() => setCityModalOpen(false)}
@@ -956,7 +1256,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         onSelect={(items) => {
           if (items && items[0]) {
             setCity(items[0]);
-            if (cityError) setCityError("");
+            setCityError("");
           }
         }}
         searchPlaceholder="Search city..."
@@ -964,6 +1264,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         multiSelect={false}
         searchKeys={["label", "district", "province"]}
         renderItem={renderCityItem}
+        showSearch={true}
       />
     </View>
   );

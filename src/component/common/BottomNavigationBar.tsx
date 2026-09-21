@@ -43,15 +43,26 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
         // Listen for real-time notification socket updates
         socketService.connect();
-        const unsubscribe = socketService.onNewNotification(() => {
+        const unsubscribeNotif = socketService.onNewNotification((item) => {
             if (isMounted) {
-                setUnreadCount((prev) => prev + 1);
+                if (typeof (item as any)?.unreadCount === "number") {
+                    setUnreadCount((item as any).unreadCount);
+                } else {
+                    setUnreadCount((prev) => prev + 1);
+                }
+            }
+        });
+
+        const unsubscribeCount = socketService.onUnreadCountUpdate((count) => {
+            if (isMounted) {
+                setUnreadCount(count);
             }
         });
 
         return () => {
             isMounted = false;
-            unsubscribe();
+            unsubscribeNotif();
+            unsubscribeCount();
         };
     }, [activeScreen]);
 
