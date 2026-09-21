@@ -285,7 +285,7 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                             marginBottom: 11,
                         }}
                     >
-                        Saved Addresses ({String(addresses.length).padStart(2, "0")})
+                        Saved Addresses ({addresses.length === 0 ? "0" : String(addresses.length).padStart(2, "0")})
                     </Text>
 
                     {/* ================= ADDRESS LIST ================= */}

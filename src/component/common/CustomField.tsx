@@ -22,11 +22,15 @@ export const InputField = React.memo(({
     maxLength,
     error,
     prefix,
+    iconBgColor,
+    iconColor,
     autoCapitalize,
     secureTextEntry,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     isIconThemeDark?: boolean;
+    iconBgColor?: string;
+    iconColor?: string;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
@@ -40,18 +44,8 @@ export const InputField = React.memo(({
     autoCapitalize?: "none" | "sentences" | "words" | "characters";
     secureTextEntry?: boolean;
 }) => {
-    const handleIconColor = () => {
-        if (isIconThemeDark) {
-            return "#000000";
-        }
-        return "#F2F2F6";
-    };
-    const handleBackgroundColor = () => {
-        if (isIconThemeDark) {
-            return "#FFFFFF";
-        }
-        return "#000000";
-    };
+    const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
+    const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
     return (
         <View
             style={{
@@ -77,7 +71,7 @@ export const InputField = React.memo(({
                         width: 36,
                         height: 36,
                         borderRadius: 999,
-                        backgroundColor: handleIconColor(),
+                        backgroundColor: resolvedBgColor,
                         justifyContent: "center",
                         alignItems: "center",
                     }}
@@ -86,7 +80,7 @@ export const InputField = React.memo(({
                         name={icon}
                         solid
                         size={17}
-                        color={handleBackgroundColor()}
+                        color={resolvedIconColor}
                     />
                 </View>
 

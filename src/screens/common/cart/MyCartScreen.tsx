@@ -4,6 +4,7 @@ import {
     Text,
     ScrollView,
     Alert,
+    RefreshControl,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -47,49 +48,58 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const [cartId, setCartId] = useState<number | null>(null);
     const [authModalVisible, setAuthModalVisible] = useState(false);
     const [isNegativeCreditModalVisible, setIsNegativeCreditModalVisible] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ON FOCUS ─────────────────────
+    // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ─────────────────────────────
+    const syncAndCheckCart = useCallback(async () => {
+        try {
+            if (token) {
+                // For logged-in users, getUserCart() is the single source of truth.
+                const dbCartRes = await cartService.getUserCart();
+                if (dbCartRes.data && dbCartRes.data.status && dbCartRes.data.data) {
+                    if (dbCartRes.data.data.cartId) {
+                        setCartId(dbCartRes.data.data.cartId);
+                    }
+                    const dbProducts = dbCartRes.data.data.products || [];
+                    const dbPackages = dbCartRes.data.data.packages || [];
+                    dispatch(setCartFromBackend({ products: dbProducts, packages: dbPackages }));
+                }
+            } else {
+                // For guest / unauthenticated users, check availability of local Redux items
+                const productIds = products.map((p) => p.id);
+                const packageIds = packages.map((p) => p.id);
+
+                if (productIds.length > 0 || packageIds.length > 0) {
+                    const response = await productService.checkAvailability(productIds, packageIds);
+                    if (response.data && response.data.status) {
+                        dispatch(
+                            updateAvailabilityMap({
+                                products: response.data.products || {},
+                                packages: response.data.packages || {},
+                            })
+                        );
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Cart sync/availability check error:", error);
+        }
+    }, [dispatch, token, products, packages]);
+
     useFocusEffect(
         useCallback(() => {
-            const syncAndCheckCart = async () => {
-                try {
-                    if (token) {
-                        // For logged-in users, getUserCart() is the single source of truth.
-                        // It queries the DB and already provides real-time isUnavailable flags for both products and packages.
-                        const dbCartRes = await cartService.getUserCart();
-                        if (dbCartRes.data && dbCartRes.data.status && dbCartRes.data.data) {
-                            if (dbCartRes.data.data.cartId) {
-                                setCartId(dbCartRes.data.data.cartId);
-                            }
-                            const dbProducts = dbCartRes.data.data.products || [];
-                            const dbPackages = dbCartRes.data.data.packages || [];
-                            dispatch(setCartFromBackend({ products: dbProducts, packages: dbPackages }));
-                        }
-                    } else {
-                        // For guest / unauthenticated users, check availability of local Redux items
-                        const productIds = products.map((p) => p.id);
-                        const packageIds = packages.map((p) => p.id);
-
-                        if (productIds.length > 0 || packageIds.length > 0) {
-                            const response = await productService.checkAvailability(productIds, packageIds);
-                            if (response.data && response.data.status) {
-                                dispatch(
-                                    updateAvailabilityMap({
-                                        products: response.data.products || {},
-                                        packages: response.data.packages || {},
-                                    })
-                                );
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error("Cart sync/availability check error:", error);
-                }
-            };
-
             syncAndCheckCart();
-        }, [dispatch, token])
+        }, [syncAndCheckCart])
     );
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            await syncAndCheckCart();
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     // ─── HANDLERS ─────────────────────────────────────────────────────────────
     const increaseWeight = (id: number) => {
@@ -181,10 +191,33 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     }, 0);
 
     const totalDiscount = products.reduce((total, product) => {
-        if (product.isUnavailable || !product.normalPrice || product.normalPrice <= product.price) return total;
+        if (product.isUnavailable) return total;
+        const normalPrice = product.normalPrice || product.price;
+        const discountedPrice = product.discountedPrice;
+        if (!discountedPrice || discountedPrice >= normalPrice) return total;
         const weightMultiplier = product.unit === "kg" ? product.weight : product.weight / 1000;
-        return total + (product.normalPrice - product.price) * weightMultiplier;
+        return total + (normalPrice - discountedPrice) * weightMultiplier;
     }, 0);
+
+    const savedAmount = products.reduce((total, product) => {
+        if (product.isUnavailable) return total;
+        const comPrice = product.comPrice || 0;
+        const effectivePrice = product.discountedPrice && product.discountedPrice > 0
+            ? product.discountedPrice
+            : (product.normalPrice || product.price);
+        const marketPrice = comPrice > 0
+            ? comPrice
+            : ((product.normalPrice || product.price) > effectivePrice ? (product.normalPrice || product.price) : 0);
+        const weightMultiplier = product.unit === "kg" ? product.weight : product.weight / 1000;
+        const diff = (marketPrice - effectivePrice) * weightMultiplier;
+        return total + (diff > 0 ? diff : 0);
+    }, 0);
+
+    const formatPrice = (value: number) =>
+        value.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
 
     const handleCheckout = async () => {
         if (!token) {
@@ -247,6 +280,14 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={["#FF9114"]}
+                        tintColor="#FF9114"
+                    />
+                }
                 contentContainerStyle={{
                     flexGrow: 1,
                     justifyContent: "space-between",
@@ -254,6 +295,39 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             >
                 {/* Cart Items */}
                 <View style={{ flex: 1, paddingHorizontal: 16 }}>
+                    {/* Saving Price Box */}
+                    {savedAmount > 0 && (
+                        <View
+                            style={{
+                                backgroundColor: "#EDFBF2",
+                                borderRadius: 20,
+                                paddingVertical: 14,
+                                paddingHorizontal: 18,
+                                marginTop: 8,
+                                marginBottom: 14,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "700",
+                                    color: "#166534",
+                                    marginBottom: 4,
+                                }}
+                            >
+                                Great News!
+                            </Text>
+                            <Text
+                                style={{
+                                    fontSize: 14,
+                                    color: "#334155",
+                                    lineHeight: 20,
+                                }}
+                            >
+                                You’ll save Rs. {formatPrice(savedAmount)} compared to the market price.
+                            </Text>
+                        </View>
+                    )}
                     {/* Package Section */}
                     {packages.length > 0 && (
                         <>

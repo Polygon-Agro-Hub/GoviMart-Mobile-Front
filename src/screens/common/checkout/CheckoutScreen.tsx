@@ -163,6 +163,31 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
+  // Dynamic delivery fee calculation based on selected address city
+  const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
+  const addressCity = (selectedAddress?.raw?.city || "").toLowerCase().trim();
+
+  let currentDeliveryFee = 300; // default fallback
+  let currentCompanycenterId = 1;
+
+  if (addressCity && cities.length > 0) {
+    const matchedCity = cities.find(
+      (c: any) => (c.city || "").toLowerCase().trim() === addressCity,
+    );
+    if (matchedCity) {
+      currentDeliveryFee = parseFloat(matchedCity.charge) || 300;
+      currentCompanycenterId = matchedCity.companycenterId || 1;
+    }
+  }
+
+  const currentPackageTotal = orderContext?.packageTotal || 0;
+  const currentProductTotal = orderContext?.productTotal || 0;
+  const currentDiscount = orderContext?.discount || 0;
+  const currentGrandTotal = Math.max(
+    0,
+    currentPackageTotal + currentProductTotal - currentDiscount + currentDeliveryFee,
+  );
+
   const handleProceed = () => {
     if (!selectedAddressId) {
       Alert.alert(
@@ -172,31 +197,12 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
-    const selected = addresses.find((a) => a.id === selectedAddressId);
-    if (!selected || !selected.raw) {
+    if (!selectedAddress || !selectedAddress.raw) {
       Alert.alert("Error", "Selected address details could not be found.");
       return;
     }
 
-    const raw = selected.raw;
-    const addressCity = (raw.city || "").toLowerCase().trim();
-
-    // Find delivery charge and companycenterId from cities table
-    let deliveryCharge = 300; // default fallback
-    let companycenterId = 1;
-
-    const matchedCity = cities.find(
-      (c: any) => (c.city || "").toLowerCase().trim() === addressCity,
-    );
-    if (matchedCity) {
-      deliveryCharge = parseFloat(matchedCity.charge) || 300;
-      companycenterId = matchedCity.companycenterId || 1;
-    }
-
-    const currentGrandTotal = orderContext?.grandTotal || 0;
-    const currentPackageTotal = orderContext?.packageTotal || 0;
-    const currentProductTotal = orderContext?.productTotal || 0;
-    const currentDiscount = orderContext?.discount || 0;
+    const raw = selectedAddress.raw;
 
     const updatedContext = {
       ...orderContext,
@@ -204,7 +210,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
       packageTotal: currentPackageTotal,
       productTotal: currentProductTotal,
       discount: currentDiscount,
-      deliveryCharge,
+      deliveryCharge: currentDeliveryFee,
       deliveryMethod: "home" as const,
       checkoutDetails: {
         ...(orderContext?.checkoutDetails || {}),
@@ -219,7 +225,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
           | "house"
           | "apartment",
         cityName: raw.city || "",
-        companycenterId,
+        companycenterId: currentCompanycenterId,
         houseNo: raw.houseNo || "",
         street: raw.streetName || "",
         buildingNo: raw.buildingNo || "",
@@ -255,7 +261,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
           flexGrow: 1,
           paddingHorizontal: 16,
           paddingTop: 16,
-          paddingBottom: 260,
+          paddingBottom: 310,
         }}
       >
         {/* Add New Address Card */}
@@ -557,10 +563,11 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
 
       {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
       <OrderSummary
-        packageTotal={orderContext?.packageTotal || 0}
-        productTotal={orderContext?.productTotal || 0}
-        discount={orderContext?.discount || 0}
-        grandTotal={orderContext?.grandTotal || 0}
+        packageTotal={currentPackageTotal}
+        productTotal={currentProductTotal}
+        discount={currentDiscount}
+        deliveryFee={currentDeliveryFee}
+        grandTotal={currentGrandTotal}
         buttonText="Proceed to Checkout"
         disabled={!selectedAddressId}
         onCheckout={handleProceed}

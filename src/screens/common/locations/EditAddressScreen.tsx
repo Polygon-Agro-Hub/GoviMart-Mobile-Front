@@ -927,7 +927,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
                     width: 36,
                     height: 36,
                     borderRadius: 18,
-                    backgroundColor: "#F2F2F6",
+                    backgroundColor: "#000000",
                     justifyContent: "center",
                     alignItems: "center",
                   }}
@@ -936,7 +936,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
                     name="user"
                     solid
                     size={17}
-                    color="#000000"
+                    color="#FFFFFF"
                   />
                 </View>
 

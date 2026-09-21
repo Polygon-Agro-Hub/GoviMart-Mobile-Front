@@ -10,16 +10,20 @@ import {
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootStackParamList } from "@/types/types";
+import { RootState } from "@/store";
+import { CartState } from "@/store/cartSlice";
 import CustomHeader from "@/component/common/CustomHeader";
 import { PaymentOptionCard } from "@/component/payment/PaymentOptionCard";
 import PaymentMethodSummary from "@/component/payment/PaymentMethodSummary";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
+import productService from "@/services/product/product.service";
 import { clearCart } from "@/store/cartSlice";
 import CouponModal from "@/component/coupon/CouponModal";
 import AppliedCouponCard from "@/component/coupon/AppliedCouponCard";
+import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -47,6 +51,22 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     discount: number;
     isFreeDelivery: boolean;
   } | null>(null);
+
+  const cartProducts = useSelector(
+    (state: RootState) =>
+      (state as RootState & { cart: CartState }).cart.products,
+  );
+  const cartPackages = useSelector(
+    (state: RootState) =>
+      (state as RootState & { cart: CartState }).cart.packages,
+  );
+  const [unavailableModalVisible, setUnavailableModalVisible] = useState(false);
+
+  const formatPrice = (value: number) =>
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   // Initial base totals from order context
   const baseTotal = Number(
@@ -129,6 +149,33 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
   // CONFIRM
   const handleConfirm = async () => {
+    // Proactively check availability of items in cart
+    const productIds: number[] = (cartProducts || []).map((p: any) => p.id);
+    const packageIds: number[] = (cartPackages || []).map((p: any) => p.id);
+    if (productIds.length > 0 || packageIds.length > 0) {
+      try {
+        const availRes = await productService.checkAvailability(
+          productIds,
+          packageIds,
+        );
+        if (availRes.data && availRes.data.status && availRes.data.data) {
+          const { products: pMap, packages: pkgMap } = availRes.data.data;
+          const hasUnavailProd = productIds.some(
+            (id) => pMap && pMap[id] === false,
+          );
+          const hasUnavailPkg = packageIds.some(
+            (id) => pkgMap && pkgMap[id] === false,
+          );
+          if (hasUnavailProd || hasUnavailPkg) {
+            setUnavailableModalVisible(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Availability check error:", err);
+      }
+    }
+
     const itemDiscount = orderContext?.discount || 0;
     const isFreeDelivery = Boolean(appliedCoupon?.isFreeDelivery);
     const couponVal = appliedCoupon
@@ -228,11 +275,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         "Failed to place order. Please try again.";
       console.error("Order error in PaymentMethodScreen:", errorMsg, errorData);
       if (errorData?.code === "ITEMS_UNAVAILABLE") {
-        Alert.alert(
-          "Items Unavailable",
-          "Some items in your cart are no longer available. Please review your cart.",
-          [{ text: "OK", onPress: () => navigation.navigate("MyCart") }],
-        );
+        setUnavailableModalVisible(true);
       } else {
         Alert.alert("Order Failed", errorMsg);
       }
@@ -332,6 +375,179 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             <Ionicons name="chevron-forward" size={20} color="#111111" />
           </TouchableOpacity>
         )}
+
+        {/* ─── TOTAL AMOUNT / ORDER SUMMARY SECTION ──────────────────────── */}
+        <View
+          style={{
+            marginHorizontal: 15,
+            marginTop: 10,
+            marginBottom: 4,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: "#E1E7EE",
+            backgroundColor: "#FFFFFF",
+            paddingHorizontal: 18,
+            paddingVertical: 16,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.04,
+            shadowRadius: 3,
+            elevation: 1,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "700",
+              color: "#111111",
+              marginBottom: 10,
+            }}
+          >
+            Order Summary
+          </Text>
+
+          {/* For Packages */}
+          {Boolean(
+            orderContext?.packageTotal && orderContext.packageTotal > 0,
+          ) && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 3,
+              }}
+            >
+              <Text style={{ fontSize: 13.5, color: "#64748B" }}>
+                For Packages
+              </Text>
+              <Text
+                style={{ fontSize: 13.5, fontWeight: "600", color: "#111111" }}
+              >
+                Rs. {formatPrice(orderContext?.packageTotal || 0)}
+              </Text>
+            </View>
+          )}
+
+          {/* Ala Carte Items */}
+          {Boolean(
+            orderContext?.productTotal && orderContext.productTotal > 0,
+          ) && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 3,
+              }}
+            >
+              <Text style={{ fontSize: 13.5, color: "#64748B" }}>
+                Ala Carte Items
+              </Text>
+              <Text
+                style={{ fontSize: 13.5, fontWeight: "600", color: "#111111" }}
+              >
+                Rs. {formatPrice(orderContext?.productTotal || 0)}
+              </Text>
+            </View>
+          )}
+
+          {/* Item Discount */}
+          {Boolean(orderContext?.discount && orderContext.discount > 0) && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 3,
+              }}
+            >
+              <Text style={{ fontSize: 13.5, color: "#64748B" }}>
+                Item Discount
+              </Text>
+              <Text
+                style={{ fontSize: 13.5, fontWeight: "600", color: "#16A34A" }}
+              >
+                - Rs. {formatPrice(orderContext?.discount || 0)}
+              </Text>
+            </View>
+          )}
+
+          {/* Delivery Fee */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              paddingVertical: 3,
+            }}
+          >
+            <Text style={{ fontSize: 13.5, color: "#64748B" }}>
+              Delivery Fee
+            </Text>
+            <Text
+              style={{ fontSize: 13.5, fontWeight: "600", color: "#111111" }}
+            >
+              {effectiveDeliveryCharge > 0
+                ? `+ Rs. ${formatPrice(effectiveDeliveryCharge)}`
+                : "Free"}
+            </Text>
+          </View>
+
+          {/* Coupon Discount */}
+          {Boolean(couponDiscountAmount > 0) && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 3,
+              }}
+            >
+              <Text style={{ fontSize: 13.5, color: "#64748B" }}>
+                Coupon Discount
+              </Text>
+              <Text
+                style={{ fontSize: 13.5, fontWeight: "600", color: "#16A34A" }}
+              >
+                - Rs. {formatPrice(couponDiscountAmount)}
+              </Text>
+            </View>
+          )}
+
+          {/* Divider */}
+          <View
+            style={{
+              height: 1,
+              backgroundColor: "#E5E7EB",
+              marginVertical: 10,
+            }}
+          />
+
+          {/* Total Amount Row */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingVertical: 2,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: "#111111",
+              }}
+            >
+              Total Amount
+            </Text>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "800",
+                color: "#111111",
+              }}
+            >
+              Rs. {formatPrice(totalAmount)}
+            </Text>
+          </View>
+        </View>
 
         {/* DESCRIPTION */}
         <Text
@@ -679,6 +895,16 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           (orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)
         }
         cartId={orderContext?.cartId}
+      />
+
+      {/* ─── UNAVAILABLE ITEMS MODAL ─────────────────────────────────────── */}
+      <UnavailableItemsModal
+        visible={unavailableModalVisible}
+        onClose={() => setUnavailableModalVisible(false)}
+        onViewCart={() => {
+          setUnavailableModalVisible(false);
+          navigation.navigate("MyCart");
+        }}
       />
     </View>
   );

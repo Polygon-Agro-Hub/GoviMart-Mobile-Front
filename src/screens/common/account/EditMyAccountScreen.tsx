@@ -317,12 +317,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       setUpdating(true);
 
       const payload: any = {
-        title,
-        firstName,
-        lastName,
-        phoneCode: mobileCode,
-        phoneNumber: mobileNumber,
-        email,
+        title: (title || "Mr").trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phoneCode: mobileCode.trim(),
+        phoneNumber: mobileNumber.trim(),
+        email: email.trim(),
       };
 
       if (isWholesale) {

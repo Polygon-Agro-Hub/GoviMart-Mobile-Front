@@ -125,6 +125,19 @@ export function formatQuantity(quantity: string | number, unit: string = ""): st
   return unit ? `${formattedQty} ${unit}` : formattedQty;
 }
 
+export function formatPhoneNumberStr(phone?: string | null): string {
+  if (!phone || phone === "N/A") return "N/A";
+  let cleaned = String(phone).trim();
+  cleaned = cleaned.replace(/^\++/, "");
+  if (cleaned.startsWith("94")) {
+    return `+94 ${cleaned.slice(2).trim()}`;
+  }
+  if (cleaned.startsWith("0")) {
+    return `+94 ${cleaned.slice(1).trim()}`;
+  }
+  return `+94 ${cleaned}`;
+}
+
 export function formatItemCount(count: number): string {
   return count === 1 ? "01 Item" : `${count.toString().padStart(2, "0")} Items`;
 }
@@ -321,10 +334,11 @@ export const buildInvoiceHtml = (
       margin-bottom: 20px;
     }
     .company-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      column-gap: 36px;
       margin-bottom: 20px;
+      align-items: flex-start;
     }
     .company-details {
       font-size: 11px;
@@ -341,12 +355,13 @@ export const buildInvoiceHtml = (
       color: #333333;
     }
     .logo-container {
-      text-align: right;
+      text-align: left;
     }
     .logo-container img {
       max-width: 140px;
       height: auto;
       object-fit: contain;
+      display: block;
     }
     .brand-fallback {
       font-size: 22px;
@@ -562,7 +577,7 @@ export const buildInvoiceHtml = (
         <p class="bold-label">Bill To:</p>
         <p>${billing.title ? `${billing.title}. ` : ""}${billing.fullName || "Valued Customer"}</p>
         <p style="word-break: break-all;">${billing.email || "N/A"}</p>
-        <p>${billing.phone || "N/A"}</p>
+        <p>${formatPhoneNumberStr(billing.phone)}</p>
       </div>
 
       ${

@@ -20,6 +20,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
+import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 // Note: PayHere adapter and modal files are preserved in the codebase and can be relinked if needed.
 
 type PaymentScreenNavigationProp = StackNavigationProp<
@@ -53,6 +54,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const dispatch = useDispatch();
   const [submitting, setSubmitting] = useState(false);
+  const [unavailableModalVisible, setUnavailableModalVisible] = useState(false);
 
   useEffect(() => {
     if (!initialAmount) {
@@ -220,14 +222,18 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       }
     } catch (err: any) {
       const errorData = err?.response?.data;
-      const errorMsg =
-        errorData?.message ||
-        (Array.isArray(errorData?.details)
-          ? errorData.details.join("; ")
-          : null) ||
-        err?.message ||
-        "Payment failed. Please check your card details and try again.";
-      setCardError(errorMsg);
+      if (errorData?.code === "ITEMS_UNAVAILABLE") {
+        setUnavailableModalVisible(true);
+      } else {
+        const errorMsg =
+          errorData?.message ||
+          (Array.isArray(errorData?.details)
+            ? errorData.details.join("; ")
+            : null) ||
+          err?.message ||
+          "Payment failed. Please check your card details and try again.";
+        setCardError(errorMsg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -813,6 +819,16 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      {/* ─── UNAVAILABLE ITEMS MODAL ─────────────────────────────────────── */}
+      <UnavailableItemsModal
+        visible={unavailableModalVisible}
+        onClose={() => setUnavailableModalVisible(false)}
+        onViewCart={() => {
+          setUnavailableModalVisible(false);
+          navigation.navigate("MyCart");
+        }}
+      />
     </View>
   );
 };

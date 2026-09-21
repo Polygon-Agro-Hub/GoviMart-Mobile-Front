@@ -78,9 +78,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
   // Recurring
   const [selectedDays, setSelectedDays] = useState<string[]>(["Tu"]);
   const [selectedWeeks, setSelectedWeeks] = useState<string>("04");
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(
-    "08:00 AM - 12:00 PM",
-  );
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
 
   // Modals
   const [typeModalVisible, setTypeModalVisible] = useState(false);
@@ -308,20 +306,23 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
           >
             We'll deliver your order within this time slot.
           </Text>
-
-          {/* 1. Schedule Type Dropdown */}
+          {/* ─────────────────────────────────────────────────────────────────
+                    ONE TIME ORDER FLOW (Temporarily Kept as One Time Only)
+                ─────────────────────────────────────────────────────────────────── */}
+          {/* 1. Schedule Date */}
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => setTypeModalVisible(true)}
+            onPress={() => setDateModalVisible(true)}
             style={{
               height: 64,
               borderRadius: 32,
-              borderWidth: 1,
+              backgroundColor: "#F2F2F6",
               borderColor: "#BAC2C7",
-              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
               flexDirection: "row",
               alignItems: "center",
               paddingHorizontal: 14,
+              marginBottom: 20,
             }}
           >
             <View
@@ -335,144 +336,77 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                 marginRight: 12,
               }}
             >
-              <FontAwesome5 name="bars" size={18} color="#FFFFFF" solid />
+              <FontAwesome5
+                name="calendar"
+                size={18}
+                color="#FFFFFF"
+                solid
+              />
             </View>
 
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 12, color: "#64748B" }}>
-                Schedule Type
+                Schedule Date
               </Text>
               <Text
                 style={{
                   fontSize: 14,
-                  fontWeight: "600",
-                  color: "#000000",
+                  fontWeight: selectedDate ? "600" : "400",
+                  color: selectedDate ? "#000000" : "#9CA3AF",
                   marginTop: 2,
                 }}
               >
-                {scheduleType}
+                {selectedDate || "YYYY/MM/DD"}
               </Text>
             </View>
-
-            <Ionicons name="chevron-down" size={18} color="#111111" />
           </TouchableOpacity>
 
-          {/* HR Divider */}
-          <View
+          {/* 2. Schedule Time Slot */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setSlotModalVisible(true)}
             style={{
-              height: 1,
-              backgroundColor: "#E1E7EE",
-              marginVertical: 20,
+              height: 64,
+              borderRadius: 32,
+              borderWidth: 1,
+              borderColor: "#BAC2C7",
+              backgroundColor: "#FFFFFF",
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 14,
+              marginBottom: 16,
             }}
-          />
+          >
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "#000000",
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 12,
+              }}
+            >
+              <FontAwesome5 name="clock" size={18} color="#FFFFFF" solid />
+            </View>
 
-          {/* ─────────────────────────────────────────────────────────────────
-                    ONE TIME ORDER FLOW
-                ─────────────────────────────────────────────────────────────────── */}
-          {scheduleType === "One Time" && (
-            <>
-              {/* 2. Schedule Date */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setDateModalVisible(true)}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>
+                Schedule Time Slot
+              </Text>
+              <Text
                 style={{
-                  height: 64,
-                  borderRadius: 32,
-                  backgroundColor: "#F2F2F6",
-                  borderColor: "#BAC2C7",
-                  borderWidth: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 14,
-                  marginBottom: 20,
+                  fontSize: 14,
+                  fontWeight: selectedTimeSlot ? "600" : "400",
+                  color: selectedTimeSlot ? "#000000" : "#9CA3AF",
+                  marginTop: 2,
                 }}
               >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: "#000000",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <FontAwesome5
-                    name="calendar"
-                    size={18}
-                    color="#FFFFFF"
-                    solid
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
-                    Schedule Date
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: selectedDate ? "600" : "400",
-                      color: selectedDate ? "#000000" : "#9CA3AF",
-                      marginTop: 2,
-                    }}
-                  >
-                    {selectedDate || "YYYY/MM/DD"}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* 3. Schedule Time Slot */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setSlotModalVisible(true)}
-                style={{
-                  height: 64,
-                  borderRadius: 32,
-                  borderWidth: 1,
-                  borderColor: "#BAC2C7",
-                  backgroundColor: "#FFFFFF",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 14,
-                  marginBottom: 16,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: "#000000",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <FontAwesome5 name="clock" size={18} color="#FFFFFF" solid />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
-                    Schedule Time Slot
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: selectedTimeSlot ? "600" : "400",
-                      color: selectedTimeSlot ? "#000000" : "#9CA3AF",
-                      marginTop: 2,
-                    }}
-                  >
-                    {selectedTimeSlot || "Select From Here"}
-                  </Text>
-                </View>
-
-                <Ionicons name="chevron-down" size={18} color="#111111" />
-              </TouchableOpacity>
-            </>
-          )}
+                {selectedTimeSlot || "Select Time Slot"}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
           {/* ─────────────────────────────────────────────────────────────────
                     ONCE A WEEK / TWICE A WEEK RECURRING FLOW

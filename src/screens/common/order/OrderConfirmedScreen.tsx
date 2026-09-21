@@ -253,11 +253,14 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       discount: apiInvoice?.discount !== undefined ? apiInvoice.discount : discount,
       couponDiscount: apiInvoice?.couponDiscount !== undefined ? apiInvoice.couponDiscount : (orderCtx.couponDiscount || 0),
       grandTotal: apiInvoice?.grandTotal !== undefined ? apiInvoice.grandTotal : total,
-      billingInfo: apiInvoice?.billingInfo || {
+      billingInfo: apiInvoice?.billingInfo ? {
+        ...apiInvoice.billingInfo,
+        phone: formatPhoneNumber(apiInvoice.billingInfo.phone),
+      } : {
         title: customerObj?.title || userProf.title || "",
         fullName: customerObj?.fullName || `${userProf.firstName || ""} ${userProf.lastName || ""}`.trim() || checkout.fullName || "Valued Customer",
         email: customerObj?.email || userProf.email || "N/A",
-        phone: customerObj?.phoneNumber || userProf.phoneNumber || checkout.phone1 || "N/A",
+        phone: formatPhoneNumber(customerObj?.phoneNumber || userProf.phoneNumber || checkout.phone1 || "N/A"),
         buildingType: isApartment ? "Apartment" : "House",
         houseNo: checkout.houseNo || "",
         street: checkout.street || checkout.streetName || "",
@@ -355,28 +358,40 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         width: 595,
       });
 
-      const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
-      const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
-      const targetUri = `${FileSystem.cacheDirectory}${targetFileName}`;
+      let shareUri = uri;
+      try {
+        const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
+        const targetUri = `${FileSystem.cacheDirectory}${targetFileName}`;
 
-      // Copy to target named file so the shared attachment has the proper Invoice_[INV NO].pdf name
-      await FileSystem.copyAsync({
-        from: uri,
-        to: targetUri,
-      });
+        // Ensure old file is deleted if already exists to prevent copyAsync failure
+        const fileInfo = await FileSystem.getInfoAsync(targetUri);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(targetUri, { idempotent: true });
+        }
+        await FileSystem.copyAsync({
+          from: uri,
+          to: targetUri,
+        });
+        shareUri = targetUri;
+      } catch (copyErr) {
+        console.warn("Could not rename invoice file for sharing, using original uri:", copyErr);
+        shareUri = uri;
+      }
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(targetUri, {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(shareUri, {
           UTI: ".pdf",
           mimeType: "application/pdf",
-          dialogTitle: `Share ${targetFileName}`,
+          dialogTitle: `Share Invoice #${invoiceData.invoiceNumber}`,
         });
       } else {
-        Alert.alert("Error", "Sharing is not available on this device.");
+        Alert.alert("Sharing Unavailable", "Sharing is not available on this device.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Invoice sharing error:", error);
-      Alert.alert("Error", "Failed to share invoice. Please try again.");
+      Alert.alert("Error", error?.message || "Failed to share invoice. Please try again.");
     } finally {
       setIsSharing(false);
     }

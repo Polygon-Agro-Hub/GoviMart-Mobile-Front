@@ -92,7 +92,19 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         ? Math.round(rawStartValue * 1000)
         : rawStartValue;
 
-  const stepSize = unit === "g" ? (minQuantity >= 500 ? 500 : 100) : 0.5;
+  const rawChangeBy =
+    product?.changeby != null && product.changeby !== ""
+      ? parseFloat(String(product.changeby))
+      : rawStartValue;
+
+  const stepSize =
+    unit === "kg"
+      ? baseUnit === "kg"
+        ? rawChangeBy
+        : rawChangeBy / 1000
+      : baseUnit === "kg"
+        ? Math.round(rawChangeBy * 1000)
+        : rawChangeBy;
 
   const currentWeightInG = unit === "kg" ? quantity * 1000 : quantity;
   const startWeightInG =
@@ -164,7 +176,10 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         id: product!.id,
         name: product!.displayName,
         image: product!.image,
-        price: startEffectivePrice,
+        price: normalPriceVal,
+        normalPrice: normalPriceVal,
+        discountedPrice: discountedPriceVal || undefined,
+        comPrice: comPrice || undefined,
         weight: quantity,
         unit: unit,
         minimumWeight: minQuantity,
@@ -189,7 +204,10 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         id: product!.id,
         name: product!.displayName,
         image: product!.image,
-        price: startEffectivePrice,
+        price: normalPriceVal,
+        normalPrice: normalPriceVal,
+        discountedPrice: discountedPriceVal || undefined,
+        comPrice: comPrice || undefined,
         weight: quantity,
         unit: unit,
         minimumWeight: minQuantity,

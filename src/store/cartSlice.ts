@@ -16,6 +16,8 @@ export interface ProductCartItem {
   image: string;
   price: number;
   normalPrice?: number;
+  discountedPrice?: number;
+  comPrice?: number;
   weight: number;
   unit: "g" | "kg";
   minimumWeight: number;
@@ -47,6 +49,9 @@ const cartSlice = createSlice({
           unit: action.payload.unit,
           price: action.payload.price,
           normalPrice: action.payload.normalPrice ?? state.products[existingIndex].normalPrice,
+          discountedPrice: action.payload.discountedPrice ?? state.products[existingIndex].discountedPrice,
+          comPrice: action.payload.comPrice ?? state.products[existingIndex].comPrice,
+          step: action.payload.step ?? state.products[existingIndex].step,
           isUnavailable: false,
         };
       } else {
@@ -84,12 +89,12 @@ const cartSlice = createSlice({
         if (action.payload.newUnit === "kg") {
           product.weight = parseFloat((product.weight / 1000).toFixed(3));
           product.minimumWeight = parseFloat((product.minimumWeight / 1000).toFixed(3));
-          product.step = 0.5;
+          product.step = parseFloat((product.step / 1000).toFixed(3));
           product.unit = "kg";
         } else {
           product.weight = Math.round(product.weight * 1000);
           product.minimumWeight = Math.round(product.minimumWeight * 1000);
-          product.step = product.minimumWeight >= 500 ? 500 : 100;
+          product.step = Math.round(product.step * 1000);
           product.unit = "g";
         }
       }
