@@ -21,6 +21,7 @@ export interface OpenStreetMapProps {
     markers?: MapMarker[];
     pinColor?: string;
     onLocationSelect?: (coord: { latitude: number; longitude: number }) => void;
+    onMarkerSelect?: (id: string | number) => void;
     style?: StyleProp<ViewStyle>;
 }
 
@@ -34,6 +35,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     markers,
     pinColor = "#FF8A00",
     onLocationSelect,
+    onMarkerSelect,
     style,
 }) => {
     const webViewRef = useRef<WebView>(null);
@@ -86,13 +88,13 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         var currentPinColor = "${pinColor}";
 
         function createPinIcon(color) {
-            var svgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 24 24" fill="' + (color || '#FF8A00') + '" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3" fill="#FFFFFF"></circle></svg>';
+            var svgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 24 24" fill="' + (color || '#FF8A00') + '" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3" fill="#FFFFFF"></circle></svg>';
             return L.divIcon({
                 className: 'custom-pin',
                 html: svgHtml,
-                iconSize: [34, 42],
-                iconAnchor: [17, 42],
-                popupAnchor: [0, -38]
+                iconSize: [32, 40],
+                iconAnchor: [16, 40],
+                popupAnchor: [0, -36]
             });
         }
 
@@ -158,19 +160,39 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             if (!markerData || !markerData.length) return;
 
             for (var i = 0; i < markerData.length; i++) {
-                var m = markerData[i];
-                var marker = L.marker([m.latitude, m.longitude], {
-                    icon: createPinIcon(m.color || currentPinColor)
-                }).addTo(map);
+                (function(m) {
+                    var marker = L.marker([m.latitude, m.longitude], {
+                        icon: createPinIcon(m.color || currentPinColor)
+                    }).addTo(map);
 
-                if (m.title || m.description) {
-                    var popupText = '<b>' + (m.title || '') + '</b>';
-                    if (m.description) {
-                        popupText += '<br/><span style="font-size:12px;color:#555;">' + m.description + '</span>';
+                    if (m.title || m.description) {
+                        var popupText = '<div style="text-align:center;padding:3px 6px;"><b style="color:#0F172A;font-size:13px;">' + (m.title || '') + '</b>';
+                        if (m.description) {
+                            popupText += '<div style="font-size:11px;color:#64748B;margin-top:2px;">' + m.description + '</div>';
+                        }
+                        popupText += '</div>';
+                        marker.bindPopup(popupText);
                     }
-                    marker.bindPopup(popupText);
-                }
-                activeMarkers.push(marker);
+
+                    marker.on('click', function() {
+                        if (m.id && window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                                type: 'onMarkerSelect',
+                                id: m.id,
+                                title: m.title
+                            }));
+                        }
+                    });
+
+                    activeMarkers.push(marker);
+                })(markerData[i]);
+            }
+
+            if (activeMarkers.length > 1 && map) {
+                try {
+                    var group = new L.featureGroup(activeMarkers);
+                    map.fitBounds(group.getBounds().pad(0.12));
+                } catch(e) {}
             }
         }
 
@@ -217,6 +239,8 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                     latitude: data.latitude,
                     longitude: data.longitude,
                 });
+            } else if (data.type === "onMarkerSelect" && onMarkerSelect) {
+                onMarkerSelect(data.id);
             }
         } catch (e) {
             console.warn("OpenStreetMap message parse error:", e);

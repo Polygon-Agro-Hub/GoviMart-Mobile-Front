@@ -7,10 +7,11 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  BackHandler,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { RootStackParamList } from "@/types/types";
 import { RootState } from "@/store";
@@ -106,6 +107,22 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       routes: [{ name: "Home" }],
     });
   };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        handleBackHome();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [navigation])
+  );
 
   const convertLogoToBase64 = async (): Promise<string> => {
     try {
@@ -942,7 +959,10 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       const logoBase64 = await convertLogoToBase64();
       const { order, customerData } = await resolveOrderAndCustomerData();
       const invoiceNumber =
-        order?.orderStatus?.invoiceNumber || invoiceNo || `INV-${Date.now()}`;
+        order?.invoiceNumber ||
+        order?.orderStatus?.invoiceNumber ||
+        invoiceNo ||
+        `INV-${Date.now()}`;
 
       const htmlContent = buildHtmlContent(order, customerData, logoBase64);
 
@@ -951,6 +971,9 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         width: 595,
         base64: true,
       });
+
+      const cleanInvoiceNumber = invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
 
       if (Platform.OS === "android") {
         const permissions =
@@ -966,7 +989,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
 
         const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
           permissions.directoryUri,
-          `Invoice_${invoiceNumber}.pdf`,
+          targetFileName,
           "application/pdf",
         );
 
@@ -976,7 +999,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
 
         Alert.alert("Success", "Invoice downloaded successfully.");
       } else {
-        const filePath = `${FileSystem.documentDirectory}Invoice_${invoiceNumber}.pdf`;
+        const filePath = `${FileSystem.documentDirectory}${targetFileName}`;
 
         await FileSystem.writeAsStringAsync(filePath, pdfBase64!, {
           encoding: FileSystem.EncodingType.Base64,
@@ -1000,6 +1023,11 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
 
       const logoBase64 = await convertLogoToBase64();
       const { order, customerData } = await resolveOrderAndCustomerData();
+      const invoiceNumber =
+        order?.invoiceNumber ||
+        order?.orderStatus?.invoiceNumber ||
+        invoiceNo ||
+        `INV-${Date.now()}`;
 
       const htmlContent = buildHtmlContent(order, customerData, logoBase64);
 
@@ -1008,10 +1036,21 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         width: 595,
       });
 
+      const cleanInvoiceNumber = invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
+      const targetUri = `${FileSystem.cacheDirectory}${targetFileName}`;
+
+      // Copy to target named file so the shared attachment has the proper Invoice_[INV NO].pdf name
+      await FileSystem.copyAsync({
+        from: uri,
+        to: targetUri,
+      });
+
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
+        await Sharing.shareAsync(targetUri, {
           UTI: ".pdf",
           mimeType: "application/pdf",
+          dialogTitle: `Share ${targetFileName}`,
         });
       } else {
         Alert.alert("Error", "Sharing is not available on this device.");

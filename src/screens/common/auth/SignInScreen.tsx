@@ -213,10 +213,20 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           },
         ]);
       } else {
-        Alert.alert(
-          "Login Failed",
-          response.data.message || "An error occurred during login.",
-        );
+        const msg = response.data?.message || "An error occurred during login.";
+        if (
+          msg.toLowerCase().includes("password") &&
+          (msg.toLowerCase().includes("incorrect") ||
+            msg.toLowerCase().includes("invalid"))
+        ) {
+          Alert.alert(
+            "Incorrect Password",
+            "The password you entered is incorrect.\nPlease check and re-enter.",
+            [{ text: "OK" }]
+          );
+        } else {
+          Alert.alert("Login Failed", msg, [{ text: "OK" }]);
+        }
       }
     } catch (error: any) {
       console.error("Login error:", error);
@@ -224,7 +234,19 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         error.response?.data?.message ||
         error.message ||
         "Failed to connect to server.";
-      Alert.alert("Login Error", errorMsg);
+      if (
+        errorMsg.toLowerCase().includes("password") &&
+        (errorMsg.toLowerCase().includes("incorrect") ||
+          errorMsg.toLowerCase().includes("invalid"))
+      ) {
+        Alert.alert(
+          "Incorrect Password",
+          "The password you entered is incorrect.\nPlease check and re-enter.",
+          [{ text: "OK" }]
+        );
+      } else {
+        Alert.alert("Login Error", errorMsg, [{ text: "OK" }]);
+      }
     } finally {
       setLoading(false);
     }

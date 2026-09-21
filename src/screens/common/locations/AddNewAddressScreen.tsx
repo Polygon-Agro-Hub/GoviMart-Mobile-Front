@@ -189,7 +189,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
 
   const validatePhone = (phone: string) => {
     const clean = phone.replace(/[^0-9]/g, "");
-    return /^(0\d{9}|\d{9})$/.test(clean);
+    return /^0\d{9}$/.test(clean);
   };
 
   // Field Level Blur & Change Handlers
@@ -226,9 +226,20 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     const stripped = stripLeadingSpace(text);
     const cleaned = stripped.replace(/[^0-9]/g, "").slice(0, 10);
     setMobileNumber1(cleaned);
-    if (cleaned.trim()) {
-      if (validatePhone(cleaned)) {
-        setMobileNumber1Error("");
+
+    if (!cleaned.trim()) {
+      setMobileNumber1Error("");
+    } else if (!validatePhone(cleaned)) {
+      setMobileNumber1Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+    } else {
+      setMobileNumber1Error("");
+    }
+
+    if (mobileNumber2.trim()) {
+      if (cleaned.trim() && cleaned.trim() === mobileNumber2.trim()) {
+        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+      } else if (validatePhone(mobileNumber2.trim())) {
+        setMobileNumber2Error("");
       }
     }
   };
@@ -237,9 +248,13 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     if (!mobileNumber1.trim()) {
       setMobileNumber1Error(requiredMessage(FIELD_LABELS.mobileNumber1));
     } else if (!validatePhone(mobileNumber1)) {
-      setMobileNumber1Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
+      setMobileNumber1Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
     } else {
       setMobileNumber1Error("");
+    }
+
+    if (mobileNumber2.trim() && mobileNumber1.trim() === mobileNumber2.trim()) {
+      setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
     }
   };
 
@@ -247,18 +262,27 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     const stripped = stripLeadingSpace(text);
     const cleaned = stripped.replace(/[^0-9]/g, "").slice(0, 10);
     setMobileNumber2(cleaned);
-    if (cleaned.trim()) {
-      if (validatePhone(cleaned)) {
-        setMobileNumber2Error("");
-      }
+
+    if (!cleaned.trim()) {
+      setMobileNumber2Error("");
+    } else if (mobileNumber1.trim() && cleaned.trim() === mobileNumber1.trim()) {
+      setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+    } else if (!validatePhone(cleaned)) {
+      setMobileNumber2Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
     } else {
       setMobileNumber2Error("");
     }
   };
 
   const handleMobile2Blur = () => {
-    if (mobileNumber2.trim() && !validatePhone(mobileNumber2)) {
-      setMobileNumber2Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
+    if (mobileNumber2.trim()) {
+      if (mobileNumber1.trim() && mobileNumber2.trim() === mobileNumber1.trim()) {
+        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+      } else if (!validatePhone(mobileNumber2)) {
+        setMobileNumber2Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+      } else {
+        setMobileNumber2Error("");
+      }
     } else {
       setMobileNumber2Error("");
     }
@@ -319,6 +343,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     setStreetNameError("");
   };
 
+  const matchedCity = allCities.find(
+    (item) => item.city.trim().toLowerCase() === city.trim().toLowerCase()
+  );
+  const isCityKnown = city.trim().length > 0 && !!matchedCity;
+  const isCityDeliverable = isCityKnown && !!matchedCity?.isAvailable;
+
   const cityModalData = allCities.map((item) => ({
     label: item.city,
     value: item.city,
@@ -340,13 +370,6 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         !isLast ? "border-b border-gray-100" : ""
       }`}
       onPress={() => {
-        if (!item.isAvailable) {
-          Alert.alert(
-            "Coming Soon",
-            `Delivery is not available in ${item.label} yet, but we’re working on it and coming to your area soon!`,
-          );
-          return;
-        }
         onPress(item.value);
       }}
       activeOpacity={0.7}
@@ -448,6 +471,72 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           {cityError}
         </Text>
       ) : null}
+
+      {city.trim().length > 0 && isCityKnown && (
+        isCityDeliverable ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#EEFAF3",
+              borderRadius: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              marginTop: 8,
+              borderWidth: 1,
+              borderColor: "#D2ECE1",
+            }}
+          >
+            <FontAwesome6
+              name="circle-info"
+              size={16}
+              color="#059669"
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{
+                color: "#065F46",
+                fontSize: 13,
+                fontWeight: "600",
+                flexShrink: 1,
+              }}
+            >
+              Great news! We deliver to {city}!
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#FEF6ED",
+              borderRadius: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              marginTop: 8,
+              borderWidth: 1,
+              borderColor: "#FFDCB5",
+            }}
+          >
+            <FontAwesome6
+              name="circle-info"
+              size={16}
+              color="#EC6821"
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{
+                color: "#EC6821",
+                fontSize: 13,
+                fontWeight: "600",
+                flexShrink: 1,
+              }}
+            >
+              Delivery not available in {city} yet, but we're working on it and coming to your area soon!
+            </Text>
+          </View>
+        )
+      )}
     </View>
   );
 
@@ -499,18 +588,25 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       alertTitle = "Required";
       alertMessage = "Mobile Number 1 is required.";
     } else if (!validatePhone(p1)) {
-      setMobileNumber1Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
+      setMobileNumber1Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
       hasError = true;
       alertTitle = "Invalid Phone Number";
       alertMessage = "Please enter a valid mobile number (format: 07XXXXXXXX).";
     }
 
     const p2 = mobileNumber2.trim();
-    if (p2 && !validatePhone(p2)) {
-      setMobileNumber2Error("Please enter a valid mobile number (e.g. 07XXXXXXXX)");
-      hasError = true;
-      alertTitle = "Invalid Phone Number";
-      alertMessage = "Please enter a valid second mobile number (format: 07XXXXXXXX).";
+    if (p2) {
+      if (p1 && p1 === p2) {
+        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+        hasError = true;
+        alertTitle = "Duplicate Phone Number";
+        alertMessage = "Mobile Number 2 cannot be the same as Mobile Number 1.";
+      } else if (!validatePhone(p2)) {
+        setMobileNumber2Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+        hasError = true;
+        alertTitle = "Invalid Phone Number";
+        alertMessage = "Please enter a valid second mobile number (format: 07XXXXXXXX).";
+      }
     }
 
     if (!buildingType.trim()) {
@@ -538,6 +634,14 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         hasError = true;
         alertTitle = "Required";
         alertMessage = "Please select your city.";
+      } else if (!isCityDeliverable) {
+        setCityError("Delivery is not available in " + city + " yet.");
+        hasError = true;
+        alertTitle = "Not Deliverable";
+        alertMessage =
+          "Delivery not available in " +
+          city +
+          " yet, but we're working on it and coming to your area soon!";
       }
     } else if (buildingType === "Apartment") {
       if (!buildingNo.trim()) {
@@ -575,6 +679,14 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         hasError = true;
         alertTitle = "Required";
         alertMessage = "Please select your city.";
+      } else if (!isCityDeliverable) {
+        setCityError("Delivery is not available in " + city + " yet.");
+        hasError = true;
+        alertTitle = "Not Deliverable";
+        alertMessage =
+          "Delivery not available in " +
+          city +
+          " yet, but we're working on it and coming to your area soon!";
       }
     }
 
@@ -690,15 +802,15 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingHorizontal: 11,
           paddingTop: 10,
-          paddingBottom: 120,
+          paddingBottom: 85,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         enableAutomaticScroll={true}
-        extraScrollHeight={Platform.select({ ios: 20, android: 80 })}
-        extraHeight={Platform.select({ ios: 75, android: 120 })}
+        extraScrollHeight={Platform.select({ ios: 20, android: 40 })}
+        extraHeight={Platform.select({ ios: 20, android: 40 })}
       >
         {/* SAVE ADDRESS AS */}
         <InputField
@@ -780,7 +892,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                       fontWeight: title ? "500" : "400",
                     }}
                   >
-                    {title || "Select Title"}
+                    {title || "Title"}
                   </Text>
                 </View>
 
@@ -1262,7 +1374,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         searchPlaceholder="Search city..."
         noResultsText="No cities found"
         multiSelect={false}
-        searchKeys={["label", "district", "province"]}
+        searchKeys={["label"]}
         renderItem={renderCityItem}
         showSearch={true}
       />

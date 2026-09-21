@@ -49,6 +49,18 @@ interface PickupCentre {
     mapImage?: string;
 }
 
+const isCentreCurrentlyOpen = (openingTime = "08:00 AM", closingTime = "09:00 PM"): boolean => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // 8:00 AM = 8 * 60 = 480 minutes
+    // 9:00 PM = 21 * 60 = 1260 minutes
+    const openMinutes = 8 * 60;
+    const closeMinutes = 21 * 60;
+
+    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+};
+
 const ChoosePickupCentre: React.FC<Props> = ({
     navigation,
     route,
@@ -69,6 +81,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                 setLoading(true);
                 const response = await orderService.getPickupCenters();
                 if (response.data && response.data.status && Array.isArray(response.data.data)) {
+                    const isOpen = isCentreCurrentlyOpen("08:00 AM", "09:00 PM");
                     const mapped: PickupCentre[] = response.data.data.map((item: any) => ({
                         id: item.centerId || item.id,
                         name: item.centerName || item.name || "Pickup Centre",
@@ -76,7 +89,7 @@ const ChoosePickupCentre: React.FC<Props> = ({
                         district: item.district || "",
                         province: item.province || "",
                         country: item.country || "Sri Lanka",
-                        status: "Open",
+                        status: isOpen ? "Open" : "Closed",
                         openingTime: "08:00 AM",
                         closingTime: "09:00 PM",
                         latitude: parseFloat(item.latitude) || 6.9271,
@@ -245,18 +258,25 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                 longitude={selectedCentre.longitude}
                                 zoom={15}
                                 interactive={true}
-                                pinColor="#FF0000"
+                                pinColor="#FF8A00"
                                 markers={[{
                                     id: selectedCentre.id,
                                     latitude: selectedCentre.latitude,
                                     longitude: selectedCentre.longitude,
                                     title: selectedCentre.name,
                                     description: `${selectedCentre.city}, ${selectedCentre.district}`,
-                                    color: "#FF0000"
+                                    color: "#FF8A00"
                                 }]}
+                                onMarkerSelect={(id) => {
+                                    const found = pickupCentres.find((c) => c.id === id || String(c.id) === String(id));
+                                    if (found) {
+                                        setSelectedCentre(found);
+                                        setSelectedCity(found.name);
+                                    }
+                                }}
                             />
 
-                            {/* Map centre popup badge overlay */}
+                            {/* Map centre popup badge overlay - NO DROP SHADOW */}
                             <View
                                 style={{
                                     position: "absolute",
@@ -264,24 +284,18 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                     left: 12,
                                     right: 12,
                                     backgroundColor: "#FFFFFF",
-                                    borderRadius: 9,
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 8,
-                                    shadowColor: "#000",
-                                    shadowOffset: {
-                                        width: 0,
-                                        height: 2,
-                                    },
-                                    shadowOpacity: 0.2,
-                                    shadowRadius: 4,
-                                    elevation: 5,
+                                    borderRadius: 10,
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 10,
+                                    borderWidth: 1,
+                                    borderColor: "#E2E8F0",
                                 }}
                             >
                                 <Text
                                     style={{
                                         fontSize: 13,
                                         fontWeight: "700",
-                                        color: "#111",
+                                        color: "#0F172A",
                                     }}
                                 >
                                     {selectedCentre.name}
@@ -294,20 +308,29 @@ const ChoosePickupCentre: React.FC<Props> = ({
                                         marginTop: 4,
                                     }}
                                 >
+                                    <View
+                                        style={{
+                                            width: 7,
+                                            height: 7,
+                                            borderRadius: 4,
+                                            backgroundColor: isCentreCurrentlyOpen(selectedCentre.openingTime, selectedCentre.closingTime) ? "#059669" : "#DC2626",
+                                            marginRight: 6,
+                                        }}
+                                    />
                                     <Text
                                         style={{
                                             fontSize: 12,
-                                            color: "#FF8500",
+                                            color: isCentreCurrentlyOpen(selectedCentre.openingTime, selectedCentre.closingTime) ? "#059669" : "#DC2626",
                                             fontWeight: "700",
                                         }}
                                     >
-                                        {selectedCentre.status}
+                                        {isCentreCurrentlyOpen(selectedCentre.openingTime, selectedCentre.closingTime) ? "Open" : "Closed"}
                                     </Text>
 
                                     <Text
                                         style={{
                                             fontSize: 12,
-                                            color: "#777",
+                                            color: "#64748B",
                                             marginLeft: 6,
                                         }}
                                     >
@@ -317,23 +340,29 @@ const ChoosePickupCentre: React.FC<Props> = ({
                             </View>
                         </>
                     ) : (
-                        <View
-                            style={{
-                                flex: 1,
-                                justifyContent: "center",
-                                alignItems: "center",
-                                backgroundColor: "#DDF2F7",
+                        <OpenStreetMap
+                            key={`map-all-centres-${pickupCentres.length}`}
+                            latitude={7.8731}
+                            longitude={80.7718}
+                            zoom={7}
+                            interactive={true}
+                            pinColor="#FF8A00"
+                            markers={pickupCentres.map((c) => ({
+                                id: c.id,
+                                latitude: c.latitude,
+                                longitude: c.longitude,
+                                title: c.name,
+                                description: `${c.city}${c.district ? ', ' + c.district : ''}`,
+                                color: "#FF8A00",
+                            }))}
+                            onMarkerSelect={(id) => {
+                                const found = pickupCentres.find((c) => c.id === id || String(c.id) === String(id));
+                                if (found) {
+                                    setSelectedCentre(found);
+                                    setSelectedCity(found.name);
+                                }
                             }}
-                        >
-                            <Text
-                                style={{
-                                    color: "#9A9A9A",
-                                    fontSize: 13,
-                                }}
-                            >
-                                Select a city to view pickup centre
-                            </Text>
-                        </View>
+                        />
                     )}
                 </View>
 
@@ -349,11 +378,6 @@ const ChoosePickupCentre: React.FC<Props> = ({
                             padding: 16,
                             flexDirection: "row",
                             alignItems: "center", // VERTICALLY CENTERED!
-                            shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.05,
-                            shadowRadius: 4,
-                            elevation: 2,
                         }}
                     >
                         {/* Map Pin Icon Circle — Vertically Centered */}

@@ -41,18 +41,30 @@ interface AddressItem {
 
 const formatAddress = (item: any) => {
   const parts: string[] = [];
-  if (item.buildingType === "Apartment") {
-    if (item.unitNo) parts.push(`Unit ${item.unitNo}`);
-    if (item.floorNo) parts.push(`Floor ${item.floorNo}`);
-    if (item.buildingName) parts.push(item.buildingName);
-    if (item.buildingNo) parts.push(item.buildingNo);
-  } else {
-    if (item.houseNo) parts.push(item.houseNo);
+  // Order: Building No, Building Name, Flat/Unit Number, Floor Number, House No, Street Name, City
+  if (item.buildingNo && String(item.buildingNo).trim()) {
+    parts.push(String(item.buildingNo).trim());
   }
-  if (item.streetName) parts.push(item.streetName);
-  if (item.city) parts.push(item.city);
+  if (item.buildingName && String(item.buildingName).trim()) {
+    parts.push(String(item.buildingName).trim());
+  }
+  if (item.unitNo && String(item.unitNo).trim()) {
+    parts.push(String(item.unitNo).trim());
+  }
+  if (item.floorNo && String(item.floorNo).trim()) {
+    parts.push(String(item.floorNo).trim());
+  }
+  if (item.houseNo && String(item.houseNo).trim()) {
+    parts.push(String(item.houseNo).trim());
+  }
+  if (item.streetName && String(item.streetName).trim()) {
+    parts.push(String(item.streetName).trim());
+  }
+  if (item.city && String(item.city).trim()) {
+    parts.push(String(item.city).trim());
+  }
   return parts
-    .filter((p) => p !== null && p !== undefined && String(p).trim() !== "")
+    .filter((p) => p !== null && p !== undefined && String(p).trim() !== "" && p !== "null" && p !== "undefined" && p !== "N/A")
     .join(", ");
 };
 
@@ -110,17 +122,20 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
             setSelectedAddressId(null);
           } else {
             const mapped: AddressItem[] = response.data.result.map(
-              (item: any) => ({
-                id: item.id,
-                title: item.saveAs || "Address",
-                name: item.fullName
-                  ? `${item.title ? item.title + ". " : ""}${item.fullName}`
-                  : "No Name Provided",
-                address: formatAddress(item),
-                phone: formatPhone(item),
-                buildingType: item.buildingType,
-                raw: item,
-              }),
+              (item: any) => {
+                const cleanTitle = (item.title || "").replace(/\.+$/, "").trim();
+                return {
+                  id: item.id,
+                  title: item.saveAs || "Address",
+                  name: item.fullName
+                    ? `${cleanTitle ? cleanTitle + " " : ""}${item.fullName}`
+                    : "No Name Provided",
+                  address: formatAddress(item),
+                  phone: formatPhone(item),
+                  buildingType: item.buildingType,
+                  raw: item,
+                };
+              },
             );
             setAddresses(mapped);
             if (mapped.length > 0 && selectedAddressId === null) {
@@ -234,11 +249,13 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
 
       {/* ─── CONTENT ─────────────────────────────────────────────────────── */}
       <ScrollView
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
+          flexGrow: 1,
           paddingHorizontal: 16,
           paddingTop: 16,
-          paddingBottom: 220,
+          paddingBottom: 260,
         }}
       >
         {/* Add New Address Card */}

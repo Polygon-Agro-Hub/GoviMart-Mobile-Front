@@ -40,7 +40,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onSelect,
   searchPlaceholder = "Search...",
   doneButtonText = "Done",
-  noResultsText = "No items found",
+  noResultsText = "No Search Option Found",
   multiSelect = false,
   renderItem,
   searchKeys = ["label"],
@@ -71,7 +71,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       return;
     }
 
-    const searchTerm = searchValue.toLowerCase();
+    const searchTerm = searchValue.trim().toLowerCase();
     const filtered = data.filter((item) => {
       return searchKeys.some((key) => {
         const value = item[key];
@@ -205,12 +205,9 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             showsVerticalScrollIndicator={false}
             className="max-h-64"
             ListEmptyComponent={
-              <View 
-                className="mx-4 my-6 rounded-2xl px-4 py-4 items-center"
-                style={{ backgroundColor: "#FFF5E9" }}
-              >
-                <Text className="text-base font-semibold text-center" style={{ color: "#FF9114" }}>
-                  {noResultsText}
+              <View className="py-8 px-4 items-center justify-center">
+                <Text className="text-sm font-medium text-gray-400 text-center">
+                  {searchValue.trim() ? "No Search Option Found" : noResultsText}
                 </Text>
               </View>
             }

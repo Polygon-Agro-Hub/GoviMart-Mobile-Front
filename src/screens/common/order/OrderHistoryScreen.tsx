@@ -666,8 +666,14 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                             }}
                         >
                             {getFilteredOrders().map((order) => (
-                                <View
+                                <TouchableOpacity
                                     key={order.id}
+                                    activeOpacity={0.85}
+                                    onPress={() =>
+                                        handleViewDetails(
+                                            order
+                                        )
+                                    }
                                     style={{
                                         minHeight: 139,
                                         borderWidth: 1,
@@ -897,13 +903,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                     </View>
 
                                     {/* VIEW DETAILS */}
-                                    <TouchableOpacity
-                                        activeOpacity={0.7}
-                                        onPress={() =>
-                                            handleViewDetails(
-                                                order
-                                            )
-                                        }
+                                    <View
                                         style={{
                                             flexDirection:
                                                 "row",
@@ -928,8 +928,8 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                 marginLeft: 3,
                                             }}
                                         />
-                                    </TouchableOpacity>
-                                </View>
+                                    </View>
+                                </TouchableOpacity>
                             ))}
                         </ScrollView>
                     )}
