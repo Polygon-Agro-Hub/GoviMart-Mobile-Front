@@ -33,9 +33,11 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
   const { packageId, packageName, image, price } = route.params;
   const dispatch = useDispatch();
   const token = useSelector((state: RootState) => state.auth.token);
-  const existingPackage = useSelector((state: RootState) =>
-    state.cart.packages.find((p) => p.id === packageId),
-  );
+  const cartProducts = useSelector((state: RootState) => state.cart.products);
+  const cartPackages = useSelector((state: RootState) => state.cart.packages);
+  const totalCartCount = cartProducts.length + cartPackages.length;
+
+  const existingPackage = cartPackages.find((p) => p.id === packageId);
 
   const [packageItems, setPackageItems] = useState<
     { itemName: string; quantity: number }[]
@@ -49,7 +51,9 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [toastMessage, setToastMessage] = useState("");
   const [authModalVisible, setAuthModalVisible] = useState(false);
 
-  const [viewCartVisible, setViewCartVisible] = useState(!!existingPackage);
+  const [viewCartVisible, setViewCartVisible] = useState(
+    !!existingPackage || totalCartCount > 0,
+  );
 
   useEffect(() => {
     if (existingPackage) {
@@ -304,8 +308,8 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
       <CartToast visible={toastVisible} message={toastMessage} />
 
       <ViewCartPopup
-        visible={viewCartVisible}
-        itemCount={quantity}
+        visible={viewCartVisible && totalCartCount > 0}
+        itemCount={totalCartCount}
         onPress={() => navigation.navigate("MyCart")}
       />
 
@@ -313,6 +317,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
         minimumValue={1}
         step={1}
         quantity={quantity}
+        initialIsAdded={!!existingPackage}
         onIncrease={increaseQty}
         onDecrease={decreaseQty}
         onAddToCart={onAddToCart}
