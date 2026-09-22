@@ -300,19 +300,22 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
       {/* SCROLL CONTENT */}
       <ScrollView
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingBottom: 220,
+          flexGrow: 1,
+          justifyContent: "space-between",
         }}
       >
-        {/* ─── APPLY COUPON CARD ────────────────────────────────────────── */}
-        {appliedCoupon ? (
-          <AppliedCouponCard
-            code={appliedCoupon.code}
-            type={appliedCoupon.type}
-            discount={appliedCoupon.discount}
-            isFreeDelivery={appliedCoupon.isFreeDelivery}
-            deliveryCharge={initialDeliveryCharge}
+        <View style={{ flex: 1, paddingBottom: 16 }}>
+          {/* ─── APPLY COUPON CARD ────────────────────────────────────────── */}
+          {appliedCoupon ? (
+            <AppliedCouponCard
+              code={appliedCoupon.code}
+              type={appliedCoupon.type}
+              discount={appliedCoupon.discount}
+              isFreeDelivery={appliedCoupon.isFreeDelivery}
+              deliveryCharge={initialDeliveryCharge}
             onRemove={() => setAppliedCoupon(null)}
           />
         ) : (
@@ -864,9 +867,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             securely.
           </Text>
         </View>
-      </ScrollView>
+      </View>
 
-      {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
+      {/* ─── BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
       <PaymentMethodSummary
         useCredit={useCredit}
         creditUsed={creditUsed}
@@ -875,13 +878,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         totalAmount={totalAmount}
         submitting={submitting}
         onConfirm={handleConfirm}
-        containerStyle={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-        }}
       />
+    </ScrollView>
 
       {/* ─── COUPON MODAL ──────────────────────────────────────────────── */}
       <CouponModal

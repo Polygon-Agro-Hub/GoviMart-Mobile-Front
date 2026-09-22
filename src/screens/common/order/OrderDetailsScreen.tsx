@@ -1228,6 +1228,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                         ? (isCardOrder ? orderFullTotal : creditPaid)
                         : orderFullTotal;
 
+                    const isPickup = (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() === "PICKUP";
+
                     return (
                         <>
                             <View
@@ -1315,35 +1317,39 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                     </>
                                 )}
 
-                                {order?.delivaryMethod === 'PICKUP' && <SummaryRow
-                                    label="Delivery Fee"
-                                    value={
-                                        order?.delivaryMethod === 'PICKUP'
-                                            ? "Rs. 0.00"
-                                            : (isFreeDeliveryCoupon ? "+ Rs. 0.00" : `+ Rs. ${formatAmount(parseFloat(order?.delivaryCharge || order?.deliveryCharge) || 0)}`)
-                                    }
-                                />}
+                                {!isPickup && (
+                                    <>
+                                        <SummaryRow
+                                            label="Delivery Fee"
+                                            value={
+                                                isFreeDeliveryCoupon
+                                                    ? "+ Rs. 0.00"
+                                                    : `+ Rs. ${formatAmount(parseFloat(order?.delivaryCharge || order?.deliveryCharge) || 0)}`
+                                            }
+                                        />
 
-                                {isFreeDeliveryCoupon && (
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            color: "#34C759",
-                                            marginTop: 2,
-                                            marginBottom: 4,
-                                        }}
-                                    >
-                                        *Applied Delivery Fee Coupon
-                                    </Text>
+                                        {isFreeDeliveryCoupon && (
+                                            <Text
+                                                style={{
+                                                    fontSize: 12,
+                                                    color: "#34C759",
+                                                    marginTop: 2,
+                                                    marginBottom: 4,
+                                                }}
+                                            >
+                                                *Applied Delivery Fee Coupon
+                                            </Text>
+                                        )}
+
+                                        <View
+                                            style={{
+                                                height: 1,
+                                                backgroundColor: "#E1E7EE",
+                                                marginVertical: 6,
+                                            }}
+                                        />
+                                    </>
                                 )}
-
-                                <View
-                                    style={{
-                                        height: 1,
-                                        backgroundColor: "#E1E7EE",
-                                        marginVertical: 6,
-                                    }}
-                                />
 
                                 <SummaryRow
                                     label="Total"
