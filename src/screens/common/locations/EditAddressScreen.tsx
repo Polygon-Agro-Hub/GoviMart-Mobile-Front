@@ -869,7 +869,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingHorizontal: 11,
           paddingTop: 10,
-          paddingBottom: 85,
+          paddingBottom: Platform.OS === "ios" ? 30 : 20,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
@@ -1370,51 +1370,38 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
             {geoLocationError}
           </Text>
         ) : null}
-      </KeyboardAwareScrollView>
 
-      {/* UPDATE BUTTON */}
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          paddingHorizontal: 11,
-          paddingTop: 8,
-          paddingBottom: Platform.OS === "ios" ? 22 : 12,
-          backgroundColor: "#FFFFFF",
-          borderTopWidth: 1,
-          borderTopColor: "#F1F5F9",
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={handleUpdateAddress}
-          disabled={saving}
-          style={{
-            height: 50,
-            borderRadius: 26,
-            backgroundColor: "#000000",
-            justifyContent: "center",
-            alignItems: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.15,
-            shadowRadius: 5,
-            elevation: 4,
-          }}
-        >
-          <Text
+        {/* UPDATE BUTTON */}
+        <View style={{ marginTop: 24, marginBottom: 16 }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleUpdateAddress}
+            disabled={saving}
             style={{
-              color: "#FFFFFF",
-              fontSize: 15,
-              fontWeight: "700",
+              height: 50,
+              borderRadius: 26,
+              backgroundColor: "#000000",
+              justifyContent: "center",
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.15,
+              shadowRadius: 5,
+              elevation: 4,
             }}
           >
-            {saving ? "Updating..." : "Update Address"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Text
+              style={{
+                color: "#FFFFFF",
+                fontSize: 15,
+                fontWeight: "700",
+              }}
+            >
+              {saving ? "Updating..." : "Update Address"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
 
       {/* TITLE SEARCH MODAL (SEARCH HIDDEN) */}
       <GlobalSearchModal

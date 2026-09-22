@@ -15,7 +15,13 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons } from "@expo/vector-icons";
+import {
+  Entypo,
+  FontAwesome,
+  FontAwesome5,
+  FontAwesome6,
+  MaterialIcons,
+} from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
@@ -26,10 +32,7 @@ type NavigationProp = StackNavigationProp<
   RootStackParamList,
   "ForgotPasswordInput"
 >;
-type ScreenRouteProp = RouteProp<
-  RootStackParamList,
-  "ForgotPasswordInput"
->;
+type ScreenRouteProp = RouteProp<RootStackParamList, "ForgotPasswordInput">;
 
 interface Props {
   navigation: NavigationProp;
@@ -75,7 +78,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const initialMethod = route.params?.method || "email";
   const [currentMethod, setCurrentMethod] = useState<"email" | "sms">(
-    initialMethod
+    initialMethod,
   );
 
   const [email, setEmail] = useState("");
@@ -153,7 +156,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
     isSelected: boolean,
     index: number,
     isLast: boolean,
-    onPress: (value: string) => void
+    onPress: (value: string) => void,
   ) => (
     <TouchableOpacity
       onPress={() => onPress(item.value)}
@@ -175,19 +178,13 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         <Text className="text-base text-gray-500 font-bold">
           {item.dialCode}
         </Text>
-        {isSelected && (
-          <FontAwesome6 name="check" size={16} color="#094EE8" />
-        )}
+        {isSelected && <FontAwesome6 name="check" size={16} color="#094EE8" />}
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.select({ ios: 100, android: 80 })}
-      className="flex-1 bg-white"
-    >
+    <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       {/* Custom Header */}
@@ -203,6 +200,9 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
+        extraScrollHeight={0}
+        extraHeight={0}
+        keyboardOpeningTime={0}
         contentContainerStyle={{
           paddingBottom: 40,
         }}
@@ -244,7 +244,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                 <View className="border border-[#FF9114] px-4 rounded-full flex-row items-center justify-between bg-white">
                   <View className="flex-row items-center flex-1 gap-x-3 h-20">
                     <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
-                      <FontAwesome5 name="envelope" size={14} color="black" />
+                      <Entypo name="mail" size={16} color="black" />
                     </View>
                     <View className="flex-1 justify-center">
                       <Text className="text-[12px] text-black mb-[1px]">
@@ -307,7 +307,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                   <View className="border border-[#FF9114] px-4 rounded-full flex-row items-center justify-between bg-white flex-1">
                     <View className="flex-row items-center flex-1 gap-x-3 h-20">
                       <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
-                        <FontAwesome5 name="phone-alt" size={14} color="black" />
+                        <FontAwesome5
+                          name="phone-alt"
+                          size={14}
+                          color="black"
+                        />
                       </View>
                       <View className="flex-1 justify-center">
                         <Text className="text-[12px] text-black mb-[1px]">
@@ -353,7 +357,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
               disabled={loading || !isValid}
             >
               {loading && (
-                <ActivityIndicator color="white" size="small" className="mr-2" />
+                <ActivityIndicator
+                  color="white"
+                  size="small"
+                  className="mr-2"
+                />
               )}
               <Text className="text-white text-base font-bold">Continue</Text>
             </TouchableOpacity>
@@ -413,7 +421,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         autoClose={false}
         showOkButton={true}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

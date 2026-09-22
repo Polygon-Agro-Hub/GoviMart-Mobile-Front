@@ -303,11 +303,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.select({ ios: 80, android: 50 })}
-      className="flex-1 bg-white"
-    >
+    <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       {/* Custom Header with Logo instead of Title, same as Create Account OTP */}
@@ -321,15 +317,15 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         ref={scrollViewRef}
         contentContainerStyle={{
           flexGrow: 1,
-          justifyContent: "center",
-          paddingBottom: 120,
+          justifyContent: "space-between",
+          paddingBottom: 20,
         }}
         className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Verification Content Centered Vertically */}
-        <View className="w-full py-8">
+        {/* Verification Content */}
+        <View className="w-full py-4">
           <Text className="text-2xl font-bold text-black text-center mb-4">
             {method === "email"
               ? "Verify your email address"
@@ -341,7 +337,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           </Text>
 
           {/* Phone Number / Email Display with Icon */}
-          <View className="flex-row items-center justify-center gap-x-2 mt-6 mb-8 bg-[#F2F2F6] px-4 py-2 rounded-full self-center">
+          <View className="flex-row items-center justify-center gap-x-2 mt-4 mb-6 bg-[#F2F2F6] px-4 py-2 rounded-full self-center">
             {method === "email" ? (
               <MaterialIcons name="email" size={14} color="#5A5859" />
             ) : (
@@ -353,7 +349,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
 
           {/* 5 OTP Digit Input Boxes */}
-          <View className="flex-row justify-between my-8 px-2">
+          <View className="flex-row justify-between my-6 px-2">
             {otp.map((digit, index) => {
               const isFocused = focusedIndex === index;
               return (
@@ -384,7 +380,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
           {/* Rate Limit / Code Expired Banner */}
           {isRateLimited && timeLeft > 0 ? (
-            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-6 border-0">
+            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-4 border-0">
               <FontAwesome5
                 name="info-circle"
                 size={16}
@@ -401,7 +397,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               </View>
             </View>
           ) : isExpired ? (
-            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-6 border-0">
+            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-4 border-0">
               <FontAwesome5
                 name="info-circle"
                 size={16}
@@ -421,9 +417,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           ) : null}
 
           {/* Resend Helper / Countdown Details */}
-          <View className="mt-12 w-full">
+          <View className="mt-8 w-full">
             {/* Divider lines next to Didn't receive the code */}
-            <View className="flex-row items-center my-6">
+            <View className="flex-row items-center my-4">
               <View className="flex-1 h-[1px] bg-gray-200" />
               <Text className="text-sm font-semibold text-[#5A5859] mx-4">
                 Didn’t receive the code ?
@@ -460,31 +456,31 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             )}
           </View>
         </View>
-      </ScrollView>
 
-      {/* Action Buttons */}
-      <View className="px-6 pb-0 pt-2 bg-white">
-        {/* Verify Button (Always shown) */}
-        <TouchableOpacity
-          onPress={handleVerify}
-          disabled={isVerifying || isResending}
-          activeOpacity={0.8}
-          className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-        >
-          <Text className="text-white text-base font-bold">
-            {isVerifying ? "Verifying..." : "Verify"}
-          </Text>
-        </TouchableOpacity>
-        <View
-          className="h-14 mt-6"
-          style={{ marginLeft: -16, marginRight: -16 }}
-        >
-          <Image
-            source={require("@/assets/images/auth/bottom-line.webp")}
-            style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-          />
+        {/* Action Buttons */}
+        <View className="px-2 pb-0 pt-4 bg-white">
+          {/* Verify Button (Always shown) */}
+          <TouchableOpacity
+            onPress={handleVerify}
+            disabled={isVerifying || isResending}
+            activeOpacity={0.8}
+            className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+          >
+            <Text className="text-white text-base font-bold">
+              {isVerifying ? "Verifying..." : "Verify"}
+            </Text>
+          </TouchableOpacity>
+          <View
+            className="h-14 mt-4"
+            style={{ marginLeft: -16, marginRight: -16 }}
+          >
+            <Image
+              source={require("@/assets/images/auth/bottom-line.webp")}
+              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+            />
+          </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Alert Modal */}
       <AlertModal
@@ -496,7 +492,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         autoClose={false}
         showOkButton={true}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
