@@ -70,6 +70,18 @@ export type RootStackParamList = {
     blockBackNavigation?: boolean;
   };
   Login: undefined;
+  ForgotPassword: undefined;
+  ForgotPasswordInput: { method: "email" | "sms" };
+  ForgotPasswordOTP: {
+    method: "email" | "sms";
+    identifier: string;
+    phoneCode?: string;
+    phoneNumber?: string;
+    email?: string;
+    referenceId: string;
+    resetToken: string;
+  };
+  ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   Home: undefined;
