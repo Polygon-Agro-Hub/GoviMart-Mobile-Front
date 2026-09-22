@@ -40,7 +40,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                     setUnreadCount(Number(res.data?.unreadCount) || 0);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
 
         // Listen for real-time notification socket updates
         socketService.connect();
@@ -71,7 +71,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
         <View
             style={{
                 position: "absolute",
-                bottom: Platform.OS === "ios" ? 10 : 18,
+                bottom: Platform.OS === "ios" ? 10 : 10,
                 left: 24, // mx-6
                 right: 24, // mx-6
 
@@ -94,7 +94,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
 
-                elevation: 10,
+                elevation: 6,
 
                 zIndex: 20,
             }}
