@@ -315,39 +315,6 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             >
                 {/* Cart Items */}
                 <View style={{ flex: 1, paddingHorizontal: 16 }}>
-                    {/* Saving Price Box */}
-                    {savedAmount > 0 && (
-                        <View
-                            style={{
-                                backgroundColor: "#EDFBF2",
-                                borderRadius: 20,
-                                paddingVertical: 14,
-                                paddingHorizontal: 18,
-                                marginTop: 8,
-                                marginBottom: 14,
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    fontSize: 16,
-                                    fontWeight: "700",
-                                    color: "#166534",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                Great News!
-                            </Text>
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    color: "#334155",
-                                    lineHeight: 20,
-                                }}
-                            >
-                                You’ll save Rs. {formatPrice(savedAmount)} compared to the market price.
-                            </Text>
-                        </View>
-                    )}
                     {/* Package Section */}
                     {packages.length > 0 && (
                         <>
@@ -399,6 +366,40 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                                 />
                             ))}
                         </>
+                    )}
+
+                    {/* Saving Price Box */}
+                    {savedAmount > 0 && (
+                        <View
+                            style={{
+                                backgroundColor: "#EDFBF2",
+                                borderRadius: 20,
+                                paddingVertical: 14,
+                                paddingHorizontal: 18,
+                                marginTop: 14,
+                                marginBottom: 14,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 16,
+                                    fontWeight: "700",
+                                    color: "#166534",
+                                    marginBottom: 4,
+                                }}
+                            >
+                                Great News!
+                            </Text>
+                            <Text
+                                style={{
+                                    fontSize: 14,
+                                    color: "#334155",
+                                    lineHeight: 20,
+                                }}
+                            >
+                                You’ll save Rs. {formatPrice(savedAmount)} compared to the market price.
+                            </Text>
+                        </View>
                     )}
 
                     {packages.length === 0 && products.length === 0 && (
