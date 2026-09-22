@@ -208,7 +208,7 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
             borderTopRightRadius: 30,
             paddingHorizontal: 20,
             paddingTop: 22,
-            paddingBottom: 30,
+            paddingBottom: 130,
             shadowColor: "#000",
             shadowOpacity: 0.08,
             shadowRadius: 8,
@@ -240,9 +240,10 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
               marginBottom: 6,
             }}
           >
+            Rs.{" "}
             {price.toLocaleString("en-US", {
-              style: "currency",
-              currency: "LKR",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             })}
           </Text>
           <View
