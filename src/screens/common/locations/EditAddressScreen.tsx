@@ -411,9 +411,8 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   ) => (
     <TouchableOpacity
       key={item.value}
-      className={`px-5 py-3.5 flex-row items-center justify-between ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row items-center justify-between ${!isLast ? "border-b border-gray-100" : ""
+        }`}
       onPress={() => {
         onPress(item.value);
       }}
@@ -429,9 +428,8 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       </View>
       <View className="flex-row items-center gap-x-2">
         <Text
-          className={`text-xs font-bold ${
-            item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
-          }`}
+          className={`text-xs font-bold ${item.isAvailable ? "text-[#2E7D32]" : "text-orange-400"
+            }`}
         >
           {item.isAvailable ? "Available" : "Coming soon"}
         </Text>
@@ -811,11 +809,11 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         buildingType === "House"
           ? basePayload
           : {
-              ...basePayload,
-              buildingName: apartmentName,
-              unitNo,
-              floorNo,
-            };
+            ...basePayload,
+            buildingName: apartmentName,
+            unitNo,
+            floorNo,
+          };
 
       const res = await customerService.updateAddress(
         addressParam.id,
@@ -869,15 +867,13 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingHorizontal: 11,
           paddingTop: 10,
-          paddingBottom: 85,
-          flexGrow: 1,
+          paddingBottom: Platform.OS === "ios" ? 75 : 65,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         enableAutomaticScroll={true}
         extraScrollHeight={Platform.select({ ios: 20, android: 40 })}
-        extraHeight={Platform.select({ ios: 20, android: 40 })}
       >
         {/* SAVE ADDRESS AS */}
         <InputField
