@@ -275,10 +275,13 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             enableResetScrollToCoords={false}
             contentContainerStyle={{
               paddingTop: 10,
-              paddingBottom: 110,
+              paddingBottom: Platform.OS === "ios" ? 34 : 20,
+              flexGrow: 1,
+              justifyContent: "space-between",
             }}
           >
-            {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
+            <View style={{ flex: 1 }}>
+              {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
             <View style={{ alignItems: "center", marginVertical: 10 }}>
               <Image
                 source={require("@/assets/images/payment/payment-summery.webp")}
@@ -656,29 +659,15 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 encryption standards.
               </Text>
             </View>
-          </KeyboardAwareScrollView>
+          </View>
 
           {/* ─── BOTTOM SUBMIT BUTTON ─────────────────────────────────────── */}
           <View
             style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 0,
               paddingHorizontal: 16,
-              paddingBottom: Platform.OS === "ios" ? 34 : 16,
-              paddingTop: 12,
+              paddingTop: 24,
+              paddingBottom: Platform.OS === "ios" ? 30 : 16,
               backgroundColor: "#FFFFFF",
-              borderTopWidth: 1,
-              borderColor: "#F1F5F9",
-              shadowColor: "#000",
-              shadowOffset: {
-                width: 0,
-                height: -2,
-              },
-              shadowOpacity: 0.08,
-              shadowRadius: 5,
-              elevation: 8,
             }}
           >
             <TouchableOpacity
@@ -718,8 +707,9 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               )}
             </TouchableOpacity>
           </View>
-        </View>
-      )}
+        </KeyboardAwareScrollView>
+      </View>
+    )}
 
 
       {/* ─── PAYMENT SUCCESS MODAL ────────────────────────────────────────── */}

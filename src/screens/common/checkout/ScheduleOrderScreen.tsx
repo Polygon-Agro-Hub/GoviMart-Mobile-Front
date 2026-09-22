@@ -715,12 +715,12 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         visible={slotModalVisible}
         onClose={() => setSlotModalVisible(false)}
         title="Select Time Slot"
-        searchPlaceholder="Search time slot..."
         data={timeSlotOptions.map((slot) => ({
           label: slot,
           value: slot,
         }))}
         selectedItems={selectedTimeSlot ? [selectedTimeSlot] : []}
+        showSearch={false}
         onSelect={(selectedValues) => {
           if (selectedValues.length > 0) {
             setSelectedTimeSlot(selectedValues[0]);
