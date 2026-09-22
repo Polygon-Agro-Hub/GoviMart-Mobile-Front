@@ -78,17 +78,26 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
     } else {
       const hasUppercase = /[A-Z]/.test(newPassword);
       const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+      const hasSpecialChar =
+        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(newPassword);
 
       if (newPassword.length < 8) {
+        newErrors.newPassword = "Must be at least 8 characters";
+      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
         newErrors.newPassword =
-          "Use at least 8 characters, including 1 uppercase letter, 1 number, and 1 special character.";
+          "Must have 1 uppercase letter, 1 number & 1 special character";
+      } else if (!hasUppercase && !hasSpecialChar) {
+        newErrors.newPassword = "Must have 1 uppercase letter & 1 special character";
+      } else if (!hasUppercase && !hasNumber) {
+        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
+      } else if (!hasNumber && !hasSpecialChar) {
+        newErrors.newPassword = "Must have 1 number & 1 special character";
       } else if (!hasUppercase) {
-        newErrors.newPassword = "Must contain at least 1 uppercase letter";
+        newErrors.newPassword = "Must have 1 uppercase letter";
       } else if (!hasNumber) {
-        newErrors.newPassword = "Must contain at least 1 number";
+        newErrors.newPassword = "Must have 1 number";
       } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must contain at least 1 special character";
+        newErrors.newPassword = "Must have 1 special character";
       }
     }
 
@@ -147,11 +156,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.select({ ios: 100, android: 80 })}
-      className="flex-1 bg-white"
-    >
+    <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       {/* Custom Header */}
@@ -167,6 +172,9 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
+        extraScrollHeight={0}
+        extraHeight={0}
+        keyboardOpeningTime={0}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
@@ -351,7 +359,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
         autoClose={false}
         showOkButton={true}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

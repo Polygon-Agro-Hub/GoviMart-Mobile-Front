@@ -274,7 +274,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 12,
-          paddingBottom: 120,
+          paddingBottom: Platform.OS === "ios" ? 30 : 20,
         }}
       >
         {/* ================================================= */}
@@ -346,7 +346,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             <Text
               style={{
                 fontSize: 13,
-                color: "#666",
+                color: "#000000",
                 marginBottom: 3,
               }}
             >
@@ -356,8 +356,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             <Text
               style={{
                 fontSize: 14,
-                color: selectedCategoryName ? "#111" : "#747990",
-                fontWeight: selectedCategoryName ? "600" : "500",
+                color: selectedCategoryName ? "#000000" : "#747990",
+                fontWeight: selectedCategoryName ? "bold" : "normal",
               }}
             >
               {selectedCategoryName || "Select From Here"}
@@ -396,7 +396,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         <Text
           style={{
             fontSize: 15,
-            fontWeight: "700",
+            fontWeight: "normal",
             color: "#111111",
             marginBottom: 8,
           }}
@@ -444,7 +444,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         <Text
           style={{
             fontSize: 15,
-            fontWeight: "700",
+            fontWeight: "normal",
             color: "#111111",
             marginBottom: 6,
           }}
@@ -543,78 +543,52 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             </View>
           ))}
         </View>
-      </ScrollView>
 
-      {/* ================================================= */}
-      {/* BOTTOM SUBMIT BUTTON */}
-      {/* ================================================= */}
+        {/* ================================================= */}
+        {/* SUBMIT BUTTON */}
+        {/* ================================================= */}
 
-      <View
-        style={{
-          position: "absolute",
-
-          left: 0,
-          right: 0,
-          bottom: 0,
-
-          paddingHorizontal: 13,
-
-          paddingTop: 8,
-          paddingBottom: Platform.OS === "ios" ? 18 : 10,
-
-          backgroundColor: "#FFFFFF",
-
-          shadowColor: "#000",
-          shadowOffset: {
-            width: 0,
-            height: -2,
-          },
-          shadowOpacity: 0.08,
-          shadowRadius: 5,
-
-          elevation: 8,
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={handleSubmit}
+        <View
           style={{
-            height: 50,
-
-            borderRadius: 27,
-
-            backgroundColor: "#000000",
-
-            justifyContent: "center",
-            alignItems: "center",
-
-            shadowColor: "#000",
-            shadowOffset: {
-              width: 0,
-              height: 3,
-            },
-            shadowOpacity: 0.18,
-            shadowRadius: 5,
-
-            elevation: 4,
+            marginTop: 24,
+            marginBottom: Platform.OS === "ios" ? 20 : 10,
           }}
         >
-          {submitting ? (
-            <ActivityIndicator color="white" size="small" />
-          ) : (
-            <Text
-              style={{
-                color: "#FFFFFF",
-
-                fontSize: 15.5,
-                fontWeight: "800",
-              }}
-            >
-              Submit Complaint
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleSubmit}
+            style={{
+              height: 50,
+              borderRadius: 27,
+              backgroundColor: "#000000",
+              justifyContent: "center",
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: {
+                width: 0,
+                height: 3,
+              },
+              shadowOpacity: 0.18,
+              shadowRadius: 5,
+              elevation: 4,
+            }}
+          >
+            {submitting ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 15.5,
+                  fontWeight: "800",
+                }}
+              >
+                Submit Complaint
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };

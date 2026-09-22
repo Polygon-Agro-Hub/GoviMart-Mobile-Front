@@ -26,6 +26,7 @@ import * as SecureStore from "expo-secure-store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import socketService from "@/services/socket/socket.service";
+import { AlertModal } from "@/component/common/AlertModal";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.4;
@@ -43,6 +44,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
   const dispatch = useDispatch();
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
@@ -235,17 +239,18 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
       } else {
         const msg = response.data?.message || "An error occurred during login.";
         if (
-          msg.toLowerCase().includes("password") &&
-          (msg.toLowerCase().includes("incorrect") ||
-            msg.toLowerCase().includes("invalid"))
+          msg.toLowerCase().includes("the password you entered is incorrect") ||
+          (msg.toLowerCase().includes("password") && msg.toLowerCase().includes("incorrect"))
         ) {
-          Alert.alert(
-            "Incorrect Password",
-            "The password you entered is incorrect.\nPlease check and re-enter.",
-            [{ text: "OK" }]
+          setAlertTitle("Incorrect Password");
+          setAlertMessage(
+            "The password you entered is incorrect.\nPlease check and re-enter."
           );
+          setAlertVisible(true);
         } else {
-          Alert.alert("Login Failed", msg, [{ text: "OK" }]);
+          setAlertTitle("Login Failed");
+          setAlertMessage(msg);
+          setAlertVisible(true);
         }
       }
     } catch (error: any) {
@@ -255,17 +260,18 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         error.message ||
         "Failed to connect to server.";
       if (
-        errorMsg.toLowerCase().includes("password") &&
-        (errorMsg.toLowerCase().includes("incorrect") ||
-          errorMsg.toLowerCase().includes("invalid"))
+        errorMsg.toLowerCase().includes("the password you entered is incorrect") ||
+        (errorMsg.toLowerCase().includes("password") && errorMsg.toLowerCase().includes("incorrect"))
       ) {
-        Alert.alert(
-          "Incorrect Password",
-          "The password you entered is incorrect.\nPlease check and re-enter.",
-          [{ text: "OK" }]
+        setAlertTitle("Incorrect Password");
+        setAlertMessage(
+          "The password you entered is incorrect.\nPlease check and re-enter."
         );
+        setAlertVisible(true);
       } else {
-        Alert.alert("Login Error", errorMsg, [{ text: "OK" }]);
+        setAlertTitle("Login Error");
+        setAlertMessage(errorMsg);
+        setAlertVisible(true);
       }
     } finally {
       setLoading(false);
@@ -413,6 +419,17 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           </View>
         </View>
       </KeyboardAwareScrollView>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type="error"
+        onClose={() => setAlertVisible(false)}
+        autoClose={false}
+        showOkButton={true}
+      />
     </View>
   );
 };

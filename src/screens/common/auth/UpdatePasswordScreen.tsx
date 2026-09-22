@@ -100,17 +100,26 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     } else {
       const hasUppercase = /[A-Z]/.test(newPassword);
       const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+      const hasSpecialChar =
+        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(newPassword);
 
       if (newPassword.length < 8) {
+        newErrors.newPassword = "Must be at least 8 characters";
+      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
         newErrors.newPassword =
-          "Use at least 8 characters, including 1 uppercase letter, 1 number, and 1 special character.";
+          "Must have 1 uppercase letter, 1 number & 1 special character";
+      } else if (!hasUppercase && !hasSpecialChar) {
+        newErrors.newPassword = "Must have 1 uppercase letter & 1 special character";
+      } else if (!hasUppercase && !hasNumber) {
+        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
+      } else if (!hasNumber && !hasSpecialChar) {
+        newErrors.newPassword = "Must have 1 number & 1 special character";
       } else if (!hasUppercase) {
-        newErrors.newPassword = "Must contain at least 1 uppercase letter";
+        newErrors.newPassword = "Must have 1 uppercase letter";
       } else if (!hasNumber) {
-        newErrors.newPassword = "Must contain at least 1 number";
+        newErrors.newPassword = "Must have 1 number";
       } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must contain at least 1 special character";
+        newErrors.newPassword = "Must have 1 special character";
       }
     }
 
@@ -250,8 +259,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             <View>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.currentPassword
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-[#C5D2DB]"
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-[#C5D2DB]"
                   }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -298,8 +307,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             <View>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.newPassword
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-[#C5D2DB]"
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-[#C5D2DB]"
                   }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -346,8 +355,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             <View>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.confirmNewPassword
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-[#C5D2DB]"
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-[#C5D2DB]"
                   }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -406,13 +415,9 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
 
 
 
-                <Text className="text-[11px] text-[#5A5859] leading-relaxed mt-1">
-                  Use at least 8 characters with a mix of letters, numbers and
-                  symbols.
-                </Text>
-                <Text className="text-[12px] text-[#5A5859] leading-relaxed mt-1">
-                  Use at least 8 characters, including 1 uppercase letter, 1
-                  number, and 1 special character.
+
+                <Text className="text-[11px] text-[#494A65] leading-relaxed mt-1">
+                  Use at least 8 characters, including 1 uppercase letter, 1 number, and 1 special character.
                 </Text>
               </View>
             </View>
