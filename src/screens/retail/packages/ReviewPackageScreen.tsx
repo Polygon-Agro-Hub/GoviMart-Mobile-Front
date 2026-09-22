@@ -456,7 +456,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     name: i.productName || "Product",
                     icon: "🥗",
                     image: i.productImage,
-                    price: parseFloat(i.baseUnitPrice || i.price || 0),
+                    price: parseFloat(i.discountedPrice || i.baseUnitPrice || i.price || 0),
                     quantity: parseFloat(i.qty || 1),
                     minQuantity: itemMin,
                     // orderpackageitems.qty is always stored in kg — never use 'g' here
@@ -516,7 +516,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   name: b.productName || "Product",
                   icon: "🥗",
                   image: b.productImage,
-                  price: parseFloat(b.baseUnitPrice || b.price || 0),
+                  price: parseFloat(b.discountedPrice || b.baseUnitPrice || b.price || 0),
                   quantity: parseFloat(b.qty || 1),
                   minQuantity: baseMin,
                   unit: "kg" as "kg" | "g",
@@ -528,8 +528,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               });
 
               newProducts[pkgKey] = activeItems;
-              newTemplates[pkgKey] =
-                baseItems.length > 0 ? baseItems : activeItems;
+              newTemplates[pkgKey] = baseItems.length > 0 ? baseItems : activeItems;
             });
           }
 
@@ -716,10 +715,12 @@ const fetchCategoryProducts = async (categoryId: string) => {
     dispatch(updateProductQuantityAction({ packageId, productId, delta }));
   };
 
-  const overviewTotal = packagesMeta.reduce(
-    (sum, p) => sum + p.qty * (p.unitPrice + p.serviceFee + p.packingFee),
-    0,
-  );
+  // Overview total = actual items sum + fees across all packages
+  const overviewTotal = packagesMeta.reduce((sum, pkg) => {
+    const prods = packageProducts[pkg.id] || [];
+    const itemsSum = prods.reduce((s: number, p: any) => s + p.price * p.quantity, 0);
+    return sum + (itemsSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
+  }, 0);
 
   const currentStep = steps[currentStepIndex] ||
     steps[0] || { type: "confirm" as const };
@@ -1001,12 +1002,13 @@ const fetchCategoryProducts = async (categoryId: string) => {
         const currentSum = prods.reduce((s, p) => s + p.price * p.quantity, 0);
         const diff = currentSum - templateSum;
 
-        // Full signed diff — positive means more expensive, negative means savings
+        // originalPrice = template items total + fees (what was originally expected)
         const originalPrice =
-          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty;
+          (templateSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
         const additionalChanges = diff * pkg.qty; // signed
+        // currentPrice = actual items total + fees
         const currentPrice =
-          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee + diff) * pkg.qty;
+          (currentSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
 
         list.push({
           pkg,
@@ -1027,9 +1029,9 @@ const fetchCategoryProducts = async (categoryId: string) => {
   );
 
   // Totals for the final confirm step
-  const packagesTotal = packagesMeta.reduce(
-    (sum, pkg) =>
-      sum + pkg.qty * (pkg.unitPrice + pkg.serviceFee + pkg.packingFee),
+  // originalPrice in packageSummaries = templateSum + fees (what was originally expected)
+  const packagesTotal = packageSummaries.reduce(
+    (sum, item) => sum + item.originalPrice,
     0,
   );
   const alacartTotal = Object.values(alacartSelection).reduce(
@@ -1406,13 +1408,14 @@ const fetchCategoryProducts = async (categoryId: string) => {
             (s, p) => s + p.price * p.quantity,
             0,
           );
+          // diff = extra cost the user incurred by changing/replacing items
           const diff = currentSum - templateSum;
 
-          const originalPackagePrice = pkg.unitPrice;
+          // Original Package = actual sum of current item prices × quantities
+          const originalPackagePrice = currentSum;
           const serviceFee = pkg.serviceFee;
           const packingFee = pkg.packingFee;
-          const totalFor1Package =
-            originalPackagePrice + serviceFee + packingFee + diff;
+          const totalFor1Package = originalPackagePrice + serviceFee + packingFee;
           const totalForNPackages = totalFor1Package * pkg.qty;
 
           return (

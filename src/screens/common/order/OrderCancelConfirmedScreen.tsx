@@ -116,21 +116,31 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
         ? passedTotalPaid
         : calculatedOrderTotal;
 
-  const totalPaidCard =
-    passedTotalPaidCard !== undefined
-      ? passedTotalPaidCard
-      : paymentMethod &&
-          (paymentMethod.toLowerCase().includes("card") ||
-            paymentMethod.toLowerCase().includes("payhere"))
-        ? (passedTotalPaid ?? processOrderTotal)
-        : (passedTotalPaid ?? 0);
+  /* ---------------------------------------------------------
+     Payment breakdown
+     IMPORTANT: `paymentMethod` on the order record reflects the
+     method the order was *placed* with, not necessarily what was
+     actually charged. A "Card" order can still end up fully paid
+     via credit balance (see processorders.creditPaid). So:
+       1. Resolve credit paid FIRST, straight from what was passed
+          (which should ultimately come from the DB's creditPaid
+          column, not from parsing paymentMethod).
+       2. Card paid is only ever non-zero when creditPaid is 0 —
+          an order is settled by ONE method, never both.
+  --------------------------------------------------------- */
 
   const totalPaidCredit =
-    passedTotalPaidCredit !== undefined
-      ? passedTotalPaidCredit
-      : paymentMethod && paymentMethod.toLowerCase().includes("credit")
-        ? processOrderTotal
-        : 0;
+    passedTotalPaidCredit !== undefined ? passedTotalPaidCredit : 0;
+
+  const totalPaidCard =
+    totalPaidCredit > 0
+      ? 0 // credit covered it — never show card paid alongside credit
+      : passedTotalPaidCard !== undefined
+        ? passedTotalPaidCard
+        : paymentMethod &&
+            paymentMethod.toLowerCase() === "card"
+          ? (passedTotalPaid ?? processOrderTotal)
+          : 0;
 
   const totalCashDue =
     passedTotalCashDue !== undefined
@@ -158,7 +168,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       }
       Alert.alert(
         "Order Cancelled",
-        "Your order has been cancelled successfully. Any refundable amount has been credited to your credit balance.",
+        "Your order has been cancelled successfully.",
         [
           {
             text: "OK",
@@ -305,33 +315,37 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
               Payment Summary
             </Text>
 
-            {/* Total Paid with Card */}
-            <View className="flex-row justify-between pb-2.5">
-              <Text className="text-[14px] text-[#4A4A4A]">
-                Total Paid with Card
-              </Text>
-              <Text className="text-[14px] font-semibold text-black">
-                Rs. {totalPaidCard.toFixed(2)}
-              </Text>
-            </View>
+            {/* Total Paid with Card (if any) */}
+            {totalPaidCard > 0 && (
+              <View className="flex-row justify-between pb-2.5">
+                <Text className="text-[14px] text-[#4A4A4A]">
+                  Total Paid with Card
+                </Text>
+                <Text className="text-[14px] font-semibold text-black">
+                  Rs. {totalPaidCard.toFixed(2)}
+                </Text>
+              </View>
+            )}
 
-            {/* Total Paid with Credit */}
-            <View className="flex-row justify-between pb-2.5">
-              <Text className="text-[14px] text-[#4A4A4A]">
-                Total Paid with Credit
-              </Text>
-              <Text className="text-[14px] font-semibold text-black">
-                Rs. {totalPaidCredit.toFixed(2)}
-              </Text>
-            </View>
+            {/* Total Paid with Credit (if any) */}
+            {totalPaidCredit > 0 && (
+              <View className="flex-row justify-between pb-2.5">
+                <Text className="text-[14px] text-[#4A4A4A]">
+                  Total Paid with Credit
+                </Text>
+                <Text className="text-[14px] font-semibold text-black">
+                  Rs. {totalPaidCredit.toFixed(2)}
+                </Text>
+              </View>
+            )}
 
             {/* Total Cash Due (if any) */}
             {totalCashDue > 0 && (
               <View className="flex-row justify-between pb-2.5">
-                <Text className="text-[14px] text-[#4A4A4A]">
+                <Text className="text-[14px] text-[#000000]">
                   Total Cash Due
                 </Text>
-                <Text className="text-[14px] font-semibold text-[#D97706]">
+                <Text className="text-[14px] font-semibold text-[#000000]">
                   Rs. {totalCashDue.toFixed(2)}
                 </Text>
               </View>
@@ -349,7 +363,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
           </View>
 
           {/* Credit info component */}
-          {refundCreditAmount > 0 ? (
+          {refundCreditAmount > 0 && (
             <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
               <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
                 <Ionicons name="wallet" size={22} color="#fff" />
@@ -364,19 +378,6 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                 </Text>{" "}
                 will be added to your credit balance. You can use it for your
                 next purchase.
-              </Text>
-            </View>
-          ) : (
-            <View className="mx-5 mt-6 bg-[#F8F9FA] border border-[#E9ECEF] rounded-3xl p-5 items-center">
-              <View className="w-12 h-12 rounded-full bg-[#6C757D] items-center justify-center">
-                <Ionicons name="information-circle" size={24} color="#fff" />
-              </View>
-              <Text className="text-[15px] font-bold text-black mt-3 text-center">
-                No Upfront Payment Refund
-              </Text>
-              <Text className="text-[13px] text-[#6B6B6B] text-center mt-2 leading-5">
-                This order has no upfront paid balance to convert. The order
-                will be cancelled with no deduction or credit refund.
               </Text>
             </View>
           )}
