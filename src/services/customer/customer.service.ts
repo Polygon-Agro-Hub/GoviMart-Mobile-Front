@@ -89,7 +89,13 @@ class CustomerService {
     return apiClient.post(ENDPOINTS.CUSTOMER.UPLOAD_PROFILE_IMAGE, formData, {
       headers: {
         ...headers,
-        "Content-Type": "multipart/form-data",
+      },
+      transformRequest: (data, requestHeaders) => {
+        if (requestHeaders) {
+          delete requestHeaders["Content-Type"];
+          delete requestHeaders["content-type"];
+        }
+        return data;
       },
     });
   }

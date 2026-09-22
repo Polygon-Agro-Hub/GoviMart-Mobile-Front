@@ -96,7 +96,7 @@ const PackageCartCard: React.FC<Props> = ({
                             color: activeColor,
                         }}
                     >
-                        Rs. {formatPrice(item.price)}
+                        Rs. {formatPrice(item.price * item.quantity)}
                     </Text>
                 </View>
 

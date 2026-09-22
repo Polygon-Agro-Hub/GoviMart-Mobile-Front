@@ -16,6 +16,8 @@ interface AlertModalProps {
   duration?: number;
   autoClose?: boolean;
   showOkButton?: boolean;
+  okButtonText?: string;
+  onOkPress?: () => void;
 }
 
 export const AlertModal: React.FC<AlertModalProps> = ({
@@ -31,6 +33,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   duration = 4000,
   autoClose = true,
   showOkButton,
+  okButtonText = "OK",
+  onOkPress,
 }) => {
   const isOkButtonVisible = showOkButton !== undefined ? showOkButton : !autoClose;
   const loadingBarWidth = useRef(new Animated.Value(1)).current;
@@ -145,11 +149,13 @@ export const AlertModal: React.FC<AlertModalProps> = ({
 
             {isOkButtonVisible && (
               <TouchableOpacity
-                onPress={onClose}
+                onPress={onOkPress || onClose}
                 activeOpacity={0.8}
                 className="bg-[#FF9114] py-3 px-6 rounded-full flex-row items-center justify-center gap-x-2 shadow-md"
               >
-                <Text className="text-white font-bold text-base">OK</Text>
+                <Text className="text-white font-bold text-base">
+                  {okButtonText}
+                </Text>
               </TouchableOpacity>
             )}
           </View>

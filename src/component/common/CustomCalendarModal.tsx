@@ -227,6 +227,19 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
       });
     }
 
+    // Trailing empty spaces so the last row completes the 7-day week without gaps
+    const remainingDays = (7 - (days.length % 7)) % 7;
+    for (let i = 0; i < remainingDays; i++) {
+      days.push({
+        day: 0,
+        date: new Date(0),
+        isCurrentMonth: false,
+        isDisabled: true,
+        isSelected: false,
+        isToday: false,
+      });
+    }
+
     return days;
   }, [currentYear, currentMonth, minDate, maxDate, internalSelectedDate]);
 
@@ -410,17 +423,16 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           <View
             style={{
               flexDirection: "row",
-              justifyContent: "space-between",
               marginBottom: 8,
-              paddingHorizontal: 4,
             }}
           >
             {DAYS_OF_WEEK.map((d) => (
               <View
                 key={d}
                 style={{
-                  width: 40,
+                  width: "14.285%",
                   alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Text
@@ -441,8 +453,6 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
             style={{
               flexDirection: "row",
               flexWrap: "wrap",
-              justifyContent: "space-between",
-              paddingHorizontal: 4,
             }}
           >
             {calendarDays.map((item, index) => {
@@ -451,7 +461,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                   <View
                     key={`blank-${index}`}
                     style={{
-                      width: 40,
+                      width: "14.285%",
                       height: 40,
                       marginVertical: 2,
                     }}
@@ -460,39 +470,48 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
               }
 
               return (
-                <TouchableOpacity
+                <View
                   key={`day-${item.day}`}
-                  activeOpacity={item.isDisabled ? 1 : 0.7}
-                  disabled={item.isDisabled}
-                  onPress={() => handleDayPress(item)}
                   style={{
-                    width: 40,
+                    width: "14.285%",
                     height: 40,
                     marginVertical: 2,
-                    borderRadius: 20,
                     justifyContent: "center",
                     alignItems: "center",
-                    backgroundColor: item.isSelected
-                      ? "#000000"
-                      : "transparent",
-                    borderWidth: item.isToday && !item.isSelected ? 1 : 0,
-                    borderColor: "#111827",
                   }}
                 >
-                  <Text
+                  <TouchableOpacity
+                    activeOpacity={item.isDisabled ? 1 : 0.7}
+                    disabled={item.isDisabled}
+                    onPress={() => handleDayPress(item)}
                     style={{
-                      fontSize: 13,
-                      fontWeight: item.isSelected ? "700" : "500",
-                      color: item.isDisabled
-                        ? "#D1D5DB"
-                        : item.isSelected
-                        ? "#FFFFFF"
-                        : "#111827",
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: item.isSelected
+                        ? "#000000"
+                        : "transparent",
+                      borderWidth: item.isToday && !item.isSelected ? 1 : 0,
+                      borderColor: "#111827",
                     }}
                   >
-                    {String(item.day)}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: item.isSelected ? "700" : "500",
+                        color: item.isDisabled
+                          ? "#D1D5DB"
+                          : item.isSelected
+                          ? "#FFFFFF"
+                          : "#111827",
+                      }}
+                    >
+                      {String(item.day)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </View>

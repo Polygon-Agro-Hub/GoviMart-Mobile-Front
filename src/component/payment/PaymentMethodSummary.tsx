@@ -185,18 +185,18 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
             >
                 <Text
                     style={{
-                        fontSize: 15,
+                        fontSize: 16,
                         fontWeight: "700",
                         color: "#111111",
                     }}
                 >
-                    Total
+                    Total Amount
                 </Text>
 
                 <Text
                     style={{
-                        fontSize: 15,
-                        fontWeight: "700",
+                        fontSize: 18,
+                        fontWeight: "800",
                         color: "#111111",
                     }}
                 >

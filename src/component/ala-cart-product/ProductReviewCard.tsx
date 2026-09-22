@@ -11,13 +11,19 @@ import Entypo from "@expo/vector-icons/Entypo";
 
 export const ProductReviewCard: React.FC<{
     product: ReviewProduct;
+    categoryCount?: number;
     onIncrease: () => void;
     onDecrease: () => void;
     onChangeProduct: () => void;
     onResetToOriginal?: () => void;
-}> = ({ product, onIncrease, onDecrease, onChangeProduct, onResetToOriginal }) => {
+}> = ({ product, categoryCount, onIncrease, onDecrease, onChangeProduct, onResetToOriginal }) => {
     const minQuantity = product.minQuantity ?? product.step ?? 1;
     const isMin = product.quantity <= minQuantity;
+    const formatPrice = (value: number | string) =>
+        (Number(value) || 0).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
 
     return (
         <View className="mx-5 mt-4 border border-[#EEEEEE] rounded-2xl p-4 bg-white">
@@ -46,7 +52,7 @@ export const ProductReviewCard: React.FC<{
                     <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                         Price :{" "}
                         <Text className="font-bold text-black">
-                            Rs. {product.price.toFixed(2)}
+                            Rs. {formatPrice(product.price)}
                         </Text>
                     </Text>
                 </View>
@@ -63,7 +69,7 @@ export const ProductReviewCard: React.FC<{
                 </TouchableOpacity>
 
                 <Text className="text-[15px] font-semibold text-black">
-                    {product.quantity} {product.unit}
+                    {parseFloat(String(product.quantity))} {product.unit}
                 </Text>
 
                 <TouchableOpacity
@@ -110,7 +116,12 @@ export const ProductReviewCard: React.FC<{
                         style={{ marginTop: 2 }}
                     />
                     <Text className="flex-1 ml-1.5 text-[12px] text-[#F04438] leading-4">
-                        {product.excludedWarning}
+                        You marked{" "}
+                        <Text className="font-bold text-[#F04438]">
+                            {product.name}
+                        </Text>{" "}
+                        as an exclude product for your packages. Please Change
+                        Product if you don't need this.
                     </Text>
                 </View>
             )}

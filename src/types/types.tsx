@@ -70,6 +70,18 @@ export type RootStackParamList = {
     blockBackNavigation?: boolean;
   };
   Login: undefined;
+  ForgotPassword: undefined;
+  ForgotPasswordInput: { method: "email" | "sms" };
+  ForgotPasswordOTP: {
+    method: "email" | "sms";
+    identifier: string;
+    phoneCode?: string;
+    phoneNumber?: string;
+    email?: string;
+    referenceId: string;
+    resetToken: string;
+  };
+  ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   Home: undefined;
@@ -127,7 +139,7 @@ export type RootStackParamList = {
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
   ReviewPackage: { orderId?: string | number; invoiceNo?: string; replacedProduct?: any; targetStepIndex?: number; newScheduleDate?: string; } | undefined;
-  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
+ SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;
     processOrderId?: string | number;
@@ -156,7 +168,7 @@ export type RootStackParamList = {
     paymentMethod?: string;
     refundCreditAmount?: number;
   } | undefined;
-  ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; } | undefined;
+ ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -256,6 +268,7 @@ export interface UpdateUserDetailsPayload {
 
 export interface AddressPayload {
   buildingType: string;
+  originalBuildingType?: string;
   saveAs?: string;
   billingTitle?: string;
   billingName?: string;

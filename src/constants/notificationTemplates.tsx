@@ -75,17 +75,28 @@ export const NOTIFICATION_TEMPLATES: Record<
   [NOTIFICATION_TITLES.ORDER_ON_THE_WAY_AGAIN]: (p) =>
     `Your order #${p.invoiceNo || "[Invoice No.]"}, is back on the way to you. Our driver will deliver your order shortly.`,
 
-  [NOTIFICATION_TITLES.ORDER_RETURNED]: (p) =>
-    `Your order #${p.invoiceNo || "[Invoice No.]"}, has been returned. Reason : “${p.reason || "The customer didn’t answered the call."}”`,
+  [NOTIFICATION_TITLES.ORDER_RETURNED]: (p) => {
+    const reasonText =
+      p.reason && p.reason.toLowerCase() !== "other"
+        ? p.reason
+        : (p as any).otherReason || (p as any).returnNote || p.reason || "The customer didn’t answered the call.";
+    return `Your order #${p.invoiceNo || "[Invoice No.]"}, has been returned. Reason : “${reasonText}”`;
+  },
 
-  [NOTIFICATION_TITLES.ORDER_CANCELLED]: (p) =>
-    p.reason
-      ? `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled. Reason : “${p.reason}”\n\nIf you have already made a payment for this order, the total amount will be added to your credit balance. You can use this credit toward your next order.`
-      : `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.`,
+  [NOTIFICATION_TITLES.ORDER_CANCELLED]: (p) => {
+    const reasonText =
+      p.reason && p.reason.toLowerCase() !== "other"
+        ? p.reason
+        : (p as any).otherReason || (p as any).returnNote || p.reason;
+    return reasonText
+      ? `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled. Reason : “${reasonText}”\n\nIf you have already made a payment for this order, the total amount will be added to your credit balance. You can use this credit toward your next order.`
+      : `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.`;
+  },
 };
 
 /**
- * Parses message text to highlight invoice number (e.g. `#[Invoice No]`, `#[2609030012]`, `#2609030012`) in bold.
+ * Parses message text to highlight invoice number (e.g. `#[Invoice No]`, `#[2609030012]`, `#2609030012`)
+ * and Schedule Date (e.g. `August 8`, `September 3`, `2026-09-03`) in bold.
  */
 export const renderBoldInvoiceMessage = (
   message: string,
@@ -94,39 +105,64 @@ export const renderBoldInvoiceMessage = (
 ): React.ReactNode => {
   if (!message) return null;
 
-  // Regex to match patterns like:
-  // - #[Invoice No]
-  // - #[Invoice No.]
-  // - #[INV-2026-001]
-  // - #2609030012
-  // - #[2609030012]
-  const regex = /(#\[?[A-Za-z0-9_\-\.\s]+\]?)/g;
+  // Replace "scheduled for <Date>" with a delimited marker so we can parse both invoice & date tokens
+  // Regex to match:
+  // 1. Invoice token: (#\[[^\]\r\n]+\]|#[A-Za-z0-9_-]+)
+  // 2. Schedule date token preceded by "scheduled for ": (scheduled for\s+)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s*,\s*\d{4})?|\d{4}-\d{2}-\d{2})
+  const pattern = /(#(?:\[[^\]\r\n]+\]|[A-Za-z0-9_-]+))|(scheduled for\s+)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s*,\s*\d{4})?|\d{4}-\d{2}-\d{2})/gi;
 
-  const parts = message.split(regex);
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-  return parts.map((part, index) => {
-    const isInvoiceToken = regex.test(part);
-    regex.lastIndex = 0; // reset stateful regex test
+  const boldMergedStyle = [
+    baseStyle,
+    { fontWeight: "700" as const, color: "#111827" },
+    boldStyle,
+  ];
 
-    if (isInvoiceToken) {
-      return (
-        <Text
-          key={index}
-          style={[
-            baseStyle,
-            { fontWeight: "700", color: "#111827" },
-            boldStyle,
-          ]}
-        >
-          {part}
+  while ((match = pattern.exec(message)) !== null) {
+    // Text before match
+    if (match.index > lastIndex) {
+      elements.push(
+        <Text key={`txt-${lastIndex}`} style={baseStyle}>
+          {message.substring(lastIndex, match.index)}
         </Text>
       );
     }
 
-    return (
-      <Text key={index} style={baseStyle}>
-        {part}
+    if (match[1]) {
+      // Invoice token match: #12345
+      elements.push(
+        <Text key={`inv-${match.index}`} style={boldMergedStyle}>
+          {match[1]}
+        </Text>
+      );
+    } else if (match[2] && match[3]) {
+      // "scheduled for " (normal) + Date (bold)
+      elements.push(
+        <Text key={`sched-prefix-${match.index}`} style={baseStyle}>
+          {match[2]}
+        </Text>
+      );
+      elements.push(
+        <Text key={`sched-date-${match.index}`} style={boldMergedStyle}>
+          {match[3]}
+        </Text>
+      );
+    }
+
+    lastIndex = pattern.lastIndex;
+  }
+
+  // Trailing text
+  if (lastIndex < message.length) {
+    elements.push(
+      <Text key={`txt-end`} style={baseStyle}>
+        {message.substring(lastIndex)}
       </Text>
     );
-  });
+  }
+
+  return elements;
 };
