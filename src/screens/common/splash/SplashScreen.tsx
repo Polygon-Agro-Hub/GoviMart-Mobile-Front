@@ -5,8 +5,10 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
-import { loginSuccess } from "@/store/authSlice";
+import { loginSuccess, logoutSuccess } from "@/store/authSlice";
+import { clearCart, setCartFromBackend } from "@/store/cartSlice";
 import authService from "@/services/auth/auth.service";
+import cartService from "@/services/cart/cart.service";
 import { tokenStorage } from "@/utils/tokenStorage";
 import socketService from "@/services/socket/socket.service";
 
@@ -41,6 +43,22 @@ const Splash: React.FC = () => {
             if (userProfile.id) {
               socketService.registerUser(userProfile.id, token);
             }
+            try {
+              const dbCartRes = await cartService.getUserCart();
+              if (dbCartRes.data?.status && dbCartRes.data?.data) {
+                const dbProducts = dbCartRes.data.data.products || [];
+                const dbPackages = dbCartRes.data.data.packages || [];
+                dispatch(
+                  setCartFromBackend({
+                    products: dbProducts,
+                    packages: dbPackages,
+                    cartUserId: userProfile.id,
+                  })
+                );
+              }
+            } catch (cartErr) {
+              console.log("Cart restore error in splash:", cartErr);
+            }
             navigation.replace("Home");
             return;
           } else if (isRemembered === "true") {
@@ -63,6 +81,22 @@ const Splash: React.FC = () => {
                   if (userProfile.id) {
                     socketService.registerUser(userProfile.id, newToken);
                   }
+                  try {
+                    const dbCartRes = await cartService.getUserCart();
+                    if (dbCartRes.data?.status && dbCartRes.data?.data) {
+                      const dbProducts = dbCartRes.data.data.products || [];
+                      const dbPackages = dbCartRes.data.data.packages || [];
+                      dispatch(
+                        setCartFromBackend({
+                          products: dbProducts,
+                          packages: dbPackages,
+                          cartUserId: userProfile.id,
+                        })
+                      );
+                    }
+                  } catch (cartErr) {
+                    console.log("Cart restore error after token refresh:", cartErr);
+                  }
                   navigation.replace("Home");
                   return;
                 }
@@ -74,6 +108,8 @@ const Splash: React.FC = () => {
                   "userLoginTime",
                   "rememberMeEnabled",
                 ]).catch(() => {});
+                dispatch(clearCart());
+                dispatch(logoutSuccess());
               }
             }
           } else {
@@ -84,6 +120,8 @@ const Splash: React.FC = () => {
               "userLoginTime",
               "rememberMeEnabled",
             ]).catch(() => {});
+            dispatch(clearCart());
+            dispatch(logoutSuccess());
           }
         }
       } catch (e) {

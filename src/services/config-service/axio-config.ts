@@ -2,6 +2,7 @@ import { environment } from "@/environment/environment";
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { store } from "@/store";
 import { updateToken, logoutSuccess } from "@/store/authSlice";
+import { clearCart } from "@/store/cartSlice";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { ENDPOINTS } from "./endpoints";
 
@@ -123,6 +124,7 @@ apiClient.interceptors.response.use(
       processQueue(refreshErr, null);
       // Refresh token expired or invalid: clear tokens and log user out
       await tokenStorage.clearTokens();
+      store.dispatch(clearCart());
       store.dispatch(logoutSuccess());
       return Promise.reject(refreshErr);
     } finally {

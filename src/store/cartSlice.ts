@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { loginSuccess, logoutSuccess } from "./authSlice";
 
 export interface PackageCartItem {
   id: number;
@@ -28,11 +29,13 @@ export interface ProductCartItem {
 export interface CartState {
   packages: PackageCartItem[];
   products: ProductCartItem[];
+  cartUserId: number | null;
 }
 
 const initialState: CartState = {
   packages: [],
   products: [],
+  cartUserId: null,
 };
 
 const cartSlice = createSlice({
@@ -139,10 +142,17 @@ const cartSlice = createSlice({
     // ─── BACKEND SYNC ACTIONS ──────────────────────────────────────────────────
     setCartFromBackend: (
       state,
-      action: PayloadAction<{ products: ProductCartItem[]; packages: PackageCartItem[] }>
+      action: PayloadAction<{
+        products: ProductCartItem[];
+        packages: PackageCartItem[];
+        cartUserId?: number | null;
+      }>
     ) => {
       state.products = action.payload.products;
       state.packages = action.payload.packages;
+      if (action.payload.cartUserId !== undefined) {
+        state.cartUserId = action.payload.cartUserId;
+      }
     },
 
     // ─── AVAILABILITY SYNC ──────────────────────────────────────────────────────
@@ -171,7 +181,24 @@ const cartSlice = createSlice({
     clearCart: (state) => {
       state.packages = [];
       state.products = [];
+      state.cartUserId = null;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(logoutSuccess, (state) => {
+        state.packages = [];
+        state.products = [];
+        state.cartUserId = null;
+      })
+      .addCase(loginSuccess, (state, action) => {
+        const newUserId = action.payload.userProfile?.id ?? null;
+        if (state.cartUserId !== newUserId) {
+          state.packages = [];
+          state.products = [];
+          state.cartUserId = newUserId;
+        }
+      });
   },
 });
 

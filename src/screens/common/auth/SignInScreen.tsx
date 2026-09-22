@@ -19,7 +19,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import { useDispatch } from "react-redux";
 import { loginSuccess, setRememberMeDetails } from "@/store/authSlice";
+import { setCartFromBackend } from "@/store/cartSlice";
 import authService from "@/services/auth/auth.service";
+import cartService from "@/services/cart/cart.service";
 import * as SecureStore from "expo-secure-store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -133,6 +135,24 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         dispatch(loginSuccess({ token, userProfile, loginTime }));
         if (userProfile.id) {
           socketService.registerUser(userProfile.id, token);
+        }
+
+        // Fetch this logged-in user's cart from backend
+        try {
+          const dbCartRes = await cartService.getUserCart();
+          if (dbCartRes.data?.status && dbCartRes.data?.data) {
+            const dbProducts = dbCartRes.data.data.products || [];
+            const dbPackages = dbCartRes.data.data.packages || [];
+            dispatch(
+              setCartFromBackend({
+                products: dbProducts,
+                packages: dbPackages,
+                cartUserId: userProfile.id,
+              })
+            );
+          }
+        } catch (cartErr) {
+          console.log("Failed to sync cart on login:", cartErr);
         }
 
         if (rememberMe) {
