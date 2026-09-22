@@ -11,6 +11,7 @@ import {
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { logoutSuccess, updateUserProfile } from "@/store/authSlice";
+import { clearCart } from "@/store/cartSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -118,6 +119,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
         await AsyncStorage.removeItem("userProfile");
         await AsyncStorage.removeItem("userLoginTime");
 
+        dispatch(clearCart());
         dispatch(logoutSuccess());
 
         navigation.reset({

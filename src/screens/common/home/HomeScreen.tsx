@@ -34,6 +34,8 @@ import {
   removePackage,
   increasePackageQuantity,
   decreasePackageQuantity,
+  setCartFromBackend,
+  clearCart,
   ProductCartItem,
   PackageCartItem,
   CartState,
@@ -51,6 +53,7 @@ import ViewCartPopup from "@/component/common/ViewCartPopup";
 import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
 import socketService from "@/services/socket/socket.service";
+import FixedMarqueeText from "@/component/marquee-text/MarqueeText";
 
 export type { ProductType, PackageType } from "@/types/types";
 
@@ -75,6 +78,12 @@ interface AddTimeSnapshot {
   quantity?: number;
   price: number;
 }
+
+// Price display types coming from the backend (marketplaceitems.displayType):
+// "AP&SP&D" -> Actual Price (struck through) + Sale Price + Discount% badge
+// "AP&SP"   -> Actual Price (struck through) + Sale Price, no badge
+// "D&AP"    -> Only Sale Price + Discount% badge, no struck-through actual price
+type DisplayType = "AP&SP&D" | "D&AP" | "AP&SP";
 
 const CATEGORY_IMAGES: Record<string, any> = {
   Packages: require("@/assets/images/home/packages.webp"),
@@ -352,6 +361,26 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       if (userToken) {
         syncUserProfile();
+
+        // Sync this user's cart from backend
+        cartService.getUserCart()
+          .then((dbCartRes) => {
+            if (dbCartRes.data?.status && dbCartRes.data?.data) {
+              const dbProducts = dbCartRes.data.data.products || [];
+              const dbPackages = dbCartRes.data.data.packages || [];
+              dispatch(
+                setCartFromBackend({
+                  products: dbProducts,
+                  packages: dbPackages,
+                  cartUserId: userProfile?.id ?? null,
+                })
+              );
+            }
+          })
+          .catch(() => { });
+      } else {
+        // No token — clear any stale cart items from a previous session
+        dispatch(clearCart());
       }
 
       const onBackPress = () => {
@@ -599,11 +628,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch {}
+              } catch { }
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => {});
+          .catch(() => { });
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -660,7 +689,26 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
+        );
+
+        // Also refresh the cart from backend
+        promises.push(
+          cartService.getUserCart()
+            .then((dbCartRes) => {
+              if (dbCartRes.data?.status && dbCartRes.data?.data) {
+                const dbProducts = dbCartRes.data.data.products || [];
+                const dbPackages = dbCartRes.data.data.packages || [];
+                dispatch(
+                  setCartFromBackend({
+                    products: dbProducts,
+                    packages: dbPackages,
+                    cartUserId: userProfile?.id ?? null,
+                  })
+                );
+              }
+            })
+            .catch(() => { }),
         );
       }
 
@@ -694,11 +742,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch {}
+                } catch { }
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -1175,6 +1223,28 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     discountedPerUnit > 0 &&
                     discountedPerUnit < normalPerUnit;
 
+                  // ---- Price display type (backend: marketplaceitems.displayType) ----
+                  // "AP&SP&D" -> actual price (struck) + sale price + discount% badge
+                  // "AP&SP"   -> actual price (struck) + sale price, no badge
+                  // "D&AP"    -> only sale price + discount% badge, no struck price
+                  // Falls back to showing everything if displayType is unset/unknown,
+                  // matching the previous behavior for existing items.
+                  const displayType = isProduct
+                    ? ((product as any).displayType as DisplayType | undefined)
+                    : undefined;
+
+                  const showDiscountBadge =
+                    hasDiscount &&
+                    (displayType === "AP&SP&D" ||
+                      displayType === "D&AP" ||
+                      !displayType);
+
+                  const showStruckNormalPrice =
+                    hasDiscount &&
+                    (displayType === "AP&SP&D" ||
+                      displayType === "AP&SP" ||
+                      !displayType);
+
                   const startNormalPrice = isProduct
                     ? normalPerUnit * rawStartValue
                     : 0;
@@ -1234,7 +1304,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           borderBottomRightRadius: 18,
                         }}
                       >
-                        {isProduct && hasDiscount && product.discount && (
+                        {isProduct && showDiscountBadge && product.discount && (
                           <View
                             style={{
                               position: "absolute",
@@ -1263,12 +1333,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           </View>
                         )}
 
-                        {/*
-                          Product/package images come from the backend as
-                          absolute URLs, so `{ uri: product.image }` is
-                          correct here — unlike the local category icons
-                          above, these are NOT bundler-relative paths.
-                        */}
+
                         <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
                           <Image
                             source={{ uri: product?.image! }}
@@ -1278,12 +1343,18 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         </View>
 
                         {/* Product Details */}
-                        <Text
-                          className="text-black font-bold text-sm mt-1 text-center"
-                          numberOfLines={1}
-                        >
-                          {product?.displayName!}
-                        </Text>
+                        <View style={{ width: "100%", marginTop: 4 }}>
+                          <FixedMarqueeText
+                            key={product.id}
+                            text={product?.displayName!}
+                            style={{
+                              color: "#000000",
+                              fontWeight: "bold",
+                              fontSize: 13,
+                              textAlign: "center",
+                            }}
+                          />
+                        </View>
 
                         {/* PRODUCT CARD: Not in cart */}
                         {isProduct && !cartItem && (
@@ -1292,7 +1363,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               {displayWeightText}
                             </Text>
 
-                            {hasDiscount && (
+                            {showStruckNormalPrice && (
                               <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
@@ -1473,7 +1544,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               {displayWeightText}
                             </Text>
 
-                            {hasDiscount && (
+                            {showStruckNormalPrice && (
                               <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
@@ -1594,10 +1665,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* Shows the FROZEN add-time snapshot, not live cartPackage data. */}
                         {isPackage && cartPackage && !isExpanded && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                              {snapshot?.quantity ?? cartPackage.quantity}
-                            </Text>
-
                             <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
                               Rs.{" "}
                               {formatPrice(
@@ -1605,7 +1672,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               )}
                             </Text>
 
-                            {/* Checkmark Button — tap to re-expand this card and see live data */}
+                            {/* Checkmark / Re-expand Button — tap to re-expand this card */}
                             <TouchableOpacity
                               activeOpacity={0.8}
                               onPress={(e) => {
