@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.polygonagro.Polygon",
-      "versionCode": 1,
+      "versionCode": 0,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/public/app-icon-android.png",
