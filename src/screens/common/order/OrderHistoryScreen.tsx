@@ -5,6 +5,7 @@ import {
     TouchableOpacity,
     ScrollView,
     BackHandler,
+    ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -44,6 +45,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
     const [dateFilterOpen, setDateFilterOpen] = useState(false);
     const [selectedFilter, setSelectedFilter] = useState("Ordered Date");
     const [appliedFilter, setAppliedFilter] = useState(false);
+    const [filterLoading, setFilterLoading] = useState(false);
     const [datePickerVisible, setDatePickerVisible] = useState(false);
     const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
@@ -208,6 +210,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
 
         setSelectedDateStr(dateStr);
         setAppliedFilter(true);
+        setFilterLoading(true);
 
         const matches = orders.filter((order) => {
             if (selectedFilter === "Ordered Date") {
@@ -224,13 +227,16 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             return true;
         });
 
-        if (matches.length === 0) {
-            showAlert(
-                "No Orders Found",
-                `No orders found matching ${selectedFilter}: ${dateStr}.`,
-                "error"
-            );
-        }
+        setTimeout(() => {
+            setFilterLoading(false);
+            if (matches.length === 0) {
+                showAlert(
+                    "No Orders Found",
+                    `No orders found matching ${selectedFilter}: ${dateStr}.`,
+                    "error"
+                );
+            }
+        }, 350);
     };
 
     const handleApplyFilter = () => {
@@ -243,20 +249,42 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             return;
         }
         setAppliedFilter(true);
+        setFilterLoading(true);
 
-        const matches = getFilteredOrders();
-        if (matches.length === 0) {
-            showAlert(
-                "No Orders Found",
-                `No orders found matching ${selectedFilter}: ${selectedDateStr}.`,
-                "error"
-            );
-        }
+        const matches = orders.filter((order) => {
+            if (selectedFilter === "Ordered Date") {
+                return (
+                    isSameCalendarDate(order.rawOrderDate, selectedDateStr) ||
+                    isSameCalendarDate(order.orderDate, selectedDateStr)
+                );
+            } else if (selectedFilter === "Scheduled Date") {
+                return (
+                    isSameCalendarDate(order.rawScheduleDate, selectedDateStr) ||
+                    isSameCalendarDate(order.deliveryDate, selectedDateStr)
+                );
+            }
+            return true;
+        });
+
+        setTimeout(() => {
+            setFilterLoading(false);
+            if (matches.length === 0) {
+                showAlert(
+                    "No Orders Found",
+                    `No orders found matching ${selectedFilter}: ${selectedDateStr}.`,
+                    "error"
+                );
+            }
+        }, 350);
     };
 
     const handleClearFilter = () => {
+        setFilterLoading(true);
         setSelectedDateStr(null);
         setAppliedFilter(false);
+        setTimeout(() => {
+            setFilterLoading(false);
+        }, 350);
     };
 
     const handleViewDetails = (order: Order) => {
@@ -476,6 +504,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                             return;
                                                         }
                                                     }
+                                                    setFilterLoading(true);
                                                     const matches = orders.filter((order) => {
                                                         if (option === "Ordered Date") {
                                                             return (
@@ -490,13 +519,16 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                                         }
                                                         return true;
                                                     });
-                                                    if (matches.length === 0) {
-                                                        showAlert(
-                                                            "No Orders Found",
-                                                            `No orders found matching ${option}: ${selectedDateStr}.`,
-                                                            "error"
-                                                        );
-                                                    }
+                                                    setTimeout(() => {
+                                                        setFilterLoading(false);
+                                                        if (matches.length === 0) {
+                                                            showAlert(
+                                                                "No Orders Found",
+                                                                `No orders found matching ${option}: ${selectedDateStr}.`,
+                                                                "error"
+                                                            );
+                                                        }
+                                                    }, 350);
                                                 }
                                             }}
                                             style={{
@@ -585,6 +617,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                         {/* APPLY / CLEAR FILTER BUTTON */}
                         <TouchableOpacity
                             activeOpacity={0.85}
+                            disabled={filterLoading}
                             onPress={appliedFilter ? handleClearFilter : handleApplyFilter}
                             style={{
                                 height: 50,
@@ -604,23 +637,29 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                 elevation: 3,
                             }}
                         >
-                            {appliedFilter && (
-                                <Ionicons
-                                    name="close"
-                                    size={18}
-                                    color="#FFFFFF"
-                                    style={{ marginRight: 6 }}
-                                />
+                            {filterLoading ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    {appliedFilter && (
+                                        <Ionicons
+                                            name="close"
+                                            size={18}
+                                            color="#FFFFFF"
+                                            style={{ marginRight: 6 }}
+                                        />
+                                    )}
+                                    <Text
+                                        style={{
+                                            color: "#FFFFFF",
+                                            fontSize: 15,
+                                            fontWeight: "600",
+                                        }}
+                                    >
+                                        {appliedFilter ? "Clear Filter" : "Apply Filter"}
+                                    </Text>
+                                </>
                             )}
-                            <Text
-                                style={{
-                                    color: "#FFFFFF",
-                                    fontSize: 15,
-                                    fontWeight: "600",
-                                }}
-                            >
-                                {appliedFilter ? "Clear Filter" : "Apply Filter"}
-                            </Text>
                         </TouchableOpacity>
                     </View>
 
@@ -633,7 +672,18 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                     />
 
                     {/* ORDER LIST */}
-                    {getFilteredOrders().length == 0 ? (
+                    {filterLoading ? (
+                        <View
+                            style={{
+                                flex: 1,
+                                justifyContent: "center",
+                                alignItems: "center",
+                                paddingHorizontal: 30,
+                            }}
+                        >
+                            <LoadingPage message="Loading Orders..." fullScreen={false} />
+                        </View>
+                    ) : getFilteredOrders().length == 0 ? (
                         <View
                             style={{
                                 flex: 1,
