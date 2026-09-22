@@ -373,7 +373,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 Remember me
               </Text>
             </View>
-            <TouchableOpacity activeOpacity={0.7}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate("ForgotPassword")}
+            >
               <Text className="text-sm font-bold text-[#094EE8]">
                 Forgot Password?
               </Text>
