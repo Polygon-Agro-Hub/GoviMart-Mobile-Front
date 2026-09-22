@@ -19,6 +19,10 @@ export interface AlacartSelectedProduct {
   image?: any;
   price: number;
   basePrice: number;
+  // Per-kg rate used to recompute `price` whenever amount/unit changes.
+  // Falls back to `basePrice` for items loaded from an existing order
+  // (where this isn't set) so their unit/qty math keeps working as before.
+  perKgPrice?: number;
   weightDisplay: string;
   unit: "kg" | "g";
   amount: number;
@@ -41,6 +45,7 @@ export interface PackageReviewState {
   moneyPaid: number;
   creditPaid: number;
   paymentMethod: string;
+  deliveryMethod: string;
   isPaid: boolean;
   processOrderAmount: number;
   packagesMeta: PackageMeta[];
@@ -81,6 +86,7 @@ const initialState: PackageReviewState = {
   targetLimit: 50,
   isLimitReached: false,
   unreadReminderDays: 1,
+deliveryMethod: "",
 };
 
 export const packageReviewSlice = createSlice({
@@ -333,7 +339,18 @@ export const packageReviewSlice = createSlice({
     },
     toggleAlacartProduct: (state, action: PayloadAction<ProductType>) => {
       const product = action.payload;
-      const basePrice = parseFloat(product.normalPrice) || 0;
+
+      // Per-kg rates as stored in marketplaceitems — discountedPrice is the
+      // effective per-kg charge; fall back to normalPrice when there's no
+      // discount (mirrors normalizeToKg() in AlacartProductCard).
+      const normalPricePerKg = parseFloat(String(product.normalPrice)) || 0;
+      const discountedPricePerKg =
+        product.discountedPrice != null && String(product.discountedPrice).trim() !== ""
+          ? parseFloat(String(product.discountedPrice))
+          : 0;
+      const perKgPrice = discountedPricePerKg > 0 ? discountedPricePerKg : normalPricePerKg;
+      const basePrice = normalPricePerKg;
+
       const dbUnitType = (product.unitType || "g").toLowerCase();
       const rawStartValue = product.startValue ? parseFloat(String(product.startValue)) : (dbUnitType === "kg" ? 1 : 500);
       const initialUnit = (dbUnitType === "kg" && rawStartValue < 1) || dbUnitType === "g" ? "g" : "kg";
@@ -356,6 +373,11 @@ export const packageReviewSlice = createSlice({
       const weightDisplay = `${initialAmount} ${initialUnit}`;
       const newKey = `new-${product.id}`;
 
+      // Price at the initial quantity — this is the line that was missing
+      // the multiplication by weight before (it was just the flat per-kg rate).
+      const initialWeightMultiplier = initialUnit === "kg" ? initialAmount : initialAmount / 1000;
+      const initialPrice = Number((perKgPrice * initialWeightMultiplier).toFixed(2));
+
       // Check if this product is already in alacartSelection as newly added
       if (state.alacartSelection[newKey]) {
         delete state.alacartSelection[newKey];
@@ -367,8 +389,9 @@ export const packageReviewSlice = createSlice({
           productId: product.id,
           displayName: product.displayName,
           image: product.image,
-          price: basePrice,
+          price: initialPrice,
           basePrice: basePrice,
+          perKgPrice,
           weightDisplay,
           unit: initialUnit,
           amount: initialAmount,
@@ -398,7 +421,10 @@ export const packageReviewSlice = createSlice({
       const newMin = item.minQuantity ? (newUnit === "kg" ? parseFloat((item.minQuantity / 1000).toFixed(3)) : Math.round(item.minQuantity * 1000)) : undefined;
 
       const weightMultiplier = newUnit === "kg" ? newAmount : newAmount / 1000;
-      const newPrice = Number((item.basePrice * weightMultiplier).toFixed(2));
+      // perKgPrice is the correct multiplier; basePrice is only a fallback
+      // for items loaded from an existing order that predate this field.
+      const rate = item.perKgPrice ?? item.basePrice;
+      const newPrice = Number((rate * weightMultiplier).toFixed(2));
 
       state.alacartSelection[id] = {
         ...item,
@@ -427,7 +453,10 @@ export const packageReviewSlice = createSlice({
       const cleanAmount = Math.max(min, rawNewAmount);
 
       const weightMultiplier = item.unit === "kg" ? cleanAmount : cleanAmount / 1000;
-      const newPrice = Number((item.basePrice * weightMultiplier).toFixed(2));
+      // perKgPrice is the correct multiplier; basePrice is only a fallback
+      // for items loaded from an existing order that predate this field.
+      const rate = item.perKgPrice ?? item.basePrice;
+      const newPrice = Number((rate * weightMultiplier).toFixed(2));
 
       state.alacartSelection[id] = {
         ...item,
@@ -477,4 +506,3 @@ export const {
 } = packageReviewSlice.actions;
 
 export default packageReviewSlice.reducer;
-

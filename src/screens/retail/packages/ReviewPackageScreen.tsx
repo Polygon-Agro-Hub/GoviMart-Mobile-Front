@@ -892,7 +892,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
     }
   };
 
-  const onChangeProduct = (packageId: string, product: ReviewProduct) => {
+ const onChangeProduct = (packageId: string, product: ReviewProduct) => {
     navigation.navigate("ReplaceProduct", {
       orderId: effectiveOrderId,
       fromProduct: product,
@@ -900,6 +900,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
       orderPackageId: orderPackageDbIds[packageId],
       replceId: product.itemId || parseInt(product.id) || undefined,
       stepIndex: currentStepIndex,
+      paymentMethod: paymentMethod, // NEW — Redux value, e.g. "Cash on Delivery"
     });
   };
 

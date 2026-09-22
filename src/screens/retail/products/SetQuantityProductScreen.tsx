@@ -105,6 +105,26 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const packageId = route.params?.packageId || "";
   const stepIndex = route.params?.stepIndex ?? 0;
 
+  // ---------------------------------------------------------------------
+  // Payment / delivery method — drives which "Please Note" copy is shown.
+  // Forwarded from ReviewPackage -> ReplaceProduct -> here via route.params.
+  // ---------------------------------------------------------------------
+  const paymentMethod: string = String(
+    route.params?.paymentMethod || "",
+  ).toLowerCase();
+  const deliveryMethod: string = String(
+    route.params?.deliveryMethod || "",
+  ).toLowerCase();
+
+  const isCashOnDelivery =
+    paymentMethod === "cash" || paymentMethod === "cod";
+  const isPickup = deliveryMethod === "pickup";
+
+  // Show the "you'll owe/be refunded at the end" note when the order is
+  // Cash on Delivery OR being picked up (i.e. money hasn't been settled yet).
+  const showConditionalNote = isCashOnDelivery || isPickup;
+  const deliveryWord = isPickup ? "pickup" : "delivery";
+
   // Display unit for each side, taken from their own unitType — NOT
   // hardcoded to "kg". Internal math always stays in kg regardless.
   const fromDisplayUnit: "kg" | "g" =
@@ -346,11 +366,28 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               Please Note :
             </Text>
             <Text className="text-[13px] text-[#6B6B6B] leading-5">
-              You have already paid for this order, so the remaining balance of{" "}
-              <Text className="font-bold text-black">
-                Rs. {formatPrice(Math.abs(balance))}
-              </Text>{" "}
-              will be credited to your account.
+              {showConditionalNote ? (
+                <>
+                  The total amount you need to pay upon {deliveryWord} will be{" "}
+                  <Text className="font-bold text-black">
+                    {isCredit ? "reduced" : "increased"}
+                  </Text>{" "}
+                  by{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(Math.abs(balance))}
+                  </Text>{" "}
+                  at the end of this process.
+                </>
+              ) : (
+                <>
+                  You have already paid for this order, so the remaining
+                  balance of{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(Math.abs(balance))}
+                  </Text>{" "}
+                  will be credited to your account.
+                </>
+              )}
             </Text>
           </View>
         </View>

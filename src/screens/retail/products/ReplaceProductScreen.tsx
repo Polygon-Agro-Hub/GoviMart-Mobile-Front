@@ -39,9 +39,12 @@ type AlacartSelectedProduct = {
  */
 // Local extension so weightDisplay/perKgPrice can travel alongside a
 // ProductType without ProductType itself needing to declare them.
+// Local extension so weightDisplay/perKgPrice/totalPrice can travel
+// alongside a ProductType without ProductType itself needing to declare them.
 type NormalizedProduct = ProductType & {
   weightDisplay: string;
   perKgPrice: number;
+  totalPrice: number;
 };
 
 const normalizeToKg = (product: ProductType): NormalizedProduct => {
@@ -58,10 +61,11 @@ const normalizeToKg = (product: ProductType): NormalizedProduct => {
   const qtyKg = Number(rawStartValue.toFixed(3));
   const stepKg = Number(rawChangeBy.toFixed(3));
 
-  // Always use discountedPrice as the per-kg rate.
+  // Per-kg rate, straight from the DB — never mutated.
   const perKgPrice = parseFloat(String(product.discountedPrice || "0")) || 0;
 
-  // Displayed price = discountedPrice (per-kg rate) * quantity in kg
+  // Total price for the current quantity — computed ONCE, here.
+  // Anything downstream should use this directly and NOT multiply again.
   const totalPrice = Number((perKgPrice * qtyKg).toFixed(2));
 
   // Label built straight from the DB's unitType column: "g" -> grams, else kg
@@ -70,12 +74,13 @@ const normalizeToKg = (product: ProductType): NormalizedProduct => {
 
   return {
     ...product,
-    unitType: product.unitType, // keep the original DB value, don't force "kg"
+    unitType: product.unitType,   // keep the original DB value
     startValue: qtyKg.toString(),
     changeby: stepKg.toString(),
-    perKgPrice,
-    normalPrice: totalPrice.toString(), // string, matches ProductType
-    discountedPrice: totalPrice,        // number, matches ProductType
+    perKgPrice,                   // rate per kg, for any live recompute
+    normalPrice: perKgPrice.toString(), // rate, NOT pre-multiplied
+    discountedPrice: perKgPrice,        // rate, NOT pre-multiplied
+    totalPrice,                   // <-- use THIS for display, not discountedPrice
     weightDisplay,
   };
 };
@@ -293,16 +298,17 @@ const toggleAlacartProduct = (product: ProductType) => {
             );
             if (!selectedProduct) return;
 
-            navigation.navigate("SetQauntity", {
-              orderId: route.params?.orderId,
-              fromProduct: route.params?.fromProduct,
-              toProduct: normalizeToKg(selectedProduct),
-              packageId: route.params?.packageId,
-              orderPackageId: route.params?.orderPackageId,
-              replceId:
-                route.params?.fromProduct?.itemId || route.params?.replceId,
-              stepIndex: route.params?.stepIndex,
-            });
+          navigation.navigate("SetQauntity", {
+  orderId: route.params?.orderId,
+  fromProduct: route.params?.fromProduct,
+  toProduct: normalizeToKg(selectedProduct),
+  packageId: route.params?.packageId,
+  orderPackageId: route.params?.orderPackageId,
+  replceId: route.params?.fromProduct?.itemId || route.params?.replceId,
+  stepIndex: route.params?.stepIndex,
+  paymentMethod: route.params?.paymentMethod,
+  deliveryMethod: route.params?.deliveryMethod,
+});
           }}
           activeOpacity={0.85}
         >
