@@ -6,6 +6,10 @@ export const ENDPOINTS = {
     UPDATE_PASSWORD: "api/auth/update-password",
     REFRESH_TOKEN: "api/auth/refresh-token",
     GET_CITIES: "api/auth/cities",
+    FORGOT_PASSWORD_REQUEST_OTP: "api/auth/forgot-password/request-otp",
+    FORGOT_PASSWORD_RESEND_OTP: "api/auth/forgot-password/resend-otp",
+    FORGOT_PASSWORD_VERIFY_OTP: "api/auth/forgot-password/verify-otp",
+    FORGOT_PASSWORD_RESET: "api/auth/forgot-password/reset-password",
   },
 
   CUSTOMER: {

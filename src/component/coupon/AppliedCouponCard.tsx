@@ -49,6 +49,7 @@ export const AppliedCouponCard: React.FC<AppliedCouponCardProps> = ({
           shadowOpacity: 0.05,
           shadowRadius: 5,
           elevation: 1,
+          marginHorizontal: 16,
         },
         style,
       ]}

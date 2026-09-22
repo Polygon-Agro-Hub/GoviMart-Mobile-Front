@@ -1,3 +1,4 @@
+import React from "react";
 import {
     View,
     Text,
@@ -8,41 +9,43 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 // INPUT FIELD
 
-export const InputField = ({
+export const InputField = React.memo(({
     isIconThemeDark,
     icon,
     label,
     value,
     onChangeText,
+    onBlur,
+    onFocus,
     keyboardType = "default",
     placeholder,
     maxLength,
     error,
-    prefix
+    prefix,
+    iconBgColor,
+    iconColor,
+    autoCapitalize,
+    secureTextEntry,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
-    isIconThemeDark?: boolean,
+    isIconThemeDark?: boolean;
+    iconBgColor?: string;
+    iconColor?: string;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
+    onBlur?: () => void;
+    onFocus?: () => void;
     keyboardType?: "default" | "phone-pad" | "email-address";
     placeholder?: string;
     maxLength?: number;
-    error?: string
-    prefix?: string
+    error?: string;
+    prefix?: string;
+    autoCapitalize?: "none" | "sentences" | "words" | "characters";
+    secureTextEntry?: boolean;
 }) => {
-    const handleIconColor = () => {
-        if (isIconThemeDark) {
-            return "#00000"
-        }
-        return "#F2F2F6"
-    }
-    const handleBackgroundColor = () => {
-        if (isIconThemeDark) {
-            return "#FFFFF"
-        }
-        return "#00000"
-    }
+    const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
+    const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
     return (
         <View
             style={{
@@ -68,7 +71,7 @@ export const InputField = ({
                         width: 36,
                         height: 36,
                         borderRadius: 999,
-                        backgroundColor: handleIconColor(),
+                        backgroundColor: resolvedBgColor,
                         justifyContent: "center",
                         alignItems: "center",
                     }}
@@ -77,7 +80,7 @@ export const InputField = ({
                         name={icon}
                         solid
                         size={17}
-                        color={handleBackgroundColor()}
+                        color={resolvedIconColor}
                     />
                 </View>
 
@@ -104,6 +107,7 @@ export const InputField = ({
                     <View style={{
                         flexDirection: "row",
                         alignItems: "center",
+                        width: "100%",
                     }}>
                         {prefix && (
                             <Text
@@ -121,17 +125,24 @@ export const InputField = ({
                         <TextInput
                             value={value}
                             onChangeText={onChangeText}
+                            onBlur={onBlur}
+                            onFocus={onFocus}
                             keyboardType={keyboardType}
                             placeholder={placeholder}
                             placeholderTextColor="#9CA3AF"
                             maxLength={maxLength}
+                            autoCapitalize={autoCapitalize}
+                            secureTextEntry={secureTextEntry}
                             style={{
-                                height: 21,
+                                flex: 1,
+                                height: 24,
                                 paddingVertical: 0,
+                                paddingHorizontal: 0,
                                 fontSize: 14,
-                                color: "#111",
+                                color: "#111111",
                                 fontWeight: "500",
-                                paddingLeft: 0
+                                textAlignVertical: "center",
+                                includeFontPadding: false,
                             }}
                         />
                     </View>
@@ -152,7 +163,7 @@ export const InputField = ({
             ) : null}
         </View>
     );
-};
+});
 
 // DROPDOWN
 

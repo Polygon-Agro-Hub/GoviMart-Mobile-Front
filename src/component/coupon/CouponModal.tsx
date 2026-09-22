@@ -8,13 +8,11 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
 import orderService from "@/services/order/order.service";
-import {
-  CouponItem,
-  getCouponTheme,
-} from "@/constants/coupon.constants";
+import { CouponItem, getCouponTheme } from "@/constants/coupon.constants";
 import AppliedCouponCard from "./AppliedCouponCard";
 
 interface CouponModalProps {
@@ -80,6 +78,42 @@ const CouponModal: React.FC<CouponModalProps> = ({
     });
   };
 
+  const isValidCoupon = (item: CouponItem) => {
+    const statusOk =
+      item.status &&
+      (item.status.toLowerCase() === "enabled" ||
+        item.status.toLowerCase() === "active");
+    if (!statusOk) return false;
+
+    const now = new Date();
+    if (item.startDate) {
+      const start = new Date(item.startDate);
+      start.setHours(0, 0, 0, 0);
+      if (now < start) return false;
+    }
+    if (item.endDate) {
+      const end = new Date(item.endDate);
+      end.setHours(23, 59, 59, 999);
+      if (now > end) return false;
+    }
+    return true;
+  };
+
+  const displayedCoupons = React.useMemo(() => {
+    return coupons.filter((item) => {
+      if (!isValidCoupon(item)) return false;
+      const isFreeDelivery =
+        item.type === "Free Delivery" ||
+        item.type === "Free Delivary" ||
+        (item.type?.toLowerCase().includes("free") &&
+          item.type?.toLowerCase().includes("deliv"));
+      if (deliveryMethod?.toLowerCase() === "pickup" && isFreeDelivery) {
+        return false;
+      }
+      return true;
+    });
+  }, [coupons, deliveryMethod]);
+
   const getCouponDescription = (item: CouponItem) => {
     const isFreeDel =
       item.type === "Free Delivery" || item.type === "Free Delivary";
@@ -138,7 +172,10 @@ const CouponModal: React.FC<CouponModalProps> = ({
           message: res.data.message || "Coupon is valid.",
         });
       } else {
-        Alert.alert("Coupon Error", res.data?.message || "Invalid coupon code.");
+        Alert.alert(
+          "Coupon Error",
+          res.data?.message || "Invalid coupon code.",
+        );
       }
     } catch (error: any) {
       console.log("Error applying coupon:", error);
@@ -242,7 +279,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
 
               <Text
                 style={{
-                  fontSize: 18,
+                  fontSize: 15,
                   fontWeight: "800",
                   color: "#111111",
                   marginBottom: 4,
@@ -305,310 +342,337 @@ const CouponModal: React.FC<CouponModalProps> = ({
             <>
               {/* Centered Ticket Badge */}
               <View style={{ alignItems: "center", marginBottom: 6 }}>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: "#F3E8FF",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <FontAwesome6 name="ticket" size={20} color="#5B18AD" />
-            </View>
+                <View
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 50,
+                    backgroundColor: "#F3E8FF",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <Image
+                    source={require("@/assets/images/order/coupon.webp")}
+                    resizeMode="contain"
+                    style={{
+                      width: 42,
+                      height: 42,
+                    }}
+                  />
+                </View>
 
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: "#111111",
-                marginTop: 10,
-              }}
-            >
-              Apply Coupon
-            </Text>
-
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#6B7280",
-                marginTop: 4,
-                textAlign: "center",
-                lineHeight: 16,
-              }}
-            >
-              Enter your coupon code to get exciting discounts.
-            </Text>
-          </View>
-
-          {/* Input Field */}
-          <View
-            style={{
-              height: 54,
-              borderRadius: 27,
-              borderWidth: 1,
-              borderColor: "#E5E7EB",
-              backgroundColor: "#FFFFFF",
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 14,
-              marginTop: 12,
-            }}
-          >
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: "#000000",
-                justifyContent: "center",
-                alignItems: "center",
-                marginRight: 10,
-              }}
-            >
-              <FontAwesome6 name="ticket" size={14} color="#FFFFFF" />
-            </View>
-
-            <TextInput
-              style={{
-                flex: 1,
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#111111",
-                paddingVertical: 0,
-              }}
-              placeholder="Type Here"
-              placeholderTextColor="#9CA3AF"
-              value={inputCode}
-              onChangeText={setInputCode}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-
-            {Boolean(inputCode) ? (
-              <TouchableOpacity
-                onPress={() => setInputCode("")}
-                style={{ padding: 4 }}
-              >
-                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-
-          {/* Apply Coupon Button */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={applyingCode !== null || !inputCode.trim()}
-            onPress={() => handleApply(inputCode)}
-            style={{
-              height: 48,
-              borderRadius: 24,
-              backgroundColor:
-                inputCode.trim() && applyingCode === null
-                  ? "#000000"
-                  : "#9CA3AF",
-              justifyContent: "center",
-              alignItems: "center",
-              marginTop: 12,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 3,
-            }}
-          >
-            {applyingCode === inputCode.trim() ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 15,
-                  fontWeight: "700",
-                }}
-              >
-                Apply Coupon
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Section Divider */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginVertical: 16,
-            }}
-          >
-            <View
-              style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }}
-            />
-            <Text
-              style={{
-                marginHorizontal: 12,
-                fontSize: 12,
-                color: "#6B7280",
-                fontWeight: "500",
-              }}
-            >
-              Available Offers
-            </Text>
-            <View
-              style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }}
-            />
-          </View>
-
-          {/* Available Offers List */}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={{ maxHeight: 260 }}
-          >
-            {loadingCoupons ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator color="#000000" />
                 <Text
                   style={{
-                    marginTop: 8,
+                    fontSize: 18,
+                    fontWeight: "800",
+                    color: "#111111",
+                    marginTop: 10,
+                  }}
+                >
+                  Apply Coupon
+                </Text>
+
+                <Text
+                  style={{
                     fontSize: 12,
                     color: "#6B7280",
+                    marginTop: 4,
+                    textAlign: "center",
+                    lineHeight: 16,
                   }}
                 >
-                  Loading available offers...
+                  Enter your coupon code to get exciting discounts.
                 </Text>
               </View>
-            ) : coupons.length === 0 ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: "#6B7280",
-                  }}
-                >
-                  No available coupons right now.
-                </Text>
-              </View>
-            ) : (
-              coupons.map((item) => {
-                const theme = getCouponTheme(item.type);
-                const isApplyingThis = applyingCode === item.code;
 
-                return (
-                  <View
-                    key={String(item.id)}
+              {/* Input Field - Styled same as Edit Address "Save Address As" field */}
+              <View
+                style={{
+                  height: 67,
+                  borderRadius: 40,
+                  borderWidth: 1,
+                  borderColor: "#D9DEE5",
+                  backgroundColor: "#FFFFFF",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 11,
+                  marginTop: 14,
+                }}
+              >
+                {/* Round Icon Badge */}
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: "#000000",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <FontAwesome6 name="ticket" solid size={17} color="#FFFFFF" />
+                </View>
+
+                {/* Label + TextInput */}
+                <View
+                  style={{
+                    flex: 1,
+                    marginLeft: 10,
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
                     style={{
-                      borderRadius: 18,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      backgroundColor: theme.background,
-                      padding: 12,
-                      marginBottom: 10,
-                      flexDirection: "row",
-                      alignItems: "center",
+                      fontSize: 14,
+                      color: "#555555",
+                      lineHeight: 19,
+                      marginBottom: 4,
                     }}
                   >
-                    {/* Left Icon Badge */}
-                    <View
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 19,
-                        backgroundColor: theme.primary,
-                        justifyContent: "center",
-                        alignItems: "center",
-                      }}
-                    >
-                      <FontAwesome6
-                        name="ticket"
-                        size={16}
-                        color="#FFFFFF"
-                      />
-                    </View>
+                    Coupon Code
+                  </Text>
 
-                    {/* Middle Info */}
-                    <View
+                  <TextInput
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "#111111",
+                      padding: 0,
+                      margin: 0,
+                    }}
+                    placeholder="Type Here"
+                    placeholderTextColor="#9CA3AF"
+                    value={inputCode}
+                    onChangeText={setInputCode}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                {Boolean(inputCode) ? (
+                  <TouchableOpacity
+                    onPress={() => setInputCode("")}
+                    style={{ padding: 6, marginRight: 4 }}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Apply Coupon Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={applyingCode !== null || !inputCode.trim()}
+                onPress={() => handleApply(inputCode)}
+                style={{
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor:
+                    inputCode.trim() && applyingCode === null
+                      ? "#000000"
+                      : "#9CA3AF",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginTop: 12,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+              >
+                {applyingCode === inputCode.trim() ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 15,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Apply Coupon
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Section Divider */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginVertical: 16,
+                }}
+              >
+                <View
+                  style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }}
+                />
+                <Text
+                  style={{
+                    marginHorizontal: 12,
+                    fontSize: 12,
+                    color: "#6B7280",
+                    fontWeight: "500",
+                  }}
+                >
+                  Available Offers
+                </Text>
+                <View
+                  style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }}
+                />
+              </View>
+
+              {/* Available Offers List */}
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: 260 }}
+              >
+                {loadingCoupons ? (
+                  <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                    <ActivityIndicator color="#000000" />
+                    <Text
                       style={{
-                        flex: 1,
-                        marginLeft: 12,
-                        marginRight: 8,
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "#6B7280",
                       }}
                     >
-                      <Text
+                      Loading available offers...
+                    </Text>
+                  </View>
+                ) : displayedCoupons.length === 0 ? (
+                  <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: "#6B7280",
+                      }}
+                    >
+                      No available coupons right now.
+                    </Text>
+                  </View>
+                ) : (
+                  displayedCoupons.map((item) => {
+                    const theme = getCouponTheme(item.type);
+                    const isApplyingThis = applyingCode === item.code;
+
+                    return (
+                      <View
+                        key={String(item.id)}
                         style={{
-                          fontSize: 14,
-                          fontWeight: "800",
-                          color: "#111111",
+                          borderRadius: 18,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.background,
+                          padding: 12,
+                          marginBottom: 10,
+                          flexDirection: "row",
+                          alignItems: "center",
                         }}
                       >
-                        {item.code}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: "#4B5563",
-                          marginTop: 2,
-                          lineHeight: 16,
-                        }}
-                      >
-                        {getCouponDescription(item)}
-                      </Text>
-                    </View>
-
-                    {/* Right Apply Pill Button */}
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      disabled={applyingCode !== null}
-                      onPress={() => handleApply(item.code)}
-                      style={{
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: "#000000",
-                        paddingHorizontal: 16,
-                        justifyContent: "center",
-                        alignItems: "center",
-                      }}
-                    >
-                      {isApplyingThis ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <Text
+                        {/* Left Icon Badge */}
+                        <View
                           style={{
-                            color: "#FFFFFF",
-                            fontSize: 12,
-                            fontWeight: "700",
+                            width: 38,
+                            height: 38,
+                            borderRadius: 19,
+                            backgroundColor: theme.primary,
+                            justifyContent: "center",
+                            alignItems: "center",
                           }}
                         >
-                          Apply
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                );
-              })
-            )}
-          </ScrollView>
+                          <FontAwesome6
+                            name="ticket"
+                            size={16}
+                            color="#FFFFFF"
+                          />
+                        </View>
 
-          {/* Bottom Footnote Badge */}
-          <View
-            style={{
-              backgroundColor: "#F3F4F6",
-              borderRadius: 12,
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              alignSelf: "center",
-              marginTop: 10,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#4B5563",
-                fontWeight: "500",
-              }}
-            >
-              Only one coupon can be applied for a order.
-            </Text>
-          </View>
+                        {/* Middle Info */}
+                        <View
+                          style={{
+                            flex: 1,
+                            marginLeft: 12,
+                            marginRight: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "800",
+                              color: "#111111",
+                            }}
+                          >
+                            {item.code}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#4B5563",
+                              marginTop: 2,
+                              lineHeight: 16,
+                            }}
+                          >
+                            {getCouponDescription(item)}
+                          </Text>
+                        </View>
+
+                        {/* Right Apply Pill Button */}
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          disabled={applyingCode !== null}
+                          onPress={() => handleApply(item.code)}
+                          style={{
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: "#000000",
+                            paddingHorizontal: 16,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          {isApplyingThis ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                          ) : (
+                            <Text
+                              style={{
+                                color: "#FFFFFF",
+                                fontSize: 12,
+                                fontWeight: "700",
+                              }}
+                            >
+                              Apply
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+
+              {/* Bottom Footnote Badge */}
+              <View
+                style={{
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 12,
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  alignSelf: "center",
+                  marginTop: 10,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#4B5563",
+                    fontWeight: "500",
+                  }}
+                >
+                  Only one coupon can be applied for a order.
+                </Text>
+              </View>
             </>
           )}
         </View>
