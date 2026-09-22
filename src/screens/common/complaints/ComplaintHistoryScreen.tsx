@@ -139,6 +139,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
             justifyContent: "center",
             alignItems: "center",
             paddingHorizontal: 24,
+            paddingBottom: 60,
             width: "100%",
           }}
         >
@@ -148,6 +149,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
               justifyContent: "center",
               alignItems: "center",
               width: "100%",
+              paddingVertical: 0,
             }}
           />
         </View>
@@ -214,9 +216,8 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
                   activeOpacity={complaint.reply ? 0.8 : 1}
                   disabled={!complaint.reply}
                   onPress={() => handleReply(complaint)}
-                  className={`h-[25px] px-[9px] rounded-[5px] justify-center items-center shadow-md ${
-                    complaint.reply ? "bg-black" : "bg-[#9EADB5]"
-                  }`}
+                  className={`h-[25px] px-[9px] rounded-[5px] justify-center items-center shadow-md ${complaint.reply ? "bg-black" : "bg-[#9EADB5]"
+                    }`}
                   style={{
                     elevation: complaint.reply ? 3 : 0,
                   }}
