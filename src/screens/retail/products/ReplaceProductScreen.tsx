@@ -13,6 +13,7 @@ import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSke
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
 import CustomHeader from "@/component/common/CustomHeader";
 import productService from "@/services/product/product.service";
+import socketService from "@/services/socket/socket.service";
 
 type Props = StackScreenProps<RootStackParamList, "ReplaceProduct">;
 
@@ -188,6 +189,18 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
 
   useEffect(() => {
     fetchReplacementsByProductType();
+  }, [targetProductTypeId]);
+
+  // Real-time Replacement Products update via Socket.IO
+  useEffect(() => {
+    const unsubscribe = socketService.onCatalogUpdate((data) => {
+      console.log("📦 [ReplaceProductScreen] Real-time catalog update received via Socket.IO:", data);
+      fetchReplacementsByProductType();
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [targetProductTypeId]);
 
 const toggleAlacartProduct = (product: ProductType) => {

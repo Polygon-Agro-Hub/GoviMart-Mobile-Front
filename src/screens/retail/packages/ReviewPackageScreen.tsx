@@ -48,6 +48,7 @@ import ConfirmationModal from "@/component/common/ConfirmationModal";
 import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
+import socketService from "@/services/socket/socket.service";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
@@ -245,6 +246,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [loadingAlaCartProducts, setLoadingAlaCartProducts] =
     useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [unavailablePackageIds, setUnavailablePackageIds] = useState<Record<string, boolean>>({});
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -686,6 +688,29 @@ const fetchCategoryProducts = async (categoryId: string) => {
     fetchCategoryProducts("Vegetables");
   }, []);
 
+  // Helper: check if any packages in the current review are still enabled
+  const checkPackageAvailability = useCallback(async () => {
+    if (packagesMeta.length === 0) return;
+    try {
+      const packageIds = packagesMeta.map((p) => parseInt(p.id)).filter((id) => !isNaN(id));
+      if (packageIds.length === 0) return;
+      const res = await productService.checkAvailability([], packageIds);
+      if (res.data?.packages) {
+        const unavailable: Record<string, boolean> = {};
+        packagesMeta.forEach((p) => {
+          const id = parseInt(p.id);
+          if (res.data.packages[id] === false) {
+            unavailable[p.id] = true;
+          }
+        });
+        setUnavailablePackageIds(unavailable);
+      }
+    } catch (err) {
+      console.log("[ReviewPackageScreen] checkPackageAvailability error:", err);
+    }
+  }, [packagesMeta]);
+
+
   const toggleAlacartProduct = (product: ProductType) => {
     dispatch(toggleAlacartProductAction(product));
   };
@@ -724,6 +749,46 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
   const currentStep = steps[currentStepIndex] ||
     steps[0] || { type: "confirm" as const };
+
+  // Real-time Ala Carte Products & Package Availability update via Socket.IO
+  useEffect(() => {
+    const unsubscribe = socketService.onCatalogUpdate((data) => {
+      console.log("📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:", data);
+      // Re-fetch the currently selected ala carte category (don't reset category)
+      if (mode === "flow" && currentStep.type === "alacart") {
+        productService
+          .getProductsByCategory(selectedAlaCartCategory)
+          .then((response) => {
+            if (response.data?.status && Array.isArray(response.data.products)) {
+              const products = response.data.products
+                .map((item: any) => ({ ...item, type: "product" }))
+                .filter(
+                  (item: any) =>
+                    item.isEnable === undefined ||
+                    item.isEnable === 1 ||
+                    item.isEnable === true
+                );
+              setAlaCartProducts(products);
+            }
+          })
+          .catch(() => {});
+      }
+      // Re-check package availability on confirm step
+      if (mode === "flow" && currentStep.type === "confirm") {
+        checkPackageAvailability();
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [mode, currentStep, selectedAlaCartCategory, checkPackageAvailability]);
+
+  // Check package availability whenever the user enters the confirm step
+  useEffect(() => {
+    if (mode === "flow" && currentStep.type === "confirm") {
+      checkPackageAvailability();
+    }
+  }, [mode, currentStep, checkPackageAvailability]);
 
   const goToPrevStep = () => {
     if (currentStepIndex === 0) {
@@ -1056,6 +1121,11 @@ const fetchCategoryProducts = async (categoryId: string) => {
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
+
+  // True when at least one package in the confirm step is no longer available
+  const hasUnavailablePackage = packagesMeta.some(
+    (p) => unavailablePackageIds[p.id] === true
+  );
 
   return (
     <View className="flex-1 bg-white">
@@ -1916,79 +1986,112 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
           {/* Package Cards */}
           <View className="mt-3">
-            {packageSummaries.map((item, sIdx) => (
-              <View
-                key={`summary-${item.pkg.id}-${sIdx}`}
-                className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
-              >
-                <View className="flex-row items-center">
-                  <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center mr-3 overflow-hidden">
-                    {item.pkg.image ? (
-                      <Image
-                        source={
-                          typeof item.pkg.image === "string"
-                            ? { uri: item.pkg.image }
-                            : item.pkg.image
-                        }
-                        className="w-12 h-12 rounded-xl"
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Image
-                        source={getPackageImage(item.pkg.id)}
-                        className="w-10 h-10"
-                        resizeMode="contain"
-                      />
-                    )}
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-[16px] font-bold text-black">
-                      {item.pkg.name}
-                      {item.pkg.qty > 1 ? ` (x${item.pkg.qty})` : ""}
-                    </Text>
-                    <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                      Original Price :{" "}
-                      <Text className="font-bold text-black">
-                        Rs. {formatPrice(item.originalPrice)}
-                      </Text>
-                    </Text>
-                    <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                      Additional Changes :{" "}
-                      {item.diff === 0 ? (
-                        <Text className="font-bold text-black">Rs. 0.00</Text>
+            {packageSummaries.map((item, sIdx) => {
+              const isUnavailable = unavailablePackageIds[item.pkg.id] === true;
+              return (
+                <View
+                  key={`summary-${item.pkg.id}-${sIdx}`}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isUnavailable ? "#FF383C" : "#EEEEEE",
+                    borderRadius: 16,
+                    padding: 16,
+                    marginBottom: 12,
+                    marginHorizontal: 20,
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <View className="flex-row items-center">
+                    <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center mr-3 overflow-hidden">
+                      {item.pkg.image ? (
+                        <Image
+                          source={
+                            typeof item.pkg.image === "string"
+                              ? { uri: item.pkg.image }
+                              : item.pkg.image
+                          }
+                          className="w-12 h-12 rounded-xl"
+                          resizeMode="cover"
+                        />
                       ) : (
-                        <Text
-                          className="font-bold"
-                          style={{ color: item.diff > 0 ? "#FF2D55" : "#0088FF" }}
-                        >
-                          {item.diff > 0 ? "+ " : "- "}Rs.{" "}
-                          {formatPrice(Math.abs(item.additionalChanges))}
-                        </Text>
+                        <Image
+                          source={getPackageImage(item.pkg.id)}
+                          className="w-10 h-10"
+                          resizeMode="contain"
+                        />
                       )}
-                    </Text>
+                    </View>
+                    <View className="flex-1">
+                      <Text
+                        style={{
+                          fontSize: 16,
+                          fontWeight: "700",
+                          color: isUnavailable ? "#FF383C" : "#000000",
+                        }}
+                      >
+                        {item.pkg.name}
+                        {item.pkg.qty > 1 ? ` (x${item.pkg.qty})` : ""}
+                      </Text>
+                      {!isUnavailable && (
+                        <>
+                          <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
+                            Original Price :{" "}
+                            <Text className="font-bold text-black">
+                              Rs. {formatPrice(item.originalPrice)}
+                            </Text>
+                          </Text>
+                          <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
+                            Additional Changes :{" "}
+                            {item.diff === 0 ? (
+                              <Text className="font-bold text-black">Rs. 0.00</Text>
+                            ) : (
+                              <Text
+                                className="font-bold"
+                                style={{ color: item.diff > 0 ? "#FF2D55" : "#0088FF" }}
+                              >
+                                {item.diff > 0 ? "+ " : "- "}Rs.{" "}
+                                {formatPrice(Math.abs(item.additionalChanges))}
+                              </Text>
+                            )}
+                          </Text>
+                        </>
+                      )}
+                    </View>
                   </View>
-                </View>
 
-                <View className="h-[1px] bg-[#F0F0F0] my-3" />
+                  <View className="h-[1px] bg-[#F0F0F0] my-3" />
 
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-[14px] text-black">
-                    Current Price :{" "}
-                    <Text className="font-bold">
-                      Rs. {formatPrice(item.currentPrice)}
-                    </Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setCurrentStepIndex(item.stepIndex)}
-                    activeOpacity={0.8}
-                    className="w-7 h-7 rounded-full bg-black items-center justify-center"
-                  >
-                    <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
-                  </TouchableOpacity>
+                  {isUnavailable ? (
+                    <View className="flex-row items-center justify-between">
+                      <Text style={{ fontSize: 14, color: "#FF383C", fontWeight: "600" }}>
+                        Qty: {item.pkg.qty}
+                      </Text>
+                      <Text style={{ fontSize: 14, color: "#FF383C", fontWeight: "700" }}>
+                        No longer available
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-[14px] text-black">
+                        Current Price :{" "}
+                        <Text className="font-bold">
+                          Rs. {formatPrice(item.currentPrice)}
+                        </Text>
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setCurrentStepIndex(item.stepIndex)}
+                        activeOpacity={0.8}
+                        className="w-7 h-7 rounded-full bg-black items-center justify-center"
+                      >
+                        <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
+
 
           {/* Ala Carte Items Section (only if order has ala carte items or user added them) */}
           {Object.keys(alacartSelection).length > 0 && (
@@ -2383,25 +2486,28 @@ const fetchCategoryProducts = async (categoryId: string) => {
           </View>
 
           <TouchableOpacity
-            onPress={goToNextStep}
+            onPress={hasUnavailablePackage ? undefined : goToNextStep}
+            disabled={hasUnavailablePackage}
             activeOpacity={0.85}
             style={{
               height: 54,
-              backgroundColor: "#000000",
+              backgroundColor: hasUnavailablePackage ? "#7F919C" : "#000000",
               borderRadius: 30,
               justifyContent: "center",
               alignItems: "center",
               shadowColor: "#000",
-              shadowOpacity: 0.15,
+              shadowOpacity: hasUnavailablePackage ? 0 : 0.15,
               shadowRadius: 6,
               shadowOffset: { width: 0, height: 3 },
-              elevation: 5,
+              elevation: hasUnavailablePackage ? 0 : 5,
             }}
           >
             <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              {totalDiff > 0
-                ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
-                : "Confirm Order Details"}
+              {hasUnavailablePackage
+                ? "Some Packages Unavailable"
+                : totalDiff > 0
+                  ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
+                  : "Confirm Order Details"}
             </Text>
           </TouchableOpacity>
         </View>
