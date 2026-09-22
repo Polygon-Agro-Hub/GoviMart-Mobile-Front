@@ -466,6 +466,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     productTypeId: i.productType || i.productTypeId,
                     productTypeName: i.productTypeName,
                     isReplaced: !!i.isReplaced,
+                    excludedWarning: i.excludedWarning,
                     originalProduct: i.originalProduct
                       ? {
                           id: String(i.originalProduct.id),
@@ -802,17 +803,43 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             price: item.price,
           }));
 
+        // Build packages payload for initial insert into orderpackageitems (Todo packages)
+        const packagesPayload = Object.entries(packageProducts).map(
+          ([pkgKey, prods]) => ({
+            orderPackageId: orderPackageDbIds[pkgKey],
+            packageId: pkgKey,
+            items: (prods as any[]).map((p) => {
+              const pType =
+                p.productTypeId != null && !isNaN(Number(p.productTypeId))
+                  ? Number(p.productTypeId)
+                  : p.productType != null && !isNaN(Number(p.productType))
+                    ? Number(p.productType)
+                    : null;
+              const prodId =
+                p.productId ||
+                (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+              return {
+                productType: pType,
+                productId: prodId,
+                qty: Number(p.quantity) || 1,
+                price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+              };
+            }),
+          }),
+        );
+
         console.log(
           "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
           {
             orderId: effectiveOrderId,
             processOrderId: processOrderId || undefined,
-            lockNow: false,
+            lockNow: true,
             additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
             newScheduleDate:
               (route.params as any)?.newScheduleDate || undefined,
             replacements,
             additionalItems: additionalItemsPayload,
+            packagesCount: packagesPayload.length,
           },
         );
 
@@ -833,7 +860,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         const confirmRes = await orderService.confirmPackageReview({
           orderId: actualOrderId || effectiveOrderId,
           processOrderId: processOrderId || undefined,
-          lockNow: false,
+          lockNow: true,
           additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
           newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
           paymentMethod: paymentMethod || undefined,
@@ -841,6 +868,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
+          packages: packagesPayload,
         });
         console.log(
           "[ReviewPackageScreen] confirmPackageReview response:",
@@ -2325,7 +2353,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
               {additionalPayAmount > 0
                 ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
-                : "Confirm & Complete Order"}
+                : "Confirm Order Details"}
             </Text>
           </TouchableOpacity>
         </View>
