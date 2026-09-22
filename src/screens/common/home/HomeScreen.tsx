@@ -377,7 +377,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
               );
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       } else {
         // No token — clear any stale cart items from a previous session
         dispatch(clearCart());
@@ -628,11 +628,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch {}
+              } catch { }
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => {});
+          .catch(() => { });
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -689,7 +689,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
 
         // Also refresh the cart from backend
@@ -708,7 +708,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       }
 
@@ -742,11 +742,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch {}
+                } catch { }
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -1333,7 +1333,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           </View>
                         )}
 
-                       
+
                         <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
                           <Image
                             source={{ uri: product?.image! }}
@@ -1342,19 +1342,19 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           />
                         </View>
 
-{/* Product Details */}
-<View style={{ width: "100%", marginTop: 4 }}>
-  <FixedMarqueeText
-    key={product.id}
-    text={product?.displayName!}
-    style={{
-      color: "#000000",
-      fontWeight: "bold",
-      fontSize: 13,
-      textAlign: "center",
-    }}
-  />
-</View>
+                        {/* Product Details */}
+                        <View style={{ width: "100%", marginTop: 4 }}>
+                          <FixedMarqueeText
+                            key={product.id}
+                            text={product?.displayName!}
+                            style={{
+                              color: "#000000",
+                              fontWeight: "bold",
+                              fontSize: 13,
+                              textAlign: "center",
+                            }}
+                          />
+                        </View>
 
                         {/* PRODUCT CARD: Not in cart */}
                         {isProduct && !cartItem && (
@@ -1665,10 +1665,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* Shows the FROZEN add-time snapshot, not live cartPackage data. */}
                         {isPackage && cartPackage && !isExpanded && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
-                              {snapshot?.quantity ?? cartPackage.quantity}
-                            </Text>
-
                             <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
                               Rs.{" "}
                               {formatPrice(
@@ -1676,7 +1672,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               )}
                             </Text>
 
-                            {/* Checkmark Button — tap to re-expand this card and see live data */}
+                            {/* Checkmark / Re-expand Button — tap to re-expand this card */}
                             <TouchableOpacity
                               activeOpacity={0.8}
                               onPress={(e) => {
