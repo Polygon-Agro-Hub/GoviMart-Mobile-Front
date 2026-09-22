@@ -246,7 +246,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     else {
       const hasUppercase = /[A-Z]/.test(password);
       const hasNumber = /[0-9]/.test(password);
-      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+      const hasSpecialChar =
+        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(password);
 
       if (password.length < 8) {
         newErrors.password = "Must be at least 8 characters";

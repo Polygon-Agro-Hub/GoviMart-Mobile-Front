@@ -100,17 +100,26 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     } else {
       const hasUppercase = /[A-Z]/.test(newPassword);
       const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+      const hasSpecialChar =
+        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(newPassword);
 
       if (newPassword.length < 8) {
+        newErrors.newPassword = "Must be at least 8 characters";
+      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
         newErrors.newPassword =
-          "Use at least 8 characters, including 1 uppercase letter, 1 number, and 1 special character.";
+          "Must have 1 uppercase letter, 1 number & 1 special character";
+      } else if (!hasUppercase && !hasSpecialChar) {
+        newErrors.newPassword = "Must have 1 uppercase letter & 1 special character";
+      } else if (!hasUppercase && !hasNumber) {
+        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
+      } else if (!hasNumber && !hasSpecialChar) {
+        newErrors.newPassword = "Must have 1 number & 1 special character";
       } else if (!hasUppercase) {
-        newErrors.newPassword = "Must contain at least 1 uppercase letter";
+        newErrors.newPassword = "Must have 1 uppercase letter";
       } else if (!hasNumber) {
-        newErrors.newPassword = "Must contain at least 1 number";
+        newErrors.newPassword = "Must have 1 number";
       } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must contain at least 1 special character";
+        newErrors.newPassword = "Must have 1 special character";
       }
     }
 
