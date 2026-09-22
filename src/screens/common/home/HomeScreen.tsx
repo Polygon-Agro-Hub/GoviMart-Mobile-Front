@@ -1433,20 +1433,20 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               </TouchableOpacity>
 
                               {/* Arrow icon */}
-                              <Text
+                              <View
                                 style={{
-                                  fontSize: 18,
-                                  fontWeight: "900",
-                                  color: "#000000",
+                                  height: 22,
+                                  justifyContent: "center",
+                                  alignItems: "center",
                                   marginHorizontal: 6,
-                                  textAlign: "center",
-                                  textAlignVertical: "center",
-                                  includeFontPadding: false,
-                                  lineHeight: 22,
                                 }}
                               >
-                                ↔
-                              </Text>
+                                <FontAwesome6
+                                  name="arrows-left-right"
+                                  size={13}
+                                  color="#000000"
+                                />
+                              </View>
 
                               {/* g button */}
                               <TouchableOpacity
@@ -1483,7 +1483,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             </View>
 
                             {/* Quantity Selector Capsule */}
-                            <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-1 shadow-sm">
+                            <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-3 shadow-sm">
                               {/* Minus / Trash Button */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
