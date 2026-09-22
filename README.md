@@ -60,21 +60,74 @@ npm run ios
 
 ```
 GoviMart-Mobile-Front/
-├── app/
-│   └── App.tsx                 # Root application component & stack navigator
-├── index.ts                    # Application entry point & Expo root registration
-├── app.json                    # Expo configuration & app metadata
-├── eas.json                    # EAS Build profiles
-├── tailwind.config.js          # Tailwind CSS theme & plugin config
+├── .expo/                      # Expo development build files
+├── assets/                     # Images, icons, and animations
 ├── src/
-│   ├── assets/                 # Images & Lottie animations
-│   ├── component/              # Reusable UI components (common, home, cart, profile, order, payment)
+│   ├── component/              # Reusable UI components
+│   │   ├── common/             # Common shared components (Headers, Modals, Toasts)
+│   │   ├── home/               # Marketplace home components & banners
+│   │   ├── my-cart/            # Shopping cart cards & summaries
+│   │   ├── order/              # Order details & summary widgets
+│   │   ├── payment/            # Payment option cards & forms
+│   │   └── coupon/             # Coupon cards & modals
+│   ├── constants/              # System constants & user roles
 │   ├── environment/            # Environment configurations (API URL, Shoutout key)
-│   ├── screens/                # Screen modules (auth, home, cart, locations, order, complaints, account, etc.)
-│   ├── services/               # API service layer (auth, customer, product, order, complaint)
-│   ├── store/                  # Redux store & auth slice
+│   ├── routes/                 # Navigation stack & role-based route guarding (Routes.tsx)
+│   ├── screens/                # Screen modules partitioned by user role
+│   │   ├── common/             # Public & shared screens (Splash, Auth, Home, Cart, Orders, Locations)
+│   │   ├── retail/             # Retail-only screens (Package review, customization, item exclusions)
+│   │   └── wholesale/          # Wholesale-specific screens
+│   ├── services/               # API service layer (auth, customer, product, order, notification)
+│   ├── store/                  # Redux store & state slices
 │   └── types/                  # TypeScript interface & navigation parameter definitions
+├── app.json                    # Expo application manifest
+├── eas.json                    # Expo Application Services configuration
+├── package.json                # Dependency manifest
+└── tsconfig.json               # TypeScript compiler configurations
 ```
+
+---
+
+## 📦 Deployment & Building
+
+### 1. EAS Build (Cloud Build)
+Make sure you have EAS CLI installed and are logged in:
+```bash
+npm install -g eas-cli
+eas login
+```
+
+#### 📦 Build AAB (Android App Bundle for Google Play Store)
+Generates an `.aab` file required for uploading/updating on Google Play Console:
+```bash
+eas build --platform android --profile production
+```
+
+#### 📱 Build APK (Android Package for Direct Installation / Testing)
+Generates an `.apk` file for direct installation on physical Android devices for testing:
+```bash
+eas build --platform android --profile preview
+```
+
+---
+
+### 2. Local Gradle Build (On Your Machine)
+
+#### 📦 Build AAB Locally
+```bash
+npx expo prebuild --platform android
+cd android
+./gradlew bundleRelease
+```
+*Output path*: `android/app/build/outputs/bundle/release/app-release.aab`
+
+#### 📱 Build APK Locally
+```bash
+npx expo prebuild --platform android
+cd android
+./gradlew assembleRelease
+```
+*Output path*: `android/app/build/outputs/apk/release/app-release.apk`
 
 ---
 
@@ -83,3 +136,11 @@ GoviMart-Mobile-Front/
 - Secret keys are loaded dynamically via `expo-constants` / environment variables (`.env`).
 - User passwords are **never** persisted in local storage.
 - Authentication tokens are managed through Redux store state with automatic Axios request interceptor injection.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+Copyright (c) 2026 **Polygon Holdings Private Limited**.

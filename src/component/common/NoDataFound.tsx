@@ -35,6 +35,9 @@ const styles = StyleSheet.create({
   },
   textWrapper: {
     backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   messageText: {
     color: "#888888",

@@ -116,6 +116,16 @@ class OrderService {
             normalPrice?: number;
             price: number;
         }>;
+        packages?: Array<{
+            orderPackageId: number;
+            packageId?: string | number;
+            items: Array<{
+                productType?: string | number | null;
+                productId: number;
+                qty: number;
+                price: number;
+            }>;
+        }>;
     }) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });

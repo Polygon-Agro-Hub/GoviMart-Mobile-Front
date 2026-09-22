@@ -46,8 +46,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View className="flex-1 bg-black/60 justify-center items-center p-6">
-        <View className="bg-white p-6 rounded-3xl items-center shadow-2xl w-full max-w-sm relative">
+      <View className="flex-1 bg-black/60 justify-center items-center px-4 py-6">
+        <View className="bg-white px-5 py-6 rounded-3xl items-center shadow-2xl w-full max-w-sm relative">
           {/* Top Right Close Button */}
           {showCloseButton && (
             <TouchableOpacity
@@ -76,14 +76,29 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
           {/* Action Buttons */}
           {buttonLayout === "column" ? (
-            <View className="w-full">
+            <View style={{ width: "100%", alignSelf: "stretch" }}>
               <TouchableOpacity
                 onPress={onConfirm}
                 activeOpacity={0.85}
-                style={{ backgroundColor: confirmButtonColor }}
-                className="w-full py-4 rounded-full items-center justify-center mb-3"
+                style={{
+                  backgroundColor: confirmButtonColor,
+                  width: "100%",
+                  alignSelf: "stretch",
+                  minHeight: 50,
+                }}
+                className="w-full py-3.5 px-4 rounded-full items-center justify-center mb-3"
               >
-                <Text style={{ color: confirmButtonTextColor }} className="font-bold text-base">
+                <Text
+                  style={{
+                    color: confirmButtonTextColor,
+                    textAlign: "center",
+                    includeFontPadding: false,
+                  }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.75}
+                  className="font-bold text-base text-center"
+                >
                   {confirmLabel}
                 </Text>
               </TouchableOpacity>
@@ -91,31 +106,65 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               <TouchableOpacity
                 onPress={onCancel}
                 activeOpacity={0.85}
-                style={{ backgroundColor: cancelButtonBgColor || "#EAEFF5" }}
-                className="w-full py-4 rounded-full items-center justify-center"
+                style={{
+                  backgroundColor: cancelButtonBgColor || "#EAEFF5",
+                  width: "100%",
+                  alignSelf: "stretch",
+                  minHeight: 50,
+                }}
+                className="w-full py-3.5 px-4 rounded-full items-center justify-center"
               >
-                <Text style={{ color: cancelButtonTextColor }} className="font-bold text-base">
+                <Text
+                  style={{
+                    color: cancelButtonTextColor,
+                    textAlign: "center",
+                    includeFontPadding: false,
+                  }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.75}
+                  className="font-bold text-base text-center"
+                >
                   {cancelLabel}
                 </Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <View className="flex-row w-full justify-between gap-x-3">
+            <View style={{ width: "100%", alignSelf: "stretch" }} className="flex-row w-full justify-between gap-x-3">
               <TouchableOpacity
                 onPress={onCancel}
                 activeOpacity={0.7}
-                className="flex-1 py-3.5 border-2 border-gray-200 rounded-full items-center justify-center bg-white"
+                style={{ minHeight: 48 }}
+                className="flex-1 py-3 px-3 border-2 border-gray-200 rounded-full items-center justify-center bg-white"
               >
-                <Text className="text-gray-700 font-bold text-base">{cancelLabel}</Text>
+                <Text
+                  style={{ includeFontPadding: false, textAlign: "center" }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.75}
+                  className="text-gray-700 font-bold text-base text-center"
+                >
+                  {cancelLabel}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={onConfirm}
                 activeOpacity={0.8}
-                style={{ backgroundColor: confirmButtonColor }}
-                className="flex-1 py-3.5 rounded-full items-center justify-center"
+                style={{ backgroundColor: confirmButtonColor, minHeight: 48 }}
+                className="flex-1 py-3 px-3 rounded-full items-center justify-center"
               >
-                <Text style={{ color: confirmButtonTextColor }} className="font-bold text-base">
+                <Text
+                  style={{
+                    color: confirmButtonTextColor,
+                    includeFontPadding: false,
+                    textAlign: "center",
+                  }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.75}
+                  className="font-bold text-base text-center"
+                >
                   {confirmLabel}
                 </Text>
               </TouchableOpacity>

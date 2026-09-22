@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 interface Props {
     minimumValue: number;
@@ -86,6 +86,8 @@ const ProductBottomCart: React.FC<Props> = ({
         setHasChanges(false);
     };
 
+    const isMinimum = quantity <= minimumValue;
+
     return (
         <View
             style={{
@@ -97,7 +99,7 @@ const ProductBottomCart: React.FC<Props> = ({
                 backgroundColor: "#FFF",
                 flexDirection: "row",
                 alignItems: "center",
-                paddingHorizontal: 12,
+                paddingHorizontal: 16,
                 borderTopWidth: 1,
                 borderTopColor: "#ECECEC",
 
@@ -111,131 +113,142 @@ const ProductBottomCart: React.FC<Props> = ({
                 elevation: 12,
             }}
         >
-            {/* Left Button:
-                - quantity > minimum  → active dark minus button (always, even before adding to cart)
-                - quantity <= minimum, not added → gray disabled trash (nothing to delete)
-                - quantity <= minimum, added      → dark active trash (removes from cart) */}
-            {quantity > minimumValue ? (
+            {/* Quantity Stepper Capsule with #F3F3F3 background */}
+            <View
+                style={{
+                    flex: isAdded ? 1 : undefined,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#F3F3F3",
+                    borderRadius: 28,
+                    padding: 4,
+                    marginRight: isAdded ? 14 : 12,
+                }}
+            >
+                {/* Left Button:
+                    - quantity > minimum  → active dark minus button
+                    - quantity <= minimum, added      → dark active trash (removes from cart)
+                    - quantity <= minimum, not added → gray disabled trash */}
+                {!isMinimum ? (
+                    <TouchableOpacity
+                        onPress={decrease}
+                        activeOpacity={0.8}
+                        style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "#000",
+                            justifyContent: "center",
+                            alignItems: "center",
+
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 3,
+                            elevation: 3,
+                        }}
+                    >
+                        <Ionicons
+                            name="remove"
+                            size={24}
+                            color="#FFF"
+                        />
+                    </TouchableOpacity>
+                ) : isAdded ? (
+                    <TouchableOpacity
+                        onPress={handleDelete}
+                        activeOpacity={0.8}
+                        style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "#000",
+                            justifyContent: "center",
+                            alignItems: "center",
+
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 3,
+                            elevation: 3,
+                        }}
+                    >
+                        <FontAwesome6
+                            name="trash"
+                            size={18}
+                            color="#FFF"
+                        />
+                    </TouchableOpacity>
+                ) : (
+                    <View
+                        style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "#D9D9D9",
+                            justifyContent: "center",
+                            alignItems: "center",
+                        }}
+                    >
+                        <FontAwesome6
+                            name="trash"
+                            size={18}
+                            color="#FFF"
+                        />
+                    </View>
+                )}
+
+                {/* Quantity Text */}
+                <Text
+                    style={{
+                        fontSize: 18,
+                        fontWeight: "700",
+                        paddingHorizontal: 12,
+                        minWidth: 60,
+                        textAlign: "center",
+                        color: "#000",
+                    }}
+                >
+                    {quantity}
+                    {unit ? ` ${unit}` : ""}
+                </Text>
+
+                {/* Plus Button */}
                 <TouchableOpacity
-                    onPress={decrease}
+                    onPress={increase}
+                    activeOpacity={0.8}
                     style={{
                         width: 48,
                         height: 48,
                         borderRadius: 24,
                         backgroundColor: "#000",
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 4,
-                        elevation: 4,
-                    }}
-                >
-                    <Ionicons
-                        name="remove"
-                        size={24}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>
-            ) : isAdded ? (
-                <TouchableOpacity
-                    onPress={handleDelete}
-                    style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: "#000",
-                        justifyContent: "center",
-                        alignItems: "center",
-
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 4,
-                        elevation: 4,
-                    }}
-                >
-                    <Ionicons
-                        name="trash-outline"
-                        size={22}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>
-            ) : (
-                <View
-                    style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: "#F3F3F3",
                         justifyContent: "center",
                         alignItems: "center",
 
                         shadowColor: "#000",
                         shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 4,
-                        elevation: 2,
+                        shadowOpacity: 0.15,
+                        shadowRadius: 3,
+                        elevation: 3,
                     }}
                 >
                     <Ionicons
-                        name="trash-outline"
+                        name="add"
                         size={24}
-                        color="#CFCFCF"
+                        color="#FFF"
                     />
-                </View>
-            )}
+                </TouchableOpacity>
+            </View>
 
-            {/* Quantity */}
-            <Text
-                style={{
-                    fontSize: 18,
-                    fontWeight: "700",
-                    marginHorizontal: 12,
-                    minWidth: 70,
-                    textAlign: "center",
-                    color: "#000",
-                }}
-            >
-                {quantity}
-                {unit ? ` ${unit}` : ""}
-            </Text>
-
-            {/* Plus */}
-            <TouchableOpacity
-                onPress={increase}
-                style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    backgroundColor: "#000",
-                    justifyContent: "center",
-                    alignItems: "center",
-
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 3 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 4,
-                    elevation: 4,
-                }}
-            >
-                <Ionicons
-                    name="add"
-                    size={24}
-                    color="#FFF"
-                />
-            </TouchableOpacity>
-
-            {/* Right Button */}
+            {/* Right Action Button */}
             {!isAdded ? (
                 <TouchableOpacity
                     onPress={handleAdd}
+                    activeOpacity={0.8}
                     style={{
                         flex: 1,
                         height: 52,
-                        marginLeft: 16,
                         backgroundColor: "#000",
                         borderRadius: 28,
                         justifyContent: "center",
@@ -259,32 +272,31 @@ const ProductBottomCart: React.FC<Props> = ({
                     </Text>
                 </TouchableOpacity>
             ) : (
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                    <TouchableOpacity
-                        disabled={!hasChanges}
-                        onPress={handleUpdate}
-                        style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: 26,
-                            justifyContent: "center",
-                            alignItems: "center",
-                            backgroundColor: hasChanges ? "#000" : "#D9D9D9",
+                <TouchableOpacity
+                    disabled={!hasChanges}
+                    onPress={handleUpdate}
+                    activeOpacity={0.8}
+                    style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 26,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        backgroundColor: hasChanges ? "#000" : "#D9D9D9",
 
-                            shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 3 },
-                            shadowOpacity: 0.2,
-                            shadowRadius: 4,
-                            elevation: 4,
-                        }}
-                    >
-                        <Ionicons
-                            name="checkmark"
-                            size={24}
-                            color="#FFF"
-                        />
-                    </TouchableOpacity>
-                </View>
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 4,
+                        elevation: 4,
+                    }}
+                >
+                    <Ionicons
+                        name="checkmark"
+                        size={26}
+                        color="#FFF"
+                    />
+                </TouchableOpacity>
             )}
         </View>
     );

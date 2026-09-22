@@ -19,11 +19,20 @@ export interface AlacartSelectedProduct {
   image?: any;
   price: number;
   basePrice: number;
+  // Per-kg rate used to recompute `price` whenever amount/unit changes.
+  // Falls back to `basePrice` for items loaded from an existing order
+  // (where this isn't set) so their unit/qty math keeps working as before.
+  perKgPrice?: number;
   weightDisplay: string;
   unit: "kg" | "g";
   amount: number;
   quantity: number;
   isAddedNow?: boolean;
+  step?: number;
+  minQuantity?: number;
+  changeby?: string | number;
+  startValue?: string | number;
+  unitType?: string;
 }
 
 export interface PackageReviewState {
@@ -36,6 +45,7 @@ export interface PackageReviewState {
   moneyPaid: number;
   creditPaid: number;
   paymentMethod: string;
+  deliveryMethod: string;
   isPaid: boolean;
   processOrderAmount: number;
   packagesMeta: PackageMeta[];
@@ -76,6 +86,7 @@ const initialState: PackageReviewState = {
   targetLimit: 50,
   isLimitReached: false,
   unreadReminderDays: 1,
+deliveryMethod: "",
 };
 
 export const packageReviewSlice = createSlice({
@@ -312,10 +323,14 @@ export const packageReviewSlice = createSlice({
       if (state.packageProducts[packageId]) {
         state.packageProducts[packageId] = state.packageProducts[packageId].map((prod) => {
           if (prod.id === productId) {
-            const minAllowed = prod.minQuantity ?? prod.originalProduct?.quantity ?? prod.step ?? 1;
+            const stepVal = prod.step && prod.step > 0 ? prod.step : 0.5;
+            const minAllowed = prod.minQuantity ?? prod.originalProduct?.quantity ?? stepVal;
+            const nextQty = prod.unit === "kg"
+              ? parseFloat((prod.quantity + delta * stepVal).toFixed(3))
+              : Math.round(prod.quantity + delta * stepVal);
             return {
               ...prod,
-              quantity: Math.max(minAllowed, Number((prod.quantity + delta * prod.step).toFixed(2))),
+              quantity: Math.max(minAllowed, nextQty),
             };
           }
           return prod;
@@ -324,11 +339,44 @@ export const packageReviewSlice = createSlice({
     },
     toggleAlacartProduct: (state, action: PayloadAction<ProductType>) => {
       const product = action.payload;
-      const basePrice = parseFloat(product.normalPrice) || 0;
-      const initialUnit = (product.unitType?.toLowerCase() === "kg" ? "kg" : "g") as "kg" | "g";
-      const initialAmount = product.startValue ? parseFloat(product.startValue) : initialUnit === "kg" ? 1 : 500;
+
+      // Per-kg rates as stored in marketplaceitems — discountedPrice is the
+      // effective per-kg charge; fall back to normalPrice when there's no
+      // discount (mirrors normalizeToKg() in AlacartProductCard).
+      const normalPricePerKg = parseFloat(String(product.normalPrice)) || 0;
+      const discountedPricePerKg =
+        product.discountedPrice != null && String(product.discountedPrice).trim() !== ""
+          ? parseFloat(String(product.discountedPrice))
+          : 0;
+      const perKgPrice = discountedPricePerKg > 0 ? discountedPricePerKg : normalPricePerKg;
+      const basePrice = normalPricePerKg;
+
+      const dbUnitType = (product.unitType || "g").toLowerCase();
+      const rawStartValue = product.startValue ? parseFloat(String(product.startValue)) : (dbUnitType === "kg" ? 1 : 500);
+      const initialUnit = (dbUnitType === "kg" && rawStartValue < 1) || dbUnitType === "g" ? "g" : "kg";
+      const initialAmount = initialUnit === "g"
+        ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
+        : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+
+      const rawChangeBy = product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
+        ? parseFloat(String(product.changeby))
+        : rawStartValue;
+
+      const step = initialUnit === "g"
+        ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
+        : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+
+      const minQuantity = initialUnit === "g"
+        ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
+        : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+
       const weightDisplay = `${initialAmount} ${initialUnit}`;
       const newKey = `new-${product.id}`;
+
+      // Price at the initial quantity — this is the line that was missing
+      // the multiplication by weight before (it was just the flat per-kg rate).
+      const initialWeightMultiplier = initialUnit === "kg" ? initialAmount : initialAmount / 1000;
+      const initialPrice = Number((perKgPrice * initialWeightMultiplier).toFixed(2));
 
       // Check if this product is already in alacartSelection as newly added
       if (state.alacartSelection[newKey]) {
@@ -341,13 +389,19 @@ export const packageReviewSlice = createSlice({
           productId: product.id,
           displayName: product.displayName,
           image: product.image,
-          price: basePrice,
+          price: initialPrice,
           basePrice: basePrice,
+          perKgPrice,
           weightDisplay,
           unit: initialUnit,
           amount: initialAmount,
           quantity: 1,
           isAddedNow: true,
+          step,
+          minQuantity,
+          changeby: product.changeby,
+          startValue: product.startValue,
+          unitType: product.unitType,
         };
       }
     },
@@ -362,19 +416,22 @@ export const packageReviewSlice = createSlice({
       const item = state.alacartSelection[id];
       if (!item || item.unit === newUnit) return;
 
-      let newAmount = item.amount;
-      let newPrice = item.price;
-      if (newUnit === "kg") {
-        newAmount = Math.max(1, Math.round(item.amount / 1000) || 1);
-        newPrice = item.basePrice * (newAmount * 2);
-      } else {
-        newAmount = item.amount >= 1 && item.amount <= 10 ? item.amount * 1000 : 500;
-        newPrice = item.basePrice * (newAmount / 500);
-      }
+      const newAmount = newUnit === "kg" ? parseFloat((item.amount / 1000).toFixed(3)) : Math.round(item.amount * 1000);
+      const newStep = item.step ? (newUnit === "kg" ? parseFloat((item.step / 1000).toFixed(3)) : Math.round(item.step * 1000)) : undefined;
+      const newMin = item.minQuantity ? (newUnit === "kg" ? parseFloat((item.minQuantity / 1000).toFixed(3)) : Math.round(item.minQuantity * 1000)) : undefined;
+
+      const weightMultiplier = newUnit === "kg" ? newAmount : newAmount / 1000;
+      // perKgPrice is the correct multiplier; basePrice is only a fallback
+      // for items loaded from an existing order that predate this field.
+      const rate = item.perKgPrice ?? item.basePrice;
+      const newPrice = Number((rate * weightMultiplier).toFixed(2));
+
       state.alacartSelection[id] = {
         ...item,
         unit: newUnit,
         amount: newAmount,
+        step: newStep,
+        minQuantity: newMin,
         weightDisplay: `${newAmount} ${newUnit}`,
         price: newPrice,
       };
@@ -387,16 +444,24 @@ export const packageReviewSlice = createSlice({
       const item = state.alacartSelection[id];
       if (!item) return;
 
-      const step = item.unit === "kg" ? 1 : 250;
-      const min = item.unit === "kg" ? 1 : 250;
-      const newAmount = Math.max(min, item.amount + delta * step);
-      const newPrice = Number(
-        (item.basePrice * (item.unit === "kg" ? newAmount * 2 : newAmount / 500)).toFixed(2)
-      );
+      const step = item.step && item.step > 0 ? item.step : (item.unit === "kg" ? 0.5 : 500);
+      const min = item.minQuantity && item.minQuantity > 0 ? item.minQuantity : step;
+
+      const rawNewAmount = item.unit === "kg"
+        ? parseFloat((item.amount + delta * step).toFixed(3))
+        : Math.round(item.amount + delta * step);
+      const cleanAmount = Math.max(min, rawNewAmount);
+
+      const weightMultiplier = item.unit === "kg" ? cleanAmount : cleanAmount / 1000;
+      // perKgPrice is the correct multiplier; basePrice is only a fallback
+      // for items loaded from an existing order that predate this field.
+      const rate = item.perKgPrice ?? item.basePrice;
+      const newPrice = Number((rate * weightMultiplier).toFixed(2));
+
       state.alacartSelection[id] = {
         ...item,
-        amount: newAmount,
-        weightDisplay: `${newAmount} ${item.unit}`,
+        amount: cleanAmount,
+        weightDisplay: `${cleanAmount} ${item.unit}`,
         price: newPrice,
       };
     },
@@ -441,4 +506,3 @@ export const {
 } = packageReviewSlice.actions;
 
 export default packageReviewSlice.reducer;
-

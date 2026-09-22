@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { loginSuccess, logoutSuccess } from "./authSlice";
 
 export interface PackageCartItem {
   id: number;
@@ -16,6 +17,8 @@ export interface ProductCartItem {
   image: string;
   price: number;
   normalPrice?: number;
+  discountedPrice?: number;
+  comPrice?: number;
   weight: number;
   unit: "g" | "kg";
   minimumWeight: number;
@@ -26,11 +29,13 @@ export interface ProductCartItem {
 export interface CartState {
   packages: PackageCartItem[];
   products: ProductCartItem[];
+  cartUserId: number | null;
 }
 
 const initialState: CartState = {
   packages: [],
   products: [],
+  cartUserId: null,
 };
 
 const cartSlice = createSlice({
@@ -47,6 +52,10 @@ const cartSlice = createSlice({
           unit: action.payload.unit,
           price: action.payload.price,
           normalPrice: action.payload.normalPrice ?? state.products[existingIndex].normalPrice,
+          discountedPrice: action.payload.discountedPrice ?? state.products[existingIndex].discountedPrice,
+          comPrice: action.payload.comPrice ?? state.products[existingIndex].comPrice,
+          minimumWeight: action.payload.minimumWeight ?? state.products[existingIndex].minimumWeight,
+          step: action.payload.step ?? state.products[existingIndex].step,
           isUnavailable: false,
         };
       } else {
@@ -84,12 +93,12 @@ const cartSlice = createSlice({
         if (action.payload.newUnit === "kg") {
           product.weight = parseFloat((product.weight / 1000).toFixed(3));
           product.minimumWeight = parseFloat((product.minimumWeight / 1000).toFixed(3));
-          product.step = 0.5;
+          product.step = parseFloat((product.step / 1000).toFixed(3));
           product.unit = "kg";
         } else {
           product.weight = Math.round(product.weight * 1000);
           product.minimumWeight = Math.round(product.minimumWeight * 1000);
-          product.step = product.minimumWeight >= 500 ? 500 : 100;
+          product.step = Math.round(product.step * 1000);
           product.unit = "g";
         }
       }
@@ -133,10 +142,17 @@ const cartSlice = createSlice({
     // ─── BACKEND SYNC ACTIONS ──────────────────────────────────────────────────
     setCartFromBackend: (
       state,
-      action: PayloadAction<{ products: ProductCartItem[]; packages: PackageCartItem[] }>
+      action: PayloadAction<{
+        products: ProductCartItem[];
+        packages: PackageCartItem[];
+        cartUserId?: number | null;
+      }>
     ) => {
       state.products = action.payload.products;
       state.packages = action.payload.packages;
+      if (action.payload.cartUserId !== undefined) {
+        state.cartUserId = action.payload.cartUserId;
+      }
     },
 
     // ─── AVAILABILITY SYNC ──────────────────────────────────────────────────────
@@ -165,7 +181,24 @@ const cartSlice = createSlice({
     clearCart: (state) => {
       state.packages = [];
       state.products = [];
+      state.cartUserId = null;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(logoutSuccess, (state) => {
+        state.packages = [];
+        state.products = [];
+        state.cartUserId = null;
+      })
+      .addCase(loginSuccess, (state, action) => {
+        const newUserId = action.payload.userProfile?.id ?? null;
+        if (state.cartUserId !== newUserId) {
+          state.packages = [];
+          state.products = [];
+          state.cartUserId = newUserId;
+        }
+      });
   },
 });
 

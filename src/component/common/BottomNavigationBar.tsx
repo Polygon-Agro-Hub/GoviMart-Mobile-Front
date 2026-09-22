@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Feather from '@expo/vector-icons/Feather';
 import notificationService from "@/services/notification/notification.service";
 import socketService from "@/services/socket/socket.service";
+import pushNotificationService from "@/services/notification/pushNotification.service";
 
 type BottomScreen =
     | "Home"
@@ -39,19 +40,30 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                     setUnreadCount(Number(res.data?.unreadCount) || 0);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
 
         // Listen for real-time notification socket updates
         socketService.connect();
-        const unsubscribe = socketService.onNewNotification(() => {
+        const unsubscribeNotif = socketService.onNewNotification((item) => {
             if (isMounted) {
-                setUnreadCount((prev) => prev + 1);
+                if (typeof (item as any)?.unreadCount === "number") {
+                    setUnreadCount((item as any).unreadCount);
+                } else {
+                    setUnreadCount((prev) => prev + 1);
+                }
+            }
+        });
+
+        const unsubscribeCount = socketService.onUnreadCountUpdate((count) => {
+            if (isMounted) {
+                setUnreadCount(count);
             }
         });
 
         return () => {
             isMounted = false;
-            unsubscribe();
+            unsubscribeNotif();
+            unsubscribeCount();
         };
     }, [activeScreen]);
 
@@ -59,7 +71,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
         <View
             style={{
                 position: "absolute",
-                bottom: Platform.OS === "ios" ? 10 : 24,
+                bottom: Platform.OS === "ios" ? 10 : 10,
                 left: 24, // mx-6
                 right: 24, // mx-6
 
@@ -82,7 +94,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
 
-                elevation: 10,
+                elevation: 6,
 
                 zIndex: 20,
             }}
@@ -167,7 +179,21 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* NOTIFICATIONS / ALERTS */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("Notification")}
+                onPress={async () => {
+                    if (activeScreen === "Notification") return;
+                    try {
+                        const hasPerm = await pushNotificationService.hasPermission();
+                        if (hasPerm) {
+                            navigation.navigate("Notification");
+                        } else {
+                            navigation.navigate("NotificationAccess", {
+                                returnScreen: "Notification",
+                            });
+                        }
+                    } catch (e) {
+                        navigation.navigate("Notification");
+                    }
+                }}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -285,7 +311,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                             marginLeft: 6,
                         }}
                     >
-                        Profile
+                        Account
                     </Text>
                 )}
             </TouchableOpacity>
