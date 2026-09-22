@@ -1,0 +1,86 @@
+export const ENDPOINTS = {
+  AUTH: {
+    SIGN_UP: "api/auth/signup",
+    LOGIN: "api/auth/login",
+    LOGOUT: "api/auth/logout",
+    UPDATE_PASSWORD: "api/auth/update-password",
+    REFRESH_TOKEN: "api/auth/refresh-token",
+    GET_CITIES: "api/auth/cities",
+    FORGOT_PASSWORD_REQUEST_OTP: "api/auth/forgot-password/request-otp",
+    FORGOT_PASSWORD_RESEND_OTP: "api/auth/forgot-password/resend-otp",
+    FORGOT_PASSWORD_VERIFY_OTP: "api/auth/forgot-password/verify-otp",
+    FORGOT_PASSWORD_RESET: "api/auth/forgot-password/reset-password",
+  },
+
+  CUSTOMER: {
+    GET_ACCOUNT_DETAILS: "api/customer/account-details",
+    GET_SAVED_ADDRESSES: "api/customer/fetch-saved-addresses",
+    ADD_ADDRESS: "api/customer/add-address",
+    UPDATE_ADDRESS: "api/customer/update-address/:addressId",
+    DELETE_ADDRESS: "api/customer/delete-address",
+    UPDATE_USER_DETAILS: "api/customer/update-details",
+    DELETE_ACCOUNT: "api/customer/delete-account",
+    GET_DELETE_ACCOUNT_STATUS: "api/customer/delete-account-status",
+    SEND_PHONE_CHANGE_OTP: "api/customer/send-phone-change-otp",
+    VERIFY_PHONE_CHANGE_OTP: "api/customer/verify-phone-change-otp",
+    RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
+    UPDATE_CREDIT_BALANCE: "api/customer/update-credit-balance",
+    UPLOAD_PROFILE_IMAGE: "api/customer/upload-profile-image",
+  },
+
+  COMPLAINT: {
+    GET_CATEGORIES: "api/complaint/categories",
+    CREATE_COMPLAINT: "api/complaint/create-complain",
+    GET_MY_COMPLAINTS: "api/complaint/my-complaints",
+    GET_COMPLAINT_DETAILS: "api/complaint/complain",
+  },
+
+  PRODUCT: {
+    GET_ALL_PRODUCTS: "api/product/all-product",
+    GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
+    GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
+    GET_PRODUCTS_BY_PRODUCT_TYPE: "api/product/by-product-type/:productTypeId",
+    GET_BANNERS: "api/product/slides",
+    CHECK_AVAILABILITY: "api/product/check-availability",
+  },
+
+  CART: {
+    GET_USER_CART: "api/cart/user-cart",
+    ADD_UPDATE_PRODUCT: "api/cart/product",
+    ADD_UPDATE_PACKAGE: "api/cart/package",
+    REMOVE_PRODUCT: "api/cart/product/:productId",
+    REMOVE_PACKAGE: "api/cart/package/:packageId",
+    CLEAR_CART: "api/cart/clear",
+  },
+
+  ORDER: {
+    GET_ORDER_HISTORY: "api/order/order-history",
+    GET_ORDER_BY_ID: "api/order/:orderId",
+    GET_ORDER_PACKAGES: "api/order/packages/:orderId",
+    GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
+    CREATE_ORDER: "api/order/create-order",
+    GET_PICKUP_CENTERS: "api/order/pickup-centers",
+    GET_DELIVERY_CITIES: "api/order/delivery-cities",
+    GET_COUPONS: "api/order/coupons",
+    CHECK_COUPON: "api/order/check-coupon",
+    GET_INVOICE: "api/order/invoice/:orderId",
+    GET_PACKAGE_REVIEW: "api/order/package/review/:orderId",
+    GET_PACKING_LIMIT: "api/order/package/packing-limit",
+    REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
+    RESET_PACKAGE_ITEM: "api/order/package/reset-item",
+    CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
+    GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
+    CANCEL_ORDER: "api/order/package/cancel-order",
+  },
+
+  PAYMENT: {
+    PAYHERE_INITIATE: "api/payment/payhere/initiate",
+  },
+
+  NOTIFICATION: {
+    GET_ALL: "api/notification",
+    MARK_READ: "api/notification/:id/read",
+    MARK_ALL_READ: "api/notification/read-all",
+    SEED_DUMMY: "api/notification/seed-dummy",
+  },
+};

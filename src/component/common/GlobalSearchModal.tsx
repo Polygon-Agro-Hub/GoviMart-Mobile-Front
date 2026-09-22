@@ -1,0 +1,235 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Modal,
+} from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+
+interface GlobalSearchModalProps {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  data: Array<{ label: string; value: string; [key: string]: any }>;
+  selectedItems: string[];
+  onSelect: (items: string[]) => void;
+  searchPlaceholder?: string;
+  doneButtonText?: string;
+  noResultsText?: string;
+  multiSelect?: boolean;
+  renderItem?: (
+    item: any,
+    isSelected: boolean,
+    index: number,
+    isLast: boolean,
+    onPress: (value: string) => void
+  ) => React.ReactNode;
+  searchKeys?: string[];
+  showSearch?: boolean;
+}
+
+const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
+  visible,
+  onClose,
+  title,
+  data,
+  selectedItems = [],
+  onSelect,
+  searchPlaceholder = "Search...",
+  doneButtonText = "Done",
+  noResultsText = "No Search Option Found",
+  multiSelect = false,
+  renderItem,
+  searchKeys = ["label"],
+  showSearch = true,
+}) => {
+  const [searchValue, setSearchValue] = useState("");
+  const [filteredData, setFilteredData] = useState(data);
+  const [selectedValues, setSelectedValues] = useState<string[]>(selectedItems);
+
+  const prevVisibleRef = useRef(visible);
+
+  // Initialize selected values and reset search ONLY when opening modal
+  useEffect(() => {
+    if (visible && !prevVisibleRef.current) {
+      setSelectedValues(selectedItems);
+      setSearchValue("");
+    }
+    prevVisibleRef.current = visible;
+  }, [visible, selectedItems]);
+
+  const dataKey = JSON.stringify(data);
+  const searchKeysKey = JSON.stringify(searchKeys);
+
+  // Filter data based on search
+  useEffect(() => {
+    if (!showSearch || !searchValue.trim()) {
+      setFilteredData(data);
+      return;
+    }
+
+    const searchTerm = searchValue.trim().toLowerCase();
+    const filtered = data.filter((item) => {
+      return searchKeys.some((key) => {
+        const value = item[key];
+        if (typeof value === "string") {
+          return value.toLowerCase().includes(searchTerm);
+        }
+        return false;
+      });
+    });
+    setFilteredData(filtered);
+  }, [searchValue, dataKey, searchKeysKey, showSearch]);
+
+  const handleItemPress = (value: string) => {
+    let newSelectedValues: string[];
+
+    if (multiSelect) {
+      if (selectedValues.includes(value)) {
+        newSelectedValues = selectedValues.filter((v) => v !== value);
+      } else {
+        newSelectedValues = [...selectedValues, value];
+      }
+    } else {
+      newSelectedValues = [value];
+    }
+
+    setSelectedValues(newSelectedValues);
+
+    if (!multiSelect) {
+      onSelect(newSelectedValues);
+      onClose();
+    }
+  };
+
+  const handleDone = () => {
+    onSelect(selectedValues);
+    onClose();
+  };
+
+  const clearSearch = () => {
+    setSearchValue("");
+  };
+
+  const renderDefaultItem = (
+    item: any,
+    isSelected: boolean,
+    isLast: boolean
+  ) => (
+    <TouchableOpacity
+      className={`px-4 py-3 flex-row items-center justify-between ${
+        !isLast ? "border-b border-gray-200" : ""
+      }`}
+      onPress={() => handleItemPress(item.value)}
+    >
+      <Text className="text-base text-gray-800">{item.label}</Text>
+      {isSelected && (
+        <MaterialIcons name="check" size={20} color="#21202B" />
+      )}
+    </TouchableOpacity>
+  );
+
+  const renderSearchInput = () => (
+    <View className="px-4 py-2 border-b border-gray-200">
+      <View className="bg-gray-100 rounded-full px-4 h-[50px] flex-row items-center">
+        <MaterialIcons name="search" size={22} color="#666" />
+
+        <TextInput
+          placeholder={searchPlaceholder}
+          value={searchValue}
+          onChangeText={setSearchValue}
+          placeholderTextColor="#666"
+          autoCapitalize="none"
+          autoCorrect={false}
+              style={{
+            flex: 1,
+            minWidth: 0,
+            paddingVertical: 0,
+            fontSize: 16,
+            height: "100%",
+            marginLeft:4
+          }}
+        />
+
+        {searchValue ? (
+          <TouchableOpacity onPress={clearSearch}>
+            <MaterialIcons name="close" size={20} color="#666" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 bg-black/50 justify-center items-center">
+        <View className="bg-white rounded-2xl w-11/12 max-h-3/4 overflow-hidden">
+          {/* Header */}
+          <View className="flex-row justify-between items-center px-4 py-3 border-b border-gray-200">
+            <View>
+              <Text className="text-lg font-semibold">{title}</Text>
+              {multiSelect && selectedValues.length > 0 && (
+                <Text className="text-sm text-gray-500">
+                  {selectedValues.length} selected
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialIcons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Bar - Conditional Rendering */}
+          {showSearch && renderSearchInput()}
+
+          {/* List */}
+          <FlatList
+            data={filteredData}
+            keyExtractor={(item) => item.value}
+            renderItem={({ item, index }) => {
+              const isSelected = selectedValues.includes(item.value);
+              const isLast = index === filteredData.length - 1;
+              if (renderItem) {
+                return renderItem(item, isSelected, index, isLast, handleItemPress) as React.ReactElement | null;
+              }
+              return renderDefaultItem(item, isSelected, isLast);
+            }}
+            showsVerticalScrollIndicator={false}
+            className="max-h-64"
+            ListEmptyComponent={
+              <View className="py-8 px-4 items-center justify-center">
+                <Text className="text-sm font-medium text-gray-400 text-center">
+                  {searchValue.trim() ? "No Search Option Found" : noResultsText}
+                </Text>
+              </View>
+            }
+          />
+
+          {/* Done Button (only for multi-select) */}
+          {multiSelect && (
+            <View className="px-4 py-3 border-t border-gray-200">
+              <TouchableOpacity
+                className="bg-[#21202B] rounded-xl py-3 items-center"
+                onPress={handleDone}
+              >
+                <Text className="text-white font-semibold text-base">
+                  {doneButtonText}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+export default GlobalSearchModal;
