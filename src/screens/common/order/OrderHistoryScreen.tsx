@@ -580,18 +580,6 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                             >
                                 {selectedDateStr || "Select Date (YYYY/MM/DD)"}
                             </Text>
-
-                            {selectedDateStr && (
-                                <TouchableOpacity
-                                    onPress={(e) => {
-                                        e.stopPropagation();
-                                        handleClearFilter();
-                                    }}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                >
-                                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                                </TouchableOpacity>
-                            )}
                         </TouchableOpacity>
 
                         {/* APPLY / CLEAR FILTER BUTTON */}
