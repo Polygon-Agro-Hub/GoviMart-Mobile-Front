@@ -25,31 +25,58 @@ type AlacartSelectedProduct = {
   quantity: number;
 };
 
-const normalizeToKg = (product: ProductType): ProductType => {
+/**
+ * `normalPrice` / `discountedPrice` in marketplaceitems are PER-1KG rates.
+ * `startValue` is the default display quantity, in whatever unit `unitType` says.
+ * `changeby` is the stepper increment, in the same unit as `startValue`.
+ *
+ * This function:
+ *  1. Converts startValue/changeby into kg (so the whole app works in kg,
+ *     matching what SetQauntity already assumes).
+ *  2. Recomputes normalPrice/discountedPrice from "per-kg rate" into
+ *     "price for the current display quantity" — i.e. rate * qtyInKg —
+ *     so the card shows the correct total, not the raw per-kg rate.
+ */
+// Local extension so weightDisplay/perKgPrice can travel alongside a
+// ProductType without ProductType itself needing to declare them.
+type NormalizedProduct = ProductType & {
+  weightDisplay: string;
+  perKgPrice: number;
+};
+
+const normalizeToKg = (product: ProductType): NormalizedProduct => {
   const rawUnit = (product.unitType || "kg").toLowerCase();
-  if (rawUnit === "g") {
-    const rawVal = parseFloat(product.startValue || "500");
-    const kgVal = Number((rawVal / 1000).toFixed(3));
-    const cleanKg = parseFloat(String(kgVal));
 
-    const rawChange = product.changeby != null && String(product.changeby).trim() !== "" ? parseFloat(String(product.changeby)) : rawVal;
-    const kgChange = Number((rawChange / 1000).toFixed(3));
-    const cleanKgChange = parseFloat(String(kgChange));
+  const rawStartValue = parseFloat(String(product.startValue || "1")) || 1;
+  const rawChangeBy =
+    product.changeby != null && String(product.changeby).trim() !== ""
+      ? parseFloat(String(product.changeby))
+      : rawStartValue;
 
-    return {
-      ...product,
-      unitType: "kg",
-      startValue: (isNaN(cleanKg) ? 0.5 : cleanKg).toString(),
-      changeby: (isNaN(cleanKgChange) ? (isNaN(cleanKg) ? 0.5 : cleanKg) : cleanKgChange).toString(),
-    };
-  }
-  const cleanVal = product.startValue ? parseFloat(String(product.startValue)) : 1;
-  const cleanChange = product.changeby ? parseFloat(String(product.changeby)) : cleanVal;
+  // startValue / changeby are always stored in kg in the DB.
+  // unitType (from the DB column) just controls the display label.
+  const qtyKg = Number(rawStartValue.toFixed(3));
+  const stepKg = Number(rawChangeBy.toFixed(3));
+
+  // Always use discountedPrice as the per-kg rate.
+  const perKgPrice = parseFloat(String(product.discountedPrice || "0")) || 0;
+
+  // Displayed price = discountedPrice (per-kg rate) * quantity in kg
+  const totalPrice = Number((perKgPrice * qtyKg).toFixed(2));
+
+  // Label built straight from the DB's unitType column: "g" -> grams, else kg
+  const weightDisplay =
+    rawUnit === "g" ? `${Math.round(qtyKg * 1000)} g` : `${qtyKg} kg`;
+
   return {
     ...product,
-    unitType: "kg",
-    startValue: (isNaN(cleanVal) ? (product.startValue || "1") : cleanVal.toString()),
-    changeby: (isNaN(cleanChange) ? (product.changeby || "1") : cleanChange.toString()),
+    unitType: product.unitType, // keep the original DB value, don't force "kg"
+    startValue: qtyKg.toString(),
+    changeby: stepKg.toString(),
+    perKgPrice,
+    normalPrice: totalPrice.toString(), // string, matches ProductType
+    discountedPrice: totalPrice,        // number, matches ProductType
+    weightDisplay,
   };
 };
 
@@ -67,9 +94,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
   );
   const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
   const [availableProducts, setAvailableProducts] = useState<ProductType[]>([]);
-  const [alacartSelection, setAlacartSelection] = useState<
-    Record<string | number, AlacartSelectedProduct>
-  >({});
+ const [alacartSelection, setAlacartSelection] = useState<Record<string | number, AlacartSelectedProduct>>({});
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -160,28 +185,30 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     fetchReplacementsByProductType();
   }, [targetProductTypeId]);
 
-  const toggleAlacartProduct = (product: ProductType) => {
-    const normalized = normalizeToKg(product);
-    const price = parseFloat(normalized.normalPrice) || 0;
-    const cleanStartVal = parseFloat(String(normalized.startValue || "1")) || 1;
-    const weightDisplay = `${cleanStartVal} kg`;
+const toggleAlacartProduct = (product: ProductType) => {
+  const normalized = normalizeToKg(product);
 
-    setAlacartSelection((prev) => {
-      if (prev[normalized.id]) {
-        return {};
-      }
-      return {
-        [normalized.id]: {
-          id: normalized.id,
-          displayName: normalized.displayName,
-          image: normalized.image,
-          price,
-          weightDisplay,
-          quantity: 1,
-        },
-      };
-    });
-  };
+  const price = Number(normalized.discountedPrice) || 0;
+
+  const cleanStartVal = parseFloat(String(normalized.startValue || "1")) || 1;
+  const weightDisplay = normalized.weightDisplay || `${cleanStartVal} kg`;
+
+  setAlacartSelection((prev) => {
+    if (prev[normalized.id]) {
+      return {};
+    }
+    return {
+      [normalized.id]: {
+        id: normalized.id,
+        displayName: normalized.displayName,
+        image: normalized.image,
+        price,
+        weightDisplay,
+        quantity: 1,
+      },
+    };
+  });
+};
 
   return (
     <View className="flex-1 bg-white">
@@ -265,20 +292,6 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
               (p) => p.id.toString() === selectedId.toString(),
             );
             if (!selectedProduct) return;
-
-            console.log(
-              "\n[ReplaceProductScreen] Navigating to SetQauntity with:",
-              {
-                orderId: route.params?.orderId,
-                fromProduct: route.params?.fromProduct,
-                toProduct: normalizeToKg(selectedProduct),
-                packageId: route.params?.packageId,
-                orderPackageId: route.params?.orderPackageId,
-                replceId:
-                  route.params?.fromProduct?.itemId || route.params?.replceId,
-                stepIndex: route.params?.stepIndex,
-              },
-            );
 
             navigation.navigate("SetQauntity", {
               orderId: route.params?.orderId,

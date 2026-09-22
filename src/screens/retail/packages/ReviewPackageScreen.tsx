@@ -642,42 +642,46 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
   }, [packagesMeta]);
 
-  const fetchCategoryProducts = async (categoryId: string) => {
-    try {
-      setSelectedAlaCartCategory(categoryId);
-      setLoadingAlaCartProducts(true);
-      const response = await productService.getProductsByCategory(categoryId);
+const fetchCategoryProducts = async (categoryId: string) => {
+  try {
+    setSelectedAlaCartCategory(categoryId);
+    setLoadingAlaCartProducts(true);
+    const response = await productService.getProductsByCategory(categoryId);
 
-      if (
-        response.data?.status &&
-        Array.isArray(response.data.products)
-      ) {
-        if (response.data.products.length > 0) {
-          const products = response.data.products.map((item: any) => ({
+    if (
+      response.data?.status &&
+      Array.isArray(response.data.products)
+    ) {
+      if (response.data.products.length > 0) {
+        const products = response.data.products
+          .map((item: any) => ({
             ...item,
             type: "product",
-          }));
-          setAlaCartProducts(products);
-        } else {
-          setAlaCartProducts([]);
-        }
+          }))
+          // Defensive: never show a disabled product even if it slips
+          // through the backend filter (e.g. isEnable is null/0/"0").
+          .filter((item: any) => item.isEnable === undefined || item.isEnable === 1 || item.isEnable === true);
+        setAlaCartProducts(products);
       } else {
         setAlaCartProducts([]);
-        const message =
-          response.data?.message || `No products available for ${categoryId}.`;
-        Alert.alert("Notice", message);
       }
-    } catch (error: any) {
-      console.error("Failed to load products by category from API:", error);
+    } else {
       setAlaCartProducts([]);
-      const errorMsg =
-        error?.response?.data?.message ||
-        `Failed to load products for ${categoryId}. Please check your connection and try again.`;
-      Alert.alert("Error", errorMsg);
-    } finally {
-      setLoadingAlaCartProducts(false);
+      const message =
+        response.data?.message || `No products available for ${categoryId}.`;
+      Alert.alert("Notice", message);
     }
-  };
+  } catch (error: any) {
+    console.error("Failed to load products by category from API:", error);
+    setAlaCartProducts([]);
+    const errorMsg =
+      error?.response?.data?.message ||
+      `Failed to load products for ${categoryId}. Please check your connection and try again.`;
+    Alert.alert("Error", errorMsg);
+  } finally {
+    setLoadingAlaCartProducts(false);
+  }
+};
 
   useEffect(() => {
     fetchCategoryProducts("Vegetables");
@@ -1039,10 +1043,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const grandTotal = packagesTotal + alacartTotal + deliveryCharge;
   const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
   const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
-  const additionalPayAmount = Math.max(
-    0,
-    confirmGrandTotal - packagesTotal,
-  );
+  // Signed diff between the original paid-for total and the reviewed total.
+  // Positive => customer owes more. Negative => total went down (reduced / refundable).
+  const totalDiff = confirmGrandTotal - packagesTotal;
+  const additionalPayAmount = Math.max(0, totalDiff);
+  const totalSavingsAmount = Math.max(0, -totalDiff);
+
+  // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
+  const pMethodLower = (paymentMethod || "").trim().toLowerCase();
+  const isCashOnDelivery =
+    pMethodLower.includes("cash") || pMethodLower === "cod";
 
   return (
     <View className="flex-1 bg-white">
@@ -1433,22 +1443,34 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   You can change the products and quantity as needed.
                 </Text>
 
-                {products.map((product, index) => (
-                  <ProductReviewCard
-                    key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
-                    product={product}
-                    onIncrease={() =>
-                      updateProductQuantity(pkg.id, product.id, 1)
-                    }
-                    onDecrease={() =>
-                      updateProductQuantity(pkg.id, product.id, -1)
-                    }
-                    onChangeProduct={() => onChangeProduct(pkg.id, product)}
-                    onResetToOriginal={() =>
-                      onResetToOriginal(pkg.id, product.id)
-                    }
-                  />
-                ))}
+                {(() => {
+  // Count how many products fall under each category within
+  // THIS package only, so the header shown on every card in
+  // that category reflects the correct group size.
+  const categoryCounts: Record<string, number> = {};
+  products.forEach((p) => {
+    const key = p.category || "Other";
+    categoryCounts[key] = (categoryCounts[key] || 0) + 1;
+  });
+
+  return products.map((product, index) => (
+    <ProductReviewCard
+      key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
+      product={product}
+      categoryCount={categoryCounts[product.category || "Other"]}
+      onIncrease={() =>
+        updateProductQuantity(pkg.id, product.id, 1)
+      }
+      onDecrease={() =>
+        updateProductQuantity(pkg.id, product.id, -1)
+      }
+      onChangeProduct={() => onChangeProduct(pkg.id, product)}
+      onResetToOriginal={() =>
+        onResetToOriginal(pkg.id, product.id)
+      }
+    />
+  ));
+})()}
               </View>
 
               {/* Price Breakdown & Confirm Button (Inside ScrollView) */}
@@ -2109,19 +2131,41 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             </>
           )}
 
-          {/* Please Note Box */}
-          <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
-            <Text className="text-[14px] font-bold text-black mb-1">
-              Please Note :
-            </Text>
-            <Text className="text-[13px] text-[#6B6B6B] leading-5">
-              You have already paid for this order. The additional amount{" "}
-              <Text className="font-bold text-black">
-                Rs. {formatPrice(additionalPayAmount)}
-              </Text>{" "}
-              will need to be paid at the end of this process.
-            </Text>
-          </View>
+          {/* Please Note Box — wording/color depend on whether the reviewed total
+              went UP (extra payment due) or DOWN (reduced / refundable) vs. what
+              was originally paid for. */}
+          {totalDiff > 0 ? (
+            <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
+              <Text className="text-[14px] font-bold text-black mb-1">
+                Please Note :
+              </Text>
+              <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                You have already paid for this order. The additional amount{" "}
+                <Text className="font-bold text-black">
+                  Rs. {formatPrice(additionalPayAmount)}
+                </Text>{" "}
+                will need to be paid at the end of this process.
+              </Text>
+            </View>
+          ) : totalDiff < 0 ? (
+            <View className="bg-[#EDFDF2] border border-[#A6F4C5] rounded-2xl p-4 mx-5 my-4">
+              <Text className="text-[14px] font-bold text-black mb-1">
+                Please Note :
+              </Text>
+              <Text className="text-[13px] text-[#475467] leading-5">
+                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total
+                has been reduced by{" "}
+                <Text className="font-bold text-black">
+                  Rs. {formatPrice(totalSavingsAmount)}
+                </Text>
+                . Your new total is{" "}
+                <Text className="font-bold text-black">
+                  Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                </Text>
+                .
+              </Text>
+            </View>
+          ) : null}
         </ScrollView>
       )}
 
@@ -2351,7 +2395,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             }}
           >
             <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              {additionalPayAmount > 0
+              {totalDiff > 0
                 ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
                 : "Confirm Order Details"}
             </Text>

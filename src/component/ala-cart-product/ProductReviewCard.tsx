@@ -11,11 +11,12 @@ import Entypo from "@expo/vector-icons/Entypo";
 
 export const ProductReviewCard: React.FC<{
     product: ReviewProduct;
+    categoryCount?: number;
     onIncrease: () => void;
     onDecrease: () => void;
     onChangeProduct: () => void;
     onResetToOriginal?: () => void;
-}> = ({ product, onIncrease, onDecrease, onChangeProduct, onResetToOriginal }) => {
+}> = ({ product, categoryCount, onIncrease, onDecrease, onChangeProduct, onResetToOriginal }) => {
     const minQuantity = product.minQuantity ?? product.step ?? 1;
     const isMin = product.quantity <= minQuantity;
     const formatPrice = (value: number | string) =>
@@ -115,7 +116,12 @@ export const ProductReviewCard: React.FC<{
                         style={{ marginTop: 2 }}
                     />
                     <Text className="flex-1 ml-1.5 text-[12px] text-[#F04438] leading-4">
-                        {product.excludedWarning}
+                        You marked{" "}
+                        <Text className="font-bold text-[#F04438]">
+                            {product.name}
+                        </Text>{" "}
+                        as an exclude product for your packages. Please Change
+                        Product if you don't need this.
                     </Text>
                 </View>
             )}

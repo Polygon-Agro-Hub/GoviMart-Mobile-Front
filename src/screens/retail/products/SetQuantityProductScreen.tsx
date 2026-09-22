@@ -54,13 +54,9 @@ const ProductRow: React.FC<{
   <View className="flex-row items-center justify-center px-8 w-full">
     <ProductAvatar product={product} />
     <View className="ml-4 items-start">
-      <Text className="text-[16px] font-bold text-black">
-        {product.name}
-      </Text>
+      <Text className="text-[16px] font-bold text-black">{product.name}</Text>
       <Text className="text-[13px] text-[#8A8A8A] mt-0.5">{subtitle}</Text>
-      <Text className="text-[16px] font-bold text-black mt-0.5">
-        {price}
-      </Text>
+      <Text className="text-[16px] font-bold text-black mt-0.5">{price}</Text>
     </View>
   </View>
 );
@@ -92,6 +88,13 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
+// Formats a quantity that is ALWAYS stored internally in kg into the
+// unit the product should actually be displayed in ("g" or "kg").
+const formatQty = (qtyKg: number, unit: "kg" | "g") =>
+  unit === "g"
+    ? `${Math.round(qtyKg * 1000)} g`
+    : `${parseFloat(String(qtyKg))} kg`;
+
 /* ---------------------------------------------------------
    Screen
 --------------------------------------------------------- */
@@ -102,9 +105,19 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const packageId = route.params?.packageId || "";
   const stepIndex = route.params?.stepIndex ?? 0;
 
+  // Display unit for each side, taken from their own unitType — NOT
+  // hardcoded to "kg". Internal math always stays in kg regardless.
+  const fromDisplayUnit: "kg" | "g" =
+    (rawFrom?.unitType || rawFrom?.unit || "kg").toLowerCase() === "g"
+      ? "g"
+      : "kg";
+  const toDisplayUnit: "kg" | "g" =
+    (rawTo?.unitType || "kg").toLowerCase() === "g" ? "g" : "kg";
+
   const fromProduct: ProductInfo = useMemo(() => {
     const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
-    let rawQty = parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
+    let rawQty =
+      parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
     const rawPrice = rawFrom?.price || 0;
     if (rawUnit === "g") {
       rawQty = Number((rawQty / 1000).toFixed(3));
@@ -122,9 +135,19 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   }, [rawFrom]);
 
   const toProduct: ProductInfo = useMemo(() => {
+    // Prefer the true per-kg rate (perKgPrice, set by normalizeToKg in
+    // ReplaceProductScreen). Falling back to normalPrice/price only if
+    // perKgPrice wasn't provided.
     const priceVal =
-      parseFloat(rawTo?.normalPrice || rawTo?.price || rawTo?.pricePerBaseQty) ||
-      0;
+      parseFloat(
+        String(
+          rawTo?.perKgPrice ??
+            rawTo?.normalPrice ??
+            rawTo?.price ??
+            rawTo?.pricePerBaseQty ??
+            0,
+        ),
+      ) || 0;
 
     return {
       id: rawTo?.id?.toString() || "to",
@@ -133,51 +156,62 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       image: rawTo?.image,
       unit: "kg",
       baseQty: 1,
-      pricePerBaseQty: priceVal,
+      pricePerBaseQty: priceVal, // this is now the per-kg rate
     };
   }, [rawTo]);
 
   const rawStepVal =
-    rawTo?.changeby != null && String(rawTo.changeby).trim() !== "" && parseFloat(String(rawTo.changeby)) > 0
+    rawTo?.changeby != null &&
+    String(rawTo.changeby).trim() !== "" &&
+    parseFloat(String(rawTo.changeby)) > 0
       ? parseFloat(String(rawTo.changeby))
-      : (rawTo?.step != null && parseFloat(String(rawTo.step)) > 0 ? parseFloat(String(rawTo.step)) : (parseFloat(String(rawTo?.startValue)) || 0.5));
+      : rawTo?.step != null && parseFloat(String(rawTo.step)) > 0
+        ? parseFloat(String(rawTo.step))
+        : parseFloat(String(rawTo?.startValue)) || 0.5;
 
   const rawMinVal =
-    rawTo?.startValue != null && String(rawTo.startValue).trim() !== "" && parseFloat(String(rawTo.startValue)) > 0
+    rawTo?.startValue != null &&
+    String(rawTo.startValue).trim() !== "" &&
+    parseFloat(String(rawTo.startValue)) > 0
       ? parseFloat(String(rawTo.startValue))
       : rawStepVal;
 
-  const step = rawStepVal > 10 ? parseFloat((rawStepVal / 1000).toFixed(3)) : parseFloat(rawStepVal.toFixed(3));
-  const minQty = rawMinVal > 10 ? parseFloat((rawMinVal / 1000).toFixed(3)) : parseFloat(rawMinVal.toFixed(3));
+  const step =
+    rawStepVal > 10
+      ? parseFloat((rawStepVal / 1000).toFixed(3))
+      : parseFloat(rawStepVal.toFixed(3));
+  const minQty =
+    rawMinVal > 10
+      ? parseFloat((rawMinVal / 1000).toFixed(3))
+      : parseFloat(rawMinVal.toFixed(3));
   const maxQty = 10;
 
-  const [quantity, setQuantity] = useState(() => {
-    const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
-    const parsedQty = parseFloat(String(rawFrom?.quantity ?? minQty));
-    if (!isNaN(parsedQty) && parsedQty > 0) {
-      const initialInKg = rawUnit === "g" ? Number((parsedQty / 1000).toFixed(3)) : parsedQty;
-      return Math.max(minQty, initialInKg);
-    }
-    return minQty;
-  });
+  // Default quantity comes from the REPLACEMENT product's (toProduct's)
+  // own startValue — i.e. minQty, already derived from rawTo above —
+  // not from the original product being replaced (rawFrom).
+  const [quantity, setQuantity] = useState<number>(minQty);
 
   const fromUnitPrice = fromProduct.pricePerBaseQty;
   const fromPrice = fromUnitPrice * fromProduct.baseQty;
 
-  const toUnitPrice = toProduct.pricePerBaseQty;
+  const toUnitPrice = toProduct.pricePerBaseQty; // per-kg rate
   const toPrice = useMemo(
-    () => toUnitPrice * quantity,
-    [toUnitPrice, quantity]
+    () => Number((toUnitPrice * quantity).toFixed(2)),
+    [toUnitPrice, quantity],
   );
 
   const balance = useMemo(() => fromPrice - toPrice, [fromPrice, toPrice]);
   const isCredit = balance >= 0;
 
   const decrease = () =>
-    setQuantity((q: number) => Math.max(minQty, parseFloat((q - step).toFixed(3))));
+    setQuantity((q: number) =>
+      Math.max(minQty, parseFloat((q - step).toFixed(3))),
+    );
 
   const increase = () =>
-    setQuantity((q: number) => Math.min(maxQty, parseFloat((q + step).toFixed(3))));
+    setQuantity((q: number) =>
+      Math.min(maxQty, parseFloat((q + step).toFixed(3))),
+    );
 
   const dispatch = useDispatch();
 
@@ -185,15 +219,18 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     const newProductObj = {
       id: String(rawTo?.id ?? toProduct.id),
       itemId: rawFrom?.itemId,
-      productId: rawTo?.id ? Number(rawTo.id) : (parseInt(toProduct.id) || undefined),
-      category: rawFrom?.category || rawTo?.productTypeName || "Replaced Product",
+      productId: rawTo?.id
+        ? Number(rawTo.id)
+        : parseInt(toProduct.id) || undefined,
+      category:
+        rawFrom?.category || rawTo?.productTypeName || "Replaced Product",
       name: toProduct.name,
       icon: toProduct.icon || "🥗",
       image: toProduct.image,
-      price: toUnitPrice,
+      price: toUnitPrice, // per-kg rate, so downstream qty*price math stays correct
       quantity: quantity,
       minQuantity: minQty,
-      unit: "kg" as const,
+      unit: "kg" as const, // internal storage unit stays kg
       step: step,
       productType: rawFrom?.productType || rawTo?.productTypeId,
       productTypeId: rawFrom?.productTypeId || rawTo?.productTypeId,
@@ -202,20 +239,13 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       originalProduct: rawFrom?.originalProduct || rawFrom,
     };
 
-    console.log("\n[SetQuantityProductScreen] onReplace triggered. Dispatching replacePackageProduct to Redux:", {
-      packageId: route.params?.packageId,
-      orderPackageId: route.params?.orderPackageId,
-      originalProductId: String(rawFrom?.id ?? fromProduct.id),
-      newProduct: newProductObj,
-    });
-
     dispatch(
       replacePackageProduct({
         packageId: route.params?.packageId,
         orderPackageId: route.params?.orderPackageId,
         originalProductId: String(rawFrom?.id ?? fromProduct.id),
         newProduct: newProductObj,
-      })
+      }),
     );
 
     navigation.navigate("ReviewPackage", {
@@ -228,7 +258,6 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
-      {/* Header */}
       <CustomHeader
         title="Set Quantity"
         showBackButton={true}
@@ -247,11 +276,10 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             You are replacing {fromProduct.name} with {toProduct.name}.
           </Text>
 
-          {/* From -> To */}
           <View className="items-center mt-6">
             <ProductRow
               product={fromProduct}
-              subtitle={`${parseFloat(String(fromProduct.baseQty))} kg`}
+              subtitle={formatQty(fromProduct.baseQty, fromDisplayUnit)}
               price={`Rs. ${formatPrice(fromPrice)}`}
             />
 
@@ -261,39 +289,39 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
             <ProductRow
               product={toProduct}
-              subtitle={`${parseFloat(String(quantity))} kg`}
+              subtitle={formatQty(quantity, toDisplayUnit)}
               price={`Rs. ${formatPrice(toPrice)}`}
             />
           </View>
 
-          {/* Quantity Stepper */}
           <View className="mx-6 mt-8 flex-row items-center justify-between rounded-full border border-[#E1E7EE] bg-[#FBFBFB] px-2 py-2">
             <TouchableOpacity
               onPress={decrease}
               disabled={quantity <= minQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#D9D9D9]"
-                }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${
+                quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#D9D9D9]"
+              }`}
             >
               <Ionicons name="remove" size={20} color="#374151" />
             </TouchableOpacity>
 
             <Text className="text-[16px] font-semibold text-black">
-              {parseFloat(String(quantity))} kg
+              {formatQty(quantity, toDisplayUnit)}
             </Text>
 
             <TouchableOpacity
               onPress={increase}
               disabled={quantity >= maxQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
-                }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${
+                quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
+              }`}
             >
               <Ionicons name="add" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
 
-          {/* Price breakdown */}
           <View className="mx-6 mt-8">
             <SummaryRow
               label={`${fromProduct.name} Price`}
@@ -307,20 +335,18 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             <View className="h-[1px] bg-[#ECECEC]" />
             <SummaryRow
               label="Balance"
-              value={`${isCredit ? "" : "- "}Rs. ${formatPrice(Math.abs(balance))}`}
+              value={`Rs. ${formatPrice(Math.abs(balance))}`}
               bold
-              valueColor="#3B82F6"
+              valueColor={isCredit ? "#3B82F6" : "#EF4444"}
             />
           </View>
 
-          {/* Note */}
           <View className="mx-6 mt-6 bg-[#F5F5F5] rounded-2xl p-4">
             <Text className="text-[14px] font-bold text-black mb-1">
               Please Note :
             </Text>
             <Text className="text-[13px] text-[#6B6B6B] leading-5">
-              You have already paid for this order, so the remaining
-              balance of{" "}
+              You have already paid for this order, so the remaining balance of{" "}
               <Text className="font-bold text-black">
                 Rs. {formatPrice(Math.abs(balance))}
               </Text>{" "}
@@ -334,9 +360,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           activeOpacity={0.85}
           className="mx-6 mt-6 mb-8 h-[54px] bg-black rounded-full justify-center items-center shadow-sm"
         >
-          <Text className="text-white text-[16px] font-bold">
-            Replace
-          </Text>
+          <Text className="text-white text-[16px] font-bold">Replace</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
