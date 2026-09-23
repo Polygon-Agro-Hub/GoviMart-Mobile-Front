@@ -25,6 +25,30 @@ import { RootState, AppDispatch } from "@/store";
 
 type Props = StackScreenProps<RootStackParamList, "ViewProduct">;
 
+// Normalizes whatever the backend sends (e.g. "Kg", "KG ", "kilograms", null, "")
+// into a strict "g" | "kg". This ONLY controls which unit tab is preselected —
+// it does NOT say what unit `startValue`/`changeby` are expressed in. The API
+// always sends those two fields in kg-scale decimal (0.2 = 200g, 0.3 = 300g
+// step), no matter what unitType says. Treating unitType as "the unit the raw
+// number is already in" was the actual bug: it made the code skip the ×1000
+// conversion whenever unitType was "g".
+const normalizeUnit = (raw?: string | null): "g" | "kg" => {
+  const norm = (raw || "g").toString().trim().toLowerCase();
+  if (norm === "kg" || norm === "kgs" || norm === "kilogram" || norm === "kilograms") {
+    return "kg";
+  }
+  return "g";
+};
+
+// startValue/changeby are always kg-scale decimals. Convert a kg amount into
+// the units of the given tab: "kg" -> same number (rounded to 3dp), "g" -> ×1000.
+const toUnit = (kgAmount: number, unit: "g" | "kg"): number =>
+  unit === "kg" ? parseFloat(kgAmount.toFixed(3)) : Math.round(kgAmount * 1000);
+
+// Convert a quantity that's already in the given tab's units back to kg.
+const toKg = (amount: number, unit: "g" | "kg"): number =>
+  unit === "kg" ? amount : amount / 1000;
+
 const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   const { product } = route.params;
 
@@ -44,19 +68,16 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
     (p: ProductCartItem) => p.id === product?.id,
   );
 
-  const baseUnit = (product?.unitType || "g").toLowerCase();
-  const rawStartValue = Number(product?.startValue) || 1;
+  // preferredUnit: which tab is selected by default. kgStartValue: the
+  // canonical amount in kg, regardless of preferredUnit.
+  const preferredUnit = normalizeUnit(product?.unitType);
+  const kgStartValue = Number(product?.startValue) || 1;
 
-  const defaultStartUnit: "g" | "kg" =
-    baseUnit === "kg" && rawStartValue < 1 ? "g" : (baseUnit as "g" | "kg");
-  const defaultStartWeight =
-    baseUnit === "kg" && rawStartValue < 1
-      ? Math.round(rawStartValue * 1000)
-      : rawStartValue;
+  const defaultStartWeight = toUnit(kgStartValue, preferredUnit);
 
   const initialUnit: "g" | "kg" = existingCartItem
     ? existingCartItem.unit
-    : defaultStartUnit;
+    : preferredUnit;
   const initialWeight = existingCartItem
     ? existingCartItem.weight
     : defaultStartWeight;
@@ -72,8 +93,8 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
   const effectiveUnitPrice = hasDiscount ? discountedPriceVal : normalPriceVal;
 
-  const startEffectivePrice = effectiveUnitPrice * rawStartValue;
-  const startNormalPrice = normalPriceVal * rawStartValue;
+  const startEffectivePrice = effectiveUnitPrice * kgStartValue;
+  const startNormalPrice = normalPriceVal * kgStartValue;
 
   const [unit, setUnit] = useState<"g" | "kg">(initialUnit);
   const [quantity, setQuantity] = useState(initialWeight);
@@ -83,30 +104,18 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   const [viewCartVisible, setViewCartVisible] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
 
-  const rawChangeBy =
+  const kgChangeBy =
     product?.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
       ? parseFloat(String(product.changeby))
-      : rawStartValue;
+      : kgStartValue;
 
-  const minQuantity =
-    unit === "g"
-      ? (baseUnit === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-      : (baseUnit === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+  const minQuantity = toUnit(kgStartValue, unit);
+  const stepSize = toUnit(kgChangeBy, unit);
 
-  const stepSize =
-    unit === "g"
-      ? (baseUnit === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
-      : (baseUnit === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+  const currentKg = toKg(quantity, unit);
+  const multiplier = kgStartValue > 0 ? currentKg / kgStartValue : 1;
 
-  const currentWeightInG = unit === "kg" ? quantity * 1000 : quantity;
-  const startWeightInG =
-    baseUnit === "kg" ? rawStartValue * 1000 : rawStartValue;
-  const multiplier = startWeightInG > 0 ? currentWeightInG / startWeightInG : 1;
-
-  const startWeightDisplay =
-    baseUnit === "kg" && rawStartValue < 1
-      ? `${Math.round(rawStartValue * 1000)} g`
-      : `${rawStartValue} ${baseUnit}`;
+  const startWeightDisplay = `${defaultStartWeight} ${preferredUnit}`;
 
   const formattedStartPrice =
     "Rs. " +
@@ -129,7 +138,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
   const discountSaving =
     comPrice != null && discountedPrice != null && comPrice > discountedPrice
-      ? (comPrice - discountedPrice) * rawStartValue
+      ? (comPrice - discountedPrice) * kgStartValue
       : null;
 
   const increaseQty = () => {
@@ -155,16 +164,9 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   const changeUnit = (value: "kg" | "g") => {
     if (unit === value) return;
     setUnit(value);
-    const minKg = baseUnit === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3));
-    const minG = baseUnit === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue);
-
-    if (value === "kg") {
-      const newQty = parseFloat((quantity / 1000).toFixed(3));
-      setQuantity(Math.max(minKg, newQty));
-    } else {
-      const newQty = Math.round(quantity * 1000);
-      setQuantity(Math.max(minG, newQty));
-    }
+    const newQty = toUnit(toKg(quantity, unit), value);
+    const min = toUnit(kgStartValue, value);
+    setQuantity(Math.max(min, newQty));
   };
 
   const onAddToCart = () => {
