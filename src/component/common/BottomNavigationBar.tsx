@@ -10,6 +10,7 @@ import Feather from '@expo/vector-icons/Feather';
 import notificationService from "@/services/notification/notification.service";
 import socketService from "@/services/socket/socket.service";
 import pushNotificationService from "@/services/notification/pushNotification.service";
+import { subscribeToUnreadCount, updateGlobalUnreadCount } from "@/store/notificationStore";
 
 type BottomScreen =
     | "Home"
@@ -31,41 +32,31 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
     const [unreadCount, setUnreadCount] = useState<number>(0);
 
     useEffect(() => {
-        // Fetch unread count
-        let isMounted = true;
+        // ── 1. Subscribe to the global unread count store (Sales Dash pattern) ──
+        // This persists across ALL tab switches — no re-subscriptions on tab change.
+        const unsubscribe = subscribeToUnreadCount((count) => {
+            setUnreadCount(count);
+        });
+
+        // ── 2. Ensure socket is connected so we receive real-time events ──
+        socketService.connect();
+
+        // ── 3. Fetch fresh count from API on first mount ──
         notificationService
             .getNotifications(1, 0)
             .then((res) => {
-                if (isMounted && res.data?.status) {
-                    setUnreadCount(Number(res.data?.unreadCount) || 0);
+                if (res.data?.status) {
+                    updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
                 }
             })
             .catch(() => { });
 
-        // Listen for real-time notification socket updates
-        socketService.connect();
-        const unsubscribeNotif = socketService.onNewNotification((item) => {
-            if (isMounted) {
-                if (typeof (item as any)?.unreadCount === "number") {
-                    setUnreadCount((item as any).unreadCount);
-                } else {
-                    setUnreadCount((prev) => prev + 1);
-                }
-            }
-        });
-
-        const unsubscribeCount = socketService.onUnreadCountUpdate((count) => {
-            if (isMounted) {
-                setUnreadCount(count);
-            }
-        });
-
         return () => {
-            isMounted = false;
-            unsubscribeNotif();
-            unsubscribeCount();
+            unsubscribe();
         };
-    }, [activeScreen]);
+        // Intentionally run once on mount — NOT on activeScreen change.
+        // The global store handles cross-tab updates without re-subscribing.
+    }, []);
 
     return (
         <View

@@ -35,7 +35,9 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
   const token = useSelector((state: RootState) => state.auth.token);
   const cartProducts = useSelector((state: RootState) => state.cart.products);
   const cartPackages = useSelector((state: RootState) => state.cart.packages);
-  const totalCartCount = cartProducts.length + cartPackages.length;
+const totalCartCount =
+  cartProducts.length +
+  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const existingPackage = cartPackages.find((p) => p.id === packageId);
 

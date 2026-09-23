@@ -12,6 +12,7 @@ import {
   ToastAndroid,
   Platform,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -285,7 +286,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (state: RootState) =>
       (state as RootState & { cart: CartState }).cart.packages,
   );
-  const totalCartItems = cartProducts.length + cartPackages.length;
+  const totalCartItems =
+  cartProducts.length +
+  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const visibleCategories = isRetail
     ? CATEGORIES
@@ -309,6 +312,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
+  const [addingItemId, setAddingItemId] = useState<number | null>(null);
+  const isCartSyncingRef = useRef(false);
+
+  const userProfileRef = useRef(userProfile);
+  userProfileRef.current = userProfile;
+  const userTokenRef = useRef(userToken);
+  userTokenRef.current = userToken;
 
   const [addTimeSnapshots, setAddTimeSnapshots] = useState<
     Record<number, AddTimeSnapshot>
@@ -340,44 +350,60 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           const response = await customerService.getAccountDetails();
           if (response.data && response.data.data) {
             const data = response.data.data;
-            const updatedProfile = {
-              firstName: data.firstName || userProfile?.firstName || "",
-              lastName: data.lastName || userProfile?.lastName || "",
-              title: data.title || userProfile?.title,
-              image: data.image !== undefined ? data.image : userProfile?.image,
-              buyerType: data.buyerType || userProfile?.buyerType || "Retail",
-              email: data.email || userProfile?.email || "",
-              phoneNumber: data.phoneNumber || userProfile?.phoneNumber || "",
-              firstTimeUser: userProfile?.firstTimeUser ?? 0,
-              id: data.id || userProfile?.id,
-            };
-            dispatch(updateUserProfile(updatedProfile));
-            await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
+            const current = userProfileRef.current;
+            const isDifferent =
+              !current ||
+              current.firstName !== data.firstName ||
+              current.lastName !== data.lastName ||
+              current.title !== data.title ||
+              current.image !== data.image ||
+              current.buyerType !== data.buyerType ||
+              current.email !== data.email ||
+              current.phoneNumber !== data.phoneNumber;
+
+            if (isDifferent) {
+              const updatedProfile = {
+                firstName: data.firstName || current?.firstName || "",
+                lastName: data.lastName || current?.lastName || "",
+                title: data.title || current?.title,
+                image: data.image !== undefined ? data.image : current?.image,
+                buyerType: data.buyerType || current?.buyerType || "Retail",
+                email: data.email || current?.email || "",
+                phoneNumber: data.phoneNumber || current?.phoneNumber || "",
+                firstTimeUser: current?.firstTimeUser ?? 0,
+                id: data.id || current?.id,
+              };
+              dispatch(updateUserProfile(updatedProfile));
+              await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
+            }
           }
         } catch (error) {
           // silently handle if offline or unauthenticated
         }
       };
 
-      if (userToken) {
+      if (userTokenRef.current) {
         syncUserProfile();
 
-        // Sync this user's cart from backend
-        cartService.getUserCart()
-          .then((dbCartRes) => {
-            if (dbCartRes.data?.status && dbCartRes.data?.data) {
-              const dbProducts = dbCartRes.data.data.products || [];
-              const dbPackages = dbCartRes.data.data.packages || [];
-              dispatch(
-                setCartFromBackend({
-                  products: dbProducts,
-                  packages: dbPackages,
-                  cartUserId: userProfile?.id ?? null,
-                })
-              );
-            }
-          })
-          .catch(() => { });
+        // Sync this user's cart from backend only if not actively modifying locally
+        if (!isCartSyncingRef.current) {
+          cartService.getUserCart()
+            .then((dbCartRes) => {
+              if (isCartSyncingRef.current) return;
+              if (dbCartRes.data?.status && dbCartRes.data?.data) {
+                const dbProducts = dbCartRes.data.data.products || [];
+                const dbPackages = dbCartRes.data.data.packages || [];
+                dispatch(
+                  setCartFromBackend({
+                    products: dbProducts,
+                    packages: dbPackages,
+                    cartUserId: userProfileRef.current?.id ?? null,
+                  })
+                );
+              }
+            })
+            .catch(() => { });
+        }
       } else {
         // No token — clear any stale cart items from a previous session
         dispatch(clearCart());
@@ -407,7 +433,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       );
 
       return () => subscription.remove();
-    }, [userToken, userProfile]),
+    }, [dispatch]),
   );
 
   const fetchBanners = async () => {
@@ -791,13 +817,18 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (productId: number, unit: "g" | "kg") => {
       const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
       if (!item || item.unit === unit) return;
+      isCartSyncingRef.current = true;
       dispatch(changeProductUnit({ id: productId, newUnit: unit }));
       showToast("Cart Updated");
       if (userToken) {
         const newWeight = unit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
-        cartService.syncCartProduct(productId, newWeight, unit).catch((err) =>
-          console.error("Cart DB sync error:", err)
-        );
+        cartService.syncCartProduct(productId, newWeight, unit)
+          .catch((err) => console.error("Cart DB sync error:", err))
+          .finally(() => {
+            setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+          });
+      } else {
+        isCartSyncingRef.current = false;
       }
     },
     [dispatch, showToast, userToken, cartProducts],
@@ -805,6 +836,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleIncrement = useCallback(
     (productId: number) => {
+      isCartSyncingRef.current = true;
       dispatch(increaseProductWeight(productId));
       showToast("Cart Updated");
       if (userToken) {
@@ -813,10 +845,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           const newWeight = item.unit === "kg"
             ? parseFloat((item.weight + item.step).toFixed(3))
             : Math.round(item.weight + item.step);
-          cartService.syncCartProduct(productId, newWeight, item.unit).catch((err) =>
-            console.error("Cart DB sync error:", err)
-          );
+          cartService.syncCartProduct(productId, newWeight, item.unit)
+            .catch((err) => console.error("Cart DB sync error:", err))
+            .finally(() => {
+              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            });
         }
+      } else {
+        isCartSyncingRef.current = false;
       }
     },
     [dispatch, showToast, userToken, cartProducts],
@@ -824,6 +860,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleDecrement = useCallback(
     (productId: number) => {
+      isCartSyncingRef.current = true;
       const existing = cartProducts.find(
         (p: ProductCartItem) => p.id === productId,
       );
@@ -837,9 +874,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         });
         showToast("Removed from cart");
         if (userToken) {
-          cartService.removeCartProduct(productId).catch((err) =>
-            console.error("Cart DB sync error:", err)
-          );
+          cartService.removeCartProduct(productId)
+            .catch((err) => console.error("Cart DB sync error:", err))
+            .finally(() => {
+              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            });
+        } else {
+          isCartSyncingRef.current = false;
         }
       } else {
         dispatch(decreaseProductWeight(productId));
@@ -849,9 +890,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             ? parseFloat((existing.weight - existing.step).toFixed(3))
             : Math.round(existing.weight - existing.step);
           const newWeight = Math.max(existing.minimumWeight, decremented);
-          cartService.syncCartProduct(productId, newWeight, existing.unit).catch((err) =>
-            console.error("Cart DB sync error:", err)
-          );
+          cartService.syncCartProduct(productId, newWeight, existing.unit)
+            .catch((err) => console.error("Cart DB sync error:", err))
+            .finally(() => {
+              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            });
+        } else {
+          isCartSyncingRef.current = false;
         }
       }
     },
@@ -859,7 +904,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   );
 
   const handleAddProduct = useCallback(
-    (product: ProductType) => {
+    async (product: ProductType) => {
+      if (addingItemId === product.id) return;
+      setAddingItemId(product.id);
+      isCartSyncingRef.current = true;
+
       const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
       const dbUnitType = (product.unitType || "g").toLowerCase();
 
@@ -914,12 +963,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         }),
       );
 
-      if (userToken) {
-        cartService.syncCartProduct(product.id, initialWeight, initialUnit).catch((err) =>
-          console.error("Cart DB sync error:", err)
-        );
-      }
-
       setAddTimeSnapshots((prev) => ({
         ...prev,
         [product.id]: {
@@ -931,12 +974,29 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       setExpandedItemId(product.id);
       showToast("Added to Cart");
+
+      if (userToken) {
+        try {
+          await cartService.syncCartProduct(product.id, initialWeight, initialUnit);
+        } catch (err) {
+          console.error("Cart DB sync error:", err);
+        }
+      }
+
+      setTimeout(() => {
+        setAddingItemId(null);
+        isCartSyncingRef.current = false;
+      }, 400);
     },
-    [dispatch, showToast, userToken],
+    [dispatch, showToast, userToken, addingItemId],
   );
 
   const handleAddPackage = useCallback(
-    (pkg: PackageType) => {
+    async (pkg: PackageType) => {
+      if (addingItemId === pkg.id) return;
+      setAddingItemId(pkg.id);
+      isCartSyncingRef.current = true;
+
       const price = parseFloat(pkg.subTotal) || 0;
 
       dispatch(
@@ -950,12 +1010,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         }),
       );
 
-      if (userToken) {
-        cartService.syncCartPackage(pkg.id, 1).catch((err) =>
-          console.error("Cart DB sync package error:", err)
-        );
-      }
-
       setAddTimeSnapshots((prev) => ({
         ...prev,
         [pkg.id]: { quantity: 1, price },
@@ -963,19 +1017,37 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       setExpandedItemId(pkg.id);
       showToast("Added to Cart");
+
+      if (userToken) {
+        try {
+          await cartService.syncCartPackage(pkg.id, 1);
+        } catch (err) {
+          console.error("Cart DB sync package error:", err);
+        }
+      }
+
+      setTimeout(() => {
+        setAddingItemId(null);
+        isCartSyncingRef.current = false;
+      }, 400);
     },
-    [dispatch, showToast, userToken],
+    [dispatch, showToast, userToken, addingItemId],
   );
 
   const handleIncrementPackage = useCallback(
     (packageId: number) => {
+      isCartSyncingRef.current = true;
       dispatch(increasePackageQuantity(packageId));
       const existing = cartPackages.find((p: PackageCartItem) => p.id === packageId);
       const newQty = (existing?.quantity || 1) + 1;
       if (userToken) {
-        cartService.syncCartPackage(packageId, newQty).catch((err) =>
-          console.error("Cart DB sync package increment error:", err)
-        );
+        cartService.syncCartPackage(packageId, newQty)
+          .catch((err) => console.error("Cart DB sync package increment error:", err))
+          .finally(() => {
+            setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+          });
+      } else {
+        isCartSyncingRef.current = false;
       }
       showToast("Cart Updated");
     },
@@ -984,15 +1056,20 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleDecrementPackage = useCallback(
     (packageId: number) => {
+      isCartSyncingRef.current = true;
       const existing = cartPackages.find(
         (p: PackageCartItem) => p.id === packageId,
       );
       if (existing && existing.quantity <= 1) {
         dispatch(removePackage(packageId));
         if (userToken) {
-          cartService.removeCartPackage(packageId).catch((err) =>
-            console.error("Cart DB remove package error:", err)
-          );
+          cartService.removeCartPackage(packageId)
+            .catch((err) => console.error("Cart DB remove package error:", err))
+            .finally(() => {
+              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            });
+        } else {
+          isCartSyncingRef.current = false;
         }
 
         setAddTimeSnapshots((prev) => {
@@ -1005,9 +1082,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         dispatch(decreasePackageQuantity(packageId));
         const newQty = (existing?.quantity || 1) - 1;
         if (userToken) {
-          cartService.syncCartPackage(packageId, newQty).catch((err) =>
-            console.error("Cart DB sync package decrement error:", err)
-          );
+          cartService.syncCartPackage(packageId, newQty)
+            .catch((err) => console.error("Cart DB sync package decrement error:", err))
+            .finally(() => {
+              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            });
+        } else {
+          isCartSyncingRef.current = false;
         }
         showToast("Cart Updated");
       }
@@ -1137,10 +1218,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   {/* Text inside the card */}
                   <Text
                     style={{
-                      fontWeight: "bold",
+                      fontWeight: 500,
                       color: isActive ? "#FFFFFF" : "#1E1E1E",
                       textAlign: "center",
                       marginTop: 6,
+                      fontSize: 12
                     }}
                   >
                     {category.name}
@@ -1376,8 +1458,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* Black Circular Add Button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={(e) => {
-                                e.stopPropagation();
+                              disabled={addingItemId === product.id}
+                              onPress={() => {
                                 handleAddProduct(product as ProductType);
                               }}
                               className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
@@ -1389,7 +1471,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                 elevation: 5,
                               }}
                             >
-                              <Ionicons name="add" size={22} color="#FFFFFF" />
+                              {addingItemId === product.id ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                              ) : (
+                                <Ionicons name="add" size={22} color="#FFFFFF" />
+                              )}
                             </TouchableOpacity>
                           </>
                         )}
@@ -1557,8 +1643,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* Plus Button — tap to re-expand this card and see live controls */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={(e) => {
-                                e.stopPropagation();
+                              disabled={addingItemId === product.id}
+                              onPress={() => {
                                 setExpandedItemId(product.id);
                               }}
                               className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
@@ -1585,8 +1671,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* Add Button */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={(e) => {
-                                e.stopPropagation();
+                              disabled={addingItemId === product.id}
+                              onPress={() => {
                                 handleAddPackage(product as PackageType);
                               }}
                               className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
@@ -1598,7 +1684,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                 elevation: 5,
                               }}
                             >
-                              <Ionicons name="add" size={22} color="#FFFFFF" />
+                              {addingItemId === product.id ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                              ) : (
+                                <Ionicons name="add" size={22} color="#FFFFFF" />
+                              )}
                             </TouchableOpacity>
                           </>
                         )}
@@ -1675,8 +1765,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             {/* Checkmark / Re-expand Button — tap to re-expand this card */}
                             <TouchableOpacity
                               activeOpacity={0.8}
-                              onPress={(e) => {
-                                e.stopPropagation();
+                              disabled={addingItemId === product.id}
+                              onPress={() => {
                                 setExpandedItemId(product.id);
                               }}
                               className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"

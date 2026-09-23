@@ -30,6 +30,7 @@ import { logoutSuccess } from "@/store/authSlice";
 import { clearCart } from "@/store/cartSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tokenStorage } from "@/utils/tokenStorage";
+import LottieView from "lottie-react-native";
 
 type UpdatePasswordNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -241,10 +242,12 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       >
         <View className="flex-1 justify-start">
           {/* Lock Illustration Area */}
-          <View className="items-center mt-6">
-            <Image
-              source={require("@/assets/images/auth/update-password.webp")}
-              style={{ width: 140, height: 140, resizeMode: "contain" }}
+           <View className="items-center mt-6">
+            <LottieView
+              source={require("@/assets/json/auth/change-passwords.json")}
+              autoPlay
+              loop
+              style={{ width: 140, height: 140 }}
             />
           </View>
 

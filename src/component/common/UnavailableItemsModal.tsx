@@ -33,7 +33,7 @@ const UnavailableItemsModal: React.FC<UnavailableItemsModalProps> = ({
           <View style={styles.iconCircle}>
             <FontAwesome6
               name="triangle-exclamation"
-              size={30}
+              size={24}
               color="#DC2626"
             />
           </View>
@@ -85,16 +85,16 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   iconCircle: {
-    width: 72,
-    height: 72,
+    width: 50,
+    height: 50,
     borderRadius: 36,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#FBE7E7",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     color: "#101828",
     textAlign: "center",
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   message: {
-    fontSize: 14.5,
+    fontSize: 14,
     lineHeight: 22,
     color: "#475467",
     textAlign: "center",
