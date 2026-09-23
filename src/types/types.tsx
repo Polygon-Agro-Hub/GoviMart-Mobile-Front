@@ -200,6 +200,7 @@ export interface ProductType {
   normalPrice: string;
   startValue?: string;
   varietyNameEnglish?: string;
+  bgColor?: string;
 }
 
 export type ShopItem = ProductType | PackageType;

@@ -248,7 +248,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <View className="flex-1 bg-[#FCEFD9]">
+    <View className="flex-1" style={{ backgroundColor: product?.bgColor || "#FCEFD9" }}>
       {/* Close Button */}
       <TouchableOpacity
         onPress={() => navigation.goBack()}
