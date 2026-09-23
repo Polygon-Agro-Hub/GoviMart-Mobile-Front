@@ -248,133 +248,50 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
               <ActivityIndicator size="large" color="#FF8A00" />
             </View>
           ) : selectedCentre ? (
-            <>
-              {/*
-                Map is view-only here: interactive={true} keeps pan/pinch-zoom
-                working, but markersInteractive={false} means tapping the pin
-                does nothing (no popup, no selection). Centre selection only
-                happens through the "Select Your City" search modal below.
-              */}
-              <OpenStreetMap
-                key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
-                latitude={selectedCentre.latitude}
-                longitude={selectedCentre.longitude}
-                zoom={15}
-                interactive={true}
-                markersInteractive={false}
-                pinColor="#FF8A00"
-                markers={[
-                  {
-                    id: selectedCentre.id,
-                    latitude: selectedCentre.latitude,
-                    longitude: selectedCentre.longitude,
-                    title: selectedCentre.name,
-                    description: `${selectedCentre.city}, ${selectedCentre.district}`,
-                    color: "#FF8A00",
-                  },
-                ]}
-              />
-
-              {/* Map centre popup badge overlay - NO DROP SHADOW */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  left: 12,
-                  right: 12,
-                  backgroundColor: "#FFFFFF",
-                  borderRadius: 10,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: "#0F172A",
-                  }}
-                >
-                  {selectedCentre.name}
-                </Text>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: isCentreCurrentlyOpen(
-                        selectedCentre.openingTime,
-                        selectedCentre.closingTime,
-                      )
-                        ? "#FF9114"
-                        : "#FF2D55",
-                      fontWeight: "700",
-                    }}
-                  >
-                    {isCentreCurrentlyOpen(
-                      selectedCentre.openingTime,
-                      selectedCentre.closingTime,
-                    )
-                      ? "Open"
-                      : "Closed"}
-                  </Text>
-
-                  <View
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: 4,
-                      backgroundColor: isCentreCurrentlyOpen(
-                        selectedCentre.openingTime,
-                        selectedCentre.closingTime,
-                      )
-                        ? "#FF9114"
-                        : "#FF2D55",
-                      marginRight: 4,
-                      marginLeft: 4,
-                    }}
-                  />
-
-                  {isCentreCurrentlyOpen(
+            <OpenStreetMap
+              key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
+              latitude={selectedCentre.latitude}
+              longitude={selectedCentre.longitude}
+              zoom={15}
+              interactive={true}
+              pinColor="#FF0000"
+              markers={[
+                {
+                  id: selectedCentre.id,
+                  latitude: selectedCentre.latitude,
+                  longitude: selectedCentre.longitude,
+                  title: selectedCentre.name,
+                  isOpen: isCentreCurrentlyOpen(
                     selectedCentre.openingTime,
                     selectedCentre.closingTime,
-                  ) ? (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#64748B",
-                        marginLeft: 6,
-                      }}
-                    >
-                      {selectedCentre.openingTime} -{" "}
-                      {selectedCentre.closingTime}
-                    </Text>
-                  ) : (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#64748B",
-                        marginLeft: 6,
-                      }}
-                    >
-                      Opens by{" "}
-                      <Text style={{ color: "#FF9114", fontWeight: "700" }}>
-                        {selectedCentre.openingTime}
-                      </Text>{" "}
-                      Tomorrow
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </>
+                  ),
+                  statusText: isCentreCurrentlyOpen(
+                    selectedCentre.openingTime,
+                    selectedCentre.closingTime,
+                  )
+                    ? "Open"
+                    : "Closed",
+                  statusColor: isCentreCurrentlyOpen(
+                    selectedCentre.openingTime,
+                    selectedCentre.closingTime,
+                  )
+                    ? "#FF9114"
+                    : "#FF2D55",
+                  timeText: `${selectedCentre.openingTime || "08:00 AM"} – ${selectedCentre.closingTime || "09:00 PM"}`,
+                  color: "#FF0000",
+                  autoOpenPopup: true,
+                },
+              ]}
+              onMarkerSelect={(id) => {
+                const found = pickupCentres.find(
+                  (c) => c.id === id || String(c.id) === String(id),
+                );
+                if (found) {
+                  setSelectedCentre(found);
+                  setSelectedCity(found.name);
+                }
+              }}
+            />
           ) : (
             <OpenStreetMap
               key={`map-all-centres-${pickupCentres.length}`}
@@ -382,16 +299,34 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
               longitude={80.7718}
               zoom={7}
               interactive={true}
-              markersInteractive={false}
-              pinColor="#FF8A00"
-              markers={pickupCentres.map((c) => ({
-                id: c.id,
-                latitude: c.latitude,
-                longitude: c.longitude,
-                title: c.name,
-                description: `${c.city}${c.district ? ", " + c.district : ""}`,
-                color: "#FF8A00",
-              }))}
+              pinColor="#FF0000"
+              markers={pickupCentres.map((c) => {
+                const isOpen = isCentreCurrentlyOpen(
+                  c.openingTime,
+                  c.closingTime,
+                );
+                return {
+                  id: c.id,
+                  latitude: c.latitude,
+                  longitude: c.longitude,
+                  title: c.name,
+                  isOpen: isOpen,
+                  statusText: isOpen ? "Open" : "Closed",
+                  statusColor: isOpen ? "#FF9114" : "#FF2D55",
+                  timeText: `${c.openingTime || "08:00 AM"} – ${c.closingTime || "09:00 PM"}`,
+                  color: "#FF0000",
+                  autoOpenPopup: false,
+                };
+              })}
+              onMarkerSelect={(id) => {
+                const found = pickupCentres.find(
+                  (c) => c.id === id || String(c.id) === String(id),
+                );
+                if (found) {
+                  setSelectedCentre(found);
+                  setSelectedCity(found.name);
+                }
+              }}
             />
           )}
         </View>

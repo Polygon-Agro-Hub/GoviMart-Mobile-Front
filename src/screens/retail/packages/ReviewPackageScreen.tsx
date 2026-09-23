@@ -247,6 +247,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [unavailablePackageIds, setUnavailablePackageIds] = useState<Record<string, boolean>>({});
+  // Tracks product IDs (as strings) that have been disabled via socket — used
+  // to show "No longer available" red style in BOTH the ala carte grid AND the confirm step.
+  const [disabledAlacartProductIds, setDisabledAlacartProductIds] = useState<Set<string>>(new Set());
+
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -654,14 +658,13 @@ const fetchCategoryProducts = async (categoryId: string) => {
       Array.isArray(response.data.products)
     ) {
       if (response.data.products.length > 0) {
-        const products = response.data.products
-          .map((item: any) => ({
-            ...item,
-            type: "product",
-          }))
-          // Defensive: never show a disabled product even if it slips
-          // through the backend filter (e.g. isEnable is null/0/"0").
-          .filter((item: any) => item.isEnable === undefined || item.isEnable === 1 || item.isEnable === true);
+        // Keep ALL products (enabled AND disabled) so that when a product
+        // is disabled via socket, the card turns red ("No longer available")
+        // instead of disappearing — giving the user clear visual feedback.
+        const products = response.data.products.map((item: any) => ({
+          ...item,
+          type: "product",
+        }));
         setAlaCartProducts(products);
       } else {
         setAlaCartProducts([]);
@@ -688,13 +691,29 @@ const fetchCategoryProducts = async (categoryId: string) => {
     fetchCategoryProducts("Vegetables");
   }, []);
 
-  // Helper: check if any packages in the current review are still enabled
-  const checkPackageAvailability = useCallback(async () => {
-    if (packagesMeta.length === 0) return;
+  // Helper: check if any packages or ala carte items in the current review are still enabled in marketplaceitems/marketplacepackages
+  const checkAllAvailability = useCallback(async () => {
     try {
-      const packageIds = packagesMeta.map((p) => parseInt(p.id)).filter((id) => !isNaN(id));
-      if (packageIds.length === 0) return;
-      const res = await productService.checkAvailability([], packageIds);
+      const packageIds = packagesMeta
+        .map((p) => parseInt(p.id))
+        .filter((id) => !isNaN(id));
+
+      const productIds = Object.values(alacartSelection)
+        .map((item) => {
+          if (typeof item.productId === "number" && !isNaN(item.productId))
+            return item.productId;
+          const parsed = parseInt(
+            String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            10,
+          );
+          return isNaN(parsed) ? 0 : parsed;
+        })
+        .filter((id) => id > 0);
+
+      if (packageIds.length === 0 && productIds.length === 0) return;
+
+      const res = await productService.checkAvailability(productIds, packageIds);
+
       if (res.data?.packages) {
         const unavailable: Record<string, boolean> = {};
         packagesMeta.forEach((p) => {
@@ -705,10 +724,29 @@ const fetchCategoryProducts = async (categoryId: string) => {
         });
         setUnavailablePackageIds(unavailable);
       }
+
+      if (res.data?.products) {
+        setDisabledAlacartProductIds((prev) => {
+          const next = new Set(prev);
+          Object.entries(res.data.products).forEach(([idStr, isAvailable]) => {
+            if (isAvailable === false) {
+              next.add(String(idStr));
+            } else if (isAvailable === true) {
+              next.delete(String(idStr));
+            }
+          });
+          return next;
+        });
+      }
     } catch (err) {
-      console.log("[ReviewPackageScreen] checkPackageAvailability error:", err);
+      console.log("[ReviewPackageScreen] checkAllAvailability error:", err);
     }
-  }, [packagesMeta]);
+  }, [packagesMeta, alacartSelection]);
+
+  // Re-check availability whenever packagesMeta or alacartSelection changes
+  useEffect(() => {
+    checkAllAvailability();
+  }, [checkAllAvailability]);
 
 
   const toggleAlacartProduct = (product: ProductType) => {
@@ -754,41 +792,65 @@ const fetchCategoryProducts = async (categoryId: string) => {
   useEffect(() => {
     const unsubscribe = socketService.onCatalogUpdate((data) => {
       console.log("📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:", data);
-      // Re-fetch the currently selected ala carte category (don't reset category)
+      // Re-fetch the currently selected ala carte category (don't reset category).
+      // Keep ALL products (including newly-disabled ones) so AlacartProductCard
+      // can show them as red "No longer available" instead of silently vanishing.
       if (mode === "flow" && currentStep.type === "alacart") {
         productService
           .getProductsByCategory(selectedAlaCartCategory)
           .then((response) => {
             if (response.data?.status && Array.isArray(response.data.products)) {
-              const products = response.data.products
-                .map((item: any) => ({ ...item, type: "product" }))
-                .filter(
-                  (item: any) =>
-                    item.isEnable === undefined ||
-                    item.isEnable === 1 ||
-                    item.isEnable === true
-                );
+              const products = response.data.products.map((item: any) => ({
+                ...item,
+                type: "product",
+              }));
               setAlaCartProducts(products);
             }
           })
           .catch(() => {});
       }
-      // Re-check package availability on confirm step
-      if (mode === "flow" && currentStep.type === "confirm") {
-        checkPackageAvailability();
-      }
+      // Re-check both packages and ala carte items availability in real time via socket
+      checkAllAvailability();
     });
     return () => {
       unsubscribe();
     };
-  }, [mode, currentStep, selectedAlaCartCategory, checkPackageAvailability]);
+  }, [mode, currentStep, selectedAlaCartCategory, checkAllAvailability]);
 
-  // Check package availability whenever the user enters the confirm step
+  // Check package & product availability whenever the user enters the confirm step
   useEffect(() => {
     if (mode === "flow" && currentStep.type === "confirm") {
-      checkPackageAvailability();
+      checkAllAvailability();
     }
-  }, [mode, currentStep, checkPackageAvailability]);
+  }, [mode, currentStep, checkAllAvailability]);
+
+  // When alaCartProducts updates (initial load or socket catalog update),
+  // collect any product IDs marked as disabled (isEnable === 0 / false).
+  // These IDs are used to render "No longer available" red cards in BOTH:
+  //   • the ala carte selection grid (step: alacart)
+  //   • the ala carte items list     (step: confirm)
+  // Items are NOT auto-removed from alacartSelection so the user can see
+  // what became unavailable and decide to delete manually via the trash icon.
+  useEffect(() => {
+    if (alaCartProducts.length === 0) return;
+    const newDisabledIds = new Set(
+      alaCartProducts
+        .filter((p) => p.isEnable === 0 || p.isEnable === false)
+        .map((p) => String(p.id)),
+    );
+    setDisabledAlacartProductIds((prev) => {
+      // Merge: once a product is marked disabled it stays disabled
+      // until a fresh category load clears/replaces the set.
+      const merged = new Set([...prev, ...newDisabledIds]);
+      // If the product appears again as enabled, remove it from disabled set.
+      alaCartProducts.forEach((p) => {
+        if (p.isEnable === 1 || p.isEnable === true || p.isEnable === undefined) {
+          merged.delete(String(p.id));
+        }
+      });
+      return merged;
+    });
+  }, [alaCartProducts]);
 
   const goToPrevStep = () => {
     if (currentStepIndex === 0) {
@@ -1093,18 +1155,39 @@ const fetchCategoryProducts = async (categoryId: string) => {
     0,
   );
 
+  // Helper to check if an ala carte item is currently marked disabled
+  const isItemUnavailable = useCallback(
+    (item: any) => {
+      const rawPid = item.productId ?? item.id;
+      const pidStr = String(rawPid);
+      const numericPid = String(
+        typeof rawPid === "number"
+          ? rawPid
+          : parseInt(String(rawPid).replace(/[^0-9]/g, ""), 10),
+      );
+      return (
+        disabledAlacartProductIds.has(pidStr) ||
+        disabledAlacartProductIds.has(numericPid)
+      );
+    },
+    [disabledAlacartProductIds],
+  );
+
   // Totals for the final confirm step
   // originalPrice in packageSummaries = templateSum + fees (what was originally expected)
   const packagesTotal = packageSummaries.reduce(
     (sum, item) => sum + item.originalPrice,
     0,
   );
-  const alacartTotal = Object.values(alacartSelection).reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
+  // Only available ala carte items count towards the price
+  const alacartTotal = Object.values(alacartSelection)
+    .filter((item) => !isItemUnavailable(item))
+    .reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
   const newlyAddedAlacartTotal = Object.values(alacartSelection)
-    .filter((item) => item.isAddedNow)
+    .filter((item) => item.isAddedNow && !isItemUnavailable(item))
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const deliveryCharge = Number(reduxDeliveryCharge || 0);
@@ -1126,6 +1209,11 @@ const fetchCategoryProducts = async (categoryId: string) => {
   const hasUnavailablePackage = packagesMeta.some(
     (p) => unavailablePackageIds[p.id] === true
   );
+
+  // True when at least one ala carte item in alacartSelection is disabled / no longer available
+  const hasDisabledAlacartItem = Object.values(alacartSelection).some(isItemUnavailable);
+
+  const isConfirmDisabled = hasUnavailablePackage || hasDisabledAlacartItem;
 
   return (
     <View className="flex-1 bg-white">
@@ -1946,18 +2034,42 @@ const fetchCategoryProducts = async (categoryId: string) => {
                     key={`alacart-row-${rowIndex}`}
                     className="flex-row justify-between mb-4"
                   >
-                    {row.map((product, pIdx) => (
-                      <AlacartProductCard
-                        key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
-                        product={product}
-                        selected={Object.values(alacartSelection).some(
-                          (item) =>
-                            String(item.productId || item.id) ===
-                              String(product.id) && Boolean(item.isAddedNow),
-                        )}
-                        onToggle={() => toggleAlacartProduct(product)}
-                      />
-                    ))}
+                    {row.map((product, pIdx) => {
+                      const isDisabled =
+                        product.isEnable === 0 ||
+                        product.isEnable === false ||
+                        disabledAlacartProductIds.has(String(product.id));
+                      const isSelected = Object.values(alacartSelection).some(
+                        (item) =>
+                          String(item.productId || item.id) ===
+                            String(product.id) && Boolean(item.isAddedNow),
+                      );
+                      return (
+                        <AlacartProductCard
+                          key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
+                          product={product}
+                          selected={isSelected && !isDisabled}
+                          disabled={isDisabled}
+                          onToggle={() => {
+                            if (!isDisabled) {
+                              // If it was previously selected and is now disabled,
+                              // remove it from selection
+                              if (isSelected && isDisabled) {
+                                removeAlacartItem(
+                                  Object.values(alacartSelection).find(
+                                    (item) =>
+                                      String(item.productId || item.id) ===
+                                      String(product.id),
+                                  )?.id ?? product.id,
+                                );
+                              } else {
+                                toggleAlacartProduct(product);
+                              }
+                            }
+                          }}
+                        />
+                      );
+                    })}
                     {row.length === 1 && <View className="flex-1 mx-2" />}
                   </View>
                 ));
@@ -2108,15 +2220,29 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   )
                 </Text>
 
-                {Object.values(alacartSelection).map((item, aIdx) => (
+                {Object.values(alacartSelection).map((item, aIdx) => {
+                  const isItemDisabled = isItemUnavailable(item);
+
+                  return (
                   <View
                     key={`alacart-item-${item.id}-${aIdx}`}
-                    className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: isItemDisabled ? "#F04438" : "#EEEEEE",
+                      borderRadius: 16,
+                      padding: 16,
+                      marginBottom: 12,
+                      marginHorizontal: 20,
+                      backgroundColor: "#FFFFFF",
+                    }}
                   >
                     {/* Top row: Image, Name & Price, Trash, Added Now */}
                     <View className="flex-row items-center justify-between">
                       <View className="flex-row items-center flex-1">
-                        <View className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]">
+                        <View
+                          className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
+                          style={{ opacity: isItemDisabled ? 0.6 : 1 }}
+                        >
                           {item.image ? (
                             typeof item.image === "string" ? (
                               <Image
@@ -2135,7 +2261,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
                             <Ionicons
                               name="leaf-outline"
                               size={24}
-                              color="#92D01B"
+                              color={isItemDisabled ? "#CCCCCC" : "#92D01B"}
                             />
                           )}
                         </View>
@@ -2147,9 +2273,14 @@ const fetchCategoryProducts = async (categoryId: string) => {
                             {item.displayName}
                           </Text>
                           <Text
-                            className={`text-[15px] font-bold mt-0.5 ${
-                              item.isAddedNow ? "text-[#F04438]" : "text-black"
-                            }`}
+                            className="text-[15px] font-bold mt-0.5"
+                            style={{
+                              color: isItemDisabled
+                                ? "#F04438"
+                                : item.isAddedNow
+                                  ? "#F04438"
+                                  : "#000000",
+                            }}
                           >
                             Rs. {formatPrice(item.price)}
                           </Text>
@@ -2157,19 +2288,27 @@ const fetchCategoryProducts = async (categoryId: string) => {
                       </View>
 
                       <View className="items-end justify-between h-14">
+                        {/* Trash button: red background & red icon when disabled, as shown in design */}
                         <TouchableOpacity
                           onPress={() => removeAlacartItem(item.id)}
                           activeOpacity={0.7}
-                          className="w-8 h-8 rounded-full bg-[#F5F5F5] items-center justify-center"
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: isItemDisabled ? "#FEE4E2" : "#F5F5F5",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
                         >
                           <Ionicons
                             name="trash-outline"
                             size={16}
-                            color="#000"
+                            color={isItemDisabled ? "#F04438" : "#000000"}
                           />
                         </TouchableOpacity>
 
-                        {item.isAddedNow && (
+                        {!isItemDisabled && item.isAddedNow && (
                           <Text className="text-[12px] font-medium text-[#F04438]">
                             Added Now
                           </Text>
@@ -2177,63 +2316,83 @@ const fetchCategoryProducts = async (categoryId: string) => {
                       </View>
                     </View>
 
-                    {/* Dashed line */}
-                    <View className="border-b border-dashed border-[#E5E5EA] my-3.5" />
+                    {/* Dashed separator */}
+                    <View
+                      style={{
+                        borderBottomWidth: 1,
+                        borderStyle: "dashed",
+                        borderColor: isItemDisabled ? "#FDA29B" : "#E5E5EA",
+                        marginVertical: 14,
+                      }}
+                    />
 
-                    {/* Bottom row: Unit selector & Stepper */}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center">
-                        <Text className="text-[13px] text-[#6B6B6B] mr-2">
-                          Unit :
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => toggleAlacartItemUnit(item.id, "kg")}
-                          activeOpacity={0.8}
-                          className={`px-3.5 py-1 rounded-full mr-1.5 ${
-                            item.unit === "kg" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
-                          }`}
-                        >
-                          <Text className="text-white font-bold text-[12px]">
-                            kg
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => toggleAlacartItemUnit(item.id, "g")}
-                          activeOpacity={0.8}
-                          className={`px-3.5 py-1 rounded-full ${
-                            item.unit === "g" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
-                          }`}
-                        >
-                          <Text className="text-white font-bold text-[12px]">
-                            g
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <View className="flex-row items-center">
-                        <TouchableOpacity
-                          onPress={() => updateAlacartItemQuantity(item.id, -1)}
-                          activeOpacity={0.7}
-                          className="w-6 h-6 rounded-full bg-[#D1D1D6] items-center justify-center"
-                        >
-                          <Ionicons name="remove" size={14} color="#FFF" />
-                        </TouchableOpacity>
-
-                        <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
+                    {/* Disabled: show weight in red + "No longer available" label in red */}
+                    {isItemDisabled ? (
+                      <View className="flex-row items-center justify-between">
+                        <Text style={{ fontSize: 13, color: "#F04438", fontWeight: "500" }}>
                           {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}
                         </Text>
-
-                        <TouchableOpacity
-                          onPress={() => updateAlacartItemQuantity(item.id, 1)}
-                          activeOpacity={0.7}
-                          className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                        >
-                          <Ionicons name="add" size={14} color="#FFF" />
-                        </TouchableOpacity>
+                        <Text style={{ fontSize: 13, color: "#F04438", fontWeight: "600" }}>
+                          No longer available
+                        </Text>
                       </View>
-                    </View>
+                    ) : (
+                      /* Normal: Unit selector & Stepper */
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center">
+                          <Text className="text-[13px] text-[#6B6B6B] mr-2">
+                            Unit :
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => toggleAlacartItemUnit(item.id, "kg")}
+                            activeOpacity={0.8}
+                            className={`px-3.5 py-1 rounded-full mr-1.5 ${
+                              item.unit === "kg" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
+                            }`}
+                          >
+                            <Text className="text-white font-bold text-[12px]">
+                              kg
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => toggleAlacartItemUnit(item.id, "g")}
+                            activeOpacity={0.8}
+                            className={`px-3.5 py-1 rounded-full ${
+                              item.unit === "g" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
+                            }`}
+                          >
+                            <Text className="text-white font-bold text-[12px]">
+                              g
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <View className="flex-row items-center">
+                          <TouchableOpacity
+                            onPress={() => updateAlacartItemQuantity(item.id, -1)}
+                            activeOpacity={0.7}
+                            className="w-6 h-6 rounded-full bg-[#D1D1D6] items-center justify-center"
+                          >
+                            <Ionicons name="remove" size={14} color="#FFF" />
+                          </TouchableOpacity>
+
+                          <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
+                            {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}
+                          </Text>
+
+                          <TouchableOpacity
+                            onPress={() => updateAlacartItemQuantity(item.id, 1)}
+                            activeOpacity={0.7}
+                            className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                          >
+                            <Ionicons name="add" size={14} color="#FFF" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                ))}
+                  );
+                })}
               </View>
             </>
           )}
@@ -2486,20 +2645,20 @@ const fetchCategoryProducts = async (categoryId: string) => {
           </View>
 
           <TouchableOpacity
-            onPress={hasUnavailablePackage ? undefined : goToNextStep}
-            disabled={hasUnavailablePackage}
+            onPress={isConfirmDisabled ? undefined : goToNextStep}
+            disabled={isConfirmDisabled}
             activeOpacity={0.85}
             style={{
               height: 54,
-              backgroundColor: hasUnavailablePackage ? "#7F919C" : "#000000",
+              backgroundColor: isConfirmDisabled ? "#7F919C" : "#000000",
               borderRadius: 30,
               justifyContent: "center",
               alignItems: "center",
               shadowColor: "#000",
-              shadowOpacity: hasUnavailablePackage ? 0 : 0.15,
+              shadowOpacity: isConfirmDisabled ? 0 : 0.15,
               shadowRadius: 6,
               shadowOffset: { width: 0, height: 3 },
-              elevation: hasUnavailablePackage ? 0 : 5,
+              elevation: isConfirmDisabled ? 0 : 5,
             }}
           >
             <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>

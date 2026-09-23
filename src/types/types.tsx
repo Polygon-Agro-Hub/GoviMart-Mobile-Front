@@ -201,6 +201,9 @@ export interface ProductType {
   startValue?: string;
   varietyNameEnglish?: string;
   bgColor?: string;
+  /** marketplaceitems.isEnable — 1/true = active, 0/false = disabled */
+  isEnable?: number | boolean;
+  displayType?: string;
 }
 
 export type ShopItem = ProductType | PackageType;

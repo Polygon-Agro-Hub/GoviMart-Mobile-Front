@@ -67,7 +67,9 @@ export const AlacartProductCard: React.FC<{
     product: ProductType;
     selected: boolean;
     onToggle: () => void;
-}> = ({ product, selected, onToggle }) => {
+    /** When true the product is disabled (isEnable=0): red border, faded, no-longer-available label, button greyed out */
+    disabled?: boolean;
+}> = ({ product, selected, onToggle, disabled = false }) => {
     const {
         totalNormalPrice,
         totalDiscountedPrice,
@@ -96,10 +98,15 @@ export const AlacartProductCard: React.FC<{
 
     const basePrice = hasDiscount ? totalDiscountedPrice : totalNormalPrice;
 
+    // Determine card border color:
+    // disabled => red, selected => orange, default => transparent
+    const borderColor = disabled ? "#FF383C" : selected ? "#FF9114" : "transparent";
+
     return (
         <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={onToggle}
+            activeOpacity={disabled ? 1 : 0.9}
+            onPress={disabled ? undefined : onToggle}
+            disabled={disabled}
             className="flex-1"
         >
             <View
@@ -110,11 +117,12 @@ export const AlacartProductCard: React.FC<{
                     borderBottomLeftRadius: 20,
                     borderBottomRightRadius: 20,
                     borderWidth: 1.5,
-                    borderColor: selected ? "#FF9114" : "transparent",
+                    borderColor,
+                    opacity: disabled ? 0.75 : 1,
                 }}
             >
                 {/* Discount % badge, top-left — same placement style as Home */}
-                {showDiscountBadge && product.discount ? (
+                {!disabled && showDiscountBadge && product.discount ? (
                     <View
                         style={{
                             position: "absolute",
@@ -150,69 +158,94 @@ export const AlacartProductCard: React.FC<{
                                 source={{ uri: product.image }}
                                 className="w-12 h-12"
                                 resizeMode="contain"
+                                style={{ opacity: disabled ? 0.5 : 1 }}
                             />
                         ) : (
                             <Image
                                 source={product.image}
                                 className="w-12 h-12"
                                 resizeMode="contain"
+                                style={{ opacity: disabled ? 0.5 : 1 }}
                             />
                         )
                     ) : (
-                        <Ionicons name="leaf-outline" size={28} color="#92D01B" />
+                        <Ionicons name="leaf-outline" size={28} color={disabled ? "#CCCCCC" : "#92D01B"} />
                     )}
                 </View>
 
                 {/* Product Name */}
-                  <View style={{ width: "100%", marginTop: 4 }}>
-                          <FixedMarqueeText
-                            key={product.id}
-                            text={product?.displayName!}
-                            style={{
-                              color: "#000000",
-                              fontWeight: "bold",
-                              fontSize: 13,
-                              textAlign: "center",
-                            }}
-                          />
-                        </View>
+                <View style={{ width: "100%", marginTop: 4 }}>
+                    <FixedMarqueeText
+                        key={product.id}
+                        text={product?.displayName!}
+                        style={{
+                            color: disabled ? "#FF383C" : "#000000",
+                            fontWeight: "bold",
+                            fontSize: 13,
+                            textAlign: "center",
+                        }}
+                    />
+                </View>
 
-                {/* Weight / Unit — derived from unitType/startValue via normalizeToKg */}
-                <Text className="text-[#8A8A8A] text-[12px] mt-1 text-center font-medium">
-                    {weightDisplay}
-                </Text>
-
-                {/* Struck-through normal price, shown only when a discount applies
-                    and displayType calls for it */}
-                {showStruckNormalPrice && (
-                    <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
-                        Rs. {formatPrice(totalNormalPrice)}
+                {/* Disabled: "No longer available" label OR Weight / Unit */}
+                {disabled ? (
+                    <Text
+                        style={{
+                            color: "#FF383C",
+                            fontSize: 11,
+                            fontWeight: "600",
+                            marginTop: 4,
+                            textAlign: "center",
+                        }}
+                    >
+                        No longer available
                     </Text>
+                ) : (
+                    <>
+                        <Text className="text-[#8A8A8A] text-[12px] mt-1 text-center font-medium">
+                            {weightDisplay}
+                        </Text>
+
+                        {/* Struck-through normal price, shown only when a discount applies
+                            and displayType calls for it */}
+                        {showStruckNormalPrice && (
+                            <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                                Rs. {formatPrice(totalNormalPrice)}
+                            </Text>
+                        )}
+
+                        {/* Price */}
+                        <Text className="text-black font-extrabold text-[14px] mt-1 text-center">
+                            Rs. {formatPrice(basePrice)}
+                        </Text>
+                    </>
                 )}
 
-                {/* Price */}
-                <Text className="text-black font-extrabold text-[14px] mt-1 text-center">
-                    Rs. {formatPrice(basePrice)}
-                </Text>
-
-                {/* Bottom Action Button (Checkmark if selected, Plus if unselected) */}
+                {/* Bottom Action Button */}
                 <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={(e) => {
+                    activeOpacity={disabled ? 1 : 0.8}
+                    onPress={disabled ? undefined : (e) => {
                         e.stopPropagation();
                         onToggle();
                     }}
+                    disabled={disabled}
                     className="w-10 h-10 rounded-full items-center justify-center absolute -bottom-5"
                     style={{
-                        backgroundColor: selected ? "#FF9114" : "#000000",
+                        backgroundColor: disabled
+                            ? "#CCCCCC"
+                            : selected
+                                ? "#FF9114"
+                                : "#000000",
                         shadowColor: "#000",
                         shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.25,
+                        shadowOpacity: disabled ? 0 : 0.25,
                         shadowRadius: 3.84,
-                        elevation: 5,
+                        elevation: disabled ? 0 : 5,
                     }}
                 >
-                    {selected ? (
+                    {disabled ? (
+                        <Ionicons name="close" size={20} color="#FFFFFF" />
+                    ) : selected ? (
                         <Ionicons name="checkmark" size={22} color="#FFFFFF" />
                     ) : (
                         <Ionicons name="add" size={22} color="#FFFFFF" />

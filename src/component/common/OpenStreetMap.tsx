@@ -8,7 +8,12 @@ export interface MapMarker {
     longitude: number;
     title?: string;
     description?: string;
+    isOpen?: boolean;
+    statusText?: string;
+    statusColor?: string;
+    timeText?: string;
     color?: string;
+    autoOpenPopup?: boolean;
 }
 
 export interface OpenStreetMapProps {
@@ -20,13 +25,6 @@ export interface OpenStreetMapProps {
     zoomEnabled?: boolean;
     markers?: MapMarker[];
     pinColor?: string;
-    /**
-     * When false, markers are purely visual: tapping a pin does nothing
-     * (no popup, no onMarkerSelect callback). Pan/zoom on the map itself
-     * is unaffected and controlled separately via `interactive`.
-     * Defaults to true to preserve existing behavior.
-     */
-    markersInteractive?: boolean;
     onLocationSelect?: (coord: { latitude: number; longitude: number }) => void;
     onMarkerSelect?: (id: string | number) => void;
     style?: StyleProp<ViewStyle>;
@@ -40,8 +38,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     scrollEnabled = true,
     zoomEnabled = true,
     markers,
-    pinColor = "#FF8A00",
-    markersInteractive = true,
+    pinColor = "#FF0000",
     onLocationSelect,
     onMarkerSelect,
     style,
@@ -53,9 +50,10 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     const htmlContent = useMemo(() => {
         const markerList = markers && markers.length > 0
             ? markers
-            : [{ latitude, longitude, color: pinColor }];
+            : [{ latitude, longitude, color: pinColor, autoOpenPopup: true }];
 
         const markersJson = JSON.stringify(markerList);
+        const canSelectLocation = Boolean(onLocationSelect);
 
         return `
 <!DOCTYPE html>
@@ -75,18 +73,40 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         }
         .leaflet-control-attribution {
             font-size: 8px !important;
-            opacity: 0.7;
+            opacity: 0.6;
         }
         .custom-pin {
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        .custom-pin svg {
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));
+        .leaflet-popup-content-wrapper {
+            background: #FFFFFF !important;
+            border-radius: 14px !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+            padding: 2px 4px !important;
+            border: none !important;
         }
-        .custom-pin.read-only {
-            pointer-events: none;
+        .leaflet-popup-content {
+            margin: 10px 14px !important;
+            line-height: 1.35 !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        }
+        .leaflet-popup-tip-container {
+            width: 20px !important;
+            height: 10px !important;
+            margin-top: -1px !important;
+        }
+        .leaflet-popup-tip {
+            background: #FFFFFF !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+            width: 12px !important;
+            height: 12px !important;
+            padding: 1px !important;
+            margin: -6px auto 0 !important;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            display: none !important;
         }
     </style>
 </head>
@@ -96,19 +116,40 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         var map;
         var activeMarkers = [];
         var isInteractive = ${interactive};
-        var isMarkersInteractive = ${markersInteractive};
-        var hasLocationSelect = ${!!onLocationSelect};
+        var canSelectLocation = ${canSelectLocation};
         var currentPinColor = "${pinColor}";
 
         function createPinIcon(color) {
-            var svgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 24 24" fill="' + (color || '#FF8A00') + '" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3" fill="#FFFFFF"></circle></svg>';
+            var pinCol = color || currentPinColor || '#FF0000';
+            var svgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 24 32" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">' +
+                '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.5 12 20 12 20s12-11.5 12-20c0-6.63-5.37-12-12-12z" fill="' + pinCol + '" />' +
+                '<circle cx="12" cy="11" r="4.2" fill="#FFFFFF" />' +
+                '</svg>';
             return L.divIcon({
-                className: 'custom-pin' + (isMarkersInteractive ? '' : ' read-only'),
+                className: 'custom-pin',
                 html: svgHtml,
-                iconSize: [32, 40],
-                iconAnchor: [16, 40],
-                popupAnchor: [0, -36]
+                iconSize: [30, 38],
+                iconAnchor: [15, 36],
+                popupAnchor: [0, -34]
             });
+        }
+
+        function buildPopupHtml(m) {
+            var title = m.title || '';
+            var isOpen = m.isOpen !== undefined ? m.isOpen : true;
+            var statusText = m.statusText || (isOpen ? 'Open' : 'Closed');
+            var statusColor = m.statusColor || (isOpen ? '#FF9114' : '#FF2D55');
+            var dotColor = isOpen ? '#FF9114' : '#94A3B8';
+            var timeText = m.timeText || m.description || '08:00 AM – 09:00 PM';
+
+            return '<div style="text-align: left; min-width: 155px; padding: 2px 2px;">' +
+                   '<div style="font-size: 15px; font-weight: 700; color: #000000; margin-bottom: 4px; letter-spacing: -0.2px; font-family: -apple-system, BlinkMacSystemFont, \\'Segoe UI\\', Roboto, sans-serif;">' + title + '</div>' +
+                   '<div style="font-size: 13px; display: flex; align-items: center; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, \\'Segoe UI\\', Roboto, sans-serif;">' +
+                   '<span style="color:' + statusColor + '; font-weight: 700; margin-right: 5px;">' + statusText + '</span>' +
+                   '<span style="color:' + dotColor + '; font-weight: 700; margin-right: 5px;">•</span>' +
+                   '<span style="color: #475569; font-weight: 500;">' + timeText + '</span>' +
+                   '</div>' +
+                   '</div>';
         }
 
         function initMap() {
@@ -133,14 +174,11 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                 var initialMarkers = ${markersJson};
                 setMarkers(initialMarkers);
 
-                // Only register map-background click (drop-a-pin) behavior
-                // when the host explicitly wants location selection.
-                if (isInteractive && hasLocationSelect) {
+                if (isInteractive && canSelectLocation) {
                     map.on('click', function(e) {
                         var lat = e.latlng.lat;
                         var lng = e.latlng.lng;
-
-                        // Update single pin
+                        
                         clearMarkers();
                         var newMarker = L.marker([lat, lng], { icon: createPinIcon(currentPinColor) }).addTo(map);
                         activeMarkers.push(newMarker);
@@ -177,24 +215,27 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             for (var i = 0; i < markerData.length; i++) {
                 (function(m) {
                     var marker = L.marker([m.latitude, m.longitude], {
-                        icon: createPinIcon(m.color || currentPinColor),
-                        // When markers are read-only, keep them out of the
-                        // tab/keyboard focus flow and non-interactive.
-                        keyboard: isMarkersInteractive,
-                        interactive: isMarkersInteractive
+                        icon: createPinIcon(m.color || currentPinColor)
                     }).addTo(map);
 
-                    if (isMarkersInteractive && (m.title || m.description)) {
-                        var popupText = '<div style="text-align:center;padding:3px 6px;"><b style="color:#0F172A;font-size:13px;">' + (m.title || '') + '</b>';
-                        if (m.description) {
-                            popupText += '<div style="font-size:11px;color:#64748B;margin-top:2px;">' + m.description + '</div>';
+                    if (m.title || m.description || m.statusText) {
+                        var popupHtml = buildPopupHtml(m);
+                        marker.bindPopup(popupHtml, {
+                            closeButton: false,
+                            autoClose: markerData.length === 1 ? false : true,
+                            closeOnClick: false,
+                            offset: [0, -4]
+                        });
+
+                        if (m.autoOpenPopup || markerData.length === 1) {
+                            setTimeout(function() {
+                                marker.openPopup();
+                            }, 100);
                         }
-                        popupText += '</div>';
-                        marker.bindPopup(popupText);
                     }
 
                     marker.on('click', function() {
-                        if (!isMarkersInteractive) return;
+                        marker.openPopup();
                         if (m.id && window.ReactNativeWebView) {
                             window.ReactNativeWebView.postMessage(JSON.stringify({
                                 type: 'onMarkerSelect',
@@ -211,7 +252,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             if (activeMarkers.length > 1 && map) {
                 try {
                     var group = new L.featureGroup(activeMarkers);
-                    map.fitBounds(group.getBounds().pad(0.12));
+                    map.fitBounds(group.getBounds().pad(0.15));
                 } catch(e) {}
             }
         }
@@ -225,11 +266,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             });
 
             clearMarkers();
-            var newMarker = L.marker([lat, lng], {
-                icon: createPinIcon(currentPinColor),
-                keyboard: isMarkersInteractive,
-                interactive: isMarkersInteractive
-            }).addTo(map);
+            var newMarker = L.marker([lat, lng], { icon: createPinIcon(currentPinColor) }).addTo(map);
             activeMarkers.push(newMarker);
         }
 
