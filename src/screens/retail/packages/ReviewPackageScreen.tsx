@@ -1741,7 +1741,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
                       color: "#000000",
                     }}
                   >
-                    Total for 1 Package
+                    Total for a package
                   </Text>
                   <Text
                     style={{
