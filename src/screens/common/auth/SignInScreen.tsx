@@ -321,7 +321,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           <View className="space-y-4">
             {/* Input 1: Mobile / Email */}
             <View>
-              <View className="w-full h-[50px] bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5">
+              <View
+                style={{ height: 50 }}
+                className="w-full bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5"
+              >
                 <View className="mr-3">
                   <FontAwesome5 name="user-alt" size={20} color="black" />
                 </View>
@@ -332,14 +335,22 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   placeholderTextColor="black"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  className="flex-1 text-sm text-black p-0"
+                  style={{
+                    height: 50,
+                    paddingVertical: 0,
+                    textAlignVertical: "center",
+                  }}
+                  className="flex-1 text-sm text-black"
                 />
               </View>
             </View>
 
             {/* Input 2: Password */}
             <View className="mt-4">
-              <View className="w-full h-[50px] bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5">
+              <View
+                style={{ height: 50 }}
+                className="w-full bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5"
+              >
                 <View className="mr-3 ml-1">
                   <FontAwesome6 name="lock" size={18} color="black" />
                 </View>
@@ -350,11 +361,16 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   placeholderTextColor="black"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  className="flex-1 text-sm text-black p-0"
+                  style={{
+                    height: 50,
+                    paddingVertical: 0,
+                    textAlignVertical: "center",
+                  }}
+                  className="flex-1 text-sm text-black"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
-                  className="pl-2"
+                  className="pl-2 h-full justify-center"
                 >
                   <Ionicons
                     name={showPassword ? "eye" : "eye-off"}
@@ -391,7 +407,8 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
           {/* Sign In Button */}
           <TouchableOpacity
-            className={`w-full h-[50px] rounded-full items-center justify-center flex-row mt-8 ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
+            style={{ height: 50 }}
+            className={`w-full rounded-full items-center justify-center flex-row mt-8 ${isValid ? "bg-black" : "bg-[#7F919C]"}`}
             activeOpacity={isValid ? 0.8 : 1}
             onPress={handleSignIn}
             disabled={loading || !isValid}

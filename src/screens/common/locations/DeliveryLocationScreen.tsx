@@ -361,7 +361,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
               {/* Call Button */}
               <TouchableOpacity
                 onPress={() => {
-                  Linking.openURL("tel:+94770111999");
+                  Linking.openURL("tel:+94114313433");
                   setIsHelpModalOpen(false);
                 }}
                 activeOpacity={0.8}
@@ -369,7 +369,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
                 style={{ backgroundColor: "#0085FF" }}
               >
                 <Text className="text-white font-bold text-base">
-                  Call (+94) 770111999
+                  Call (+94) 114313433
                 </Text>
               </TouchableOpacity>
 

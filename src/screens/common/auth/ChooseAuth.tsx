@@ -47,17 +47,11 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
         </View>
 
         {/* Right side half-screen image with mist */}
-        <View className="absolute top-0 right-0 w-[100%] h-[520px] overflow-hidden">
+        <View className="absolute top-0 right-0 w-[100%] h-[820px] overflow-hidden">
           <Image
             source={require("@/assets/images/auth/good-food.webp")}
             className="w-full h-full"
             resizeMode="cover"
-          />
-          {/* White mist overlay at the bottom of the image */}
-          <LinearGradient
-            colors={["transparent", "rgba(255,255,255,0.7)", "#ffffff"]}
-            locations={[0, 0.5, 1]}
-            className="absolute bottom-0 left-0 right-0 h-32"
           />
         </View>
       </View>
@@ -126,10 +120,10 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
             },
             shadowOpacity: 0.18,
             shadowRadius: 5,
-
             elevation: 5,
+            height: 50,
           }}
-          className="w-full bg-black py-4 rounded-full items-center justify-center"
+          className="w-full bg-black rounded-full items-center justify-center"
           activeOpacity={0.8}
           onPress={() => navigation.navigate("DeliveryLocation")}
         >
@@ -155,10 +149,10 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
             },
             shadowOpacity: 0.18,
             shadowRadius: 5,
-
             elevation: 5,
+            height: 50,
           }}
-          className="w-full bg-[#FF9114] py-4 rounded-full items-center justify-center"
+          className="w-full bg-[#FF9114] rounded-full items-center justify-center"
           activeOpacity={0.8}
           onPress={() => navigation.navigate("Login")}
         >
