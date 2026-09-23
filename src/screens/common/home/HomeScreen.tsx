@@ -1137,10 +1137,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   {/* Text inside the card */}
                   <Text
                     style={{
-                      fontWeight: "bold",
+                      fontWeight: 500,
                       color: isActive ? "#FFFFFF" : "#1E1E1E",
                       textAlign: "center",
                       marginTop: 6,
+                      fontSize: 12
                     }}
                   >
                     {category.name}
