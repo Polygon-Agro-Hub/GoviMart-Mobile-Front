@@ -21,7 +21,10 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.FOREGROUND_SERVICE"
       ],
       "blockedPermissions": [
         "com.google.android.gms.permission.AD_ID",
@@ -37,21 +40,18 @@
         "android.permission.CALL_PHONE",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.CHANGE_WIFI_STATE",
         "android.permission.CHANGE_NETWORK_STATE"
       ]
     },
     "ios": {
-      "icon": "./src/assets/images/public/app-icon-android.png",
+      "icon": "./src/assets/images/public/app-icon-ios.png",
       "bundleIdentifier": "com.polygonagro.Polygon",
       "buildNumber": "1",
       "supportsTablet": false,
@@ -115,7 +115,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "1c8baa2b-5982-43e9-9f80-a01886235093"
       }
     }
   }

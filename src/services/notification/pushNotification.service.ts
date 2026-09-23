@@ -4,16 +4,19 @@ import socketService from "../socket/socket.service";
 import { ServerNotificationItem } from "./notification.service";
 import { navigationRef } from "../../../navigationRef";
 
-// Configure how notifications should be handled when the app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Configure how notifications appear when app is in foreground / background / locked
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+} catch (e) {
+  // Silent fallback
+}
 
 class PushNotificationService {
   private isInitialized = false;
@@ -21,7 +24,8 @@ class PushNotificationService {
   private socketUnsubscribe: (() => void) | null = null;
 
   /**
-   * Initialize System Notifications, Android Channels, and real-time Socket listeners.
+   * Initialize System Notifications, Android Channels, and tap response listener.
+   * Socket listener is wired in App.tsx at root level (Sales Dash pattern).
    */
   async init() {
     if (this.isInitialized) return;
@@ -57,12 +61,6 @@ class PushNotificationService {
             console.warn("[PushNotificationService] Error handling response tap:", e);
           }
         });
-
-      // 3. Connect to Socket.IO and listen for new notifications to trigger OS alerts
-      socketService.connect();
-      this.socketUnsubscribe = socketService.onNewNotification((item: ServerNotificationItem) => {
-        this.displayLocalNotification(item);
-      });
 
       console.log("[PushNotificationService] Initialized successfully");
     } catch (error) {
@@ -125,7 +123,11 @@ class PushNotificationService {
       }
 
       const title = item.title || "Polygon Notification";
-      const body = item.message || "";
+      const body =
+        item.message ||
+        (item.invNo
+          ? `Order #${item.invNo}`
+          : item.title);
 
       try {
         await Notifications.scheduleNotificationAsync({
@@ -133,13 +135,13 @@ class PushNotificationService {
             title,
             body,
             data: {
-              orderId: item.orderId || item.processOrderId,
-              invNo: item.invNo,
+              orderId: item.orderId || item.processOrderId || item.orderid,
+              invNo: item.invNo || item.invoiceNo,
               ...item,
             },
             sound: "default",
-            badge: 1,
             priority: Notifications.AndroidNotificationPriority.MAX,
+            vibrate: [0, 250, 250, 250],
             color: "#FF8A00",
           },
           trigger: (Platform.OS === "android" ? { channelId: "default" } : null) as any,
@@ -151,11 +153,12 @@ class PushNotificationService {
             title,
             body,
             data: {
-              orderId: item.orderId || item.processOrderId,
-              invNo: item.invNo,
+              orderId: item.orderId || item.processOrderId || item.orderid,
+              invNo: item.invNo || item.invoiceNo,
               ...item,
             },
             sound: "default",
+            vibrate: [0, 250, 250, 250],
           },
           trigger: null,
         });
