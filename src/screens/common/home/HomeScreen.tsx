@@ -285,7 +285,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (state: RootState) =>
       (state as RootState & { cart: CartState }).cart.packages,
   );
-  const totalCartItems = cartProducts.length + cartPackages.length;
+  const totalCartItems =
+  cartProducts.length +
+  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const visibleCategories = isRetail
     ? CATEGORIES

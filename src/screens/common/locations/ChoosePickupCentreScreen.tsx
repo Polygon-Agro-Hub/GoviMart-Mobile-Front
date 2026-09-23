@@ -249,12 +249,19 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
             </View>
           ) : selectedCentre ? (
             <>
+              {/*
+                Map is view-only here: interactive={true} keeps pan/pinch-zoom
+                working, but markersInteractive={false} means tapping the pin
+                does nothing (no popup, no selection). Centre selection only
+                happens through the "Select Your City" search modal below.
+              */}
               <OpenStreetMap
                 key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
                 latitude={selectedCentre.latitude}
                 longitude={selectedCentre.longitude}
                 zoom={15}
                 interactive={true}
+                markersInteractive={false}
                 pinColor="#FF8A00"
                 markers={[
                   {
@@ -266,15 +273,6 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
                     color: "#FF8A00",
                   },
                 ]}
-                onMarkerSelect={(id) => {
-                  const found = pickupCentres.find(
-                    (c) => c.id === id || String(c.id) === String(id),
-                  );
-                  if (found) {
-                    setSelectedCentre(found);
-                    setSelectedCity(found.name);
-                  }
-                }}
               />
 
               {/* Map centre popup badge overlay - NO DROP SHADOW */}
@@ -384,6 +382,7 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
               longitude={80.7718}
               zoom={7}
               interactive={true}
+              markersInteractive={false}
               pinColor="#FF8A00"
               markers={pickupCentres.map((c) => ({
                 id: c.id,
@@ -393,15 +392,6 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
                 description: `${c.city}${c.district ? ", " + c.district : ""}`,
                 color: "#FF8A00",
               }))}
-              onMarkerSelect={(id) => {
-                const found = pickupCentres.find(
-                  (c) => c.id === id || String(c.id) === String(id),
-                );
-                if (found) {
-                  setSelectedCentre(found);
-                  setSelectedCity(found.name);
-                }
-              }}
             />
           )}
         </View>
