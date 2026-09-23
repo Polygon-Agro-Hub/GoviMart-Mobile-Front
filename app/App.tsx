@@ -11,17 +11,47 @@ import { navigationRef } from "../navigationRef";
 import RootStackNavigator from "@/routes/Routes";
 import { GlobalAlert } from "@/component/common/AlertModal";
 import pushNotificationService from "@/services/notification/pushNotification.service";
+import socketService from "@/services/socket/socket.service";
+import { updateGlobalUnreadCount } from "@/store/notificationStore";
 
 LogBox.ignoreLogs([
   "`expo-notifications` functionality is not fully supported in Expo Go",
   "expo-notifications: Android Push notifications",
 ]);
 
+// Disable console logs in production to improve JS thread performance (Sales Dash pattern)
+if (!__DEV__) {
+  console.log = () => {};
+  console.warn = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+}
+
 function AppContent() {
   const [isOfflineAlertShown, setIsOfflineAlertShown] = useState(false);
 
   useEffect(() => {
-    pushNotificationService.init();
+    // 1. Connect socket at app root level (Sales Dash pattern — runs before any screen mounts)
+    socketService.connect();
+
+    // 2. Init push notifications + request permission on APK (Android 13+ requires runtime request)
+    pushNotificationService.init().then(() => {
+      pushNotificationService.requestPermissions();
+    });
+
+    // 3. Global new_notification listener — same as Sales Dash App.tsx lines 164-171
+    // This runs at root level and is NEVER unmounted, so it always fires regardless of which tab is active
+    const unsubscribe = socketService.onNewNotification((item) => {
+      if (typeof (item as any).unreadCount === "number") {
+        updateGlobalUnreadCount((item as any).unreadCount);
+      }
+      // Display native OS heads-up banner
+      pushNotificationService.displayLocalNotification(item);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
