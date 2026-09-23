@@ -11,7 +11,7 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
@@ -137,8 +137,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       ? 0 // credit covered it — never show card paid alongside credit
       : passedTotalPaidCard !== undefined
         ? passedTotalPaidCard
-        : paymentMethod &&
-            paymentMethod.toLowerCase() === "card"
+        : paymentMethod && paymentMethod.toLowerCase() === "card"
           ? (passedTotalPaid ?? processOrderTotal)
           : 0;
 
@@ -385,13 +384,13 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
           {/* Confirm input */}
           <View className="mx-5 mt-6 border border-black rounded-2xl p-4">
             <View className="flex-row">
-              <Ionicons name="lock-closed" size={18} color="#000" />
+              <FontAwesome6 name="lock" size={20} color="#000" />
               <View className="ml-2 flex-1">
                 <Text className="text-[14px] font-bold text-black">
                   To cancel this order
                 </Text>
                 <Text className="text-[13px] text-[#8A8A8A] mt-0.5">
-                  Type <Text className="font-bold text-black">CANCEL</Text> in
+                  Type <Text className="font-bold text-black">"CANCEL"</Text> in
                   the box below to confirm.
                 </Text>
               </View>
@@ -400,27 +399,23 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             <TextInput
               value={confirmText}
               onChangeText={setConfirmText}
-              placeholder="CANCEL"
+              placeholder="Type “CANCEL”"
               placeholderTextColor="#B0B0B0"
               autoCapitalize="characters"
               autoCorrect={false}
-              className={`mt-4 border rounded-full px-4 py-3 text-[14px] text-center font-semibold ${
-                isConfirmed
-                  ? "border-[#22C55E] text-[#15803D]"
-                  : "border-[#E11D48] text-black"
-              }`}
+              className={`mt-4 border rounded-full px-4 py-3 text-[14px] text-center font-semibold border-[#E11D48] text-black}`}
             />
           </View>
         </ScrollView>
 
         {/* Fixed bottom action */}
-        <View className="px-5 pb-5 pt-3 bg-white border-t border-[#F0F0F0]">
+        <View className="px-5 pb-5 pt-3 bg-white ">
           <TouchableOpacity
             onPress={onCancelOrder}
             disabled={!isConfirmed || loading}
             activeOpacity={0.85}
-            className={`rounded-2xl py-4 items-center ${
-              isConfirmed ? "bg-[#E11D48]" : "bg-[#F3A9B4]"
+            className={`rounded-full py-4 items-center ${
+              isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
           >
             <Text className="text-white text-[16px] font-bold">

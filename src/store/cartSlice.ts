@@ -148,8 +148,74 @@ const cartSlice = createSlice({
         cartUserId?: number | null;
       }>
     ) => {
-      state.products = action.payload.products;
-      state.packages = action.payload.packages;
+      const incomingProducts = action.payload.products || [];
+      const incomingPackages = action.payload.packages || [];
+
+      // 1. Stable merge for products: preserve current order of items already visible
+      const newProductsMap = new Map(incomingProducts.map((p) => [p.id, p]));
+      const mergedProducts: ProductCartItem[] = [];
+
+      for (const existing of state.products) {
+        if (newProductsMap.has(existing.id)) {
+          const fresh = newProductsMap.get(existing.id)!;
+          mergedProducts.push({
+            ...existing,
+            ...fresh,
+          });
+          newProductsMap.delete(existing.id);
+        }
+      }
+      for (const remaining of newProductsMap.values()) {
+        mergedProducts.push(remaining);
+      }
+
+      // 2. Stable merge for packages
+      const newPackagesMap = new Map(incomingPackages.map((p) => [p.id, p]));
+      const mergedPackages: PackageCartItem[] = [];
+
+      for (const existing of state.packages) {
+        if (newPackagesMap.has(existing.id)) {
+          const fresh = newPackagesMap.get(existing.id)!;
+          mergedPackages.push({
+            ...existing,
+            ...fresh,
+          });
+          newPackagesMap.delete(existing.id);
+        }
+      }
+      for (const remaining of newPackagesMap.values()) {
+        mergedPackages.push(remaining);
+      }
+
+      // 3. Only update array reference if contents actually changed
+      const productsChanged =
+        state.products.length !== mergedProducts.length ||
+        state.products.some(
+          (p, i) =>
+            p.id !== mergedProducts[i]?.id ||
+            p.weight !== mergedProducts[i]?.weight ||
+            p.unit !== mergedProducts[i]?.unit ||
+            p.price !== mergedProducts[i]?.price ||
+            p.isUnavailable !== mergedProducts[i]?.isUnavailable
+        );
+
+      const packagesChanged =
+        state.packages.length !== mergedPackages.length ||
+        state.packages.some(
+          (pkg, i) =>
+            pkg.id !== mergedPackages[i]?.id ||
+            pkg.quantity !== mergedPackages[i]?.quantity ||
+            pkg.price !== mergedPackages[i]?.price ||
+            pkg.isUnavailable !== mergedPackages[i]?.isUnavailable
+        );
+
+      if (productsChanged) {
+        state.products = mergedProducts;
+      }
+      if (packagesChanged) {
+        state.packages = mergedPackages;
+      }
+
       if (action.payload.cartUserId !== undefined) {
         state.cartUserId = action.payload.cartUserId;
       }

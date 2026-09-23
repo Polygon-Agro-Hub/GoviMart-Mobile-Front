@@ -190,7 +190,7 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                         color: "#111111",
                     }}
                 >
-                    Total Amount
+                    Total 
                 </Text>
 
                 <Text

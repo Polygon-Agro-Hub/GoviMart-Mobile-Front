@@ -76,6 +76,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [phoneCode2, setPhoneCode2] = useState("+94");
   const [buildingType, setBuildingType] = useState("");
   const [buildingNo, setBuildingNo] = useState("");
+  const [houseNo, setHouseNo] = useState("");
   const [streetName, setStreetName] = useState("");
   const [city, setCity] = useState("");
   const [apartmentName, setApartmentName] = useState("");
@@ -89,6 +90,13 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [loadingCities, setLoadingCities] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Delivery-eligibility driven city lock:
+  // Until the customer has at least one order with a Delivered status,
+  // their city is fixed to marketplaceusers.nearestCity and cannot be changed.
+  const [hasDeliveredOrder, setHasDeliveredOrder] = useState<boolean | null>(null);
+  const [cityLocked, setCityLocked] = useState(false);
+  const [loadingEligibility, setLoadingEligibility] = useState(true);
+
   const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
   const buildingTypes = ["House", "Apartment"];
 
@@ -100,6 +108,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [mobileNumber2Error, setMobileNumber2Error] = useState("");
   const [buildingTypeError, setBuildingTypeError] = useState("");
   const [buildingNoError, setBuildingNoError] = useState("");
+  const [houseNoError, setHouseNoError] = useState("");
   const [buildingNameError, setBuildingNameError] = useState("");
   const [unitNoError, setUnitNoError] = useState("");
   const [floorNoError, setFloorNoError] = useState("");
@@ -135,6 +144,33 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       }
     };
     loadCities();
+  }, []);
+
+  // Check whether this customer has ever had a Delivered order.
+  // If not, lock the city field to their nearestCity from marketplaceusers.
+  useEffect(() => {
+    const loadDeliveryEligibility = async () => {
+      setLoadingEligibility(true);
+      try {
+        const response = await customerService.getDeliveryEligibility();
+        if (response.data && response.data.status) {
+          const { hasDeliveredOrder: delivered, nearestCity } = response.data;
+          setHasDeliveredOrder(delivered);
+          if (!delivered) {
+            setCityLocked(true);
+            if (nearestCity) {
+              setCity(nearestCity);
+              setCityError("");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error loading delivery eligibility:", err);
+      } finally {
+        setLoadingEligibility(false);
+      }
+    };
+    loadDeliveryEligibility();
   }, []);
 
   // Clear any leftover selected coordinates on initial mount and unmount
@@ -304,6 +340,14 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     }
   };
 
+  const handleHouseNoChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setHouseNo(nextVal);
+    if (nextVal.trim()) {
+      setHouseNoError("");
+    }
+  };
+
   const handleApartmentNameChange = (text: string) => {
     const nextVal = capitalizeWords(stripLeadingSpace(text));
     setApartmentName(nextVal);
@@ -337,6 +381,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     setBuildingType(value);
     setBuildingTypeError("");
     setBuildingNoError("");
+    setHouseNoError("");
     setBuildingNameError("");
     setUnitNoError("");
     setFloorNoError("");
@@ -398,8 +443,10 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const renderCityField = () => (
     <View style={{ marginBottom: cityError ? 4 : 12 }}>
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={cityLocked ? 1 : 0.8}
+        disabled={cityLocked}
         onPress={() => {
+          if (cityLocked) return;
           Keyboard.dismiss();
           if (!city.trim()) {
             setCityError(requiredMessage(FIELD_LABELS.city));
@@ -414,7 +461,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           paddingHorizontal: 11,
           flexDirection: "row",
           alignItems: "center",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: cityLocked ? "#FFFFFF" : "#FFFFFF",
         }}
       >
         <View
@@ -457,7 +504,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             {city || "Select From Here"}
           </Text>
         </View>
-        <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+        {!cityLocked && (
+          <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+        )}
       </TouchableOpacity>
       {cityError ? (
         <Text
@@ -471,6 +520,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           {cityError}
         </Text>
       ) : null}
+
+      
 
       {city.trim().length > 0 && isCityKnown && (
         isCityDeliverable ? (
@@ -553,6 +604,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     setMobileNumber2Error("");
     setBuildingTypeError("");
     setBuildingNoError("");
+    setHouseNoError("");
     setBuildingNameError("");
     setUnitNoError("");
     setFloorNoError("");
@@ -634,7 +686,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         hasError = true;
         alertTitle = "Required";
         alertMessage = "Please select your city.";
-      } else if (!isCityDeliverable) {
+      } else if (!cityLocked && !isCityDeliverable) {
         setCityError("Delivery is not available in " + city + " yet.");
         hasError = true;
         alertTitle = "Not Deliverable";
@@ -668,6 +720,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         alertTitle = "Required";
         alertMessage = "Please enter the floor number.";
       }
+      if (!houseNo.trim()) {
+        setHouseNoError(requiredMessage(FIELD_LABELS.houseNo));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the building or house number.";
+      }
       if (!streetName.trim()) {
         setStreetNameError(requiredMessage(FIELD_LABELS.streetName));
         hasError = true;
@@ -679,7 +737,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         hasError = true;
         alertTitle = "Required";
         alertMessage = "Please select your city.";
-      } else if (!isCityDeliverable) {
+      } else if (!cityLocked && !isCityDeliverable) {
         setCityError("Delivery is not available in " + city + " yet.");
         hasError = true;
         alertTitle = "Not Deliverable";
@@ -710,7 +768,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         !streetName.trim() ||
         !city.trim() ||
         (buildingType === "Apartment" &&
-          (!apartmentName.trim() || !unitNo.trim() || !floorNo.trim()));
+          (!apartmentName.trim() || !unitNo.trim() || !floorNo.trim() || !houseNo.trim()));
 
       Alert.alert(
         hasSpecificRequiredFieldError ? "Required" : alertTitle,
@@ -738,16 +796,16 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         longitude: longitude!,
         latitude: latitude!,
         buildingNo,
-        houseNo: buildingNo,
         streetName,
         city,
       };
 
       const payload =
         buildingType === "House"
-          ? basePayload
+          ? { ...basePayload, houseNo: buildingNo }
           : {
               ...basePayload,
+              houseNo,
               buildingName: apartmentName,
               unitNo,
               floorNo,
@@ -1102,8 +1160,24 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
               placeholder="e.g. 3rd Floor"
               error={floorNoError}
             />
+            {/* NEW: Building / House No for Apartment */}
             <InputField
               icon="house"
+              label="Building / House No *"
+              value={houseNo}
+              onChangeText={handleHouseNoChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  houseNo,
+                  setHouseNoError,
+                  FIELD_LABELS.houseNo
+                )
+              }
+              placeholder="e.g 14/B"
+              error={houseNoError}
+            />
+            <InputField
+              icon="road"
               label="Street Name *"
               value={streetName}
               onChangeText={handleStreetNameChange}
@@ -1358,9 +1432,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         multiSelect={false}
       />
 
-      {/* CITY SEARCH MODAL (SEARCH ACTIVE) */}
+      {/* CITY SEARCH MODAL (SEARCH ACTIVE) - not opened while city is locked */}
       <GlobalSearchModal
-        visible={cityModalOpen}
+        visible={cityModalOpen && !cityLocked}
         onClose={() => setCityModalOpen(false)}
         title="Select Your City"
         data={cityModalData}

@@ -50,6 +50,12 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const [isNegativeCreditModalVisible, setIsNegativeCreditModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
+    const isCartSyncingRef = React.useRef(false);
+    const deletedProductIdsRef = React.useRef<Set<number>>(new Set());
+    const deletedPackageIdsRef = React.useRef<Set<number>>(new Set());
+    const packageSyncTimersRef = React.useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+    const productSyncTimersRef = React.useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
     const productsRef = React.useRef(products);
     const packagesRef = React.useRef(packages);
     React.useEffect(() => {
@@ -57,18 +63,39 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         packagesRef.current = packages;
     }, [products, packages]);
 
+    // Clear debounce timers on unmount
+    React.useEffect(() => {
+        return () => {
+            Object.values(packageSyncTimersRef.current).forEach(clearTimeout);
+            Object.values(productSyncTimersRef.current).forEach(clearTimeout);
+        };
+    }, []);
+
     // ─── FETCH & SYNC DB CART + CHECK AVAILABILITY ─────────────────────────────
-    const syncAndCheckCart = useCallback(async () => {
+    const syncAndCheckCart = useCallback(async (force = false) => {
         try {
+            if (!force && isCartSyncingRef.current) return;
+
             if (token) {
                 // For logged-in users, getUserCart() is the single source of truth.
                 const dbCartRes = await cartService.getUserCart();
+                if (isCartSyncingRef.current && !force) return;
+
                 if (dbCartRes.data && dbCartRes.data.status && dbCartRes.data.data) {
                     if (dbCartRes.data.data.cartId) {
                         setCartId(dbCartRes.data.data.cartId);
                     }
-                    const dbProducts = dbCartRes.data.data.products || [];
-                    const dbPackages = dbCartRes.data.data.packages || [];
+                    const rawProducts = dbCartRes.data.data.products || [];
+                    const rawPackages = dbCartRes.data.data.packages || [];
+
+                    // Filter out any items that the user just deleted in this session
+                    const dbProducts = rawProducts.filter(
+                        (p: any) => !deletedProductIdsRef.current.has(p.id)
+                    );
+                    const dbPackages = rawPackages.filter(
+                        (pkg: any) => !deletedPackageIdsRef.current.has(pkg.id)
+                    );
+
                     dispatch(setCartFromBackend({ products: dbProducts, packages: dbPackages }));
                 }
             } else {
@@ -102,7 +129,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const handleRefresh = async () => {
         setRefreshing(true);
         try {
-            await syncAndCheckCart();
+            isCartSyncingRef.current = false;
+            deletedProductIdsRef.current.clear();
+            deletedPackageIdsRef.current.clear();
+            await syncAndCheckCart(true);
         } finally {
             setRefreshing(false);
         }
@@ -110,91 +140,170 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
     // ─── HANDLERS ─────────────────────────────────────────────────────────────
     const increaseWeight = (id: number) => {
-        const item = products.find((p) => p.id === id);
+        const item = productsRef.current.find((p) => p.id === id);
         if (!item) return;
+        isCartSyncingRef.current = true;
         dispatch(increaseProductWeight(id));
+
         if (token) {
             const newWeight = item.unit === "kg"
                 ? parseFloat((item.weight + item.step).toFixed(3))
                 : Math.round(item.weight + item.step);
-            cartService.syncCartProduct(id, newWeight, item.unit).catch((err) =>
-                console.error("Failed DB sync for increaseWeight:", err)
-            );
+
+            if (productSyncTimersRef.current[id]) {
+                clearTimeout(productSyncTimersRef.current[id]);
+            }
+            productSyncTimersRef.current[id] = setTimeout(() => {
+                cartService.syncCartProduct(id, newWeight, item.unit)
+                    .catch((err) => console.error("Failed DB sync for increaseWeight:", err))
+                    .finally(() => {
+                        setTimeout(() => { isCartSyncingRef.current = false; }, 800);
+                    });
+            }, 350);
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 
     const decreaseWeight = (id: number) => {
-        const item = products.find((p) => p.id === id);
+        const item = productsRef.current.find((p) => p.id === id);
         if (!item) return;
         if (item.weight <= item.minimumWeight) {
             deleteProduct(id);
             return;
         }
+        isCartSyncingRef.current = true;
         dispatch(decreaseProductWeight(id));
+
         if (token) {
             const decremented = item.unit === "kg"
                 ? parseFloat((item.weight - item.step).toFixed(3))
                 : Math.round(item.weight - item.step);
             const newWeight = Math.max(item.minimumWeight, decremented);
-            cartService.syncCartProduct(id, newWeight, item.unit).catch((err) =>
-                console.error("Failed DB sync for decreaseWeight:", err)
-            );
+
+            if (productSyncTimersRef.current[id]) {
+                clearTimeout(productSyncTimersRef.current[id]);
+            }
+            productSyncTimersRef.current[id] = setTimeout(() => {
+                cartService.syncCartProduct(id, newWeight, item.unit)
+                    .catch((err) => console.error("Failed DB sync for decreaseWeight:", err))
+                    .finally(() => {
+                        setTimeout(() => { isCartSyncingRef.current = false; }, 800);
+                    });
+            }, 350);
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 
     const deleteProduct = (id: number) => {
+        isCartSyncingRef.current = true;
+        deletedProductIdsRef.current.add(id);
+        if (productSyncTimersRef.current[id]) {
+            clearTimeout(productSyncTimersRef.current[id]);
+            delete productSyncTimersRef.current[id];
+        }
         dispatch(removeProduct(id));
         if (token) {
-            cartService.removeCartProduct(id).catch((err) =>
-                console.error("Failed DB sync for deleteProduct:", err)
-            );
+            cartService.removeCartProduct(id)
+                .catch((err) => console.error("Failed DB sync for deleteProduct:", err))
+                .finally(() => {
+                    setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+                });
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 
     const changeProductUnitHandler = (id: number, newUnit: "g" | "kg") => {
-        const item = products.find((p) => p.id === id);
+        const item = productsRef.current.find((p) => p.id === id);
         if (!item || item.unit === newUnit) return;
+        isCartSyncingRef.current = true;
         dispatch(changeProductUnit({ id, newUnit }));
+        const newWeight = newUnit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
+
         if (token) {
-            const newWeight = newUnit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
-            cartService.syncCartProduct(id, newWeight, newUnit).catch((err) =>
-                console.error("Failed DB sync for changeProductUnit:", err)
-            );
+            if (productSyncTimersRef.current[id]) {
+                clearTimeout(productSyncTimersRef.current[id]);
+            }
+            productSyncTimersRef.current[id] = setTimeout(() => {
+                cartService.syncCartProduct(id, newWeight, newUnit)
+                    .catch((err) => console.error("Failed DB sync for changeProductUnit:", err))
+                    .finally(() => {
+                        setTimeout(() => { isCartSyncingRef.current = false; }, 800);
+                    });
+            }, 350);
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 
     const increasePackage = (id: number) => {
-        const pkg = packages.find((p) => p.id === id);
+        const pkg = packagesRef.current.find((p) => p.id === id);
         if (!pkg) return;
+        isCartSyncingRef.current = true;
         dispatch(increasePackageQuantity(id));
+        const newQty = pkg.quantity + 1;
+
         if (token) {
-            cartService.syncCartPackage(id, pkg.quantity + 1).catch((err) =>
-                console.error("Failed DB sync for increasePackage:", err)
-            );
+            if (packageSyncTimersRef.current[id]) {
+                clearTimeout(packageSyncTimersRef.current[id]);
+            }
+            packageSyncTimersRef.current[id] = setTimeout(() => {
+                cartService.syncCartPackage(id, newQty)
+                    .catch((err) => console.error("Failed DB sync for increasePackage:", err))
+                    .finally(() => {
+                        setTimeout(() => { isCartSyncingRef.current = false; }, 800);
+                    });
+            }, 350);
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 
     const decreasePackage = (id: number) => {
-        const pkg = packages.find((p) => p.id === id);
+        const pkg = packagesRef.current.find((p) => p.id === id);
         if (!pkg) return;
         if (pkg.quantity <= 1) {
             deletePackage(id);
             return;
         }
+        isCartSyncingRef.current = true;
         dispatch(decreasePackageQuantity(id));
+        const newQty = pkg.quantity - 1;
+
         if (token) {
-            cartService.syncCartPackage(id, pkg.quantity - 1).catch((err) =>
-                console.error("Failed DB sync for decreasePackage:", err)
-            );
+            if (packageSyncTimersRef.current[id]) {
+                clearTimeout(packageSyncTimersRef.current[id]);
+            }
+            packageSyncTimersRef.current[id] = setTimeout(() => {
+                cartService.syncCartPackage(id, newQty)
+                    .catch((err) => console.error("Failed DB sync for decreasePackage:", err))
+                    .finally(() => {
+                        setTimeout(() => { isCartSyncingRef.current = false; }, 800);
+                    });
+            }, 350);
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 
     const deletePackage = (id: number) => {
+        isCartSyncingRef.current = true;
+        deletedPackageIdsRef.current.add(id);
+        if (packageSyncTimersRef.current[id]) {
+            clearTimeout(packageSyncTimersRef.current[id]);
+            delete packageSyncTimersRef.current[id];
+        }
         dispatch(removePackage(id));
         if (token) {
-            cartService.removeCartPackage(id).catch((err) =>
-                console.error("Failed DB sync for deletePackage:", err)
-            );
+            cartService.removeCartPackage(id)
+                .catch((err) => console.error("Failed DB sync for deletePackage:", err))
+                .finally(() => {
+                    setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+                });
+        } else {
+            isCartSyncingRef.current = false;
         }
     };
 

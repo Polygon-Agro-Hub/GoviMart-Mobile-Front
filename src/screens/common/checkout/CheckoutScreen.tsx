@@ -64,7 +64,15 @@ const formatAddress = (item: any) => {
     parts.push(String(item.city).trim());
   }
   return parts
-    .filter((p) => p !== null && p !== undefined && String(p).trim() !== "" && p !== "null" && p !== "undefined" && p !== "N/A")
+    .filter(
+      (p) =>
+        p !== null &&
+        p !== undefined &&
+        String(p).trim() !== "" &&
+        p !== "null" &&
+        p !== "undefined" &&
+        p !== "N/A",
+    )
     .join(", ");
 };
 
@@ -123,12 +131,14 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
           } else {
             const mapped: AddressItem[] = response.data.result.map(
               (item: any) => {
-                const cleanTitle = (item.title || "").replace(/\.+$/, "").trim();
+                const cleanTitle = (item.title || "")
+                  .replace(/\.+$/, "")
+                  .trim();
                 return {
                   id: item.id,
                   title: item.saveAs || "Address",
                   name: item.fullName
-                    ? `${cleanTitle ? cleanTitle + " " : ""}${item.fullName}`
+                    ? `${cleanTitle ? cleanTitle + ". " : ""}${item.fullName}`
                     : "No Name Provided",
                   address: formatAddress(item),
                   phone: formatPhone(item),
@@ -185,7 +195,10 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
   const currentDiscount = orderContext?.discount || 0;
   const currentGrandTotal = Math.max(
     0,
-    currentPackageTotal + currentProductTotal - currentDiscount + currentDeliveryFee,
+    currentPackageTotal +
+      currentProductTotal -
+      currentDiscount +
+      currentDeliveryFee,
   );
 
   const handleProceed = () => {

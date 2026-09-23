@@ -87,6 +87,23 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         });
     };
 
+    // Parses a price-ish value (number, "Rs. 1,200.00", null) into a plain
+    // number, or null if there's nothing there. Used so we can compare an
+    // item's original vs. discounted amount before deciding to show the
+    // struck-through "old price".
+    const parsePriceValue = (value: unknown): number | null => {
+        if (value == null || value === "") return null;
+        if (typeof value === "number") return value;
+        const parsed = parseFloat(
+            String(value)
+                .replace(/Rs\.?/gi, "")
+                .replace(/LKR/gi, "")
+                .replace(/,/g, "")
+                .trim()
+        );
+        return isNaN(parsed) ? null : parsed;
+    };
+
     const formatDate = (dateString: string) => {
         if (!dateString) return "N/A";
         const date = new Date(dateString);
@@ -186,15 +203,33 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                 if (itemsRes.data && itemsRes.data.status) {
                     const mappedItems: CartItem[] = itemsRes.data.data.map((item: any, idx: number) => {
-                        const priceNum = typeof item.price === "number"
-                            ? item.price
-                            : parseFloat(String(item.price || "").replace(/Rs\.?/i, "").replace(/,/g, "").trim()) || 0;
+                        const priceNum = parsePriceValue(item.price) ?? 0;
+
+                        // The "original" (pre-discount) price for this line item.
+                        // Backend naming isn't confirmed for this endpoint yet, so
+                        // we try the field names used for products elsewhere in
+                        // the app (normalPrice/comPrice) plus a couple of likely
+                        // order-line variants, in priority order. If none of these
+                        // match what the API actually returns, console.log(item)
+                        // here once to see the real field name and add it to this
+                        // list.
+                        const originalPriceNum =
+                            parsePriceValue(item.normalPrice) ??
+                            parsePriceValue(item.originalPrice) ??
+                            parsePriceValue(item.oldPrice) ??
+                            parsePriceValue(item.actualPrice) ??
+                            parsePriceValue(item.comPrice);
+
+                        const hasDiscount =
+                            originalPriceNum != null && originalPriceNum > priceNum;
+
                         const qty = parseFloat(item.qty) || 1;
                         return {
                             id: idx + 1,
                             name: item.displayName || "Unknown Item",
                             quantity: `${qty} ${item.unit || "units"}`,
                             price: priceNum,
+                            oldPrice: hasDiscount ? originalPriceNum! : undefined,
                             image: item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
                         };
                     });
