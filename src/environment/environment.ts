@@ -4,7 +4,7 @@ const devHostIp = getDevServerHostIp();
 export const environment = {
 
   // LOCAL --------------------
-   API_BASE_URL: `http://${devHostIp}:3000/polygon/`,
+  // API_BASE_URL: `http://${devHostIp}:3000/polygon/`,
 
   // DEV --------------------
   API_BASE_URL: "https://dev-mob-api.polygon.lk/polygon/",
