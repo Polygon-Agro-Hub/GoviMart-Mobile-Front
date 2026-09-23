@@ -51,7 +51,7 @@
       ]
     },
     "ios": {
-      "icon": "./src/assets/images/public/app-icon-android.png",
+      "icon": "./src/assets/images/public/app-icon-ios.png",
       "bundleIdentifier": "com.polygonagro.Polygon",
       "buildNumber": "1",
       "supportsTablet": false,
