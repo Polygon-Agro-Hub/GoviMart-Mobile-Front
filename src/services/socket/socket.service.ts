@@ -3,6 +3,7 @@ import { environment } from "@/environment/environment";
 import { store } from "@/store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { ServerNotificationItem } from "../notification/notification.service";
+import { updateGlobalUnreadCount, getGlobalUnreadCount } from "@/store/notificationStore";
 
 type NotificationCallback = (notification: ServerNotificationItem) => void;
 type CityAvailabilityCallback = (cities: any[]) => void;
@@ -70,6 +71,15 @@ class SocketService {
 
       this.socket.on("new_notification", (data: ServerNotificationItem) => {
         console.log("📢 [SocketService] Received new_notification:", data?.title || data?.id);
+
+        // Update global unread badge immediately for ALL tabs (Sales Dash pattern)
+        if (typeof (data as any)?.unreadCount === "number") {
+          updateGlobalUnreadCount((data as any).unreadCount);
+        } else {
+          // Increment by 1 if no count provided
+          updateGlobalUnreadCount(getGlobalUnreadCount() + 1);
+        }
+
         this.notificationListeners.forEach((listener) => {
           try {
             listener(data);
@@ -82,6 +92,10 @@ class SocketService {
       this.socket.on("notification_unread_count", (data: { unreadCount: number } | number) => {
         const count = typeof data === "number" ? data : (data?.unreadCount ?? 0);
         console.log("🔢 [SocketService] Received notification_unread_count:", count);
+
+        // Update global badge for ALL tabs (Sales Dash pattern)
+        updateGlobalUnreadCount(count);
+
         this.unreadCountListeners.forEach((listener) => {
           try {
             listener(count);

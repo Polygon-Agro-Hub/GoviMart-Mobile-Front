@@ -22,6 +22,7 @@ import {
     renderBoldInvoiceMessage,
 } from "@/constants/notificationTemplates";
 import { Ionicons } from "@expo/vector-icons";
+import { updateGlobalUnreadCount } from "@/store/notificationStore";
 
 export interface UiNotificationItem {
     id: number;
@@ -160,6 +161,8 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             if (res.data?.status && Array.isArray(res.data?.notifications)) {
                 const uiItems = res.data.notifications.map(mapServerItemToUi);
                 setNotifications(uiItems);
+                // Keep global store in sync for badge on all tabs
+                updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
             }
         } catch (error) {
             console.warn("Failed to load notifications from API:", error);
@@ -216,6 +219,8 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                     n.id === item.id ? { ...n, isRead: true } : n
                 );
                 const unread = nextList.filter((n) => !n.isRead).length;
+                // Update global store so badge clears on ALL tabs (Sales Dash pattern)
+                updateGlobalUnreadCount(unread);
                 socketService.emitLocalUnreadCount(unread);
                 return nextList;
             });
@@ -249,6 +254,8 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 isRead: true,
             }))
         );
+        // Clear badge globally across ALL tabs (Sales Dash pattern)
+        updateGlobalUnreadCount(0);
         socketService.emitLocalUnreadCount(0);
         try {
             await notificationService.markAllAsRead();
