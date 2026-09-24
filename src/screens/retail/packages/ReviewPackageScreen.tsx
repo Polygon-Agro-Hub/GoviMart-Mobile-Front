@@ -318,15 +318,75 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
+  const buyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+  );
+
+  // Wholesale guard: Block Wholesale users from viewing ReviewPackage
+  useEffect(() => {
+    if (buyerType && buyerType.toLowerCase() !== "retail") {
+      Alert.alert(
+        "Access Denied",
+        "Package review feature is only available for Retail users.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (effectiveOrderId) {
+                navigation.replace("OrderDetails", {
+                  orderId: String(effectiveOrderId),
+                });
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.replace("Home");
+              }
+            },
+          },
+        ],
+      );
+    }
+  }, [buyerType, effectiveOrderId, navigation]);
+
   // Fetch review data from backend
   const fetchReviewData = useCallback(
     async (force = false) => {
+      if (buyerType && buyerType.toLowerCase() !== "retail") {
+        return;
+      }
       dispatch(setLoadingReview(true));
       try {
         const res = await orderService.getPackageReview(effectiveOrderId);
         if (res.data?.status && res.data?.data) {
           const { orderInfo, packages, additionalItems, packingSlots } =
             res.data.data;
+
+          if (orderInfo?.status && orderInfo.status.toLowerCase() === "cancelled") {
+            dispatch(setLoadingReview(false));
+            Alert.alert(
+              "Cannot Proceed!",
+              "You have already cancelled this order. You cannot proceed to the payment.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (effectiveOrderId) {
+                      navigation.replace("OrderDetails", {
+                        orderId: String(effectiveOrderId),
+                      });
+                    } else if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    } else {
+                      navigation.replace("Home");
+                    }
+                  },
+                },
+              ],
+              { cancelable: false },
+            );
+            return;
+          }
+
           let resolvedProcessOrderId = null;
           let resolvedInvNo = "INV-2660000";
           let resolvedPaidAmount = 0;

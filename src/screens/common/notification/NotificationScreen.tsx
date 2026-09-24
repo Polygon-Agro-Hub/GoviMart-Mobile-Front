@@ -22,13 +22,17 @@ import {
     renderBoldInvoiceMessage,
 } from "@/constants/notificationTemplates";
 import { Ionicons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { updateGlobalUnreadCount } from "@/store/notificationStore";
+import { AlertModal } from "@/component/common/AlertModal";
 
 export interface UiNotificationItem {
     id: number;
     processOrderId?: number;
     orderId?: number;
     invNo?: string;
+    orderStatus?: string;
     title: string;
     message: string;
     time: string;
@@ -116,6 +120,7 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
         processOrderId: item.processOrderId,
         orderId: item.orderId,
         invNo: item.invNo,
+        orderStatus: item.orderStatus,
         title: item.title,
         message: messageText,
         time,
@@ -126,11 +131,36 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     };
 };
 
+const isPackageReviewTitle = (title?: string) => {
+    const t = (title || "").toLowerCase();
+    return (
+        t.includes("package finalization review") ||
+        t.includes("review package") ||
+        t.includes("package review")
+    );
+};
+
 const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
+    const buyerType = useSelector(
+        (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+    );
+    const isRetail = buyerType.toLowerCase() === "retail";
+
     const [notifications, setNotifications] = useState<UiNotificationItem[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
     const [showMenu, setShowMenu] = useState<boolean>(false);
+    const [alertConfig, setAlertConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type: "success" | "error";
+    }>({
+        visible: false,
+        title: "",
+        message: "",
+        type: "error",
+    });
 
     // Handle system back button with context-aware dismissal of action menu
     useFocusEffect(
@@ -159,7 +189,10 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         try {
             const res = await notificationService.getNotifications(50, 0);
             if (res.data?.status && Array.isArray(res.data?.notifications)) {
-                const uiItems = res.data.notifications.map(mapServerItemToUi);
+                let uiItems = res.data.notifications.map(mapServerItemToUi);
+                if (!isRetail) {
+                    uiItems = uiItems.filter((n) => !isPackageReviewTitle(n.title));
+                }
                 setNotifications(uiItems);
                 // Keep global store in sync for badge on all tabs
                 updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
@@ -170,7 +203,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, []);
+    }, [isRetail]);
 
     useEffect(() => {
         loadNotifications(true);
@@ -181,6 +214,9 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         // Listen for live socket notifications
         const unsubscribeNotif = socketService.onNewNotification((serverItem) => {
             const uiItem = mapServerItemToUi(serverItem);
+            if (!isRetail && isPackageReviewTitle(uiItem.title)) {
+                return;
+            }
             setNotifications((prev) => {
                 // Avoid duplicates
                 if (prev.some((n) => n.id === uiItem.id)) {
@@ -203,7 +239,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             unsubscribeNotif();
             unsubscribeCount();
         };
-    }, [loadNotifications]);
+    }, [loadNotifications, isRetail]);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
@@ -232,8 +268,16 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         }
 
         // Navigate based on notification title/type
-        const titleLower = (item.title || "").toLowerCase();
-        if (titleLower.includes("package finalization review") || titleLower.includes("review package") || titleLower.includes("package review")) {
+        if (isRetail && isPackageReviewTitle(item.title)) {
+            if (item.orderStatus && item.orderStatus.toLowerCase() === "cancelled") {
+                setAlertConfig({
+                    visible: true,
+                    title: "Cannot Proceed!",
+                    message: "You have already cancelled this order. You cannot proceed to the payment.",
+                    type: "error",
+                });
+                return;
+            }
             navigation.navigate("ReviewPackage", {
                 orderId: item.processOrderId || item.orderId,
                 invoiceNo: item.invNo,
@@ -642,6 +686,19 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
             {/* Floating Bottom Navigation Bar */}
             <BottomNavigation activeScreen="Notification" navigation={navigation} />
+
+            {/* Alert Modal */}
+            <AlertModal
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                autoClose={false}
+                showOkButton={true}
+                okButtonText="OK"
+                onOkPress={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+                onClose={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+            />
         </View>
     );
 };
