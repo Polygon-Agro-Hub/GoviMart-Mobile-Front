@@ -48,9 +48,9 @@ const normalizeToKg = (product: ProductType) => {
             ? Number((perKgDiscountedPrice * qtyKg).toFixed(2))
             : totalNormalPrice;
 
-    // Label built straight from the DB's unitType column: "g" -> grams, else kg
+    // Label built straight from the DB's unitType column: "g" -> grams, else kg (or pre-computed weightDisplay)
     const weightDisplay =
-        rawUnit === "g" ? `${Math.round(qtyKg * 1000)} g` : `${qtyKg} kg`;
+        (product as any).weightDisplay || (rawUnit === "g" ? `${Math.round(qtyKg * 1000)} g` : `${qtyKg} kg`);
 
     return {
         qtyKg,
