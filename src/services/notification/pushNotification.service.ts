@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import socketService from "../socket/socket.service";
 import { ServerNotificationItem } from "./notification.service";
 import { navigationRef } from "../../../navigationRef";
+import { store } from "@/store";
 
 // Configure how notifications appear when app is in foreground / background / locked
 try {
@@ -180,7 +181,17 @@ class PushNotificationService {
     const orderId = data.orderId || data.processOrderId;
     const invoiceNo = data.invNo || data.invoiceNo;
 
-    if (titleLower.includes("package finalization review")) {
+    const buyerType = store.getState()?.auth?.userProfile?.buyerType || "Retail";
+    const isRetail = buyerType.toLowerCase() === "retail";
+    const isCancelled = (data.orderStatus || "").toLowerCase() === "cancelled";
+
+    if (
+      isRetail &&
+      !isCancelled &&
+      (titleLower.includes("package finalization review") ||
+       titleLower.includes("review package") ||
+       titleLower.includes("package review"))
+    ) {
       (navigationRef.current as any)?.navigate("ReviewPackage", {
         orderId,
         invoiceNo,
