@@ -8,6 +8,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { RootStackParamList, ProductType } from "@/types/types";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
@@ -49,33 +51,34 @@ type NormalizedProduct = ProductType & {
 };
 
 const normalizeToKg = (product: ProductType): NormalizedProduct => {
-  const rawUnit = (product.unitType || "kg").toLowerCase();
-
   const rawStartValue = parseFloat(String(product.startValue || "1")) || 1;
   const rawChangeBy =
     product.changeby != null && String(product.changeby).trim() !== ""
       ? parseFloat(String(product.changeby))
       : rawStartValue;
 
-  // startValue / changeby are always stored in kg in the DB.
-  // unitType (from the DB column) just controls the display label.
-  const qtyKg = Number(rawStartValue.toFixed(3));
-  const stepKg = Number(rawChangeBy.toFixed(3));
+  // startValue / changeby: always normalize to kg for replace item flow
+  const qtyKg =
+    rawStartValue > 10
+      ? Number((rawStartValue / 1000).toFixed(3))
+      : Number(rawStartValue.toFixed(3));
+  const stepKg =
+    rawChangeBy > 10
+      ? Number((rawChangeBy / 1000).toFixed(3))
+      : Number(rawChangeBy.toFixed(3));
 
   // Per-kg rate, straight from the DB — never mutated.
   const perKgPrice = parseFloat(String(product.discountedPrice || "0")) || 0;
 
   // Total price for the current quantity — computed ONCE, here.
-  // Anything downstream should use this directly and NOT multiply again.
   const totalPrice = Number((perKgPrice * qtyKg).toFixed(2));
 
-  // Label built straight from the DB's unitType column: "g" -> grams, else kg
-  const weightDisplay =
-    rawUnit === "g" ? `${Math.round(qtyKg * 1000)} g` : `${qtyKg} kg`;
+  // Always show unit kg and value in kg for replacement items
+  const weightDisplay = `${qtyKg} kg`;
 
   return {
     ...product,
-    unitType: product.unitType,   // keep the original DB value
+    unitType: "kg",
     startValue: qtyKg.toString(),
     changeby: stepKg.toString(),
     perKgPrice,                   // rate per kg, for any live recompute
@@ -94,6 +97,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     fromProduct?.category;
   const initialProductTypeName =
     fromProduct?.productTypeName || fromProduct?.category || "Product Type";
+
+  const buyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+  );
 
   const [resolvedTypeName, setResolvedTypeName] = useState<string>(
     initialProductTypeName,
@@ -123,16 +130,16 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
-  // Fetch replacement products filtered strictly by productTypeId from producttypes table
+  // Fetch replacement products filtered strictly by productTypeId and user's buyerType
   const fetchReplacementsByProductType = async () => {
     setLoadingProducts(true);
     try {
       let productsList: any[] = [];
 
       if (targetProductTypeId) {
-        // 1. Query by productTypeId using producttypes table
+        // 1. Query by productTypeId using producttypes table, filtered by user buyerType
         const res =
-          await productService.getProductsByProductType(targetProductTypeId);
+          await productService.getProductsByProductType(targetProductTypeId, buyerType);
         if (
           res.data?.status &&
           Array.isArray(res.data.products) &&
@@ -153,7 +160,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
           ? "Fruits"
           : "Vegetables";
         const catRes =
-          await productService.getProductsByCategory(cleanCategory);
+          await productService.getProductsByCategory(cleanCategory, buyerType);
         if (
           catRes.data?.status &&
           Array.isArray(catRes.data.products) &&
@@ -175,7 +182,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
         .filter((p: any) => {
           const pid = String(p.id).toLowerCase();
           const pname = String(p.displayName || "").toLowerCase();
-          return pid !== fromIdStr && pname !== fromNameStr;
+          const isEnabled = p.isEnable === 1 || p.isEnable === undefined || p.isEnable === null;
+          return pid !== fromIdStr && pname !== fromNameStr && isEnabled;
         });
 
       setAvailableProducts(formatted);
@@ -189,7 +197,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
 
   useEffect(() => {
     fetchReplacementsByProductType();
-  }, [targetProductTypeId]);
+  }, [targetProductTypeId, buyerType]);
 
   // Real-time Replacement Products update via Socket.IO
   useEffect(() => {
@@ -201,7 +209,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     return () => {
       unsubscribe();
     };
-  }, [targetProductTypeId]);
+  }, [targetProductTypeId, buyerType]);
 
 const toggleAlacartProduct = (product: ProductType) => {
   const normalized = normalizeToKg(product);

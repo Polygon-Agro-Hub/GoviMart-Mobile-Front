@@ -88,12 +88,9 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
-// Formats a quantity that is ALWAYS stored internally in kg into the
-// unit the product should actually be displayed in ("g" or "kg").
-const formatQty = (qtyKg: number, unit: "kg" | "g") =>
-  unit === "g"
-    ? `${Math.round(qtyKg * 1000)} g`
-    : `${parseFloat(String(qtyKg))} kg`;
+// Formats a quantity: always shows unit "kg" and value in kg
+const formatQty = (qtyKg: number, _unit?: string) =>
+  `${parseFloat(String(qtyKg))} kg`;
 
 /* ---------------------------------------------------------
    Screen
@@ -125,21 +122,16 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const showConditionalNote = isCashOnDelivery || isPickup;
   const deliveryWord = isPickup ? "pickup" : "delivery";
 
-  // Display unit for each side, taken from their own unitType — NOT
-  // hardcoded to "kg". Internal math always stays in kg regardless.
-  const fromDisplayUnit: "kg" | "g" =
-    (rawFrom?.unitType || rawFrom?.unit || "kg").toLowerCase() === "g"
-      ? "g"
-      : "kg";
-  const toDisplayUnit: "kg" | "g" =
-    (rawTo?.unitType || "kg").toLowerCase() === "g" ? "g" : "kg";
+  // Always display in kg for package item replacements
+  const fromDisplayUnit: "kg" = "kg";
+  const toDisplayUnit: "kg" = "kg";
 
   const fromProduct: ProductInfo = useMemo(() => {
-    const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
+    const rawUnit = (rawFrom?.unit || rawFrom?.unitType || "kg").toLowerCase();
     let rawQty =
       parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
     const rawPrice = rawFrom?.price || 0;
-    if (rawUnit === "g") {
+    if (rawUnit === "g" || rawQty > 10) {
       rawQty = Number((rawQty / 1000).toFixed(3));
     }
     const cleanBaseQty = parseFloat(String(rawQty)) || 1;
