@@ -88,12 +88,9 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
-// Formats a quantity that is ALWAYS stored internally in kg into the
-// unit the product should actually be displayed in ("g" or "kg").
-const formatQty = (qtyKg: number, unit: "kg" | "g") =>
-  unit === "g"
-    ? `${Math.round(qtyKg * 1000)} g`
-    : `${parseFloat(String(qtyKg))} kg`;
+// Formats a quantity: always shows unit "kg" and value in kg
+const formatQty = (qtyKg: number, _unit?: string) =>
+  `${parseFloat(String(qtyKg))} kg`;
 
 /* ---------------------------------------------------------
    Screen
@@ -135,11 +132,11 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     (rawTo?.unitType || "kg").toLowerCase() === "g" ? "g" : "kg";
 
   const fromProduct: ProductInfo = useMemo(() => {
-    const rawUnit = (rawFrom?.unit || "kg").toLowerCase();
+    const rawUnit = (rawFrom?.unit || rawFrom?.unitType || "kg").toLowerCase();
     let rawQty =
       parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
     const rawPrice = rawFrom?.price || 0;
-    if (rawUnit === "g") {
+    if (rawUnit === "g" || rawQty > 10) {
       rawQty = Number((rawQty / 1000).toFixed(3));
     }
     const cleanBaseQty = parseFloat(String(rawQty)) || 1;
@@ -162,10 +159,10 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       parseFloat(
         String(
           rawTo?.perKgPrice ??
-            rawTo?.normalPrice ??
-            rawTo?.price ??
-            rawTo?.pricePerBaseQty ??
-            0,
+          rawTo?.normalPrice ??
+          rawTo?.price ??
+          rawTo?.pricePerBaseQty ??
+          0,
         ),
       ) || 0;
 
@@ -182,8 +179,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const rawStepVal =
     rawTo?.changeby != null &&
-    String(rawTo.changeby).trim() !== "" &&
-    parseFloat(String(rawTo.changeby)) > 0
+      String(rawTo.changeby).trim() !== "" &&
+      parseFloat(String(rawTo.changeby)) > 0
       ? parseFloat(String(rawTo.changeby))
       : rawTo?.step != null && parseFloat(String(rawTo.step)) > 0
         ? parseFloat(String(rawTo.step))
@@ -191,8 +188,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const rawMinVal =
     rawTo?.startValue != null &&
-    String(rawTo.startValue).trim() !== "" &&
-    parseFloat(String(rawTo.startValue)) > 0
+      String(rawTo.startValue).trim() !== "" &&
+      parseFloat(String(rawTo.startValue)) > 0
       ? parseFloat(String(rawTo.startValue))
       : rawStepVal;
 
@@ -319,11 +316,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               onPress={decrease}
               disabled={quantity <= minQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${
-                quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#D9D9D9]"
-              }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#000000]"
+                }`}
             >
-              <Ionicons name="remove" size={20} color="#374151" />
+              <Ionicons
+                name="remove"
+                size={20}
+                color={quantity <= minQty ? "#9CA3AF" : "#fff"}
+              />
             </TouchableOpacity>
 
             <Text className="text-[16px] font-semibold text-black">
@@ -334,9 +334,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               onPress={increase}
               disabled={quantity >= maxQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${
-                quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
-              }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
+                }`}
             >
               <Ionicons name="add" size={20} color="#fff" />
             </TouchableOpacity>

@@ -213,6 +213,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     productTemplatesState,
     orderPackageDbIds,
     alacartSelection,
+    deletedAdditionalItemIds,
     invoiceNo: reduxInvoiceNo,
     scheduleDateStr,
     initialPaidAmount,
@@ -404,6 +405,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {
                 id: itemKey,
+                additionalItemId: item.id ? Number(item.id) : undefined,
                 productId: prodId,
                 displayName: item.productName || item.cropNameEnglish || "Item",
                 image: item.productImage,
@@ -1000,6 +1002,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
           creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
+          deletedAdditionalItemIds:
+            deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+              ? deletedAdditionalItemIds
+              : undefined,
           packages: packagesPayload,
         });
         console.log(
@@ -2368,13 +2374,24 @@ const fetchCategoryProducts = async (categoryId: string) => {
                         </View>
 
                         <View className="flex-row items-center">
-                          <TouchableOpacity
-                            onPress={() => updateAlacartItemQuantity(item.id, -1)}
-                            activeOpacity={0.7}
-                            className="w-6 h-6 rounded-full bg-[#D1D1D6] items-center justify-center"
-                          >
-                            <Ionicons name="remove" size={14} color="#FFF" />
-                          </TouchableOpacity>
+                          {(() => {
+                            const stepVal = item.step && item.step > 0 ? item.step : (item.unit === "kg" ? 0.5 : 500);
+                            const minVal = item.minQuantity && item.minQuantity > 0 ? item.minQuantity : stepVal;
+                            const isAtMin = item.amount <= minVal;
+
+                            return (
+                              <TouchableOpacity
+                                onPress={() => updateAlacartItemQuantity(item.id, -1)}
+                                disabled={isAtMin}
+                                activeOpacity={0.7}
+                                className={`w-6 h-6 rounded-full items-center justify-center ${
+                                  isAtMin ? "bg-[#D1D1D6]" : "bg-black"
+                                }`}
+                              >
+                                <Ionicons name="remove" size={14} color="#FFF" />
+                              </TouchableOpacity>
+                            );
+                          })()}
 
                           <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
                             {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}

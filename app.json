@@ -63,8 +63,7 @@
         "NSCameraUsageDescription": "Camera access is required to take profile photos and capture images.",
         "NSPhotoLibraryUsageDescription": "Photo library access is required to upload profile and complaint images.",
         "NSPhotoLibraryAddUsageDescription": "Photo library access is required to save related images.",
-        "NSLocationWhenInUseUsageDescription": "Location access is required to detect and set delivery addresses.",
-        "NSUserTrackingUsageDescription": "Tracking is used to improve app experience."
+        "NSLocationWhenInUseUsageDescription": "Location access is required to detect and set delivery addresses."
       }
     },
     "web": {
