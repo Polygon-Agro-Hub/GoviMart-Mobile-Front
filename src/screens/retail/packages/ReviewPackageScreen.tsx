@@ -213,6 +213,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     productTemplatesState,
     orderPackageDbIds,
     alacartSelection,
+    deletedAdditionalItemIds,
     invoiceNo: reduxInvoiceNo,
     scheduleDateStr,
     initialPaidAmount,
@@ -404,6 +405,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {
                 id: itemKey,
+                additionalItemId: item.id ? Number(item.id) : undefined,
                 productId: prodId,
                 displayName: item.productName || item.cropNameEnglish || "Item",
                 image: item.productImage,
@@ -1000,6 +1002,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
           creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
+          deletedAdditionalItemIds:
+            deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+              ? deletedAdditionalItemIds
+              : undefined,
           packages: packagesPayload,
         });
         console.log(

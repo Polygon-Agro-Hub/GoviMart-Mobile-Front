@@ -116,6 +116,7 @@ class OrderService {
             normalPrice?: number;
             price: number;
         }>;
+        deletedAdditionalItemIds?: number[];
         packages?: Array<{
             orderPackageId: number;
             packageId?: string | number;
