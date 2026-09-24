@@ -14,6 +14,7 @@ export interface PackageMeta {
 
 export interface AlacartSelectedProduct {
   id: number | string;
+  additionalItemId?: number;
   productId?: number | string;
   displayName: string;
   image?: any;
@@ -53,6 +54,7 @@ export interface PackageReviewState {
   productTemplatesState: Record<string, ReviewProduct[]>;
   orderPackageDbIds: Record<string, number>;
   alacartSelection: Record<string | number, AlacartSelectedProduct>;
+  deletedAdditionalItemIds: number[];
   isLocked: boolean;
   loadingReview: boolean;
   availableSlots: number;
@@ -80,6 +82,7 @@ const initialState: PackageReviewState = {
   productTemplatesState: {},
   orderPackageDbIds: {},
   alacartSelection: {},
+  deletedAdditionalItemIds: [],
   isLocked: false,
   loadingReview: false,
   availableSlots: 50,
@@ -209,6 +212,7 @@ export const packageReviewSlice = createSlice({
       state.packageProducts = mergedProducts;
 
       state.alacartSelection = payload.alacartSelection ? { ...payload.alacartSelection } : {};
+      state.deletedAdditionalItemIds = [];
     },
     replacePackageProduct: (
       state,
@@ -406,6 +410,17 @@ export const packageReviewSlice = createSlice({
       }
     },
     removeAlacartItem: (state, action: PayloadAction<string | number>) => {
+      const item = state.alacartSelection[action.payload];
+      if (item && !item.isAddedNow) {
+        const dbId =
+          item.additionalItemId ||
+          (typeof item.id === "number"
+            ? item.id
+            : parseInt(String(item.id).replace(/[^0-9]/g, "")) || 0);
+        if (dbId && !state.deletedAdditionalItemIds.includes(dbId)) {
+          state.deletedAdditionalItemIds.push(dbId);
+        }
+      }
       delete state.alacartSelection[action.payload];
     },
     toggleAlacartItemUnit: (
@@ -485,6 +500,7 @@ export const packageReviewSlice = createSlice({
         }
       });
       state.alacartSelection = restoredAlacart;
+      state.deletedAdditionalItemIds = [];
     },
     clearPackageReview: () => initialState,
   },
