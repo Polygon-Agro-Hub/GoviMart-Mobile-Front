@@ -122,9 +122,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const showConditionalNote = isCashOnDelivery || isPickup;
   const deliveryWord = isPickup ? "pickup" : "delivery";
 
-  // Always display in kg for package item replacements
-  const fromDisplayUnit: "kg" = "kg";
-  const toDisplayUnit: "kg" = "kg";
+  // Display unit for each side, taken from their own unitType — NOT
+  // hardcoded to "kg". Internal math always stays in kg regardless.
+  const fromDisplayUnit: "kg" | "g" =
+    (rawFrom?.unitType || rawFrom?.unit || "kg").toLowerCase() === "g"
+      ? "g"
+      : "kg";
+  const toDisplayUnit: "kg" | "g" =
+    (rawTo?.unitType || "kg").toLowerCase() === "g" ? "g" : "kg";
 
   const fromProduct: ProductInfo = useMemo(() => {
     const rawUnit = (rawFrom?.unit || rawFrom?.unitType || "kg").toLowerCase();
@@ -154,10 +159,10 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       parseFloat(
         String(
           rawTo?.perKgPrice ??
-            rawTo?.normalPrice ??
-            rawTo?.price ??
-            rawTo?.pricePerBaseQty ??
-            0,
+          rawTo?.normalPrice ??
+          rawTo?.price ??
+          rawTo?.pricePerBaseQty ??
+          0,
         ),
       ) || 0;
 
@@ -174,8 +179,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const rawStepVal =
     rawTo?.changeby != null &&
-    String(rawTo.changeby).trim() !== "" &&
-    parseFloat(String(rawTo.changeby)) > 0
+      String(rawTo.changeby).trim() !== "" &&
+      parseFloat(String(rawTo.changeby)) > 0
       ? parseFloat(String(rawTo.changeby))
       : rawTo?.step != null && parseFloat(String(rawTo.step)) > 0
         ? parseFloat(String(rawTo.step))
@@ -183,8 +188,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const rawMinVal =
     rawTo?.startValue != null &&
-    String(rawTo.startValue).trim() !== "" &&
-    parseFloat(String(rawTo.startValue)) > 0
+      String(rawTo.startValue).trim() !== "" &&
+      parseFloat(String(rawTo.startValue)) > 0
       ? parseFloat(String(rawTo.startValue))
       : rawStepVal;
 
@@ -311,11 +316,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               onPress={decrease}
               disabled={quantity <= minQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${
-                quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#D9D9D9]"
-              }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#000000]"
+                }`}
             >
-              <Ionicons name="remove" size={20} color="#374151" />
+              <Ionicons
+                name="remove"
+                size={20}
+                color={quantity <= minQty ? "#9CA3AF" : "#fff"}
+              />
             </TouchableOpacity>
 
             <Text className="text-[16px] font-semibold text-black">
@@ -326,9 +334,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               onPress={increase}
               disabled={quantity >= maxQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${
-                quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
-              }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
+                }`}
             >
               <Ionicons name="add" size={20} color="#fff" />
             </TouchableOpacity>
