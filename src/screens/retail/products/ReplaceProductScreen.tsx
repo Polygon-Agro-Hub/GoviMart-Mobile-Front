@@ -8,6 +8,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { RootStackParamList, ProductType } from "@/types/types";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
@@ -96,6 +98,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
   const initialProductTypeName =
     fromProduct?.productTypeName || fromProduct?.category || "Product Type";
 
+  const buyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+  );
+
   const [resolvedTypeName, setResolvedTypeName] = useState<string>(
     initialProductTypeName,
   );
@@ -124,16 +130,16 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
-  // Fetch replacement products filtered strictly by productTypeId from producttypes table
+  // Fetch replacement products filtered strictly by productTypeId and user's buyerType
   const fetchReplacementsByProductType = async () => {
     setLoadingProducts(true);
     try {
       let productsList: any[] = [];
 
       if (targetProductTypeId) {
-        // 1. Query by productTypeId using producttypes table
+        // 1. Query by productTypeId using producttypes table, filtered by user buyerType
         const res =
-          await productService.getProductsByProductType(targetProductTypeId);
+          await productService.getProductsByProductType(targetProductTypeId, buyerType);
         if (
           res.data?.status &&
           Array.isArray(res.data.products) &&
@@ -154,7 +160,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
           ? "Fruits"
           : "Vegetables";
         const catRes =
-          await productService.getProductsByCategory(cleanCategory);
+          await productService.getProductsByCategory(cleanCategory, buyerType);
         if (
           catRes.data?.status &&
           Array.isArray(catRes.data.products) &&
@@ -176,7 +182,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
         .filter((p: any) => {
           const pid = String(p.id).toLowerCase();
           const pname = String(p.displayName || "").toLowerCase();
-          return pid !== fromIdStr && pname !== fromNameStr;
+          const isEnabled = p.isEnable === 1 || p.isEnable === undefined || p.isEnable === null;
+          return pid !== fromIdStr && pname !== fromNameStr && isEnabled;
         });
 
       setAvailableProducts(formatted);
@@ -190,7 +197,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
 
   useEffect(() => {
     fetchReplacementsByProductType();
-  }, [targetProductTypeId]);
+  }, [targetProductTypeId, buyerType]);
 
   // Real-time Replacement Products update via Socket.IO
   useEffect(() => {
@@ -202,7 +209,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     return () => {
       unsubscribe();
     };
-  }, [targetProductTypeId]);
+  }, [targetProductTypeId, buyerType]);
 
 const toggleAlacartProduct = (product: ProductType) => {
   const normalized = normalizeToKg(product);
