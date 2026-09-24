@@ -49,33 +49,34 @@ type NormalizedProduct = ProductType & {
 };
 
 const normalizeToKg = (product: ProductType): NormalizedProduct => {
-  const rawUnit = (product.unitType || "kg").toLowerCase();
-
   const rawStartValue = parseFloat(String(product.startValue || "1")) || 1;
   const rawChangeBy =
     product.changeby != null && String(product.changeby).trim() !== ""
       ? parseFloat(String(product.changeby))
       : rawStartValue;
 
-  // startValue / changeby are always stored in kg in the DB.
-  // unitType (from the DB column) just controls the display label.
-  const qtyKg = Number(rawStartValue.toFixed(3));
-  const stepKg = Number(rawChangeBy.toFixed(3));
+  // startValue / changeby: always normalize to kg for replace item flow
+  const qtyKg =
+    rawStartValue > 10
+      ? Number((rawStartValue / 1000).toFixed(3))
+      : Number(rawStartValue.toFixed(3));
+  const stepKg =
+    rawChangeBy > 10
+      ? Number((rawChangeBy / 1000).toFixed(3))
+      : Number(rawChangeBy.toFixed(3));
 
   // Per-kg rate, straight from the DB — never mutated.
   const perKgPrice = parseFloat(String(product.discountedPrice || "0")) || 0;
 
   // Total price for the current quantity — computed ONCE, here.
-  // Anything downstream should use this directly and NOT multiply again.
   const totalPrice = Number((perKgPrice * qtyKg).toFixed(2));
 
-  // Label built straight from the DB's unitType column: "g" -> grams, else kg
-  const weightDisplay =
-    rawUnit === "g" ? `${Math.round(qtyKg * 1000)} g` : `${qtyKg} kg`;
+  // Always show unit kg and value in kg for replacement items
+  const weightDisplay = `${qtyKg} kg`;
 
   return {
     ...product,
-    unitType: product.unitType,   // keep the original DB value
+    unitType: "kg",
     startValue: qtyKg.toString(),
     changeby: stepKg.toString(),
     perKgPrice,                   // rate per kg, for any live recompute
