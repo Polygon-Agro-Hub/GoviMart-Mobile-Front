@@ -10,6 +10,7 @@ import {
   Image,
   Dimensions,
   BackHandler,
+  Platform,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -336,11 +337,17 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   style={{
-                    height: 50,
+                    flex: 1,
+                    paddingTop: 0,
+                    paddingBottom: 0,
                     paddingVertical: 0,
-                    textAlignVertical: "center",
+                    fontSize: 14,
+                    color: "#000000",
+                    ...(Platform.OS === "android"
+                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      : { alignSelf: "center" }),
                   }}
-                  className="flex-1 text-sm text-black"
+                  className="flex-1 text-[14px] text-black"
                 />
               </View>
             </View>
@@ -362,11 +369,17 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   style={{
-                    height: 50,
+                    flex: 1,
+                    paddingTop: 0,
+                    paddingBottom: 0,
                     paddingVertical: 0,
-                    textAlignVertical: "center",
+                    fontSize: 14,
+                    color: "#000000",
+                    ...(Platform.OS === "android"
+                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      : { alignSelf: "center" }),
                   }}
-                  className="flex-1 text-sm text-black"
+                  className="flex-1 text-[14px] text-black"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}

@@ -227,17 +227,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         } else if (!isValidGenericMobile(cleanedCompanyPhone)) {
           newErrors.companyNumber = "Invalid number";
         }
-
-        const cleanedPersonalPhone = phoneNumber.trim().replace(/^0+/, "");
-        if (
-          cleanedPersonalPhone &&
-          cleanedCompanyPhone &&
-          phoneCode === companyPhoneCode &&
-          cleanedPersonalPhone === cleanedCompanyPhone
-        ) {
-          newErrors.companyNumber =
-            "Company number and personal mobile number cannot be the same";
-        }
       }
     }
 
@@ -528,7 +517,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         extraScrollHeight={0}
         extraHeight={0}
         keyboardOpeningTime={0}
-        contentContainerStyle={{ paddingBottom: 60 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
       >
         <View className="gap-y-4 flex-1">
           {/* Title & First Name Row */}
@@ -538,6 +527,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <TouchableOpacity
                 onPress={() => setIsTitleModalOpen(true)}
                 activeOpacity={0.8}
+                style={{ height: 50 }}
                 className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
                   errors.title
                     ? "border-red-500 bg-red-50/10"
@@ -561,6 +551,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             {/* First Name Input */}
             <View className="flex-1">
               <View
+                style={{ height: 50 }}
                 className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                   errors.firstName
                     ? "border-red-500 bg-red-50/10"
@@ -579,7 +570,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   }}
                   autoCorrect={false}
                   maxLength={50}
-                  className="flex-1 text-sm text-black p-0"
+                  style={{
+                    flex: 1,
+                    paddingTop: 0,
+                    paddingBottom: 0,
+                    paddingVertical: 0,
+                    fontSize: 14,
+                    color: "#000000",
+                    ...(Platform.OS === "android"
+                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      : { alignSelf: "center" }),
+                  }}
+                  className="flex-1 text-[14px] text-black"
                 />
               </View>
               {errors.firstName && (
@@ -596,6 +598,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Last Name Input */}
           <View>
             <View
+              style={{ height: 50 }}
               className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                 errors.lastName
                   ? "border-red-500 bg-red-50/10"
@@ -614,7 +617,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 }}
                 autoCorrect={false}
                 maxLength={50}
-                className="flex-1 text-sm text-black p-0"
+                style={{
+                  flex: 1,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  paddingVertical: 0,
+                  fontSize: 14,
+                  color: "#000000",
+                  ...(Platform.OS === "android"
+                    ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                    : { alignSelf: "center" }),
+                }}
+                className="flex-1 text-[14px] text-black"
               />
             </View>
             {errors.lastName && (
@@ -633,6 +647,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 <TouchableOpacity
                   onPress={() => setIsPhoneCodeModalOpen(true)}
                   activeOpacity={0.8}
+                  style={{ height: 50 }}
                   className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
                     errors.phoneCode
                       ? "border-red-500 bg-red-50/10"
@@ -675,6 +690,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {/* Mobile Number Input */}
               <View className="flex-1">
                 <View
+                  style={{ height: 50 }}
                   className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                     errors.phoneNumber
                       ? "border-red-500 bg-red-50/10"
@@ -693,7 +709,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         setErrors((prev) => ({ ...prev, phoneNumber: "" }));
                     }}
                     maxLength={phoneCode === "+94" ? 9 : 10}
-                    className="flex-1 text-sm text-black p-0"
+                    style={{
+                      flex: 1,
+                      paddingTop: 0,
+                      paddingBottom: 0,
+                      paddingVertical: 0,
+                      fontSize: 14,
+                      color: "#000000",
+                      ...(Platform.OS === "android"
+                        ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                        : { alignSelf: "center" }),
+                    }}
+                    className="flex-1 text-[14px] text-black"
                   />
                 </View>
                 {errors.phoneNumber && (
@@ -722,6 +749,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Email Address Input */}
           <View>
             <View
+              style={{ height: 50 }}
               className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                 errors.email
                   ? "border-red-500 bg-red-50/10"
@@ -742,7 +770,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 }}
                 textContentType="emailAddress"
                 autoComplete="email"
-                className="flex-1 text-sm text-black p-0"
+                style={{
+                  flex: 1,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  paddingVertical: 0,
+                  fontSize: 14,
+                  color: "#000000",
+                  ...(Platform.OS === "android"
+                    ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                    : { alignSelf: "center" }),
+                }}
+                className="flex-1 text-[14px] text-black"
               />
             </View>
             {errors.email && (
@@ -756,6 +795,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* NIC Number Input */}
           <View>
             <View
+              style={{ height: 50 }}
               className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                 errors.nic
                   ? "border-red-500 bg-red-50/10"
@@ -774,7 +814,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   if (errors.nic) setErrors((prev) => ({ ...prev, nic: "" }));
                 }}
                 maxLength={12}
-                className="flex-1 text-sm text-black p-0"
+                style={{
+                  flex: 1,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  paddingVertical: 0,
+                  fontSize: 14,
+                  color: "#000000",
+                  ...(Platform.OS === "android"
+                    ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                    : { alignSelf: "center" }),
+                }}
+                className="flex-1 text-[14px] text-black"
               />
             </View>
             {errors.nic && (
@@ -791,6 +842,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {/* Company Name */}
               <View>
                 <View
+                  style={{ height: 50 }}
                   className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                     errors.companyName
                       ? "border-red-500 bg-red-50/10"
@@ -807,7 +859,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                       if (errors.companyName)
                         setErrors((prev) => ({ ...prev, companyName: "" }));
                     }}
-                    className="flex-1 text-sm text-black p-0"
+                    style={{
+                      flex: 1,
+                      paddingTop: 0,
+                      paddingBottom: 0,
+                      paddingVertical: 0,
+                      fontSize: 14,
+                      color: "#000000",
+                      ...(Platform.OS === "android"
+                        ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                        : { alignSelf: "center" }),
+                    }}
+                    className="flex-1 text-[14px] text-black"
                   />
                 </View>
                 {errors.companyName && (
@@ -828,6 +891,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     <TouchableOpacity
                       onPress={() => setIsCompanyPhoneCodeModalOpen(true)}
                       activeOpacity={0.8}
+                      style={{ height: 50 }}
                       className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
                         errors.companyPhoneCode
                           ? "border-red-500 bg-red-50/10"
@@ -877,6 +941,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   {/* Company Number Input */}
                   <View className="flex-1">
                     <View
+                      style={{ height: 50 }}
                       className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                         errors.companyNumber
                           ? "border-red-500 bg-red-50/10"
@@ -898,7 +963,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                             }));
                         }}
                         maxLength={10}
-                        className="flex-1 text-sm text-black p-0"
+                        style={{
+                          flex: 1,
+                          paddingTop: 0,
+                          paddingBottom: 0,
+                          paddingVertical: 0,
+                          fontSize: 14,
+                          color: "#000000",
+                          ...(Platform.OS === "android"
+                            ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                            : { alignSelf: "center" }),
+                        }}
+                        className="flex-1 text-[14px] text-black"
                       />
                     </View>
                     {errors.companyNumber && (
@@ -933,6 +1009,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Password Input */}
           <View>
             <View
+              style={{ height: 50 }}
               className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                 errors.password
                   ? "border-red-500 bg-red-50/10"
@@ -953,7 +1030,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 textContentType="oneTimeCode"
                 autoComplete="off"
                 importantForAutofill="no"
-                className="flex-1 text-sm text-black p-0"
+                style={{
+                  flex: 1,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  paddingVertical: 0,
+                  fontSize: 14,
+                  color: "#000000",
+                  ...(Platform.OS === "android"
+                    ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                    : { alignSelf: "center" }),
+                }}
+                className="flex-1 text-[14px] text-black"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <FontAwesome5
@@ -990,6 +1078,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* Confirm Password Input */}
           <View>
             <View
+              style={{ height: 50 }}
               className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
                 errors.confirmPassword
                   ? "border-red-500 bg-red-50/10"
@@ -1010,7 +1099,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 textContentType="oneTimeCode"
                 autoComplete="off"
                 importantForAutofill="no"
-                className="flex-1 text-sm text-black p-0"
+                style={{
+                  flex: 1,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  paddingVertical: 0,
+                  fontSize: 14,
+                  color: "#000000",
+                  ...(Platform.OS === "android"
+                    ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                    : { alignSelf: "center" }),
+                }}
+                className="flex-1 text-[14px] text-black"
               />
               <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -1057,7 +1157,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     Terms & Conditions
                   </Text>{" "}
                   and{" "}
-                  <Text className="font-bold underline">Privacy Policy</Text>.
+                  <Text
+                    className="font-bold underline"
+                    onPress={() => navigation.navigate("PrivacyPolicy")}
+                  >
+                    Privacy Policy
+                  </Text>
+                  .
                 </Text>
               </TouchableOpacity>
               {errors.agreeToTerms && (
@@ -1070,56 +1176,57 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               )}
             </View>
           )}
+
+          {/* Action Button Section */}
+          <View className="pb-0 pt-2">
+            {/* Sign Up Button */}
+            <TouchableOpacity
+              onPress={handleSignUp}
+              disabled={isLoading}
+              activeOpacity={0.8}
+              className="bg-black rounded-full items-center justify-center mt-4 shadow-sm"
+              style={{
+                height: 50,
+                shadowColor: "#000",
+                shadowOffset: {
+                  width: 0,
+                  height: 3,
+                },
+                shadowOpacity: 0.18,
+                shadowRadius: 5,
+                elevation: 5,
+              }}
+            >
+              <Text className="text-white text-base font-bold">
+                {isLoading ? "Signing up..." : "Sign up"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Sign In Redirect Link */}
+            <View className="flex-row items-center justify-center mt-3">
+              <Text className="text-[14px] text-gray-500">
+                Already have an account?{" "}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate("Login")}
+              >
+                <Text className="text-[12px] font-bold text-[#0085FF] underline">
+                  Sign in
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Bottom Line Image decoration */}
+          <View className="h-14" style={{ marginLeft: -16, marginRight: -16 }}>
+            <Image
+              source={require("@/assets/images/auth/bottom-line.webp")}
+              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+            />
+          </View>
         </View>
       </KeyboardAwareScrollView>
-
-      {/* Action Button Section */}
-      <View className="px-4 pb-0 pt-2 bg-white">
-        {/* Sign Up Button */}
-        <TouchableOpacity
-          onPress={handleSignUp}
-          disabled={isLoading}
-          activeOpacity={0.8}
-          className="bg-black rounded-full items-center justify-center mt-4 shadow-sm h-[50px]"
-          style={{
-            shadowColor: "#000",
-            shadowOffset: {
-              width: 0,
-              height: 3,
-            },
-            shadowOpacity: 0.18,
-            shadowRadius: 5,
-            elevation: 5,
-          }}
-        >
-          <Text className="text-white text-base font-bold">
-            {isLoading ? "Signing up..." : "Sign up"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Sign In Redirect Link */}
-        <View className="flex-row items-center justify-center mt-3">
-          <Text className="text-[14px] text-gray-500">
-            Already have an account?{" "}
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate("Login")}
-          >
-            <Text className="text-[12px] font-bold text-[#0085FF] underline">
-              Sign in
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Bottom Line Image decoration */}
-      <View className="h-14" style={{ marginLeft: -16, marginRight: -16 }}>
-        <Image
-          source={require("@/assets/images/auth/bottom-line.webp")}
-          style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-        />
-      </View>
 
       {/* Title GlobalSearchModal */}
       <GlobalSearchModal

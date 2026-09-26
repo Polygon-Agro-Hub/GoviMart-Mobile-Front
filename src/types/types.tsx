@@ -84,6 +84,7 @@ export type RootStackParamList = {
   ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
+  PrivacyPolicy: undefined;
   Home: undefined;
   SignUpOTP: {
     phoneCode: string;
