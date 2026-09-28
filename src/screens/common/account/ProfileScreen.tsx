@@ -35,6 +35,7 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
+  const isWholesale = (user?.buyerType || "").toLowerCase() === "wholesale";
 
   const dispatch = useDispatch();
 
@@ -386,21 +387,22 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             }}
           />
 
-          {/* Package Preferences */}
-
-          <ProfileMenuItem
-            icon="thumbs-up"
-            title="My Package Preferences"
-            onPress={() => {
-              navigation.navigate("ExcludeListSummery", {
-                customerId: user?.id || 1002,
-                name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || undefined,
-                title: user?.title || undefined,
-                phoneNumber: user?.phoneNumber || undefined,
-                cusId: String(user?.id || 1002),
-              });
-            }}
-          />
+          {/* Package Preferences - Retail Only */}
+          {!isWholesale && (
+            <ProfileMenuItem
+              icon="thumbs-up"
+              title="My Package Preferences"
+              onPress={() => {
+                navigation.navigate("ExcludeListSummery", {
+                  customerId: user?.id || 1002,
+                  name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || undefined,
+                  title: user?.title || undefined,
+                  phoneNumber: user?.phoneNumber || undefined,
+                  cusId: String(user?.id || 1002),
+                });
+              }}
+            />
+          )}
 
           {/* Saved Addresses */}
 
