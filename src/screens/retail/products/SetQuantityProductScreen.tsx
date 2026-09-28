@@ -104,21 +104,21 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   // Payment / delivery method — drives which "Please Note" copy is shown.
   // Forwarded from ReviewPackage -> ReplaceProduct -> here via route.params.
   // ---------------------------------------------------------------------
-  const paymentMethod: string = String(
-    route.params?.paymentMethod || "",
-  ).toLowerCase();
-  const deliveryMethod: string = String(
-    route.params?.deliveryMethod || "",
-  ).toLowerCase();
+  // Delivery method -> orders.delivaryMethod       ("Pickup" / "Delivery")
+  // Payment method  -> processorders.paymentMethod ("Cash" / "Card")
+  const paymentMethod: string = String(route.params?.paymentMethod || "")
+    .trim()
+    .toLowerCase();
+  const deliveryMethod: string = String(route.params?.deliveryMethod || "")
+    .trim()
+    .toLowerCase();
 
-  const isCashOnDelivery =
-    paymentMethod === "cash" || paymentMethod === "cod";
-  const isPickup = deliveryMethod === "pickup";
-
-  // Show the "you'll owe/be refunded at the end" note when the order is
-  // Cash on Delivery OR being picked up (i.e. money hasn't been settled yet).
-  const showConditionalNote = isCashOnDelivery || isPickup;
-  const deliveryWord = isPickup ? "pickup" : "delivery";
+  // "pickup" (or "Pickup" from the DB) -> pickup. "home" / "delivery" -> delivery.
+  const isPickup = deliveryMethod.includes("pickup");
+  const isCard =
+    paymentMethod.includes("card") ||
+    paymentMethod.includes("payhere") ||
+    paymentMethod.includes("online");
 
   const fromProduct: ProductInfo = useMemo(() => {
     // The package item quantity is always stored in kg, so it is used as-is.
@@ -255,6 +255,52 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
+  // ---------------------------------------------------------------------
+  // "Please Note" text
+  //
+  //  Pickup  (any payment)       → pay upon pickup   (reduced / increased)
+  //  Delivery + Card             → already paid      (credited / additional)
+  //  Delivery + Cash (or other)  → pay upon delivery (reduced / increased)
+  // ---------------------------------------------------------------------
+  const amountText = (
+    <Text className="font-bold text-black">
+      Rs. {formatPrice(Math.abs(balance))}
+    </Text>
+  );
+
+  const noteContent = isPickup ? (
+    // Pickup (Cash or Card) — customer collects at pickup centre; pay on pickup
+    <>
+      The total amount you need to pay upon pickup will be{" "}
+      <Text className="font-bold text-black">
+        {isCredit ? "reduced" : "increased"}
+      </Text>{" "}
+      by {amountText} at the end of this process.
+    </>
+  ) : isCard ? (
+    // Delivery + Card — order already paid online
+    isCredit ? (
+      <>
+        You have already paid for this order, so the remaining balance of{" "}
+        {amountText} will be credited to your account.
+      </>
+    ) : (
+      <>
+        You have already paid for this order. The additional {amountText} will
+        need to be paid at the end of this process.
+      </>
+    )
+  ) : (
+    // Delivery + Cash (or any other non-card payment)
+    <>
+      The total amount you need to pay upon delivery will be{" "}
+      <Text className="font-bold text-black">
+        {isCredit ? "reduced" : "increased"}
+      </Text>{" "}
+      by {amountText} at the end of this process.
+    </>
+  );
+
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
@@ -349,28 +395,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               Please Note :
             </Text>
             <Text className="text-[13px] text-[#6B6B6B] leading-5">
-              {showConditionalNote ? (
-                <>
-                  The total amount you need to pay upon {deliveryWord} will be{" "}
-                  <Text className="font-bold text-black">
-                    {isCredit ? "reduced" : "increased"}
-                  </Text>{" "}
-                  by{" "}
-                  <Text className="font-bold text-black">
-                    Rs. {formatPrice(Math.abs(balance))}
-                  </Text>{" "}
-                  at the end of this process.
-                </>
-              ) : (
-                <>
-                  You have already paid for this order, so the remaining
-                  balance of{" "}
-                  <Text className="font-bold text-black">
-                    Rs. {formatPrice(Math.abs(balance))}
-                  </Text>{" "}
-                  will be credited to your account.
-                </>
-              )}
+              {noteContent}
             </Text>
           </View>
         </View>

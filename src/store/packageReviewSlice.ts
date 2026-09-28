@@ -128,6 +128,7 @@ export const packageReviewSlice = createSlice({
         moneyPaid?: number;
         creditPaid?: number;
         paymentMethod?: string;
+        deliveryMethod?: string;
         isPaid?: boolean;
         processOrderAmount?: number;
         packagesMeta: PackageMeta[];
@@ -160,6 +161,9 @@ export const packageReviewSlice = createSlice({
       }
       if (typeof payload.paymentMethod === "string") {
         state.paymentMethod = payload.paymentMethod;
+      }
+      if (typeof payload.deliveryMethod === "string") {
+        state.deliveryMethod = payload.deliveryMethod;
       }
       if (typeof payload.isPaid === "boolean") {
         state.isPaid = payload.isPaid;

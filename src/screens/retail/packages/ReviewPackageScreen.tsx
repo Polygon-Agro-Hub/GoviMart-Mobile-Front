@@ -158,7 +158,7 @@ const num = (v: any): number => {
 const formatWeightDisplay = (
   display?: string,
   amount?: number,
-  unit?: string
+  unit?: string,
 ): string => {
   if (amount != null && !isNaN(Number(amount)) && unit) {
     return `${parseFloat(String(amount))} ${unit.toLowerCase()}`;
@@ -286,6 +286,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     moneyPaid,
     creditPaid,
     paymentMethod,
+    deliveryMethod,
     isPaid,
     processOrderAmount,
     processOrderId,
@@ -320,6 +321,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [disabledAlacartProductIds, setDisabledAlacartProductIds] = useState<
     Set<string>
   >(new Set());
+
+  const [originalAlacartTotal, setOriginalAlacartTotal] = useState<number>(0);
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -417,338 +420,357 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   }, [buyerType, effectiveOrderId, navigation]);
 
   // Fetch review data from backend
-  const fetchReviewData = useCallback(
-    async (force = false) => {
-      if (buyerType && buyerType.toLowerCase() !== "retail") {
-        return;
-      }
-      dispatch(setLoadingReview(true));
-      try {
-        const res = await orderService.getPackageReview(effectiveOrderId);
-        if (res.data?.status && res.data?.data) {
-          const { orderInfo, packages, additionalItems, packingSlots } =
-            res.data.data;
+ // Fetch review data from backend
+const fetchReviewData = useCallback(
+  async (force = false) => {
+    if (buyerType && buyerType.toLowerCase() !== "retail") {
+      return;
+    }
+    dispatch(setLoadingReview(true));
+    try {
+      const res = await orderService.getPackageReview(effectiveOrderId);
+      if (res.data?.status && res.data?.data) {
+        const { orderInfo, packages, additionalItems, packingSlots } =
+          res.data.data;
 
-          if (
-            orderInfo?.status &&
-            orderInfo.status.toLowerCase() === "cancelled"
-          ) {
-            dispatch(setLoadingReview(false));
-            Alert.alert(
-              "Cannot Proceed!",
-              "You have already cancelled this order. You cannot proceed to the payment.",
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (effectiveOrderId) {
-                      navigation.replace("OrderDetails", {
-                        orderId: String(effectiveOrderId),
-                      });
-                    } else if (navigation.canGoBack()) {
-                      navigation.goBack();
-                    } else {
-                      navigation.replace("Home");
-                    }
-                  },
+        if (
+          orderInfo?.status &&
+          orderInfo.status.toLowerCase() === "cancelled"
+        ) {
+          dispatch(setLoadingReview(false));
+          Alert.alert(
+            "Cannot Proceed!",
+            "You have already cancelled this order. You cannot proceed to the payment.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  if (effectiveOrderId) {
+                    navigation.replace("OrderDetails", {
+                      orderId: String(effectiveOrderId),
+                    });
+                  } else if (navigation.canGoBack()) {
+                    navigation.goBack();
+                  } else {
+                    navigation.replace("Home");
+                  }
                 },
-              ],
-              { cancelable: false },
+              },
+            ],
+            { cancelable: false },
+          );
+          return;
+        }
+
+        let resolvedProcessOrderId = null;
+        let resolvedInvNo = "INV-2660000";
+        let resolvedPaidAmount = 0;
+        let resolvedMoneyPaid = 0;
+        let resolvedCreditPaid = 0;
+        let resolvedPaymentMethod = "";
+        // delivaryMethod is the DB column name (typo in schema — kept as-is for compatibility)
+        let resolvedDeliveryMethod = "";
+        let resolvedIsPaid = false;
+        let resolvedProcessOrderAmount = 0;
+        let resolvedDeliveryCharge = 0;
+        let resolvedDateStr = "14th August";
+
+        if (orderInfo) {
+          resolvedProcessOrderId =
+            orderInfo.processOrderId || orderInfo.actualOrderId;
+          if (orderInfo.invNo) resolvedInvNo = orderInfo.invNo;
+          if (orderInfo.amount) {
+            resolvedPaidAmount = parseFloat(orderInfo.amount) || 0;
+            resolvedProcessOrderAmount = parseFloat(orderInfo.amount) || 0;
+          }
+          if (orderInfo.deliveryCharge) {
+            resolvedDeliveryCharge = parseFloat(orderInfo.deliveryCharge) || 0;
+          }
+          if (orderInfo.moneyPaid) {
+            resolvedMoneyPaid = parseFloat(orderInfo.moneyPaid) || 0;
+          }
+          if (orderInfo.creditPaid) {
+            resolvedCreditPaid = parseFloat(orderInfo.creditPaid) || 0;
+          }
+          if (orderInfo.paymentMethod) {
+            resolvedPaymentMethod = orderInfo.paymentMethod;
+          }
+          // DB column is "delivaryMethod" (typo in the DB schema — intentionally kept).
+          if (orderInfo.delivaryMethod) {
+            resolvedDeliveryMethod = String(orderInfo.delivaryMethod).trim();
+          }
+          resolvedIsPaid =
+            parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
+          if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
+            const d = new Date(
+              orderInfo.sheduleDate || orderInfo.processScheduleDate,
             );
-            return;
-          }
-
-          let resolvedProcessOrderId = null;
-          let resolvedInvNo = "INV-2660000";
-          let resolvedPaidAmount = 0;
-          let resolvedMoneyPaid = 0;
-          let resolvedCreditPaid = 0;
-          let resolvedPaymentMethod = "";
-          let resolvedIsPaid = false;
-          let resolvedProcessOrderAmount = 0;
-          let resolvedDeliveryCharge = 0;
-          let resolvedDateStr = "14th August";
-
-          if (orderInfo) {
-            resolvedProcessOrderId =
-              orderInfo.processOrderId || orderInfo.actualOrderId;
-            if (orderInfo.invNo) resolvedInvNo = orderInfo.invNo;
-            if (orderInfo.amount) {
-              resolvedPaidAmount = parseFloat(orderInfo.amount) || 0;
-              resolvedProcessOrderAmount = parseFloat(orderInfo.amount) || 0;
-            }
-            if (orderInfo.deliveryCharge) {
-              resolvedDeliveryCharge =
-                parseFloat(orderInfo.deliveryCharge) || 0;
-            }
-            if (orderInfo.moneyPaid) {
-              resolvedMoneyPaid = parseFloat(orderInfo.moneyPaid) || 0;
-            }
-            if (orderInfo.creditPaid) {
-              resolvedCreditPaid = parseFloat(orderInfo.creditPaid) || 0;
-            }
-            if (orderInfo.paymentMethod) {
-              resolvedPaymentMethod = orderInfo.paymentMethod;
-            }
-            resolvedIsPaid =
-              parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
-            if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
-              const d = new Date(
-                orderInfo.sheduleDate || orderInfo.processScheduleDate,
-              );
-              if (!isNaN(d.getTime())) {
-                resolvedDateStr = d.toLocaleDateString("en-US", {
-                  day: "numeric",
-                  month: "long",
-                });
-              }
-            }
-          }
-
-          const loadedAlacart: Record<string | number, AlacartSelectedProduct> =
-            {};
-          if (Array.isArray(additionalItems) && additionalItems.length > 0) {
-            additionalItems.forEach((item: any) => {
-              const prodId = item.productId || item.additionalItemId;
-              const basePrice = parseFloat(item.normalPrice || item.price || 0);
-              const price = parseFloat(item.price || item.normalPrice || 0);
-              const dbUnitType = (item.unitType || "g").toLowerCase();
-              const unit = (item.unit?.toLowerCase() === "g"
-                ? "g"
-                : dbUnitType === "g"
-                  ? "g"
-                  : "kg") as "kg" | "g";
-              const rawQty = item.qty || item.quantity || item.weight || 1;
-              const parsedAmount = parseFloat(String(rawQty));
-              const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
-
-              const rawChangeBy =
-                item.changeby != null &&
-                String(item.changeby).trim() !== "" &&
-                parseFloat(String(item.changeby)) > 0
-                  ? parseFloat(String(item.changeby))
-                  : item.startValue
-                    ? parseFloat(String(item.startValue))
-                    : 0.5;
-
-              const step =
-                unit === "g"
-                  ? dbUnitType === "kg" || rawChangeBy <= 10
-                    ? Math.round(rawChangeBy * 1000)
-                    : Math.round(rawChangeBy)
-                  : dbUnitType === "kg" || rawChangeBy <= 10
-                    ? parseFloat(rawChangeBy.toFixed(3))
-                    : parseFloat((rawChangeBy / 1000).toFixed(3));
-
-              const rawStart =
-                parseFloat(item.startValue) > 0
-                  ? parseFloat(item.startValue)
-                  : rawChangeBy;
-              const minQuantity =
-                unit === "g"
-                  ? dbUnitType === "kg" || rawStart <= 10
-                    ? Math.round(rawStart * 1000)
-                    : Math.round(rawStart)
-                  : dbUnitType === "kg" || rawStart <= 10
-                    ? parseFloat(rawStart.toFixed(3))
-                    : parseFloat((rawStart / 1000).toFixed(3));
-
-              const itemKey = `prev-${item.id || prodId}`;
-              loadedAlacart[itemKey] = {
-                id: itemKey,
-                additionalItemId: item.id ? Number(item.id) : undefined,
-                productId: prodId,
-                displayName: item.productName || item.cropNameEnglish || "Item",
-                image: item.productImage,
-                price: price,
-                basePrice: basePrice,
-                weightDisplay: `${amount} ${unit}`,
-                unit: unit,
-                amount: amount,
-                quantity: 1,
-                isAddedNow: false,
-                step: step,
-                minQuantity: minQuantity,
-                changeby: item.changeby,
-                startValue: item.startValue,
-                unitType: item.unitType,
-              };
-            });
-          }
-
-          const newMeta: PackageMeta[] = [];
-          const newTemplates: Record<string, ReviewProduct[]> = {};
-          const newProducts: Record<string, ReviewProduct[]> = {};
-          const dbIdMap: Record<string, number> = {};
-          let anyLocked = false;
-
-          if (Array.isArray(packages) && packages.length > 0) {
-            packages.forEach((pkg: any) => {
-              const pkgKey = String(pkg.packageId || pkg.orderPackageId);
-              dbIdMap[pkgKey] = pkg.orderPackageId;
-              if (pkg.isLock === 1) anyLocked = true;
-
-              // Use DB values exactly (no `|| 1000` / `|| 50` fallbacks).
-              newMeta.push({
-                id: pkgKey,
-                name: pkg.packageName || "Custom Package",
-                icon: pkg.packageName?.toLowerCase().includes("fruit")
-                  ? "🍇"
-                  : "🥗",
-                image: pkg.packageImage,
-                qty: parseInt(pkg.qty) || 1,
-                unitPrice: num(pkg.unitPrice), // marketplacepackages.productPrice
-                serviceFee: num(pkg.serviceFee), // marketplacepackages.serviceFee
-                packingFee: num(pkg.packingFee), // marketplacepackages.packingFee
-                discountPerUnit: num(pkg.discountPerUnit), // definepackage.price - productPrice
+            if (!isNaN(d.getTime())) {
+              resolvedDateStr = d.toLocaleDateString("en-US", {
+                day: "numeric",
+                month: "long",
               });
+            }
+          }
+        }
 
-              // Map active items
-              const activeItems: ReviewProduct[] = (pkg.items || []).map(
-                (i: any, itemIdx: number) => {
-                  const itemStep = parseFloat(i.step || i.changeby || 0.5);
-                  const itemMin = parseFloat(
-                    i.minQuantity || i.startValue || i.qty || itemStep,
-                  );
-                  return {
-                    id: String(
-                      i.productId || i.itemId || `${pkgKey}-${itemIdx}`,
-                    ),
-                    itemId: i.itemId ? Number(i.itemId) : undefined,
-                    productId: i.productId ? Number(i.productId) : undefined,
-                    category:
-                      i.categoryName || i.productTypeName || "Package Item",
-                    name: i.productName || "Product",
-                    icon: "🥗",
-                    image: i.productImage,
-                    // PER-KG price. For definepackageitems fallback rows the backend
-                    // sends discountedPrice = null and baseUnitPrice = definePrice / qty.
-                    price: parseFloat(
-                      i.discountedPrice || i.baseUnitPrice || i.price || 0,
-                    ),
-                    // definepackageitems.qty (fallback) or orderpackageitems.qty
-                    quantity: parseFloat(i.qty ?? 1),
-                    minQuantity: itemMin,
-                    // orderpackageitems.qty is always stored in kg — never use 'g' here
-                    unit: "kg" as "kg" | "g",
-                    step: itemStep,
-                    productType: i.productType,
-                    productTypeId: i.productType || i.productTypeId,
-                    productTypeName: i.productTypeName,
-                    isReplaced: !!i.isReplaced,
-                    excludedWarning: i.excludedWarning,
-                    originalProduct: i.originalProduct
-                      ? {
-                          id: String(i.originalProduct.id),
-                          itemId: i.originalProduct.itemId
-                            ? Number(i.originalProduct.itemId)
-                            : i.itemId
-                              ? Number(i.itemId)
-                              : undefined,
-                          productId: i.originalProduct.productId
-                            ? Number(i.originalProduct.productId)
-                            : i.productId
-                              ? Number(i.productId)
-                              : undefined,
-                          category:
-                            i.originalProduct.category || "Original Item",
-                          name: i.originalProduct.name,
-                          icon: "🥗",
-                          image: i.originalProduct.image,
-                          price: parseFloat(i.originalProduct.price || 0),
-                          quantity: parseFloat(
-                            i.originalProduct.quantity ?? 1,
-                          ),
-                          unit: "kg" as "kg" | "g",
-                          step: parseFloat(
-                            i.originalProduct.step ||
-                              i.originalProduct.changeby ||
-                              itemStep,
-                          ),
-                          productType: i.originalProduct.productType,
-                          productTypeId: i.originalProduct.productType,
-                        }
-                      : undefined,
-                  };
-                },
-              );
+        const loadedAlacart: Record<string | number, AlacartSelectedProduct> =
+          {};
+        if (Array.isArray(additionalItems) && additionalItems.length > 0) {
+          additionalItems.forEach((item: any) => {
+            const prodId = item.productId || item.additionalItemId;
+           // price = line total for the ordered qty (from orderadditionalitems)
+const price = parseFloat(item.price || item.normalPrice || 0);
+// per-kg marketplace rates, used when the user changes qty/unit
+const perKgNormal = parseFloat(item.perKgNormalPrice || 0);
+const perKgDiscounted = parseFloat(item.perKgDiscountedPrice || 0);
+const perKgPrice =
+  perKgDiscounted > 0 ? perKgDiscounted : perKgNormal;
+const basePrice = perKgNormal || parseFloat(item.normalPrice || item.price || 0);
+            const dbUnitType = (item.unitType || "g").toLowerCase();
+            const unit = (item.unit?.toLowerCase() === "g"
+              ? "g"
+              : dbUnitType === "g"
+                ? "g"
+                : "kg") as "kg" | "g";
+            const rawQty = item.qty || item.quantity || item.weight || 1;
+            const parsedAmount = parseFloat(String(rawQty));
+            const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
 
-              // Map baseline templates
-              const baseItems: ReviewProduct[] = (
-                pkg.baselineProducts || []
-              ).map((b: any, bIdx: number) => {
-                const baseStep = parseFloat(b.step || b.changeby || 0.5);
-                const baseMin = parseFloat(
-                  b.minQuantity || b.startValue || b.qty || baseStep,
+            const rawChangeBy =
+              item.changeby != null &&
+              String(item.changeby).trim() !== "" &&
+              parseFloat(String(item.changeby)) > 0
+                ? parseFloat(String(item.changeby))
+                : item.startValue
+                  ? parseFloat(String(item.startValue))
+                  : 0.5;
+
+            const step =
+              unit === "g"
+                ? dbUnitType === "kg" || rawChangeBy <= 10
+                  ? Math.round(rawChangeBy * 1000)
+                  : Math.round(rawChangeBy)
+                : dbUnitType === "kg" || rawChangeBy <= 10
+                  ? parseFloat(rawChangeBy.toFixed(3))
+                  : parseFloat((rawChangeBy / 1000).toFixed(3));
+
+            const rawStart =
+              parseFloat(item.startValue) > 0
+                ? parseFloat(item.startValue)
+                : rawChangeBy;
+            const minQuantity =
+              unit === "g"
+                ? dbUnitType === "kg" || rawStart <= 10
+                  ? Math.round(rawStart * 1000)
+                  : Math.round(rawStart)
+                : dbUnitType === "kg" || rawStart <= 10
+                  ? parseFloat(rawStart.toFixed(3))
+                  : parseFloat((rawStart / 1000).toFixed(3));
+
+            const itemKey = `prev-${item.id || prodId}`;
+            loadedAlacart[itemKey] = {
+              id: itemKey,
+              additionalItemId: item.id ? Number(item.id) : undefined,
+              productId: prodId,
+              displayName: item.productName || item.cropNameEnglish || "Item",
+              image: item.productImage,
+              price: price,
+              basePrice: basePrice,
+              weightDisplay: `${amount} ${unit}`,
+              unit: unit,
+              amount: amount,
+              quantity: 1,
+              isAddedNow: false,
+              step: step,
+              minQuantity: minQuantity,
+              changeby: item.changeby,
+              startValue: item.startValue,
+              unitType: item.unitType,
+            };
+          });
+        }
+
+        // NEW: remember what the customer ORIGINALLY paid for ala carte items,
+        // so "Pay Additional" only counts real changes.
+        setOriginalAlacartTotal(
+          Object.values(loadedAlacart).reduce(
+            (sum, item) => sum + item.price * item.quantity,
+            0,
+          ),
+        );
+
+        const newMeta: PackageMeta[] = [];
+        const newTemplates: Record<string, ReviewProduct[]> = {};
+        const newProducts: Record<string, ReviewProduct[]> = {};
+        const dbIdMap: Record<string, number> = {};
+        let anyLocked = false;
+
+        if (Array.isArray(packages) && packages.length > 0) {
+          packages.forEach((pkg: any) => {
+            const pkgKey = String(pkg.packageId || pkg.orderPackageId);
+            dbIdMap[pkgKey] = pkg.orderPackageId;
+            if (pkg.isLock === 1) anyLocked = true;
+
+            // Use DB values exactly (no `|| 1000` / `|| 50` fallbacks).
+            newMeta.push({
+              id: pkgKey,
+              name: pkg.packageName || "Custom Package",
+              icon: pkg.packageName?.toLowerCase().includes("fruit")
+                ? "🍇"
+                : "🥗",
+              image: pkg.packageImage,
+              qty: parseInt(pkg.qty) || 1,
+              unitPrice: num(pkg.unitPrice), // marketplacepackages.productPrice
+              serviceFee: num(pkg.serviceFee), // marketplacepackages.serviceFee
+              packingFee: num(pkg.packingFee), // marketplacepackages.packingFee
+              discountPerUnit: num(pkg.discountPerUnit), // definepackage.price - productPrice
+            });
+
+            // Map active items
+            const activeItems: ReviewProduct[] = (pkg.items || []).map(
+              (i: any, itemIdx: number) => {
+                const itemStep = parseFloat(i.step || i.changeby || 0.5);
+                const itemMin = parseFloat(
+                  i.minQuantity || i.startValue || i.qty || itemStep,
                 );
                 return {
                   id: String(
-                    b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
+                    i.productId || i.itemId || `${pkgKey}-${itemIdx}`,
                   ),
-                  itemId:
-                    b.itemId || b.baselineId
-                      ? Number(b.itemId || b.baselineId)
-                      : undefined,
-                  productId: b.productId ? Number(b.productId) : undefined,
+                  itemId: i.itemId ? Number(i.itemId) : undefined,
+                  productId: i.productId ? Number(i.productId) : undefined,
                   category:
-                    b.categoryName || b.productTypeName || "Baseline Item",
-                  name: b.productName || "Product",
+                    i.categoryName || i.productTypeName || "Package Item",
+                  name: i.productName || "Product",
                   icon: "🥗",
-                  image: b.productImage,
+                  image: i.productImage,
+                  // PER-KG price. For definepackageitems fallback rows the backend
+                  // sends discountedPrice = null and baseUnitPrice = definePrice / qty.
                   price: parseFloat(
-                    b.discountedPrice || b.baseUnitPrice || b.price || 0,
+                    i.discountedPrice || i.baseUnitPrice || i.price || 0,
                   ),
-                  quantity: parseFloat(b.qty ?? 1),
-                  minQuantity: baseMin,
+                  // definepackageitems.qty (fallback) or orderpackageitems.qty
+                  quantity: parseFloat(i.qty ?? 1),
+                  minQuantity: itemMin,
+                  // orderpackageitems.qty is always stored in kg — never use 'g' here
                   unit: "kg" as "kg" | "g",
-                  step: baseStep,
-                  productType: b.productType,
-                  productTypeId: b.productType || b.productTypeId,
-                  productTypeName: b.productTypeName,
+                  step: itemStep,
+                  productType: i.productType,
+                  productTypeId: i.productType || i.productTypeId,
+                  productTypeName: i.productTypeName,
+                  isReplaced: !!i.isReplaced,
+                  excludedWarning: i.excludedWarning,
+                  originalProduct: i.originalProduct
+                    ? {
+                        id: String(i.originalProduct.id),
+                        itemId: i.originalProduct.itemId
+                          ? Number(i.originalProduct.itemId)
+                          : i.itemId
+                            ? Number(i.itemId)
+                            : undefined,
+                        productId: i.originalProduct.productId
+                          ? Number(i.originalProduct.productId)
+                          : i.productId
+                            ? Number(i.productId)
+                            : undefined,
+                        category: i.originalProduct.category || "Original Item",
+                        name: i.originalProduct.name,
+                        icon: "🥗",
+                        image: i.originalProduct.image,
+                        price: parseFloat(i.originalProduct.price || 0),
+                        quantity: parseFloat(i.originalProduct.quantity ?? 1),
+                        unit: "kg" as "kg" | "g",
+                        step: parseFloat(
+                          i.originalProduct.step ||
+                            i.originalProduct.changeby ||
+                            itemStep,
+                        ),
+                        productType: i.originalProduct.productType,
+                        productTypeId: i.originalProduct.productType,
+                      }
+                    : undefined,
                 };
-              });
+              },
+            );
 
-              newProducts[pkgKey] = activeItems;
-              newTemplates[pkgKey] =
-                baseItems.length > 0 ? baseItems : activeItems;
+            // Map baseline templates
+            const baseItems: ReviewProduct[] = (
+              pkg.baselineProducts || []
+            ).map((b: any, bIdx: number) => {
+              const baseStep = parseFloat(b.step || b.changeby || 0.5);
+              const baseMin = parseFloat(
+                b.minQuantity || b.startValue || b.qty || baseStep,
+              );
+              return {
+                id: String(
+                  b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
+                ),
+                itemId:
+                  b.itemId || b.baselineId
+                    ? Number(b.itemId || b.baselineId)
+                    : undefined,
+                productId: b.productId ? Number(b.productId) : undefined,
+                category:
+                  b.categoryName || b.productTypeName || "Baseline Item",
+                name: b.productName || "Product",
+                icon: "🥗",
+                image: b.productImage,
+                price: parseFloat(
+                  b.discountedPrice || b.baseUnitPrice || b.price || 0,
+                ),
+                quantity: parseFloat(b.qty ?? 1),
+                minQuantity: baseMin,
+                unit: "kg" as "kg" | "g",
+                step: baseStep,
+                productType: b.productType,
+                productTypeId: b.productType || b.productTypeId,
+                productTypeName: b.productTypeName,
+              };
             });
-          }
 
-          dispatch(
-            initReviewData({
-              orderId: effectiveOrderId,
-              processOrderId: resolvedProcessOrderId,
-              actualOrderId: orderInfo?.actualOrderId,
-              invoiceNo: resolvedInvNo,
-              scheduleDateStr: resolvedDateStr,
-              initialPaidAmount: resolvedPaidAmount,
-              moneyPaid: resolvedMoneyPaid,
-              creditPaid: resolvedCreditPaid,
-              paymentMethod: resolvedPaymentMethod,
-              isPaid: resolvedIsPaid,
-              processOrderAmount: resolvedProcessOrderAmount,
-              deliveryCharge: resolvedDeliveryCharge,
-              packagesMeta: newMeta,
-              packageProducts: newProducts,
-              productTemplatesState: newTemplates,
-              orderPackageDbIds: dbIdMap,
-              alacartSelection: loadedAlacart,
-              isLocked: anyLocked,
-              availableSlots: packingSlots?.availableSlots,
-              targetLimit: packingSlots?.targetLimit,
-              isLimitReached: packingSlots?.isLimitReached,
-              unreadReminderDays: packingSlots?.unreadReminderDays,
-            }),
-          );
+            newProducts[pkgKey] = activeItems;
+            newTemplates[pkgKey] =
+              baseItems.length > 0 ? baseItems : activeItems;
+          });
         }
-      } catch (err) {
-        console.log("Failed to load package review details from API:", err);
-      } finally {
-        dispatch(setLoadingReview(false));
+
+        dispatch(
+          initReviewData({
+            orderId: effectiveOrderId,
+            processOrderId: resolvedProcessOrderId,
+            actualOrderId: orderInfo?.actualOrderId,
+            invoiceNo: resolvedInvNo,
+            scheduleDateStr: resolvedDateStr,
+            initialPaidAmount: resolvedPaidAmount,
+            moneyPaid: resolvedMoneyPaid,
+            creditPaid: resolvedCreditPaid,
+            paymentMethod: resolvedPaymentMethod,
+            deliveryMethod: resolvedDeliveryMethod,
+            isPaid: resolvedIsPaid,
+            processOrderAmount: resolvedProcessOrderAmount,
+            deliveryCharge: resolvedDeliveryCharge,
+            packagesMeta: newMeta,
+            packageProducts: newProducts,
+            productTemplatesState: newTemplates,
+            orderPackageDbIds: dbIdMap,
+            alacartSelection: loadedAlacart,
+            isLocked: anyLocked,
+            availableSlots: packingSlots?.availableSlots,
+            targetLimit: packingSlots?.targetLimit,
+            isLimitReached: packingSlots?.isLimitReached,
+            unreadReminderDays: packingSlots?.unreadReminderDays,
+          }),
+        );
       }
-    },
-    [dispatch, effectiveOrderId, buyerType, navigation],
-  );
+    } catch (err) {
+      console.log("Failed to load package review details from API:", err);
+    } finally {
+      dispatch(setLoadingReview(false));
+    }
+  },
+  [dispatch, effectiveOrderId, buyerType, navigation],
+);
 
   // Refresh review data from backend whenever user is on/enters overview screen
   useFocusEffect(
@@ -1179,7 +1201,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
 
         // Net package diff (pure package + alacart items, without delivery fee)
-        const netDiff = confirmGrandTotal - packagesTotal;
+        const netDiff = totalDiff;
         const netRefundSavings =
           (isCard || isPaid) && netDiff < 0
             ? Number(Math.abs(netDiff).toFixed(2))
@@ -1229,6 +1251,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       replceId: product.itemId || parseInt(product.id) || undefined,
       stepIndex: currentStepIndex,
       paymentMethod: paymentMethod, // Redux value, e.g. "Cash on Delivery"
+      deliveryMethod: deliveryMethod as "home" | "pickup" | undefined, // Redux value, e.g. "Pickup" / "Delivery"
     });
   };
 
@@ -1394,9 +1417,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
   // Signed diff between the original paid-for total and the reviewed total.
   // Positive => customer owes more. Negative => total went down (reduced / refundable).
-  const totalDiff = confirmGrandTotal - packagesTotal;
-  const additionalPayAmount = Math.max(0, totalDiff);
-  const totalSavingsAmount = Math.max(0, -totalDiff);
+  // Compare against what the customer ORIGINALLY paid:
+// original packages + ala carte items that were already in the order.
+const originalPaidTotal = packagesTotal + originalAlacartTotal;
+const totalDiff = confirmGrandTotal - originalPaidTotal;
+const additionalPayAmount = Math.max(0, totalDiff);
+const totalSavingsAmount = Math.max(0, -totalDiff);
 
   // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
@@ -1776,7 +1802,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           const originalPackagePrice = pkg.unitPrice + discountPerUnit;
 
           // Full Total (1 package) = productPrice + packingFee + serviceFee (+ changes)
-          const totalFor1Package = pkg.unitPrice + packingFee + serviceFee + diff;
+          const totalFor1Package =
+            pkg.unitPrice + packingFee + serviceFee + diff;
           const totalForNPackages = totalFor1Package * pkg.qty;
 
           // Count how many products fall under each category within
@@ -2536,8 +2563,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 Please Note :
               </Text>
               <Text className="text-[13px] text-[#475467] leading-5">
-                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total
-                has been reduced by{" "}
+                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total has
+                been reduced by{" "}
                 <Text className="font-bold text-black">
                   Rs. {formatPrice(totalSavingsAmount)}
                 </Text>
@@ -2552,79 +2579,100 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         </ScrollView>
       )}
 
-      {/* Fixed Bottom Payment & Action Section (overview) */}
-      {mode === "overview" && !loadingReview && !isTimeRanOut && (
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 20,
-            paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 28,
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: -3 },
-            elevation: 15,
-          }}
-        >
-          {/* Total = Full Total + Discount Received */}
-          <PriceRow
-            label="Total"
-            value={`Rs. ${formatPrice(overviewTotal)}`}
-          />
+    {/* Fixed Bottom Payment & Action Section (overview) */}
+{mode === "overview" && !loadingReview && !isTimeRanOut && (
+  <View
+    style={{
+      backgroundColor: "#FFF",
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingHorizontal: 20,
+      paddingTop: 22,
+      paddingBottom: Platform.OS === "ios" ? 34 : 28,
+      shadowColor: "#000",
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: -3 },
+      elevation: 15,
+    }}
+  >
+    {/* Total = Full Total + Discount Received */}
+    <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
 
-          <RowDivider />
+    <RowDivider />
 
-          {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
-          <PriceRow
-            label="Discount Received"
-            value={`- Rs. ${formatPrice(overviewDiscount)}`}
-            valueColor="#1B8A3A"
-          />
+    {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
+    <PriceRow
+      label="Discount Received"
+      value={`- Rs. ${formatPrice(overviewDiscount)}`}
+      valueColor="#1B8A3A"
+    />
 
-          <RowDivider />
+    <RowDivider />
 
-          {/* Full Total = productPrice + packingFee + serviceFee */}
-          <PriceRow
-            label="Full Total"
-            value={`Rs. ${formatPrice(overviewFullTotal)}`}
-            strong
-            big
-            marginBottom={20}
-          />
+    {/* Full Total = productPrice + packingFee + serviceFee */}
+    <PriceRow
+      label="Full Total"
+      value={`Rs. ${formatPrice(overviewFullTotal)}`}
+      strong
+      big
+      marginBottom={14}
+    />
 
-          <TouchableOpacity
-            disabled={loadingReview || packagesMeta.length === 0}
-            onPress={() => {
-              setCurrentStepIndex(0);
-              setMode("flow");
-            }}
-            activeOpacity={0.85}
-            style={{
-              height: 54,
-              backgroundColor:
-                loadingReview || packagesMeta.length === 0
-                  ? "#7F919C"
-                  : "#000000",
-              borderRadius: 30,
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOpacity:
-                loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
-            }}
-          >
-            <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              {loadingReview ? "Loading Packages..." : "Review My Packages"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+    {/* Note about what is shown from this point onward */}
+    <View
+      style={{
+        backgroundColor: "#F5F8FF",
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 18,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 13,
+          fontWeight: "700",
+          color: "#000000",
+          marginBottom: 4,
+        }}
+      >
+        Please Note :
+      </Text>
+      <Text style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}>
+        From this point onward, only the package prices and à la carte prices
+        will be shown. Any à la carte discounts, coupon discounts, delivery
+        fees will not be reflected here.
+      </Text>
+    </View>
+
+    <TouchableOpacity
+      disabled={loadingReview || packagesMeta.length === 0}
+      onPress={() => {
+        setCurrentStepIndex(0);
+        setMode("flow");
+      }}
+      activeOpacity={0.85}
+      style={{
+        height: 54,
+        backgroundColor:
+          loadingReview || packagesMeta.length === 0 ? "#7F919C" : "#000000",
+        borderRadius: 30,
+        justifyContent: "center",
+        alignItems: "center",
+        shadowColor: "#000",
+        shadowOpacity: loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
+      }}
+    >
+      <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+        {loadingReview ? "Loading Packages..." : "Review My Packages"}
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
 
       {mode === "flow" && currentStep.type === "alacart" && (
         <View
@@ -2708,7 +2756,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
           <PriceRow
             label="Total"
-            value={`Rs. ${formatPrice(finalOrderTotalWithDelivery)}`}
+            value={`Rs. ${formatPrice(confirmGrandTotal)}`}
             strong
             big
             marginBottom={20}
