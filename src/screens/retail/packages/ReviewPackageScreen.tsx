@@ -149,10 +149,16 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
+// Parse a DB value exactly. A real 0 stays 0 (no `|| 50` style fallbacks).
+const num = (v: any): number => {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+};
+
 const formatWeightDisplay = (
   display?: string,
   amount?: number,
-  unit?: string
+  unit?: string,
 ): string => {
   if (amount != null && !isNaN(Number(amount)) && unit) {
     return `${parseFloat(String(amount))} ${unit.toLowerCase()}`;
@@ -167,6 +173,24 @@ const formatWeightDisplay = (
   }
   return "";
 };
+
+// Store price is PER KG (needed for the stepper and totals).
+// The card SHOWS the line price = price x quantity, which equals
+// definepackageitems.price at the define quantity (e.g. Ginger 120/kg x 0.5 = 60).
+const toDisplayProduct = (p: ReviewProduct): ReviewProduct => ({
+  ...p,
+  price: Number(((p.price || 0) * (p.quantity || 0)).toFixed(2)),
+  originalProduct: p.originalProduct
+    ? {
+        ...p.originalProduct,
+        price: Number(
+          (
+            (p.originalProduct.price || 0) * (p.originalProduct.quantity || 0)
+          ).toFixed(2),
+        ),
+      }
+    : undefined,
+});
 
 /* ---------------------------------------------------------
    Small pieces
@@ -195,6 +219,48 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
       />
     ))}
   </View>
+);
+
+const PriceRow: React.FC<{
+  label: string;
+  value: string;
+  valueColor?: string;
+  strong?: boolean;
+  big?: boolean;
+  marginBottom?: number;
+}> = ({ label, value, valueColor = "#000000", strong, big, marginBottom }) => (
+  <View
+    style={{
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 2,
+      marginBottom,
+    }}
+  >
+    <Text
+      style={{
+        fontSize: big ? 18 : 16,
+        fontWeight: strong ? "700" : "400",
+        color: "#000000",
+      }}
+    >
+      {label}
+    </Text>
+    <Text
+      style={{
+        fontSize: big ? 18 : 16,
+        fontWeight: strong ? "700" : "600",
+        color: valueColor,
+      }}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
+const RowDivider = () => (
+  <View style={{ height: 1, backgroundColor: "#E1E7EE", marginVertical: 14 }} />
 );
 
 /* ---------------------------------------------------------
@@ -242,16 +308,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
   const [selectedAlaCartCategory, setSelectedAlaCartCategory] =
     useState<string>("Vegetables");
-  const [alaCartProducts, setAlaCartProducts] =
-    useState<ProductType[]>([]);
+  const [alaCartProducts, setAlaCartProducts] = useState<ProductType[]>([]);
   const [loadingAlaCartProducts, setLoadingAlaCartProducts] =
     useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [unavailablePackageIds, setUnavailablePackageIds] = useState<Record<string, boolean>>({});
+  const [unavailablePackageIds, setUnavailablePackageIds] = useState<
+    Record<string, boolean>
+  >({});
   // Tracks product IDs (as strings) that have been disabled via socket — used
   // to show "No longer available" red style in BOTH the ala carte grid AND the confirm step.
-  const [disabledAlacartProductIds, setDisabledAlacartProductIds] = useState<Set<string>>(new Set());
-
+  const [disabledAlacartProductIds, setDisabledAlacartProductIds] = useState<
+    Set<string>
+  >(new Set());
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -361,7 +429,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           const { orderInfo, packages, additionalItems, packingSlots } =
             res.data.data;
 
-          if (orderInfo?.status && orderInfo.status.toLowerCase() === "cancelled") {
+          if (
+            orderInfo?.status &&
+            orderInfo.status.toLowerCase() === "cancelled"
+          ) {
             dispatch(setLoadingReview(false));
             Alert.alert(
               "Cannot Proceed!",
@@ -442,25 +513,47 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const basePrice = parseFloat(item.normalPrice || item.price || 0);
               const price = parseFloat(item.price || item.normalPrice || 0);
               const dbUnitType = (item.unitType || "g").toLowerCase();
-              const unit = (item.unit?.toLowerCase() === "g" ? "g" : (dbUnitType === "g" ? "g" : "kg")) as
-                | "kg"
-                | "g";
+              const unit = (
+                item.unit?.toLowerCase() === "g"
+                  ? "g"
+                  : dbUnitType === "g"
+                    ? "g"
+                    : "kg"
+              ) as "kg" | "g";
               const rawQty = item.qty || item.quantity || item.weight || 1;
               const parsedAmount = parseFloat(String(rawQty));
               const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
 
-              const rawChangeBy = item.changeby != null && String(item.changeby).trim() !== "" && parseFloat(String(item.changeby)) > 0
-                ? parseFloat(String(item.changeby))
-                : (item.startValue ? parseFloat(String(item.startValue)) : 0.5);
+              const rawChangeBy =
+                item.changeby != null &&
+                String(item.changeby).trim() !== "" &&
+                parseFloat(String(item.changeby)) > 0
+                  ? parseFloat(String(item.changeby))
+                  : item.startValue
+                    ? parseFloat(String(item.startValue))
+                    : 0.5;
 
-              const step = unit === "g"
-                ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
-                : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+              const step =
+                unit === "g"
+                  ? dbUnitType === "kg" || rawChangeBy <= 10
+                    ? Math.round(rawChangeBy * 1000)
+                    : Math.round(rawChangeBy)
+                  : dbUnitType === "kg" || rawChangeBy <= 10
+                    ? parseFloat(rawChangeBy.toFixed(3))
+                    : parseFloat((rawChangeBy / 1000).toFixed(3));
 
-              const rawStart = parseFloat(item.startValue) > 0 ? parseFloat(item.startValue) : rawChangeBy;
-              const minQuantity = unit === "g"
-                ? (dbUnitType === "kg" || rawStart <= 10 ? Math.round(rawStart * 1000) : Math.round(rawStart))
-                : (dbUnitType === "kg" || rawStart <= 10 ? parseFloat(rawStart.toFixed(3)) : parseFloat((rawStart / 1000).toFixed(3)));
+              const rawStart =
+                parseFloat(item.startValue) > 0
+                  ? parseFloat(item.startValue)
+                  : rawChangeBy;
+              const minQuantity =
+                unit === "g"
+                  ? dbUnitType === "kg" || rawStart <= 10
+                    ? Math.round(rawStart * 1000)
+                    : Math.round(rawStart)
+                  : dbUnitType === "kg" || rawStart <= 10
+                    ? parseFloat(rawStart.toFixed(3))
+                    : parseFloat((rawStart / 1000).toFixed(3));
 
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {
@@ -497,6 +590,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               dbIdMap[pkgKey] = pkg.orderPackageId;
               if (pkg.isLock === 1) anyLocked = true;
 
+              // Use DB values exactly (no `|| 1000` / `|| 50` fallbacks).
               newMeta.push({
                 id: pkgKey,
                 name: pkg.packageName || "Custom Package",
@@ -505,18 +599,23 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   : "🥗",
                 image: pkg.packageImage,
                 qty: parseInt(pkg.qty) || 1,
-                unitPrice: parseFloat(pkg.unitPrice) || 1000,
-                serviceFee: parseFloat(pkg.serviceFee) || 50,
-                packingFee: parseFloat(pkg.packingFee) || 50,
+                unitPrice: num(pkg.unitPrice), // marketplacepackages.productPrice
+                serviceFee: num(pkg.serviceFee), // marketplacepackages.serviceFee
+                packingFee: num(pkg.packingFee), // marketplacepackages.packingFee
+                discountPerUnit: num(pkg.discountPerUnit), // definepackage.price - productPrice
               });
 
               // Map active items
               const activeItems: ReviewProduct[] = (pkg.items || []).map(
                 (i: any, itemIdx: number) => {
                   const itemStep = parseFloat(i.step || i.changeby || 0.5);
-                  const itemMin = parseFloat(i.minQuantity || i.startValue || i.qty || itemStep);
+                  const itemMin = parseFloat(
+                    i.minQuantity || i.startValue || i.qty || itemStep,
+                  );
                   return {
-                    id: String(i.productId || i.itemId || `${pkgKey}-${itemIdx}`),
+                    id: String(
+                      i.productId || i.itemId || `${pkgKey}-${itemIdx}`,
+                    ),
                     itemId: i.itemId ? Number(i.itemId) : undefined,
                     productId: i.productId ? Number(i.productId) : undefined,
                     category:
@@ -524,8 +623,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     name: i.productName || "Product",
                     icon: "🥗",
                     image: i.productImage,
-                    price: parseFloat(i.discountedPrice || i.baseUnitPrice || i.price || 0),
-                    quantity: parseFloat(i.qty || 1),
+                    // PER-KG price. For definepackageitems fallback rows the backend
+                    // sends discountedPrice = null and baseUnitPrice = definePrice / qty.
+                    price: parseFloat(
+                      i.discountedPrice || i.baseUnitPrice || i.price || 0,
+                    ),
+                    // definepackageitems.qty (fallback) or orderpackageitems.qty
+                    quantity: parseFloat(i.qty ?? 1),
                     minQuantity: itemMin,
                     // orderpackageitems.qty is always stored in kg — never use 'g' here
                     unit: "kg" as "kg" | "g",
@@ -548,14 +652,19 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             : i.productId
                               ? Number(i.productId)
                               : undefined,
-                          category: i.originalProduct.category || "Original Item",
+                          category:
+                            i.originalProduct.category || "Original Item",
                           name: i.originalProduct.name,
                           icon: "🥗",
                           image: i.originalProduct.image,
                           price: parseFloat(i.originalProduct.price || 0),
-                          quantity: parseFloat(i.originalProduct.quantity || 1),
+                          quantity: parseFloat(i.originalProduct.quantity ?? 1),
                           unit: "kg" as "kg" | "g",
-                          step: parseFloat(i.originalProduct.step || i.originalProduct.changeby || itemStep),
+                          step: parseFloat(
+                            i.originalProduct.step ||
+                              i.originalProduct.changeby ||
+                              itemStep,
+                          ),
                           productType: i.originalProduct.productType,
                           productTypeId: i.originalProduct.productType,
                         }
@@ -569,7 +678,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 pkg.baselineProducts || []
               ).map((b: any, bIdx: number) => {
                 const baseStep = parseFloat(b.step || b.changeby || 0.5);
-                const baseMin = parseFloat(b.minQuantity || b.startValue || b.qty || baseStep);
+                const baseMin = parseFloat(
+                  b.minQuantity || b.startValue || b.qty || baseStep,
+                );
                 return {
                   id: String(
                     b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
@@ -584,8 +695,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   name: b.productName || "Product",
                   icon: "🥗",
                   image: b.productImage,
-                  price: parseFloat(b.discountedPrice || b.baseUnitPrice || b.price || 0),
-                  quantity: parseFloat(b.qty || 1),
+                  price: parseFloat(
+                    b.discountedPrice || b.baseUnitPrice || b.price || 0,
+                  ),
+                  quantity: parseFloat(b.qty ?? 1),
                   minQuantity: baseMin,
                   unit: "kg" as "kg" | "g",
                   step: baseStep,
@@ -596,7 +709,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               });
 
               newProducts[pkgKey] = activeItems;
-              newTemplates[pkgKey] = baseItems.length > 0 ? baseItems : activeItems;
+              newTemplates[pkgKey] =
+                baseItems.length > 0 ? baseItems : activeItems;
             });
           }
 
@@ -633,7 +747,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         dispatch(setLoadingReview(false));
       }
     },
-    [dispatch, effectiveOrderId],
+    [dispatch, effectiveOrderId, buyerType, navigation],
   );
 
   // Refresh review data from backend whenever user is on/enters overview screen
@@ -709,45 +823,42 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
   }, [packagesMeta]);
 
-const fetchCategoryProducts = async (categoryId: string) => {
-  try {
-    setSelectedAlaCartCategory(categoryId);
-    setLoadingAlaCartProducts(true);
-    const response = await productService.getProductsByCategory(categoryId);
+  const fetchCategoryProducts = async (categoryId: string) => {
+    try {
+      setSelectedAlaCartCategory(categoryId);
+      setLoadingAlaCartProducts(true);
+      const response = await productService.getProductsByCategory(categoryId);
 
-    if (
-      response.data?.status &&
-      Array.isArray(response.data.products)
-    ) {
-      if (response.data.products.length > 0) {
-        // Keep ALL products (enabled AND disabled) so that when a product
-        // is disabled via socket, the card turns red ("No longer available")
-        // instead of disappearing — giving the user clear visual feedback.
-        const products = response.data.products.map((item: any) => ({
-          ...item,
-          type: "product",
-        }));
-        setAlaCartProducts(products);
+      if (response.data?.status && Array.isArray(response.data.products)) {
+        if (response.data.products.length > 0) {
+          // Keep ALL products (enabled AND disabled) so that when a product
+          // is disabled via socket, the card turns red ("No longer available")
+          // instead of disappearing — giving the user clear visual feedback.
+          const products = response.data.products.map((item: any) => ({
+            ...item,
+            type: "product",
+          }));
+          setAlaCartProducts(products);
+        } else {
+          setAlaCartProducts([]);
+        }
       } else {
         setAlaCartProducts([]);
+        const message =
+          response.data?.message || `No products available for ${categoryId}.`;
+        Alert.alert("Notice", message);
       }
-    } else {
+    } catch (error: any) {
+      console.error("Failed to load products by category from API:", error);
       setAlaCartProducts([]);
-      const message =
-        response.data?.message || `No products available for ${categoryId}.`;
-      Alert.alert("Notice", message);
+      const errorMsg =
+        error?.response?.data?.message ||
+        `Failed to load products for ${categoryId}. Please check your connection and try again.`;
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setLoadingAlaCartProducts(false);
     }
-  } catch (error: any) {
-    console.error("Failed to load products by category from API:", error);
-    setAlaCartProducts([]);
-    const errorMsg =
-      error?.response?.data?.message ||
-      `Failed to load products for ${categoryId}. Please check your connection and try again.`;
-    Alert.alert("Error", errorMsg);
-  } finally {
-    setLoadingAlaCartProducts(false);
-  }
-};
+  };
 
   useEffect(() => {
     fetchCategoryProducts("Vegetables");
@@ -774,7 +885,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
       if (packageIds.length === 0 && productIds.length === 0) return;
 
-      const res = await productService.checkAvailability(productIds, packageIds);
+      const res = await productService.checkAvailability(
+        productIds,
+        packageIds,
+      );
 
       if (res.data?.packages) {
         const unavailable: Record<string, boolean> = {};
@@ -810,7 +924,6 @@ const fetchCategoryProducts = async (categoryId: string) => {
     checkAllAvailability();
   }, [checkAllAvailability]);
 
-
   const toggleAlacartProduct = (product: ProductType) => {
     dispatch(toggleAlacartProductAction(product));
   };
@@ -840,12 +953,22 @@ const fetchCategoryProducts = async (categoryId: string) => {
     dispatch(updateProductQuantityAction({ packageId, productId, delta }));
   };
 
-  // Overview total = actual items sum + fees across all packages
-  const overviewTotal = packagesMeta.reduce((sum, pkg) => {
-    const prods = packageProducts[pkg.id] || [];
-    const itemsSum = prods.reduce((s: number, p: any) => s + p.price * p.quantity, 0);
-    return sum + (itemsSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
-  }, 0);
+  // ── Overview totals ────────────────────────────────────────────────────────
+  // Full Total = marketplacepackages (productPrice + packingFee + serviceFee) x qty
+  const overviewFullTotal = packagesMeta.reduce(
+    (sum, pkg) =>
+      sum + (pkg.unitPrice + pkg.packingFee + pkg.serviceFee) * pkg.qty,
+    0,
+  );
+
+  // Discount Received = (definepackage.price - marketplacepackages.productPrice) x qty
+  const overviewDiscount = packagesMeta.reduce(
+    (sum, pkg) => sum + (pkg.discountPerUnit ?? 0) * pkg.qty,
+    0,
+  );
+
+  // Total = Full Total + Discount Received (price before discount)
+  const overviewTotal = overviewFullTotal + overviewDiscount;
 
   const currentStep = steps[currentStepIndex] ||
     steps[0] || { type: "confirm" as const };
@@ -853,7 +976,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
   // Real-time Ala Carte Products & Package Availability update via Socket.IO
   useEffect(() => {
     const unsubscribe = socketService.onCatalogUpdate((data) => {
-      console.log("📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:", data);
+      console.log(
+        "📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:",
+        data,
+      );
       // Re-fetch the currently selected ala carte category (don't reset category).
       // Keep ALL products (including newly-disabled ones) so AlacartProductCard
       // can show them as red "No longer available" instead of silently vanishing.
@@ -861,7 +987,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
         productService
           .getProductsByCategory(selectedAlaCartCategory)
           .then((response) => {
-            if (response.data?.status && Array.isArray(response.data.products)) {
+            if (
+              response.data?.status &&
+              Array.isArray(response.data.products)
+            ) {
               const products = response.data.products.map((item: any) => ({
                 ...item,
                 type: "product",
@@ -906,7 +1035,11 @@ const fetchCategoryProducts = async (categoryId: string) => {
       const merged = new Set([...prev, ...newDisabledIds]);
       // If the product appears again as enabled, remove it from disabled set.
       alaCartProducts.forEach((p) => {
-        if (p.isEnable === 1 || p.isEnable === true || p.isEnable === undefined) {
+        if (
+          p.isEnable === 1 ||
+          p.isEnable === true ||
+          p.isEnable === undefined
+        ) {
           merged.delete(String(p.id));
         }
       });
@@ -1047,9 +1180,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
         // Net package diff (pure package + alacart items, without delivery fee)
         const netDiff = confirmGrandTotal - packagesTotal;
-        const netRefundSavings = (isCard || isPaid) && netDiff < 0
-          ? Number(Math.abs(netDiff).toFixed(2))
-          : 0;
+        const netRefundSavings =
+          (isCard || isPaid) && netDiff < 0
+            ? Number(Math.abs(netDiff).toFixed(2))
+            : 0;
 
         const confirmRes = await orderService.confirmPackageReview({
           orderId: actualOrderId || effectiveOrderId,
@@ -1086,7 +1220,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
     }
   };
 
- const onChangeProduct = (packageId: string, product: ReviewProduct) => {
+  const onChangeProduct = (packageId: string, product: ReviewProduct) => {
     navigation.navigate("ReplaceProduct", {
       orderId: effectiveOrderId,
       fromProduct: product,
@@ -1094,7 +1228,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
       orderPackageId: orderPackageDbIds[packageId],
       replceId: product.itemId || parseInt(product.id) || undefined,
       stepIndex: currentStepIndex,
-      paymentMethod: paymentMethod, // NEW — Redux value, e.g. "Cash on Delivery"
+      paymentMethod: paymentMethod, // Redux value, e.g. "Cash on Delivery"
     });
   };
 
@@ -1195,13 +1329,14 @@ const fetchCategoryProducts = async (categoryId: string) => {
         const currentSum = prods.reduce((s, p) => s + p.price * p.quantity, 0);
         const diff = currentSum - templateSum;
 
-        // originalPrice = template items total + fees (what was originally expected)
+        // originalPrice = marketplacepackages (productPrice + fees) x qty
+        // (what the customer originally paid for)
         const originalPrice =
-          (templateSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
+          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty;
         const additionalChanges = diff * pkg.qty; // signed
-        // currentPrice = actual items total + fees
+        // currentPrice = original package price + changes
         const currentPrice =
-          (currentSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
+          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee + diff) * pkg.qty;
 
         list.push({
           pkg,
@@ -1240,7 +1375,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
   );
 
   // Totals for the final confirm step
-  // originalPrice in packageSummaries = templateSum + fees (what was originally expected)
+  // originalPrice in packageSummaries = productPrice + fees (what was originally paid)
   const packagesTotal = packageSummaries.reduce(
     (sum, item) => sum + item.originalPrice,
     0,
@@ -1248,10 +1383,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
   // Only available ala carte items count towards the price
   const alacartTotal = Object.values(alacartSelection)
     .filter((item) => !isItemUnavailable(item))
-    .reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0,
-    );
+    .reduce((sum, item) => sum + item.price * item.quantity, 0);
   const newlyAddedAlacartTotal = Object.values(alacartSelection)
     .filter((item) => item.isAddedNow && !isItemUnavailable(item))
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -1273,11 +1405,12 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
   // True when at least one package in the confirm step is no longer available
   const hasUnavailablePackage = packagesMeta.some(
-    (p) => unavailablePackageIds[p.id] === true
+    (p) => unavailablePackageIds[p.id] === true,
   );
 
   // True when at least one ala carte item in alacartSelection is disabled / no longer available
-  const hasDisabledAlacartItem = Object.values(alacartSelection).some(isItemUnavailable);
+  const hasDisabledAlacartItem =
+    Object.values(alacartSelection).some(isItemUnavailable);
 
   const isConfirmDisabled = hasUnavailablePackage || hasDisabledAlacartItem;
 
@@ -1581,14 +1714,12 @@ const fetchCategoryProducts = async (categoryId: string) => {
                         <Text className="font-bold text-black">
                           Rs.{" "}
                           {formatPrice(
-                            pkg.unitPrice +
-                            pkg.serviceFee +
-                            pkg.packingFee
+                            pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
                           )}{" "}
                           x {pkg.qty} = Rs.{" "}
                           {formatPrice(
                             (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
-                            pkg.qty
+                              pkg.qty,
                           )}
                         </Text>
                       </Text>
@@ -1632,15 +1763,30 @@ const fetchCategoryProducts = async (categoryId: string) => {
             (s, p) => s + p.price * p.quantity,
             0,
           );
-          // diff = extra cost the user incurred by changing/replacing items
+          // diff = extra cost / saving the user caused by changing/replacing items
           const diff = currentSum - templateSum;
 
-          // Original Package = actual sum of current item prices × quantities
-          const originalPackagePrice = currentSum;
           const serviceFee = pkg.serviceFee;
           const packingFee = pkg.packingFee;
-          const totalFor1Package = originalPackagePrice + serviceFee + packingFee;
+
+          // Discount Received = definepackage.price - marketplacepackages.productPrice
+          const discountPerUnit = pkg.discountPerUnit ?? 0;
+
+          // Original Package = definepackage.price + change amount
+          const originalPackagePrice = pkg.unitPrice + discountPerUnit + diff;
+
+          // Total for a Package = productPrice + packingFee + serviceFee (no change amount)
+          const totalFor1Package = pkg.unitPrice + packingFee + serviceFee;
           const totalForNPackages = totalFor1Package * pkg.qty;
+
+          // Count how many products fall under each category within
+          // THIS package only, so the header shown on every card in
+          // that category reflects the correct group size.
+          const categoryCounts: Record<string, number> = {};
+          products.forEach((p) => {
+            const key = p.category || "Other";
+            categoryCounts[key] = (categoryCounts[key] || 0) + 1;
+          });
 
           return (
             <ScrollView
@@ -1660,7 +1806,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
                     showCancelLink
                     onCancelOrder={onCancelOrder}
                   />
-                  <ProgressDots total={steps.length} current={currentStepIndex} />
+                  <ProgressDots
+                    total={steps.length}
+                    current={currentStepIndex}
+                  />
                 </View>
 
                 <Text className="text-[19px] font-bold text-black mx-5 mt-4">
@@ -1671,34 +1820,25 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   You can change the products and quantity as needed.
                 </Text>
 
-                {(() => {
-  // Count how many products fall under each category within
-  // THIS package only, so the header shown on every card in
-  // that category reflects the correct group size.
-  const categoryCounts: Record<string, number> = {};
-  products.forEach((p) => {
-    const key = p.category || "Other";
-    categoryCounts[key] = (categoryCounts[key] || 0) + 1;
-  });
-
-  return products.map((product, index) => (
-    <ProductReviewCard
-      key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
-      product={product}
-      categoryCount={categoryCounts[product.category || "Other"]}
-      onIncrease={() =>
-        updateProductQuantity(pkg.id, product.id, 1)
-      }
-      onDecrease={() =>
-        updateProductQuantity(pkg.id, product.id, -1)
-      }
-      onChangeProduct={() => onChangeProduct(pkg.id, product)}
-      onResetToOriginal={() =>
-        onResetToOriginal(pkg.id, product.id)
-      }
-    />
-  ));
-})()}
+                {products.map((product, index) => (
+                  <ProductReviewCard
+                    key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
+                    // display-only copy: price shown = price x quantity
+                    product={toDisplayProduct(product)}
+                    categoryCount={categoryCounts[product.category || "Other"]}
+                    onIncrease={() =>
+                      updateProductQuantity(pkg.id, product.id, 1)
+                    }
+                    onDecrease={() =>
+                      updateProductQuantity(pkg.id, product.id, -1)
+                    }
+                    // these use the ORIGINAL product (per-kg price)
+                    onChangeProduct={() => onChangeProduct(pkg.id, product)}
+                    onResetToOriginal={() =>
+                      onResetToOriginal(pkg.id, product.id)
+                    }
+                  />
+                ))}
               </View>
 
               {/* Price Breakdown & Confirm Button (Inside ScrollView) */}
@@ -1721,230 +1861,65 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   elevation: 15,
                 }}
               >
-                {/* Original Package */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "400",
-                      color: "#000000",
-                    }}
-                  >
-                    Original Package
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(originalPackagePrice)}
-                  </Text>
-                </View>
-
-                {/* HR line 1 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#E1E7EE",
-                    marginVertical: 14,
-                  }}
+                <PriceRow
+                  label="Original Package"
+                  value={`Rs. ${formatPrice(originalPackagePrice)}`}
                 />
 
-                {/* Service Fee */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "400",
-                      color: "#000000",
-                    }}
-                  >
-                    Service Fee
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(serviceFee)}
-                  </Text>
-                </View>
+                {discountPerUnit > 0 && (
+                  <>
+                    <RowDivider />
+                    <PriceRow
+                      label="Discount Received"
+                      value={`- Rs. ${formatPrice(discountPerUnit)}`}
+                      valueColor="#1B8A3A"
+                    />
+                  </>
+                )}
 
-                {/* HR line 2 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#E1E7EE",
-                    marginVertical: 14,
-                  }}
+                <RowDivider />
+                <PriceRow
+                  label="Service Fee"
+                  value={`Rs. ${formatPrice(serviceFee)}`}
                 />
 
-                {/* Packing Fee */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "400",
-                      color: "#000000",
-                    }}
-                  >
-                    Packing Fee
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(packingFee)}
-                  </Text>
-                </View>
-
-                {/* HR line 3 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#E1E7EE",
-                    marginVertical: 14,
-                  }}
+                <RowDivider />
+                <PriceRow
+                  label="Packing Fee"
+                  value={`Rs. ${formatPrice(packingFee)}`}
                 />
 
                 {/* Due to Changes — shown only when user has modified products */}
                 {diff !== 0 && (
                   <>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingVertical: 2,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 16,
-                          fontWeight: "400",
-                          color: "#000000",
-                        }}
-                      >
-                        Due to Changes
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 16,
-                          fontWeight: "600",
-                          color: diff > 0 ? "#FF2D55" : "#0088FF",
-                        }}
-                      >
-                        {diff > 0 ? "+" : ""}Rs. {formatPrice(diff)}
-                      </Text>
-                    </View>
-
-                    {/* HR line before Total */}
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: "#E1E7EE",
-                        marginVertical: 14,
-                      }}
+                    <RowDivider />
+                    <PriceRow
+                      label="Due to Changes"
+                      value={`${diff > 0 ? "+ " : "- "}Rs. ${formatPrice(Math.abs(diff))}`}
+                      valueColor={diff > 0 ? "#FF2D55" : "#0088FF"}
                     />
                   </>
                 )}
 
-                {/* Total for 1 Package */}
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                    marginBottom: pkg.qty > 1 ? 0 : 20,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: pkg.qty > 1 ? 16 : 18,
-                      fontWeight: pkg.qty > 1 ? "600" : "700",
-                      color: "#000000",
-                    }}
-                  >
-                    Total for a package
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: pkg.qty > 1 ? 16 : 18,
-                      fontWeight: pkg.qty > 1 ? "600" : "700",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(totalFor1Package)}
-                  </Text>
-                </View>
+                <RowDivider />
+                <PriceRow
+                  label="Total for a Package"
+                  value={`Rs. ${formatPrice(totalFor1Package)}`}
+                  strong
+                  big={pkg.qty === 1}
+                  marginBottom={pkg.qty > 1 ? 0 : 20}
+                />
 
                 {pkg.qty > 1 && (
                   <>
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: "#E1E7EE",
-                        marginVertical: 14,
-                      }}
+                    <RowDivider />
+                    <PriceRow
+                      label={`Total for ${pkg.qty} Packages`}
+                      value={`Rs. ${formatPrice(totalForNPackages)}`}
+                      strong
+                      big
+                      marginBottom={20}
                     />
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingVertical: 2,
-                        marginBottom: 20,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          fontWeight: "700",
-                          color: "#000000",
-                        }}
-                      >
-                        Total for {pkg.qty} Packages
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          fontWeight: "700",
-                          color: "#000000",
-                        }}
-                      >
-                        Rs. {formatPrice(totalForNPackages)}
-                      </Text>
-                    </View>
                   </>
                 )}
 
@@ -2221,11 +2196,15 @@ const fetchCategoryProducts = async (categoryId: string) => {
                           <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                             Additional Changes :{" "}
                             {item.diff === 0 ? (
-                              <Text className="font-bold text-black">Rs. 0.00</Text>
+                              <Text className="font-bold text-black">
+                                Rs. 0.00
+                              </Text>
                             ) : (
                               <Text
                                 className="font-bold"
-                                style={{ color: item.diff > 0 ? "#FF2D55" : "#0088FF" }}
+                                style={{
+                                  color: item.diff > 0 ? "#FF2D55" : "#0088FF",
+                                }}
                               >
                                 {item.diff > 0 ? "+ " : "- "}Rs.{" "}
                                 {formatPrice(Math.abs(item.additionalChanges))}
@@ -2241,10 +2220,22 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
                   {isUnavailable ? (
                     <View className="flex-row items-center justify-between">
-                      <Text style={{ fontSize: 14, color: "#FF383C", fontWeight: "600" }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#FF383C",
+                          fontWeight: "600",
+                        }}
+                      >
                         Qty: {item.pkg.qty}
                       </Text>
-                      <Text style={{ fontSize: 14, color: "#FF383C", fontWeight: "700" }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#FF383C",
+                          fontWeight: "700",
+                        }}
+                      >
                         No longer available
                       </Text>
                     </View>
@@ -2261,7 +2252,11 @@ const fetchCategoryProducts = async (categoryId: string) => {
                         activeOpacity={0.8}
                         className="w-7 h-7 rounded-full bg-black items-center justify-center"
                       >
-                        <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                        <Ionicons
+                          name="arrow-forward"
+                          size={15}
+                          color="#FFFFFF"
+                        />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -2269,7 +2264,6 @@ const fetchCategoryProducts = async (categoryId: string) => {
               );
             })}
           </View>
-
 
           {/* Ala Carte Items Section (only if order has ala carte items or user added them) */}
           {Object.keys(alacartSelection).length > 0 && (
@@ -2290,184 +2284,230 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   const isItemDisabled = isItemUnavailable(item);
 
                   return (
-                  <View
-                    key={`alacart-item-${item.id}-${aIdx}`}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: isItemDisabled ? "#F04438" : "#EEEEEE",
-                      borderRadius: 16,
-                      padding: 16,
-                      marginBottom: 12,
-                      marginHorizontal: 20,
-                      backgroundColor: "#FFFFFF",
-                    }}
-                  >
-                    {/* Top row: Image, Name & Price, Trash, Added Now */}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center flex-1">
-                        <View
-                          className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
-                          style={{ opacity: isItemDisabled ? 0.6 : 1 }}
-                        >
-                          {item.image ? (
-                            typeof item.image === "string" ? (
-                              <Image
-                                source={{ uri: item.image }}
-                                className="w-12 h-12"
-                                resizeMode="contain"
-                              />
-                            ) : (
-                              <Image
-                                source={item.image}
-                                className="w-12 h-12"
-                                resizeMode="contain"
-                              />
-                            )
-                          ) : (
-                            <Ionicons
-                              name="leaf-outline"
-                              size={24}
-                              color={isItemDisabled ? "#CCCCCC" : "#92D01B"}
-                            />
-                          )}
-                        </View>
-                        <View className="flex-1 pr-2">
-                          <Text
-                            className="text-[16px] font-bold text-black"
-                            numberOfLines={1}
+                    <View
+                      key={`alacart-item-${item.id}-${aIdx}`}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: isItemDisabled ? "#F04438" : "#EEEEEE",
+                        borderRadius: 16,
+                        padding: 16,
+                        marginBottom: 12,
+                        marginHorizontal: 20,
+                        backgroundColor: "#FFFFFF",
+                      }}
+                    >
+                      {/* Top row: Image, Name & Price, Trash, Added Now */}
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center flex-1">
+                          <View
+                            className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
+                            style={{ opacity: isItemDisabled ? 0.6 : 1 }}
                           >
-                            {item.displayName}
-                          </Text>
-                          <Text
-                            className="text-[15px] font-bold mt-0.5"
-                            style={{
-                              color: isItemDisabled
-                                ? "#F04438"
-                                : item.isAddedNow
+                            {item.image ? (
+                              typeof item.image === "string" ? (
+                                <Image
+                                  source={{ uri: item.image }}
+                                  className="w-12 h-12"
+                                  resizeMode="contain"
+                                />
+                              ) : (
+                                <Image
+                                  source={item.image}
+                                  className="w-12 h-12"
+                                  resizeMode="contain"
+                                />
+                              )
+                            ) : (
+                              <Ionicons
+                                name="leaf-outline"
+                                size={24}
+                                color={isItemDisabled ? "#CCCCCC" : "#92D01B"}
+                              />
+                            )}
+                          </View>
+                          <View className="flex-1 pr-2">
+                            <Text
+                              className="text-[16px] font-bold text-black"
+                              numberOfLines={1}
+                            >
+                              {item.displayName}
+                            </Text>
+                            <Text
+                              className="text-[15px] font-bold mt-0.5"
+                              style={{
+                                color: isItemDisabled
                                   ? "#F04438"
-                                  : "#000000",
+                                  : item.isAddedNow
+                                    ? "#F04438"
+                                    : "#000000",
+                              }}
+                            >
+                              Rs. {formatPrice(item.price)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View className="items-end justify-between h-14">
+                          {/* Trash button: red background & red icon when disabled */}
+                          <TouchableOpacity
+                            onPress={() => removeAlacartItem(item.id)}
+                            activeOpacity={0.7}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: isItemDisabled
+                                ? "#FEE4E2"
+                                : "#F5F5F5",
+                              alignItems: "center",
+                              justifyContent: "center",
                             }}
                           >
-                            Rs. {formatPrice(item.price)}
-                          </Text>
+                            <Ionicons
+                              name="trash-outline"
+                              size={16}
+                              color={isItemDisabled ? "#F04438" : "#000000"}
+                            />
+                          </TouchableOpacity>
+
+                          {!isItemDisabled && item.isAddedNow && (
+                            <Text className="text-[12px] font-medium text-[#F04438]">
+                              Added Now
+                            </Text>
+                          )}
                         </View>
                       </View>
 
-                      <View className="items-end justify-between h-14">
-                        {/* Trash button: red background & red icon when disabled, as shown in design */}
-                        <TouchableOpacity
-                          onPress={() => removeAlacartItem(item.id)}
-                          activeOpacity={0.7}
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: isItemDisabled ? "#FEE4E2" : "#F5F5F5",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Ionicons
-                            name="trash-outline"
-                            size={16}
-                            color={isItemDisabled ? "#F04438" : "#000000"}
-                          />
-                        </TouchableOpacity>
+                      {/* Dashed separator */}
+                      <View
+                        style={{
+                          borderBottomWidth: 1,
+                          borderStyle: "dashed",
+                          borderColor: isItemDisabled ? "#FDA29B" : "#E5E5EA",
+                          marginVertical: 14,
+                        }}
+                      />
 
-                        {!isItemDisabled && item.isAddedNow && (
-                          <Text className="text-[12px] font-medium text-[#F04438]">
-                            Added Now
+                      {/* Disabled: show weight in red + "No longer available" label in red */}
+                      {isItemDisabled ? (
+                        <View className="flex-row items-center justify-between">
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: "#F04438",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {formatWeightDisplay(
+                              item.weightDisplay,
+                              item.amount,
+                              item.unit,
+                            )}
                           </Text>
-                        )}
-                      </View>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: "#F04438",
+                              fontWeight: "600",
+                            }}
+                          >
+                            No longer available
+                          </Text>
+                        </View>
+                      ) : (
+                        /* Normal: Unit selector & Stepper */
+                        <View className="flex-row items-center justify-between">
+                          <View className="flex-row items-center">
+                            <Text className="text-[13px] text-[#6B6B6B] mr-2">
+                              Unit :
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() =>
+                                toggleAlacartItemUnit(item.id, "kg")
+                              }
+                              activeOpacity={0.8}
+                              className={`px-3.5 py-1 rounded-full mr-1.5 ${
+                                item.unit === "kg"
+                                  ? "bg-[#FF9114]"
+                                  : "bg-[#FCE1C5]"
+                              }`}
+                            >
+                              <Text className="text-white font-bold text-[12px]">
+                                kg
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() =>
+                                toggleAlacartItemUnit(item.id, "g")
+                              }
+                              activeOpacity={0.8}
+                              className={`px-3.5 py-1 rounded-full ${
+                                item.unit === "g"
+                                  ? "bg-[#FF9114]"
+                                  : "bg-[#FCE1C5]"
+                              }`}
+                            >
+                              <Text className="text-white font-bold text-[12px]">
+                                g
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <View className="flex-row items-center">
+                            {(() => {
+                              const stepVal =
+                                item.step && item.step > 0
+                                  ? item.step
+                                  : item.unit === "kg"
+                                    ? 0.5
+                                    : 500;
+                              const minVal =
+                                item.minQuantity && item.minQuantity > 0
+                                  ? item.minQuantity
+                                  : stepVal;
+                              const isAtMin = item.amount <= minVal;
+
+                              return (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateAlacartItemQuantity(item.id, -1)
+                                  }
+                                  disabled={isAtMin}
+                                  activeOpacity={0.7}
+                                  className={`w-6 h-6 rounded-full items-center justify-center ${
+                                    isAtMin ? "bg-[#D1D1D6]" : "bg-black"
+                                  }`}
+                                >
+                                  <Ionicons
+                                    name="remove"
+                                    size={14}
+                                    color="#FFF"
+                                  />
+                                </TouchableOpacity>
+                              );
+                            })()}
+
+                            <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
+                              {formatWeightDisplay(
+                                item.weightDisplay,
+                                item.amount,
+                                item.unit,
+                              )}
+                            </Text>
+
+                            <TouchableOpacity
+                              onPress={() =>
+                                updateAlacartItemQuantity(item.id, 1)
+                              }
+                              activeOpacity={0.7}
+                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                            >
+                              <Ionicons name="add" size={14} color="#FFF" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
                     </View>
-
-                    {/* Dashed separator */}
-                    <View
-                      style={{
-                        borderBottomWidth: 1,
-                        borderStyle: "dashed",
-                        borderColor: isItemDisabled ? "#FDA29B" : "#E5E5EA",
-                        marginVertical: 14,
-                      }}
-                    />
-
-                    {/* Disabled: show weight in red + "No longer available" label in red */}
-                    {isItemDisabled ? (
-                      <View className="flex-row items-center justify-between">
-                        <Text style={{ fontSize: 13, color: "#F04438", fontWeight: "500" }}>
-                          {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}
-                        </Text>
-                        <Text style={{ fontSize: 13, color: "#F04438", fontWeight: "600" }}>
-                          No longer available
-                        </Text>
-                      </View>
-                    ) : (
-                      /* Normal: Unit selector & Stepper */
-                      <View className="flex-row items-center justify-between">
-                        <View className="flex-row items-center">
-                          <Text className="text-[13px] text-[#6B6B6B] mr-2">
-                            Unit :
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => toggleAlacartItemUnit(item.id, "kg")}
-                            activeOpacity={0.8}
-                            className={`px-3.5 py-1 rounded-full mr-1.5 ${
-                              item.unit === "kg" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
-                            }`}
-                          >
-                            <Text className="text-white font-bold text-[12px]">
-                              kg
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => toggleAlacartItemUnit(item.id, "g")}
-                            activeOpacity={0.8}
-                            className={`px-3.5 py-1 rounded-full ${
-                              item.unit === "g" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
-                            }`}
-                          >
-                            <Text className="text-white font-bold text-[12px]">
-                              g
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <View className="flex-row items-center">
-                          {(() => {
-                            const stepVal = item.step && item.step > 0 ? item.step : (item.unit === "kg" ? 0.5 : 500);
-                            const minVal = item.minQuantity && item.minQuantity > 0 ? item.minQuantity : stepVal;
-                            const isAtMin = item.amount <= minVal;
-
-                            return (
-                              <TouchableOpacity
-                                onPress={() => updateAlacartItemQuantity(item.id, -1)}
-                                disabled={isAtMin}
-                                activeOpacity={0.7}
-                                className={`w-6 h-6 rounded-full items-center justify-center ${
-                                  isAtMin ? "bg-[#D1D1D6]" : "bg-black"
-                                }`}
-                              >
-                                <Ionicons name="remove" size={14} color="#FFF" />
-                              </TouchableOpacity>
-                            );
-                          })()}
-
-                          <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
-                            {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}
-                          </Text>
-
-                          <TouchableOpacity
-                            onPress={() => updateAlacartItemQuantity(item.id, 1)}
-                            activeOpacity={0.7}
-                            className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                          >
-                            <Ionicons name="add" size={14} color="#FFF" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                  </View>
                   );
                 })}
               </View>
@@ -2496,8 +2536,8 @@ const fetchCategoryProducts = async (categoryId: string) => {
                 Please Note :
               </Text>
               <Text className="text-[13px] text-[#475467] leading-5">
-                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total
-                has been reduced by{" "}
+                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total has
+                been reduced by{" "}
                 <Text className="font-bold text-black">
                   Rs. {formatPrice(totalSavingsAmount)}
                 </Text>
@@ -2512,7 +2552,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
         </ScrollView>
       )}
 
-      {/* Fixed Bottom Payment & Action Section */}
+      {/* Fixed Bottom Payment & Action Section (overview) */}
       {mode === "overview" && !loadingReview && !isTimeRanOut && (
         <View
           style={{
@@ -2529,22 +2569,28 @@ const fetchCategoryProducts = async (categoryId: string) => {
             elevation: 15,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-              marginBottom: 20,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Total
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(overviewTotal)}
-            </Text>
-          </View>
+          {/* Total = Full Total + Discount Received */}
+          <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
+
+          <RowDivider />
+
+          {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
+          <PriceRow
+            label="Discount Received"
+            value={`- Rs. ${formatPrice(overviewDiscount)}`}
+            valueColor="#1B8A3A"
+          />
+
+          <RowDivider />
+
+          {/* Full Total = productPrice + packingFee + serviceFee */}
+          <PriceRow
+            label="Full Total"
+            value={`Rs. ${formatPrice(overviewFullTotal)}`}
+            strong
+            big
+            marginBottom={20}
+          />
 
           <TouchableOpacity
             disabled={loadingReview || packagesMeta.length === 0}
@@ -2593,22 +2639,13 @@ const fetchCategoryProducts = async (categoryId: string) => {
             elevation: 15,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-              marginBottom: 20,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              For Ala Carte Items
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(newlyAddedAlacartTotal)}
-            </Text>
-          </View>
+          <PriceRow
+            label="For Ala Carte Items"
+            value={`Rs. ${formatPrice(newlyAddedAlacartTotal)}`}
+            strong
+            big
+            marginBottom={20}
+          />
 
           <TouchableOpacity
             onPress={goToNextStep}
@@ -2649,77 +2686,30 @@ const fetchCategoryProducts = async (categoryId: string) => {
             elevation: 15,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
-              For Packages
-            </Text>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
-              Rs. {formatPrice(confirmPackagesTotal)}
-            </Text>
-          </View>
+          <PriceRow
+            label="For Packages"
+            value={`Rs. ${formatPrice(confirmPackagesTotal)}`}
+          />
 
           {Object.keys(alacartSelection).length > 0 && (
             <>
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: "#E1E7EE",
-                  marginVertical: 14,
-                }}
+              <RowDivider />
+              <PriceRow
+                label="Ala Carte Items"
+                value={`Rs. ${formatPrice(alacartTotal)}`}
               />
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingVertical: 2,
-                }}
-              >
-                <Text
-                  style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}
-                >
-                  Ala Carte Items
-                </Text>
-                <Text
-                  style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}
-                >
-                  Rs. {formatPrice(alacartTotal)}
-                </Text>
-              </View>
             </>
           )}
 
-          <View
-            style={{
-              height: 1,
-              backgroundColor: "#E1E7EE",
-              marginVertical: 14,
-            }}
-          />
+          <RowDivider />
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-              marginBottom: 20,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Total
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(finalOrderTotalWithDelivery)}
-            </Text>
-          </View>
+          <PriceRow
+            label="Total"
+            value={`Rs. ${formatPrice(finalOrderTotalWithDelivery)}`}
+            strong
+            big
+            marginBottom={20}
+          />
 
           <TouchableOpacity
             onPress={isConfirmDisabled ? undefined : goToNextStep}

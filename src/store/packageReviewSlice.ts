@@ -4,12 +4,13 @@ import { ReviewProduct, ProductType } from "@/types/types";
 export interface PackageMeta {
   id: string;
   name: string;
-  icon?: string;
-  image?: string;
+  icon: string;
+  image?: any;
   qty: number;
   unitPrice: number;
   serviceFee: number;
   packingFee: number;
+  discountPerUnit?: number; // NEW: definepackage.price - marketplacepackages.productPrice
 }
 
 export interface AlacartSelectedProduct {

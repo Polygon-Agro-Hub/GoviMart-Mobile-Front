@@ -25,8 +25,8 @@ type ProductInfo = {
   name: string;
   icon?: string; // emoji fallback if no image
   image?: string; // uri — takes priority over icon
-  unit: "kg" | "g";
-  baseQty: number; // qty the price below refers to, e.g. 0.5, 1
+  unit: "kg";
+  baseQty: number; // qty (in kg) the price below refers to
   pricePerBaseQty: number;
 };
 
@@ -88,9 +88,8 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
-// Formats a quantity: always shows unit "kg" and value in kg
-const formatQty = (qtyKg: number, _unit?: string) =>
-  `${parseFloat(String(qtyKg))} kg`;
+// Quantities are ALWAYS shown in kg. The unit type is never switched.
+const formatQty = (qtyKg: number) => `${parseFloat(String(qtyKg))} kg`;
 
 /* ---------------------------------------------------------
    Screen
@@ -99,7 +98,6 @@ const formatQty = (qtyKg: number, _unit?: string) =>
 const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const rawFrom = route.params?.fromProduct;
   const rawTo = route.params?.toProduct;
-  const packageId = route.params?.packageId || "";
   const stepIndex = route.params?.stepIndex ?? 0;
 
   // ---------------------------------------------------------------------
@@ -122,31 +120,19 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const showConditionalNote = isCashOnDelivery || isPickup;
   const deliveryWord = isPickup ? "pickup" : "delivery";
 
-  // Display unit for each side, taken from their own unitType — NOT
-  // hardcoded to "kg". Internal math always stays in kg regardless.
-  const fromDisplayUnit: "kg" | "g" =
-    (rawFrom?.unitType || rawFrom?.unit || "kg").toLowerCase() === "g"
-      ? "g"
-      : "kg";
-  const toDisplayUnit: "kg" | "g" =
-    (rawTo?.unitType || "kg").toLowerCase() === "g" ? "g" : "kg";
-
   const fromProduct: ProductInfo = useMemo(() => {
-    const rawUnit = (rawFrom?.unit || rawFrom?.unitType || "kg").toLowerCase();
-    let rawQty =
-      parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
+    // The package item quantity is always stored in kg, so it is used as-is.
+    // (No "> 10 means grams" guessing — with no max limit, 10+ kg is valid.)
+    const rawQty =
+      parseFloat(String(rawFrom?.quantity ?? rawFrom?.qty ?? 1)) || 1;
     const rawPrice = rawFrom?.price || 0;
-    if (rawUnit === "g" || rawQty > 10) {
-      rawQty = Number((rawQty / 1000).toFixed(3));
-    }
-    const cleanBaseQty = parseFloat(String(rawQty)) || 1;
     return {
       id: rawFrom?.id?.toString() || "from",
       name: rawFrom?.name || "Original Product",
       icon: rawFrom?.icon || "🥬",
       image: rawFrom?.image,
       unit: "kg",
-      baseQty: cleanBaseQty,
+      baseQty: rawQty,
       pricePerBaseQty: rawPrice,
     };
   }, [rawFrom]);
@@ -159,10 +145,10 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       parseFloat(
         String(
           rawTo?.perKgPrice ??
-          rawTo?.normalPrice ??
-          rawTo?.price ??
-          rawTo?.pricePerBaseQty ??
-          0,
+            rawTo?.normalPrice ??
+            rawTo?.price ??
+            rawTo?.pricePerBaseQty ??
+            0,
         ),
       ) || 0;
 
@@ -173,14 +159,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       image: rawTo?.image,
       unit: "kg",
       baseQty: 1,
-      pricePerBaseQty: priceVal, // this is now the per-kg rate
+      pricePerBaseQty: priceVal, // per-kg rate
     };
   }, [rawTo]);
 
   const rawStepVal =
     rawTo?.changeby != null &&
-      String(rawTo.changeby).trim() !== "" &&
-      parseFloat(String(rawTo.changeby)) > 0
+    String(rawTo.changeby).trim() !== "" &&
+    parseFloat(String(rawTo.changeby)) > 0
       ? parseFloat(String(rawTo.changeby))
       : rawTo?.step != null && parseFloat(String(rawTo.step)) > 0
         ? parseFloat(String(rawTo.step))
@@ -188,8 +174,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const rawMinVal =
     rawTo?.startValue != null &&
-      String(rawTo.startValue).trim() !== "" &&
-      parseFloat(String(rawTo.startValue)) > 0
+    String(rawTo.startValue).trim() !== "" &&
+    parseFloat(String(rawTo.startValue)) > 0
       ? parseFloat(String(rawTo.startValue))
       : rawStepVal;
 
@@ -201,11 +187,11 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     rawMinVal > 10
       ? parseFloat((rawMinVal / 1000).toFixed(3))
       : parseFloat(rawMinVal.toFixed(3));
-  const maxQty = 10;
 
-  // Default quantity comes from the REPLACEMENT product's (toProduct's)
-  // own startValue — i.e. minQty, already derived from rawTo above —
-  // not from the original product being replaced (rawFrom).
+  // NOTE: there is intentionally NO maximum quantity.
+
+  // Default quantity comes from the REPLACEMENT product's own startValue
+  // (minQty), not from the original product being replaced.
   const [quantity, setQuantity] = useState<number>(minQty);
 
   const fromUnitPrice = fromProduct.pricePerBaseQty;
@@ -226,9 +212,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     );
 
   const increase = () =>
-    setQuantity((q: number) =>
-      Math.min(maxQty, parseFloat((q + step).toFixed(3))),
-    );
+    setQuantity((q: number) => parseFloat((q + step).toFixed(3)));
 
   const dispatch = useDispatch();
 
@@ -247,7 +231,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       price: toUnitPrice, // per-kg rate, so downstream qty*price math stays correct
       quantity: quantity,
       minQuantity: minQty,
-      unit: "kg" as const, // internal storage unit stays kg
+      unit: "kg" as const, // unit type is always kg
       step: step,
       productType: rawFrom?.productType || rawTo?.productTypeId,
       productTypeId: rawFrom?.productTypeId || rawTo?.productTypeId,
@@ -296,7 +280,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           <View className="items-center mt-6">
             <ProductRow
               product={fromProduct}
-              subtitle={formatQty(fromProduct.baseQty, fromDisplayUnit)}
+              subtitle={formatQty(fromProduct.baseQty)}
               price={`Rs. ${formatPrice(fromPrice)}`}
             />
 
@@ -306,7 +290,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
             <ProductRow
               product={toProduct}
-              subtitle={formatQty(quantity, toDisplayUnit)}
+              subtitle={formatQty(quantity)}
               price={`Rs. ${formatPrice(toPrice)}`}
             />
           </View>
@@ -316,8 +300,9 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               onPress={decrease}
               disabled={quantity <= minQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#000000]"
-                }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${
+                quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#000000]"
+              }`}
             >
               <Ionicons
                 name="remove"
@@ -327,15 +312,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             </TouchableOpacity>
 
             <Text className="text-[16px] font-semibold text-black">
-              {formatQty(quantity, toDisplayUnit)}
+              {formatQty(quantity)}
             </Text>
 
+            {/* No max limit: the + button is always enabled */}
             <TouchableOpacity
               onPress={increase}
-              disabled={quantity >= maxQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
-                }`}
+              className="w-11 h-11 rounded-full items-center justify-center bg-black"
             >
               <Ionicons name="add" size={20} color="#fff" />
             </TouchableOpacity>
