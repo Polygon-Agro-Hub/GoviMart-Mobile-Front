@@ -158,7 +158,7 @@ const num = (v: any): number => {
 const formatWeightDisplay = (
   display?: string,
   amount?: number,
-  unit?: string,
+  unit?: string
 ): string => {
   if (amount != null && !isNaN(Number(amount)) && unit) {
     return `${parseFloat(String(amount))} ${unit.toLowerCase()}`;
@@ -513,13 +513,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const basePrice = parseFloat(item.normalPrice || item.price || 0);
               const price = parseFloat(item.price || item.normalPrice || 0);
               const dbUnitType = (item.unitType || "g").toLowerCase();
-              const unit = (
-                item.unit?.toLowerCase() === "g"
+              const unit = (item.unit?.toLowerCase() === "g"
+                ? "g"
+                : dbUnitType === "g"
                   ? "g"
-                  : dbUnitType === "g"
-                    ? "g"
-                    : "kg"
-              ) as "kg" | "g";
+                  : "kg") as "kg" | "g";
               const rawQty = item.qty || item.quantity || item.weight || 1;
               const parsedAmount = parseFloat(String(rawQty));
               const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
@@ -658,7 +656,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                           icon: "🥗",
                           image: i.originalProduct.image,
                           price: parseFloat(i.originalProduct.price || 0),
-                          quantity: parseFloat(i.originalProduct.quantity ?? 1),
+                          quantity: parseFloat(
+                            i.originalProduct.quantity ?? 1,
+                          ),
                           unit: "kg" as "kg" | "g",
                           step: parseFloat(
                             i.originalProduct.step ||
@@ -1772,11 +1772,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           // Discount Received = definepackage.price - marketplacepackages.productPrice
           const discountPerUnit = pkg.discountPerUnit ?? 0;
 
-          // Original Package = definepackage.price + change amount
-          const originalPackagePrice = pkg.unitPrice + discountPerUnit + diff;
+          // Original Package = definepackage.price (productPrice + discount)
+          const originalPackagePrice = pkg.unitPrice + discountPerUnit;
 
-          // Total for a Package = productPrice + packingFee + serviceFee (no change amount)
-          const totalFor1Package = pkg.unitPrice + packingFee + serviceFee;
+          // Full Total (1 package) = productPrice + packingFee + serviceFee (+ changes)
+          const totalFor1Package = pkg.unitPrice + packingFee + serviceFee + diff;
           const totalForNPackages = totalFor1Package * pkg.qty;
 
           // Count how many products fall under each category within
@@ -2536,8 +2536,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 Please Note :
               </Text>
               <Text className="text-[13px] text-[#475467] leading-5">
-                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total has
-                been reduced by{" "}
+                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total
+                has been reduced by{" "}
                 <Text className="font-bold text-black">
                   Rs. {formatPrice(totalSavingsAmount)}
                 </Text>
@@ -2570,7 +2570,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           }}
         >
           {/* Total = Full Total + Discount Received */}
-          <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
+          <PriceRow
+            label="Total"
+            value={`Rs. ${formatPrice(overviewTotal)}`}
+          />
 
           <RowDivider />
 
