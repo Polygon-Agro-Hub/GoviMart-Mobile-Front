@@ -55,7 +55,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(method === "email" ? 240 : 76);
+  const [timeLeft, setTimeLeft] = useState(240); // 4:00 countdown for both SMS and Email
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -150,7 +150,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins} : ${secs < 10 ? "0" : ""}${secs}`;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   const handleChangeText = (text: string, index: number) => {
@@ -275,7 +275,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes."
           );
         } else {
-          setTimeLeft(method === "email" ? 240 : 76);
+          setTimeLeft(240);
           setIsExpired(false);
           Alert.alert(
             "Code Resent",

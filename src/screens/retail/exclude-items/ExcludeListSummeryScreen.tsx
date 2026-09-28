@@ -19,7 +19,8 @@ import ConfirmationModal from "@/component/common/ConfirmationModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { environment } from "@/environment/environment";
-import { store } from "@/store";
+import { store, RootState } from "@/store";
+import { useSelector } from "react-redux";
 import { tokenStorage } from "@/utils/tokenStorage";
 
 const getEffectiveToken = async (): Promise<string | null> => {
@@ -58,7 +59,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   route,
   navigation,
 }) => {
-  const { customerId = 1002, name = "Kamal Perera", title = "Mr", phoneNumber = "+94771122300", cusId = "1002", id } =
+  const user = useSelector((state: RootState) => state.auth.userProfile);
+  const { customerId, name, title, phoneNumber, cusId, id } =
     route.params || {};
 
   const [excludeCrops, setExcludeCrops] = useState<ExcludeCrop[]>([]);
@@ -75,8 +77,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   } | null>(null);
 
   const nameParts = (name || "").trim().split(/\s+/);
-  const initialFirstName = nameParts[0] || "";
-  const initialLastName = nameParts.slice(1).join(" ") || "";
+  const initialFirstName = nameParts[0] || user?.firstName || "";
+  const initialLastName = nameParts.slice(1).join(" ") || user?.lastName || "";
 
   const [customerName, setCustomerName] = useState<{
     firstName: string;
@@ -87,9 +89,9 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   }>({
     firstName: initialFirstName,
     lastName: initialLastName,
-    title: title || "",
-    cusId: cusId || "",
-    phoneNumber: phoneNumber || "",
+    title: title || user?.title || "",
+    cusId: (cusId && cusId !== "1002" ? cusId : user?.cusId) || "",
+    phoneNumber: phoneNumber || user?.phoneNumber || "",
   });
 
   const fetchLists = useCallback(async () => {
@@ -99,6 +101,25 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         Alert.alert("Authentication Required", "Please log in to view customize packages summary.");
         navigation.navigate("ChooseAuth");
         return;
+      }
+
+      try {
+        const profileRes = await axios.get(
+          `${environment.API_BASE_URL}api/customer/profile`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (profileRes.data && profileRes.data.status && profileRes.data.data) {
+          const p = profileRes.data.data;
+          setCustomerName({
+            firstName: p.firstName || "",
+            lastName: p.lastName || "",
+            title: p.title || "",
+            cusId: p.cusId ? String(p.cusId) : "",
+            phoneNumber: p.phoneNumber || "",
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to fetch customer profile in ExcludeListSummery:", err);
       }
 
       const includedRes = await axios.get(
@@ -338,10 +359,16 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     }
   };
 
+  const displayTitle = customerName.title || user?.title || "";
+  const displayFirstName = customerName.firstName || user?.firstName || "";
+  const displayLastName = customerName.lastName || user?.lastName || "";
+  const displayCusId =
+    customerName.cusId || user?.cusId || (cusId && cusId !== "1002" ? cusId : "");
+
   const fullTitle =
-    customerName.firstName && customerName.lastName
-      ? `${customerName.title}. ${customerName.firstName} ${customerName.lastName}`
-      : "Kamal Perera";
+    displayFirstName && displayLastName
+      ? `${displayTitle ? `${displayTitle}. ` : ""}${displayFirstName} ${displayLastName}`
+      : "My Package Preferences";
 
   const Checkbox = ({
     checked,
@@ -375,11 +402,11 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       />
 
       <View className="mx-auto w-full max-w-[500px]">
-        <Text className="text-center text-black text-base -mt-[3px]">
-          {customerName.firstName && customerName.lastName
-            ? `Customer ID : ${customerName.cusId}`
-            : "Customer ID : 1002"}
-        </Text>
+        {displayCusId ? (
+          <Text className="text-center text-black text-base -mt-[3px]">
+            Customer ID : {displayCusId}
+          </Text>
+        ) : null}
       </View>
 
       <ScrollView

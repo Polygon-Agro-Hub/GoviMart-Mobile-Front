@@ -199,7 +199,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     }
 
     if (!nic.trim()) {
-      newErrors.nic = "NIC Number is required";
+      newErrors.nic = "NIC number is required";
     } else if (
       !/^[0-9]{9}[vV]$/.test(nic.trim()) &&
       !/^[0-9]{12}$/.test(nic.trim())
@@ -348,7 +348,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           setErrors((prev) => ({
             ...prev,
             email: combined.includes("already")
-              ? "Email already in use"
+              ? "Email already exists"
               : "Invalid email address",
           }));
           fieldErrorFound = true;
@@ -387,7 +387,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         setErrors((prev) => ({
           ...prev,
           email: combined.includes("already")
-            ? "Email already in use"
+            ? "Email already exists"
             : "Invalid email address",
         }));
         fieldErrorFound = true;
@@ -416,9 +416,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     <TouchableOpacity
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
-      className={`px-5 py-3.5 flex-row justify-between items-center ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row justify-between items-center ${!isLast ? "border-b border-gray-100" : ""
+        }`}
     >
       <View className="flex-row items-center gap-x-3">
         <Image
@@ -468,11 +467,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "home"
-                  ? "font-bold text-black"
-                  : "font-semibold text-gray-400"
-              }`}
+              className={`text-sm ${tab === "home"
+                ? "font-bold text-black"
+                : "font-semibold text-gray-400"
+                }`}
             >
               I'm Buying for Home
             </Text>
@@ -496,11 +494,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "business"
-                  ? "font-bold text-black"
-                  : "font-semibold text-gray-400"
-              }`}
+              className={`text-sm ${tab === "business"
+                ? "font-bold text-black"
+                : "font-semibold text-gray-400"
+                }`}
             >
               I'm Buying for Business
             </Text>
@@ -528,11 +525,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 onPress={() => setIsTitleModalOpen(true)}
                 activeOpacity={0.8}
                 style={{ height: 50 }}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
-                  errors.title
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-black bg-white"
-                }`}
+                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${errors.title
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-black bg-white"
+                  }`}
               >
                 <View className="flex-row items-center gap-x-2">
                   <FontAwesome6 name="user-large" size={14} color="black" />
@@ -552,11 +548,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             <View className="flex-1">
               <View
                 style={{ height: 50 }}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                  errors.firstName
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-black bg-white"
-                }`}
+                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.firstName
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-black bg-white"
+                  }`}
               >
                 <FontAwesome6 name="user-large" size={14} color="black" />
                 <TextInput
@@ -599,11 +594,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.lastName
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.lastName
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome6 name="user-large" size={14} color="black" />
               <TextInput
@@ -648,11 +642,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   onPress={() => setIsPhoneCodeModalOpen(true)}
                   activeOpacity={0.8}
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                    errors.phoneCode
-                      ? "border-red-500 bg-red-50/10"
-                      : "border-black"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.phoneCode
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-black"
+                    }`}
                 >
                   <View className="flex-row items-center gap-x-2">
                     {phoneCode ? (
@@ -691,11 +684,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View className="flex-1">
                 <View
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.phoneNumber
-                      ? "border-red-500 bg-red-50/10"
-                      : "border-black bg-white"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.phoneNumber
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-black bg-white"
+                    }`}
                 >
                   <FontAwesome5 name="phone-alt" size={14} color="black" />
                   <TextInput
@@ -750,11 +742,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.email
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.email
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <Entypo name="mail" size={16} color="black" />
               <TextInput
@@ -796,11 +787,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.nic
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.nic
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome name="id-card" size={16} color="black" />
               <TextInput
@@ -843,11 +833,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View>
                 <View
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.companyName
-                      ? "border-red-500 bg-red-50/10"
-                      : "border-black bg-white"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyName
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-black bg-white"
+                    }`}
                 >
                   <FontAwesome name="building" size={16} color="black" />
                   <TextInput
@@ -892,11 +881,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                       onPress={() => setIsCompanyPhoneCodeModalOpen(true)}
                       activeOpacity={0.8}
                       style={{ height: 50 }}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                        errors.companyPhoneCode
-                          ? "border-red-500 bg-red-50/10"
-                          : "border-black"
-                      }`}
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.companyPhoneCode
+                        ? "border-red-500 bg-red-50/10"
+                        : "border-black"
+                        }`}
                     >
                       <View className="flex-row items-center gap-x-2">
                         {companyPhoneCode ? (
@@ -942,11 +930,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   <View className="flex-1">
                     <View
                       style={{ height: 50 }}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                        errors.companyNumber
-                          ? "border-red-500 bg-red-50/10"
-                          : "border-black bg-white"
-                      }`}
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyNumber
+                        ? "border-red-500 bg-red-50/10"
+                        : "border-black bg-white"
+                        }`}
                     >
                       <FontAwesome5 name="phone-alt" size={14} color="black" />
                       <TextInput
@@ -1010,11 +997,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.password
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.password
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -1079,11 +1065,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.confirmPassword
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.confirmPassword
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -1141,11 +1126,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 className="flex-row items-start gap-x-3 mt-2 px-1"
               >
                 <View
-                  className={`w-5 h-5 rounded border items-center justify-center ${
-                    agreeToTerms
-                      ? "bg-black border-black"
-                      : "border-black bg-white"
-                  }`}
+                  className={`w-5 h-5 rounded border items-center justify-center ${agreeToTerms
+                    ? "bg-black border-black"
+                    : "border-black bg-white"
+                    }`}
                 >
                   {agreeToTerms && (
                     <Ionicons name="checkmark" size={14} color="white" />
