@@ -94,10 +94,25 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
 
     if (!currentPassword.trim()) {
       newErrors.currentPassword = "Current password is required";
+    } else if (/\s/.test(currentPassword)) {
+      newErrors.currentPassword = "Password cannot contain spaces";
     }
 
     if (!newPassword) {
       newErrors.newPassword = "New password is required";
+    } else if (/\s/.test(newPassword)) {
+      newErrors.newPassword = "Password cannot contain spaces";
+    } else if (
+      currentPassword.trim() &&
+      newPassword === currentPassword.trim()
+    ) {
+      newErrors.newPassword =
+        "New password cannot be the same as your current password";
+      showAlert(
+        "Update Failed",
+        "New password cannot be the same as your current password.",
+        "error"
+      );
     } else {
       const hasUppercase = /[A-Z]/.test(newPassword);
       const hasNumber = /[0-9]/.test(newPassword);
@@ -126,6 +141,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
 
     if (!confirmNewPassword) {
       newErrors.confirmNewPassword = "Confirm password is required";
+    } else if (/\s/.test(confirmNewPassword)) {
+      newErrors.confirmNewPassword = "Password cannot contain spaces";
     } else if (confirmNewPassword !== newPassword) {
       newErrors.confirmNewPassword = "Passwords do not match";
     }
@@ -199,16 +216,29 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
           { cancelable: false },
         );
       } else {
-        showAlert(
-          "Update Failed",
-          response.data.message || "Failed to update password.",
-        );
+        const msg =
+          response.data?.message || "Failed to update password.";
+        if (msg.toLowerCase().includes("same as")) {
+          setErrors((prev) => ({
+            ...prev,
+            newPassword:
+              "New password cannot be the same as your current password",
+          }));
+        }
+        showAlert("Update Failed", msg, "error");
       }
     } catch (err: any) {
       console.error("Password update error:", err);
       const msg =
         err.response?.data?.message || "An unexpected error occurred.";
-      showAlert("Error", msg);
+      if (msg.toLowerCase().includes("same as")) {
+        setErrors((prev) => ({
+          ...prev,
+          newPassword:
+            "New password cannot be the same as your current password",
+        }));
+      }
+      showAlert("Update Failed", msg, "error");
     } finally {
       setLoading(false);
     }
@@ -279,7 +309,12 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showCurrentPassword}
                       value={currentPassword}
-                      onChangeText={setCurrentPassword}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/\s/g, "");
+                        setCurrentPassword(clean);
+                        if (errors.currentPassword)
+                          setErrors((prev) => ({ ...prev, currentPassword: "" }));
+                      }}
                       autoCapitalize="none"
                       className="text-sm text-black font-semibold p-0 h-9"
                     />
@@ -327,7 +362,12 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showNewPassword}
                       value={newPassword}
-                      onChangeText={setNewPassword}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/\s/g, "");
+                        setNewPassword(clean);
+                        if (errors.newPassword)
+                          setErrors((prev) => ({ ...prev, newPassword: "" }));
+                      }}
                       autoCapitalize="none"
                       className="text-sm text-black font-semibold p-0 h-9"
                     />
@@ -375,7 +415,12 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showConfirmNewPassword}
                       value={confirmNewPassword}
-                      onChangeText={setConfirmNewPassword}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/\s/g, "");
+                        setConfirmNewPassword(clean);
+                        if (errors.confirmNewPassword)
+                          setErrors((prev) => ({ ...prev, confirmNewPassword: "" }));
+                      }}
                       autoCapitalize="none"
                       className="text-sm text-black font-semibold p-0 h-9"
                     />

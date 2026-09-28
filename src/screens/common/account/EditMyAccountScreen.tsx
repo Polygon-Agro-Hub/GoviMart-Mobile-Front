@@ -14,6 +14,7 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
@@ -27,6 +28,7 @@ const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
+import { AlertModal } from "@/component/common/AlertModal";
 import customerService from "@/services/customer/customer.service";
 import CameraAccess from "@/screens/common/permission/CameraAccess";
 
@@ -128,6 +130,56 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
+  const [profileImageError, setProfileImageError] = useState<string | null>(null);
+
+  // AlertModal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: "success" | "error" = "error"
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+  const checkImageSize = async (
+    asset: ImagePicker.ImagePickerAsset
+  ): Promise<boolean> => {
+    let size = asset.fileSize || 0;
+    if (!size) {
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+        if (fileInfo.exists && typeof (fileInfo as any).size === "number") {
+          size = (fileInfo as any).size;
+        }
+      } catch (e) {
+        console.log("Failed to get image file size:", e);
+      }
+    }
+
+    if (size > MAX_IMAGE_SIZE) {
+      setProfileImageError("Image size must not exceed 5MB");
+      showAlert(
+        "Image Too Large",
+        "Image size must not exceed 5MB. Please choose a smaller image.",
+        "error"
+      );
+      return false;
+    }
+
+    setProfileImageError(null);
+    return true;
+  };
+
   const [updating, setUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [originalMobileCode, setOriginalMobileCode] = useState("");
@@ -403,6 +455,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const uploadImage = async (uri: string) => {
     try {
       setUploadingImage(true);
+      setProfileImageError(null);
       const filename = uri.split("/").pop() || "profile.jpg";
       const match = /\.(\w+)$/.exec(filename);
       const ext = match ? match[1].toLowerCase() : "jpg";
@@ -413,17 +466,21 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       if (response.data && response.data.status && response.data.data?.imageUrl) {
         const uploadedUrl = response.data.data.imageUrl;
         setProfileImage(uploadedUrl);
+        setProfileImageError(null);
         dispatch(updateUserProfileImage({ image: uploadedUrl }));
-        Alert.alert("Success", "Profile photo updated successfully.");
+        showAlert("Success", "Profile photo updated successfully.", "success");
       } else {
-        Alert.alert("Upload Failed", response.data?.message || "Failed to upload image.");
+        const msg = response.data?.message || "Failed to upload image.";
+        setProfileImageError(msg);
+        showAlert("Upload Failed", msg, "error");
       }
     } catch (error: any) {
       console.log("Error uploading profile image:", error);
       const errorMsg =
         error?.response?.data?.message ||
         "Failed to upload profile photo. Please try again.";
-      Alert.alert("Error", errorMsg);
+      setProfileImageError(errorMsg);
+      showAlert("Upload Failed", errorMsg, "error");
     } finally {
       setUploadingImage(false);
     }
@@ -444,11 +501,14 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        await uploadImage(result.assets[0].uri);
+        const isValid = await checkImageSize(result.assets[0]);
+        if (isValid) {
+          await uploadImage(result.assets[0].uri);
+        }
       }
     } catch (error) {
       console.log("Error taking photo:", error);
-      Alert.alert("Error", "Could not take photo. Please try again.");
+      showAlert("Error", "Could not take photo. Please try again.", "error");
     }
   };
 
@@ -498,11 +558,14 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        await uploadImage(result.assets[0].uri);
+        const isValid = await checkImageSize(result.assets[0]);
+        if (isValid) {
+          await uploadImage(result.assets[0].uri);
+        }
       }
     } catch (error) {
       console.log("Error choosing from gallery:", error);
-      Alert.alert("Error", "Could not select image. Please try again.");
+      showAlert("Error", "Could not select image. Please try again.", "error");
     }
   };
 
@@ -510,6 +573,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const handleRemovePhoto = () => {
     setImagePickerModalVisible(false);
     setProfileImage(null);
+    setProfileImageError(null);
   };
 
   // DELELE OPTION
@@ -717,6 +781,34 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 <FontAwesome6 name="pen" size={13} color="#FFFFFF" solid />
               </TouchableOpacity>
             </View>
+
+            {profileImageError ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Ionicons
+                  name="alert-circle"
+                  size={16}
+                  color="#FF3B30"
+                  style={{ marginRight: 5 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#FF3B30",
+                    fontWeight: "500",
+                    textAlign: "center",
+                  }}
+                >
+                  {profileImageError}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* FORM */}
@@ -1300,6 +1392,15 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           onClose={() => setShowCameraPermission(false)}
         />
       </Modal>
+
+      {/* ALERT MODAL */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 };

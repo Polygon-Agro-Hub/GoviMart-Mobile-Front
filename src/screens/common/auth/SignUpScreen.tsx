@@ -59,13 +59,31 @@ const getFlagUrl = (countryCode: string): string => {
   return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
 };
 
-const NAME_ALLOWED_REGEX = /^[a-zA-Z\s'-]*$/;
+const NAME_ALLOWED_REGEX = /^[a-zA-Z'-]*$/;
 
-const sanitizeName = (text: string): string => {
+const capitalizeName = (text: string): string => {
+  if (!text) return "";
   return text
-    .replace(/[^a-zA-Z\s'-]/g, "")
-    .replace(/^[\s'-]+/, "")
-    .replace(/\s{2,}/g, " ");
+    .trim()
+    .replace(/(?:^|\s|-)([a-z])/g, (_, c) => c.toUpperCase());
+};
+
+const sanitizeNameLive = (text: string, prevText: string = ""): string => {
+  let cleaned = text.replace(/[^a-zA-Z'-]/g, "");
+
+  if (!cleaned) return "";
+
+  // If previous text was a single letter (e.g. "A" or "") and IME buffer sent duplicate (e.g. "Aas" or "Aa"), strip ghost duplicate
+  if (
+    prevText.length <= 1 &&
+    cleaned.length >= 2 &&
+    cleaned[0].toLowerCase() === cleaned[1].toLowerCase()
+  ) {
+    cleaned = cleaned[0] + cleaned.slice(2);
+  }
+
+  // Capitalize first character live
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
 const sanitizeNIC = (text: string): string => {
@@ -153,7 +171,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     /^7[0-9]{8}$/.test(num);
 
   const isValidGenericMobile = (num: string): boolean =>
-    /^[0-9]{9,10}$/.test(num);
+    /^[0-9]{9}$/.test(num);
 
   // Validate fields helper
   const validate = () => {
@@ -163,23 +181,28 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
     if (!firstName.trim()) {
       newErrors.firstName = "First name is required";
+    } else if (/\s/.test(firstName)) {
+      newErrors.firstName = "First name cannot contain spaces";
     } else if (!NAME_ALLOWED_REGEX.test(firstName.trim())) {
       newErrors.firstName = "First name must contain only letters";
     }
 
     if (!lastName.trim()) {
       newErrors.lastName = "Last name is required";
+    } else if (/\s/.test(lastName)) {
+      newErrors.lastName = "Last name cannot contain spaces";
     } else if (!NAME_ALLOWED_REGEX.test(lastName.trim())) {
       newErrors.lastName = "Last name must contain only letters";
     }
 
-    // User Mobile Phone Validate (Separated)
     // User Mobile Phone Validate (Separated)
     if (!phoneCode) {
       newErrors.phoneCode = "Country code is required";
     }
     if (!phoneNumber.trim()) {
       newErrors.phoneNumber = "Mobile number is required";
+    } else if (/\s/.test(phoneNumber)) {
+      newErrors.phoneNumber = "Mobile number cannot contain spaces";
     } else {
       const cleanedPhone = phoneNumber.trim().replace(/^0+/, ""); // strip ALL leading zeros, not just one
       if (phoneCode === "+94") {
@@ -194,12 +217,16 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
+    } else if (/\s/.test(email)) {
+      newErrors.email = "Email cannot contain spaces";
     } else if (!isValidEmail(email)) {
       newErrors.email = "Invalid email address";
     }
 
     if (!nic.trim()) {
       newErrors.nic = "NIC number is required";
+    } else if (/\s/.test(nic)) {
+      newErrors.nic = "NIC number cannot contain spaces";
     } else if (
       !/^[0-9]{9}[vV]$/.test(nic.trim()) &&
       !/^[0-9]{12}$/.test(nic.trim())
@@ -208,8 +235,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     }
 
     if (tab === "business") {
-      if (!companyName.trim())
+      if (!companyName.trim()) {
         newErrors.companyName = "Company name is required";
+      } else if (/\s/.test(companyName)) {
+        newErrors.companyName = "Company name cannot contain spaces";
+      }
 
       // Company Mobile Phone Validate (Separated)
       if (!companyPhoneCode) {
@@ -217,6 +247,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       }
       if (!companyNumber.trim()) {
         newErrors.companyNumber = "Company number is required";
+      } else if (/\s/.test(companyNumber)) {
+        newErrors.companyNumber = "Company number cannot contain spaces";
       } else {
         const cleanedCompanyPhone = companyNumber.trim().replace(/^0+/, "");
         if (companyPhoneCode === "+94") {
@@ -231,8 +263,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     }
 
     // Password validations
-    if (!password) newErrors.password = "Password is required";
-    else {
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (/\s/.test(password)) {
+      newErrors.password = "Password cannot contain spaces";
+    } else {
       const hasUppercase = /[A-Z]/.test(password);
       const hasNumber = /[0-9]/.test(password);
       const hasSpecialChar =
@@ -258,9 +293,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       }
     }
 
-    if (!confirmPassword)
+    if (!confirmPassword) {
       newErrors.confirmPassword = "Confirm password is required";
-    else if (confirmPassword !== password) {
+    } else if (/\s/.test(confirmPassword)) {
+      newErrors.confirmPassword = "Confirm password cannot contain spaces";
+    } else if (confirmPassword !== password) {
       newErrors.confirmPassword = "Passwords do not match";
     }
 
@@ -286,8 +323,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
       const payload = {
         title,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: capitalizeName(firstName.trim()),
+        lastName: capitalizeName(lastName.trim()),
         phoneCode,
         phoneNumber: cleanedPhone,
         buyerType: tab === "home" ? "Retail" : "Wholesale",
@@ -321,7 +358,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         } else {
           Alert.alert(
             "Registration Successful",
-            "Your account has been created. Please sign in.",
+            "Your Polygon account created successfully.",
             [{ text: "OK", onPress: () => navigation.navigate("Login") }],
           );
         }
@@ -559,11 +596,14 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   placeholderTextColor="#000000"
                   value={firstName}
                   onChangeText={(text) => {
-                    setFirstName(sanitizeName(text));
+                    setFirstName((prev) => sanitizeNameLive(text, prev));
                     if (errors.firstName)
                       setErrors((prev) => ({ ...prev, firstName: "" }));
                   }}
+                  onBlur={() => setFirstName((prev) => capitalizeName(prev))}
+                  autoCapitalize="words"
                   autoCorrect={false}
+                  spellCheck={false}
                   maxLength={50}
                   style={{
                     flex: 1,
@@ -605,11 +645,14 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 placeholderTextColor="#000000"
                 value={lastName}
                 onChangeText={(text) => {
-                  setLastName(sanitizeName(text));
+                  setLastName((prev) => sanitizeNameLive(text, prev));
                   if (errors.lastName)
                     setErrors((prev) => ({ ...prev, lastName: "" }));
                 }}
+                onBlur={() => setLastName((prev) => capitalizeName(prev))}
+                autoCapitalize="words"
                 autoCorrect={false}
+                spellCheck={false}
                 maxLength={50}
                 style={{
                   flex: 1,
@@ -696,11 +739,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     keyboardType="number-pad"
                     value={phoneNumber}
                     onChangeText={(text) => {
-                      setPhoneNumber(text.replace(/[^0-9]/g, ""));
+                      const clean = text.replace(/[^0-9]/g, "").slice(0, 9);
+                      setPhoneNumber(clean);
                       if (errors.phoneNumber)
                         setErrors((prev) => ({ ...prev, phoneNumber: "" }));
                     }}
-                    maxLength={phoneCode === "+94" ? 9 : 10}
+                    maxLength={9}
                     style={{
                       flex: 1,
                       paddingTop: 0,
@@ -755,7 +799,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 autoCapitalize="none"
                 value={email}
                 onChangeText={(text) => {
-                  setEmail(text);
+                  const clean = text.replace(/\s/g, "");
+                  setEmail(clean);
                   if (errors.email)
                     setErrors((prev) => ({ ...prev, email: "" }));
                 }}
@@ -844,7 +889,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     placeholderTextColor="#000000"
                     value={companyName}
                     onChangeText={(text) => {
-                      setCompanyName(text);
+                      const clean = text.replace(/\s/g, "");
+                      setCompanyName(clean);
                       if (errors.companyName)
                         setErrors((prev) => ({ ...prev, companyName: "" }));
                     }}
@@ -942,14 +988,15 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         keyboardType="number-pad"
                         value={companyNumber}
                         onChangeText={(text) => {
-                          setCompanyNumber(text.replace(/[^0-9]/g, ""));
+                          const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "").slice(0, 9);
+                          setCompanyNumber(clean);
                           if (errors.companyNumber)
                             setErrors((prev) => ({
                               ...prev,
                               companyNumber: "",
                             }));
                         }}
-                        maxLength={10}
+                        maxLength={9}
                         style={{
                           flex: 1,
                           paddingTop: 0,
@@ -1009,7 +1056,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={(text) => {
-                  setPassword(text);
+                  const clean = text.replace(/\s/g, "");
+                  setPassword(clean);
                   if (errors.password)
                     setErrors((prev) => ({ ...prev, password: "" }));
                 }}
@@ -1077,7 +1125,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={(text) => {
-                  setConfirmPassword(text);
+                  const clean = text.replace(/\s/g, "");
+                  setConfirmPassword(clean);
                   if (errors.confirmPassword)
                     setErrors((prev) => ({ ...prev, confirmPassword: "" }));
                 }}
@@ -1250,6 +1299,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         onSelect={(items) => {
           if (items.length > 0) {
             setPhoneCode(items[0]);
+            setPhoneNumber((prev) => prev.slice(0, 9));
             setErrors((prev) => ({ ...prev, phoneCode: "" }));
           }
           setIsPhoneCodeModalOpen(false);
@@ -1277,6 +1327,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         onSelect={(items) => {
           if (items.length > 0) {
             setCompanyPhoneCode(items[0]);
+            setCompanyNumber((prev) => prev.slice(0, 9));
             setErrors((prev) => ({ ...prev, companyPhoneCode: "" }));
           }
           setIsCompanyPhoneCodeModalOpen(false);

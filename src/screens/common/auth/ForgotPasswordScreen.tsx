@@ -89,11 +89,11 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-base font-bold text-black">
+                  <Text className="text-[14px] font-bold text-black">
                     Reset via Email
                   </Text>
-                  <Text className="text-xs text-[#747990] mt-1">
-                    We'll send a reset link to{" "}
+                  <Text className="text-[14px] text-[#747990] mt-2 leading-[20px]">
+                    We'll send a reset link to{"\n"}
                     <Text className="font-bold text-black">email address</Text>
                   </Text>
                 </View>
@@ -124,11 +124,11 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-base font-bold text-black">
+                  <Text className="text-[14px] font-bold text-black">
                     Reset via SMS
                   </Text>
-                  <Text className="text-xs text-[#747990] mt-1">
-                    We'll send a code to{" "}
+                  <Text className="text-[14px] text-[#747990] mt-2 leading-[20px]">
+                    We'll send a code to{"\n"}
                     <Text className="font-bold text-black">
                       your mobile number
                     </Text>
@@ -142,8 +142,8 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
 
         {/* Bottom Support Section */}
         <View className="mt-8 pt-4 bg-[#F2F2F6] rounded-3xl px-5">
-          <Text className="text-sm font-bold text-black">Need Help?</Text>
-          <Text className="text-xs text-[#494A65] mt-1 mb-4 leading-relaxed">
+          <Text className="text-[13px] font-bold text-black">Need Help?</Text>
+          <Text className="text-[11px] text-[#494A65] mt-1 mb-4 leading-relaxed">
             Contact our support team if you're having trouble resetting your
             password.
           </Text>
