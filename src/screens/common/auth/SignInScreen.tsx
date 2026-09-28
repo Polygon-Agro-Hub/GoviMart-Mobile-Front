@@ -190,6 +190,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           {
             text: "OK",
             onPress: async () => {
+              const isWholesale =
+                (buyerType || "").toLowerCase() === "wholesale";
+
               let targetScreen: keyof RootStackParamList = "Home";
               let targetParams: any = undefined;
 
@@ -199,9 +202,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
                   number: phoneNumber,
-                  redirectTo: "ExcludeListAdd",
+                  buyerType: buyerType,
+                  redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
                 };
-              } else if (firstTimeUser === 0) {
+              } else if (firstTimeUser === 0 && !isWholesale) {
                 targetScreen = "ExcludeListAdd";
                 targetParams = {
                   customerId: response.data.data.id,
