@@ -626,7 +626,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
           className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
         >
           <Text className="text-white text-base font-bold">
-            Continue
+            Add More
           </Text>
         </TouchableOpacity>
       </View>

@@ -48,9 +48,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     route.params?.resetToken || ""
   );
 
-  const storageKey = `@forgot_pwd_otp_attempts_${identifier
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toLowerCase()}`;
+  const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const storageKey = `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
+  const lockoutKey = `@forgot_pwd_lockout_${cleanIdentifier}`;
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -65,6 +65,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"error" | "success">("error");
 
   // Input Refs
   const ref_1 = useRef<TextInput>(null);
@@ -107,15 +108,47 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   // Check rate limit on initial mount
   useEffect(() => {
     const checkInitialRateLimit = async () => {
+      // 1. Check persistent lockout
+      try {
+        const storedLockout = await AsyncStorage.getItem(lockoutKey);
+        if (storedLockout) {
+          const lockoutUntil = parseInt(storedLockout, 10);
+          const remainingMs = lockoutUntil - Date.now();
+          if (remainingMs > 0) {
+            const remainingSec = Math.ceil(remainingMs / 1000);
+            setTimeLeft(remainingSec);
+            setIsRateLimited(true);
+            setIsExpired(false);
+            setAlertType("error");
+            setAlertTitle("Too Many Attempts");
+            setAlertMessage(
+              "Too many verification attempts. Please try again after 15 minutes."
+            );
+            setAlertVisible(true);
+            return;
+          } else {
+            await AsyncStorage.removeItem(lockoutKey);
+          }
+        }
+      } catch (e) {
+        console.log("Error checking stored lockout:", e);
+      }
+
+      // 2. Check recent attempts count
       const attempts = await getRecentAttempts(storageKey);
       if (attempts.length >= MAX_OTP_ATTEMPTS) {
         const oldest = attempts[0];
         const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
         const remainingSec = Math.ceil(remainingMs / 1000);
         if (remainingSec > 0) {
+          await AsyncStorage.setItem(
+            lockoutKey,
+            String(Date.now() + remainingMs)
+          );
           setTimeLeft(remainingSec);
           setIsRateLimited(true);
           setIsExpired(false);
+          setAlertType("error");
           setAlertTitle("Too Many Attempts");
           setAlertMessage(
             "Too many verification attempts. Please try again after 15 minutes."
@@ -130,7 +163,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       }
     };
     checkInitialRateLimit();
-  }, [storageKey]);
+  }, [storageKey, lockoutKey]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -186,6 +219,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const handleVerify = async () => {
     const code = otp.join("");
     if (code.length < 5) {
+      setAlertType("error");
       setAlertTitle("Invalid Code");
       setAlertMessage("Please enter the full 5-digit verification code.");
       setAlertVisible(true);
@@ -193,6 +227,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     }
 
     if (isExpired) {
+      setAlertType("error");
       setAlertTitle("Code Expired");
       setAlertMessage(
         "Your verification code has expired. Please request a new code."
@@ -211,22 +246,54 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
       if (response.data && response.data.status) {
         await clearAttempts(storageKey);
+        await AsyncStorage.removeItem(lockoutKey);
         navigation.navigate("ResetPassword", {
           verifiedResetToken: response.data.verifiedResetToken,
         });
       } else {
-        setAlertTitle("Verification Failed");
-        setAlertMessage(
-          response.data?.message || "Failed to verify the code."
-        );
+        const is429 = response.data?.isRateLimited;
+        const msg = response.data?.message || "Failed to verify the code.";
+        setAlertType("error");
+        if (is429 || msg.toLowerCase().includes("too many")) {
+          const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+          await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+          setTimeLeft(900);
+          setIsRateLimited(true);
+          setIsExpired(false);
+          setAlertTitle("Too Many Attempts");
+          setAlertMessage(
+            "Too many verification attempts. Please try again after 15 minutes."
+          );
+        } else {
+          setAlertTitle("Verification Failed");
+          setAlertMessage(msg);
+          setOtp(["", "", "", "", ""]);
+          refs[0].current?.focus();
+        }
         setAlertVisible(true);
       }
     } catch (err: any) {
       console.error("Verification error:", err);
+      const is429 = err.response?.status === 429;
       const msg =
         err.response?.data?.message || "An unexpected error occurred.";
-      setAlertTitle("Verification Error");
-      setAlertMessage(msg);
+      setAlertType("error");
+      if (is429 || msg.toLowerCase().includes("too many")) {
+        const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+        await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+        setTimeLeft(900);
+        setIsRateLimited(true);
+        setIsExpired(false);
+        setAlertTitle("Too Many Attempts");
+        setAlertMessage(
+          "Too many verification attempts. Please try again after 15 minutes."
+        );
+      } else {
+        setAlertTitle("Verification Error");
+        setAlertMessage(msg);
+        setOtp(["", "", "", "", ""]);
+        refs[0].current?.focus();
+      }
       setAlertVisible(true);
     } finally {
       setIsVerifying(false);
@@ -234,15 +301,44 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const handleResend = async () => {
+    // 1. Check persistent lockout
+    try {
+      const storedLockout = await AsyncStorage.getItem(lockoutKey);
+      if (storedLockout) {
+        const lockoutUntil = parseInt(storedLockout, 10);
+        const remainingMs = lockoutUntil - Date.now();
+        if (remainingMs > 0) {
+          const remainingSec = Math.ceil(remainingMs / 1000);
+          setTimeLeft(remainingSec);
+          setIsRateLimited(true);
+          setIsExpired(false);
+          setAlertType("error");
+          setAlertTitle("Too Many Attempts");
+          setAlertMessage(
+            "Too many verification attempts. Please try again after 15 minutes."
+          );
+          setAlertVisible(true);
+          return;
+        } else {
+          await AsyncStorage.removeItem(lockoutKey);
+        }
+      }
+    } catch (e) {}
+
     const attempts = await getRecentAttempts(storageKey);
     if (attempts.length >= MAX_OTP_ATTEMPTS) {
       const oldest = attempts[0];
       const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
       const remainingSec = Math.ceil(remainingMs / 1000);
       const waitTime = remainingSec > 0 ? remainingSec : 900;
+      await AsyncStorage.setItem(
+        lockoutKey,
+        String(Date.now() + waitTime * 1000)
+      );
       setTimeLeft(waitTime);
       setIsRateLimited(true);
       setIsExpired(false);
+      setAlertType("error");
       setAlertTitle("Too Many Attempts");
       setAlertMessage(
         "Too many verification attempts. Please try again after 15 minutes."
@@ -267,35 +363,74 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           const oldest = updated[0];
           const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
           const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+          await AsyncStorage.setItem(
+            lockoutKey,
+            String(Date.now() + remainingSec * 1000)
+          );
           setTimeLeft(remainingSec);
           setIsRateLimited(true);
           setIsExpired(false);
-          Alert.alert(
-            "Code Resent",
+          setAlertType("error");
+          setAlertTitle("Code Resent");
+          setAlertMessage(
             "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes."
           );
+          setAlertVisible(true);
         } else {
           setTimeLeft(240);
           setIsExpired(false);
-          Alert.alert(
-            "Code Resent",
-            response.data.message || "A new 5-digit verification code has been sent."
+          setAlertType("success");
+          setAlertTitle("Code Resent");
+          setAlertMessage(
+            response.data.message ||
+              (method === "email"
+                ? "Verification code has been resent to your email address."
+                : "Verification code has been resent to your mobile number.")
           );
+          setAlertVisible(true);
         }
         refs[0].current?.focus();
       } else {
-        setAlertTitle("Resend Failed");
-        setAlertMessage(
-          response.data?.message || "Failed to resend verification code."
-        );
+        const is429 = response.data?.isRateLimited;
+        const msg =
+          response.data?.message || "Failed to resend verification code.";
+        setAlertType("error");
+        if (is429 || msg.toLowerCase().includes("too many")) {
+          const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+          await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+          setTimeLeft(900);
+          setIsRateLimited(true);
+          setIsExpired(false);
+          setAlertTitle("Too Many Attempts");
+          setAlertMessage(
+            "Too many verification attempts. Please try again after 15 minutes."
+          );
+        } else {
+          setAlertTitle("Resend Failed");
+          setAlertMessage(msg);
+        }
         setAlertVisible(true);
       }
     } catch (err: any) {
       console.error("Resend error:", err);
+      const is429 = err.response?.status === 429;
       const msg =
         err.response?.data?.message || "Failed to resend verification code.";
-      setAlertTitle("Resend Error");
-      setAlertMessage(msg);
+      setAlertType("error");
+      if (is429 || msg.toLowerCase().includes("too many")) {
+        const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+        await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+        setTimeLeft(900);
+        setIsRateLimited(true);
+        setIsExpired(false);
+        setAlertTitle("Too Many Attempts");
+        setAlertMessage(
+          "Too many verification attempts. Please try again after 15 minutes."
+        );
+      } else {
+        setAlertTitle("Resend Error");
+        setAlertMessage(msg);
+      }
       setAlertVisible(true);
     } finally {
       setIsResending(false);
@@ -392,7 +527,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                   Too Many Attempts!
                 </Text>
                 <Text className="text-xs text-black leading-relaxed">
-                  Too many login attempts. Please try again after 15 minutes.
+                  Too many verification attempts. Please try again after 15 minutes.
                 </Text>
               </View>
             </View>
@@ -487,7 +622,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         visible={alertVisible}
         title={alertTitle}
         message={alertMessage}
-        type="error"
+        type={alertType}
         onClose={() => setAlertVisible(false)}
         autoClose={false}
         showOkButton={true}

@@ -14,6 +14,7 @@ export interface MapMarker {
     timeText?: string;
     color?: string;
     autoOpenPopup?: boolean;
+    showPopup?: boolean;
 }
 
 export interface OpenStreetMapProps {
@@ -50,7 +51,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     const htmlContent = useMemo(() => {
         const markerList = markers && markers.length > 0
             ? markers
-            : [{ latitude, longitude, color: pinColor, autoOpenPopup: true }];
+            : [{ latitude, longitude, color: pinColor, autoOpenPopup: false, showPopup: false }];
 
         const markersJson = JSON.stringify(markerList);
         const canSelectLocation = Boolean(onLocationSelect);
@@ -136,19 +137,27 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
 
         function buildPopupHtml(m) {
             var title = m.title || '';
-            var isOpen = m.isOpen !== undefined ? m.isOpen : true;
-            var statusText = m.statusText || (isOpen ? 'Open' : 'Closed');
-            var statusColor = m.statusColor || (isOpen ? '#FF9114' : '#FF2D55');
-            var dotColor = isOpen ? '#FF9114' : '#94A3B8';
-            var timeText = m.timeText || m.description || '08:00 AM – 09:00 PM';
+            var hasStatus = Boolean(m.statusText);
+            var hasTime = Boolean(m.timeText || m.description);
 
-            return '<div style="text-align: left; min-width: 155px; padding: 2px 2px;">' +
-                   '<div style="font-size: 15px; font-weight: 700; color: #000000; margin-bottom: 4px; letter-spacing: -0.2px; font-family: -apple-system, BlinkMacSystemFont, \\'Segoe UI\\', Roboto, sans-serif;">' + title + '</div>' +
-                   '<div style="font-size: 13px; display: flex; align-items: center; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, \\'Segoe UI\\', Roboto, sans-serif;">' +
-                   '<span style="color:' + statusColor + '; font-weight: 700; margin-right: 5px;">' + statusText + '</span>' +
-                   '<span style="color:' + dotColor + '; font-weight: 700; margin-right: 5px;">•</span>' +
-                   '<span style="color: #475569; font-weight: 500;">' + timeText + '</span>' +
-                   '</div>' +
+            var extraInfoHtml = '';
+            if (hasStatus || hasTime) {
+                var isOpen = m.isOpen !== undefined ? m.isOpen : true;
+                var statusText = m.statusText || (isOpen ? 'Open' : 'Closed');
+                var statusColor = m.statusColor || (isOpen ? '#FF9114' : '#FF2D55');
+                var dotColor = isOpen ? '#FF9114' : '#94A3B8';
+                var timeText = m.timeText || m.description || '';
+
+                extraInfoHtml = '<div style="font-size: 13px; display: flex; align-items: center; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, \\'Segoe UI\\', Roboto, sans-serif;">' +
+                   (hasStatus ? '<span style="color:' + statusColor + '; font-weight: 700; margin-right: 5px;">' + statusText + '</span>' : '') +
+                   (hasStatus && hasTime ? '<span style="color:' + dotColor + '; font-weight: 700; margin-right: 5px;">•</span>' : '') +
+                   (hasTime ? '<span style="color: #475569; font-weight: 500;">' + timeText + '</span>' : '') +
+                   '</div>';
+            }
+
+            return '<div style="text-align: left; min-width: 120px; padding: 2px 2px;">' +
+                   '<div style="font-size: 15px; font-weight: 700; color: #000000; margin-bottom: ' + (extraInfoHtml ? '4px' : '0px') + '; letter-spacing: -0.2px; font-family: -apple-system, BlinkMacSystemFont, \\'Segoe UI\\', Roboto, sans-serif;">' + title + '</div>' +
+                   extraInfoHtml +
                    '</div>';
         }
 
@@ -218,7 +227,9 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                         icon: createPinIcon(m.color || currentPinColor)
                     }).addTo(map);
 
-                    if (m.title || m.description || m.statusText) {
+                    var shouldShowPopup = m.showPopup !== false && (m.title || m.description || m.statusText);
+
+                    if (shouldShowPopup) {
                         var popupHtml = buildPopupHtml(m);
                         marker.bindPopup(popupHtml, {
                             closeButton: false,
@@ -227,7 +238,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                             offset: [0, -4]
                         });
 
-                        if (m.autoOpenPopup || markerData.length === 1) {
+                        if (m.autoOpenPopup) {
                             setTimeout(function() {
                                 marker.openPopup();
                             }, 100);
@@ -235,7 +246,9 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
                     }
 
                     marker.on('click', function() {
-                        marker.openPopup();
+                        if (shouldShowPopup) {
+                            marker.openPopup();
+                        }
                         if (m.id && window.ReactNativeWebView) {
                             window.ReactNativeWebView.postMessage(JSON.stringify({
                                 type: 'onMarkerSelect',

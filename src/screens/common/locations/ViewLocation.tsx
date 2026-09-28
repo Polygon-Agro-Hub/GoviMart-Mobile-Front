@@ -66,7 +66,8 @@ const ViewLocation: React.FC<Props> = ({
                         latitude,
                         longitude,
                         title: title || "Delivery Location",
-                        color: "#000000"
+                        color: "#000000",
+                        showPopup: false,
                     }]}
                 />
             </View>

@@ -253,7 +253,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           await clearAttempts(storageKey);
           Alert.alert(
             "Registration Successful",
-            "Your account has been successfully created. Please sign in.",
+            "Your Polygon account created successfully.",
             [{ text: "OK", onPress: () => navigation.navigate("Login") }],
           );
         } else {
