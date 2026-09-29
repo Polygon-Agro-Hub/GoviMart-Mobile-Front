@@ -86,6 +86,14 @@ interface AddTimeSnapshot {
 // "D&AP"    -> Only Sale Price + Discount% badge, no struck-through actual price
 type DisplayType = "AP&SP&D" | "D&AP" | "AP&SP";
 
+const normalizeUnit = (raw?: string | null): "g" | "kg" => {
+  const norm = (raw || "g").toString().trim().toLowerCase();
+  if (norm === "kg" || norm === "kgs" || norm === "kilogram" || norm === "kilograms") {
+    return "kg";
+  }
+  return "g";
+};
+
 const CATEGORY_IMAGES: Record<string, any> = {
   Packages: require("@/assets/images/home/packages.webp"),
   Vegetables: require("@/assets/images/home/veggies.webp"),
@@ -916,12 +924,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       isCartSyncingRef.current = true;
 
       const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
-      const dbUnitType = (product.unitType || "g").toLowerCase();
+      const initialUnit: "g" | "kg" = normalizeUnit(product.unitType);
 
-      let initialUnit: "g" | "kg" = (dbUnitType === "kg" && rawStartValue < 1) || dbUnitType === "g" ? "g" : "kg";
-      let initialWeight = initialUnit === "g"
-        ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-        : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+      const initialWeight = initialUnit === "g"
+        ? Math.round(rawStartValue * 1000)
+        : parseFloat(rawStartValue.toFixed(3));
 
       const rawChangeBy =
         product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
@@ -930,13 +937,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const step =
         initialUnit === "g"
-          ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
-          : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+          ? Math.round(rawChangeBy * 1000)
+          : parseFloat(rawChangeBy.toFixed(3));
 
-      const minWeight =
-        initialUnit === "g"
-          ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-          : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+      const minWeight = initialWeight;
 
       const rawMaxQuantity =
         product.maxQuantity != null &&
@@ -948,12 +952,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       const maxWeight =
         rawMaxQuantity != null
           ? initialUnit === "g"
-            ? dbUnitType === "kg" || rawMaxQuantity <= 10
-              ? Math.round(rawMaxQuantity * 1000)
-              : Math.round(rawMaxQuantity)
-            : dbUnitType === "kg" || rawMaxQuantity <= 10
-              ? parseFloat(rawMaxQuantity.toFixed(3))
-              : parseFloat((rawMaxQuantity / 1000).toFixed(3))
+            ? Math.round(rawMaxQuantity * 1000)
+            : parseFloat(rawMaxQuantity.toFixed(3))
           : undefined;
 
       const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
@@ -1307,8 +1307,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const rawStartValue = isProduct
                     ? parseFloat(String(product.startValue ?? "1")) || 1
                     : 1;
-                  const rawUnitType = isProduct
-                    ? (product.unitType || "g").toLowerCase()
+                  const normUnit = isProduct
+                    ? normalizeUnit(product.unitType)
                     : "g";
                   const rawMaxQuantity =
                     isProduct &&
@@ -1319,15 +1319,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       : null;
                   const displayMaxQuantityText =
                     rawMaxQuantity != null && !isNaN(rawMaxQuantity)
-                      ? rawMaxQuantity < 1
+                      ? normUnit === "g"
                         ? `${Math.round(rawMaxQuantity * 1000)} g`
-                        : `${rawMaxQuantity} ${rawUnitType}`
+                        : `${rawMaxQuantity} kg`
                       : null;
 
                   const displayWeightText = isProduct
-                    ? rawStartValue < 1
+                    ? normUnit === "g"
                       ? `${Math.round(rawStartValue * 1000)} g`
-                      : `${rawStartValue} ${rawUnitType}`
+                      : `${rawStartValue} kg`
                     : "";
 
                   const normalPerUnit = isProduct
