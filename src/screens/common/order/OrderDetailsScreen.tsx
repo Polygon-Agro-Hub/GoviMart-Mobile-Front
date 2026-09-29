@@ -731,7 +731,983 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
+<<<<<<< HEAD
           <LoadingPage message="Loading Order Details..." fullScreen={false} />
+=======
+            {/* HEADER */}
+
+            <CustomHeader showBackButton navigation={navigation} title="Order Details" />
+
+            {/* CONTENT */}
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                    paddingHorizontal: 15,
+                    paddingTop: 3,
+                    paddingBottom: 30,
+                }}
+            >
+                {/* ORDER ID */}
+                <View
+                    style={{
+                        borderWidth: 1,
+                        borderColor: "#DDE3E8",
+                        borderRadius: 20,
+                        paddingHorizontal: 13,
+                        paddingTop: 15,
+                        paddingBottom: 15,
+                        marginBottom: 15,
+                    }}
+                >
+                    <Text
+                        style={{
+                            fontSize: 12,
+                            color: "#747990",
+                        }}
+                    >
+                        Order ID
+                    </Text>
+
+                    <Text
+                        style={{
+                            fontSize: 15,
+                            color: "#111",
+                            fontWeight: "600",
+                            marginTop: 3,
+                        }}
+                    >
+                        #{order?.invoiceNo || order?.invoiceNumber || order?.invNo || "N/A"}
+                    </Text>
+
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginTop: 8,
+                        }}
+                    >
+                        {/* Delivery Date */}
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                paddingRight: 4,
+                            }}
+                        >
+                            <Ionicons
+                                name="calendar-outline"
+                                size={11}
+                                color="#64748B"
+                            />
+                            <Text
+                                style={{
+                                    fontSize: 9,
+                                    color: "#475569",
+                                    fontWeight: "500",
+                                    marginLeft: 3,
+                                }}
+                            >
+                                {formatDate(order?.sheduleDate || order?.scheduleDate)}
+                            </Text>
+                        </View>
+
+                        <View
+                            style={{
+                                width: 1,
+                                height: 12,
+                                backgroundColor: "#E2E8F0",
+                            }}
+                        />
+
+                        {/* Time Slot */}
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                paddingHorizontal: 4,
+                            }}
+                        >
+                            <Ionicons
+                                name="time-outline"
+                                size={11}
+                                color="#64748B"
+                            />
+                            <Text
+                                style={{
+                                    fontSize: 9,
+                                    color: "#475569",
+                                    fontWeight: "500",
+                                    marginLeft: 3,
+                                }}
+                            >
+                                {order?.sheduleTime || order?.scheduleTime || "N/A"}
+                            </Text>
+                        </View>
+
+                        <View
+                            style={{
+                                width: 1,
+                                height: 12,
+                                backgroundColor: "#E2E8F0",
+                            }}
+                        />
+
+                        {/* Total */}
+                        <View
+                            style={{
+                                flex: 1,
+                                paddingLeft: 4,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 8,
+                                    color: "#64748B",
+                                    fontWeight: "500",
+                                }}
+                            >
+                                Total
+                            </Text>
+
+                            <Text
+                                style={{
+                                    fontSize: 10,
+                                    color: "#0F172A",
+                                    fontWeight: "700",
+                                }}
+                                numberOfLines={1}
+                            >
+                                Rs. {formatAmount(order?.fulltotal || order?.fullTotal || 0)}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+                {/* ORDER STATUS */}
+                <View
+                    style={{
+                        borderWidth: 1,
+                        borderColor: "#DDE3E8",
+                        borderRadius: 20,
+                        paddingHorizontal: 13,
+                        paddingTop: 13,
+                        paddingBottom: 0,
+                        marginBottom: 17,
+                    }}
+                >
+                    <Text
+                        style={{
+                            fontSize: 14,
+                            fontWeight: "600",
+                            color: "#111",
+                            marginBottom: 15,
+                        }}
+                    >
+                        Order Status
+                    </Text>
+
+                    {getStatusItems().map((status, index) => (
+                        <View
+                            key={`${status.title}-${index}`}
+                            style={{
+                                flexDirection: "row",
+                                minHeight:
+                                    (status as any).description
+                                        ? 46
+                                        : index === getStatusItems().length - 1
+                                            ? 21
+                                            : 27,
+                            }}
+                        >
+                            {/* Timeline */}
+
+                            <View
+                                style={{
+                                    width: 18,
+                                    alignItems: "center",
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 99,
+                                        backgroundColor:
+                                            status.active ? "#000" : "#E2E5EB",
+                                        justifyContent:
+                                            "center",
+                                        alignItems:
+                                            "center",
+                                        zIndex: 2,
+                                        marginBottom: 20,
+                                    }}
+                                >
+                                    <FontAwesome6
+                                        name={
+                                            status.icon as any
+                                        }
+                                        size={8}
+                                        color="#FFF"
+                                    />
+                                </View>
+
+                                {index !==
+                                    getStatusItems().length -
+                                    1 && (
+                                        <View
+                                            style={{
+                                                position:
+                                                    "absolute",
+                                                top: 13,
+                                                width: 1,
+                                                height: 40,
+                                                backgroundColor:
+                                                    status.active ? "#000" : "#E2E5EB",
+                                            }}
+                                        />
+                                    )}
+                            </View>
+
+                            {/* Status text */}
+
+                            <View
+                                style={{
+                                    flex: 1,
+                                    alignSelf:
+                                        "flex-start",
+                                    paddingLeft: 10,
+                                }}
+                            >
+                                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                                    <Text
+                                        style={{
+                                            fontSize: 13,
+                                            color: status.active ? "#111" : "#A5ABB9",
+                                            fontWeight: "600",
+                                        }}
+                                    >
+                                        {status.title}
+                                    </Text>
+
+                                    {status.date ? (
+                                        <Text
+                                            style={{
+                                                fontSize: 11,
+                                                color: "#5A5859",
+                                                marginLeft: 5,
+                                            }}
+                                        >
+                                            (At {status.date})
+                                        </Text>
+                                    ) : null}
+                                </View>
+
+                                {(status as any).description ? (
+                                    (() => {
+                                        const desc = (status as any).description as string;
+                                        if (desc.startsWith("Reason : ") || desc.startsWith("Reason:")) {
+                                            const prefix = desc.startsWith("Reason : ") ? "Reason : " : "Reason: ";
+                                            const text = desc.slice(prefix.length);
+                                            return (
+                                                <View
+                                                    style={{
+                                                        flexDirection: "row",
+                                                        marginTop: 3,
+                                                        alignItems: "flex-start",
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontSize: 11,
+                                                            color: "#5A5859",
+                                                        }}
+                                                    >
+                                                        {prefix}
+                                                    </Text>
+                                                    <Text
+                                                        style={{
+                                                            flex: 1,
+                                                            fontSize: 11,
+                                                            color: "#5A5859",
+                                                        }}
+                                                    >
+                                                        {text}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        }
+                                        return (
+                                            <Text
+                                                style={{
+                                                    fontSize: 11,
+                                                    color: "#5A5859",
+                                                    marginTop: 3,
+                                                }}
+                                            >
+                                                {desc}
+                                            </Text>
+                                        );
+                                    })()
+                                ) : null}
+                            </View>
+                        </View>
+                    ))}
+                </View>
+
+                {/* DELIVERY / PICKUP INFORMATION */}
+                {order?.delivaryMethod === 'PICKUP' && order?.pickupInfo ? (
+                    <View
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#DDE3E8",
+                            borderRadius: 20,
+                            paddingHorizontal: 13,
+                            paddingTop: 13,
+                            paddingBottom: 13,
+                            marginBottom: 17,
+                        }}
+                    >
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#111", marginBottom: 8 }}>
+                            Pickup Store Information
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
+                            Store: {order.pickupInfo.centerName}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Contact: {order.pickupInfo.contact01}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Address: {[
+                                order.pickupInfo.address?.street,
+                                order.pickupInfo.address?.city,
+                                order.pickupInfo.address?.district,
+                            ].filter(Boolean).join(", ")}
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222", marginTop: 10 }}>
+                            Pickup Person
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Name: {order.pickupInfo.pickupPerson?.fullName}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Phone: {order.pickupInfo.pickupPerson?.phone1}
+                        </Text>
+                    </View>
+                ) : order?.delivaryMethod === 'DELIVERY' && order?.deliveryInfo ? (
+                    <View
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#DDE3E8",
+                            borderRadius: 20,
+                            paddingHorizontal: 13,
+                            paddingTop: 13,
+                            paddingBottom: 13,
+                            marginBottom: 17,
+                        }}
+                    >
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#111", marginBottom: 8 }}>
+                            Delivery Address
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
+                            {order.deliveryInfo.fullName || "--"}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Phone: {order.deliveryInfo.phone || "--"}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Address: {order.deliveryInfo.buildingType === "Apartment" ? (
+                                `Flat ${order.deliveryInfo.flatNo}, Floor ${order.deliveryInfo.floorNo}, Building ${order.deliveryInfo.buildingNo} (${order.deliveryInfo.buildingName}), ${order.deliveryInfo.street}, ${order.deliveryInfo.city}`
+                            ) : (
+                                `${order.deliveryInfo.houseNo || ""}, ${order.deliveryInfo.streetName || ""}, ${order.deliveryInfo.city || ""}`
+                            )}
+                        </Text>
+                    </View>
+                ) : null}
+
+                {/* PACKAGES */}
+                {packages.length > 0 && (
+                    <View
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#DDE3E8",
+                            borderRadius: 20,
+                            paddingHorizontal: 13,
+                            paddingTop: 13,
+                            paddingBottom: 13,
+                            marginBottom: 17,
+                        }}
+                    >
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                justifyContent:
+                                    "space-between",
+                                alignItems: "center",
+                                marginBottom: 5,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 14,
+                                    fontWeight: "600",
+                                    marginBottom: 6,
+                                }}
+                            >
+                                Packages ({packages.length})
+                            </Text>
+
+                            <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => openPackageDetails()}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 12,
+                                        fontWeight: "600",
+                                        textDecorationLine: "underline",
+                                    }}
+                                >
+                                    View Details
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {packages.map((pkg) => (
+                            <TouchableOpacity
+                                key={pkg.id}
+                                activeOpacity={0.7}
+                                style={{
+                                    borderTopWidth: 1,
+                                    borderTopColor:
+                                        "#ECEFF2",
+                                    paddingVertical: 10,
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        flexDirection:
+                                            "row",
+                                        alignItems:
+                                            "center",
+                                    }}
+                                >
+                                    <Image
+                                        source={{
+                                            uri:
+                                                pkg.image || pkg.packageImage || pkg.items[0]?.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
+                                        }}
+                                        style={{
+                                            width: 50,
+                                            height: 50,
+                                            borderRadius: 20,
+                                            marginRight: 10,
+                                        }}
+                                    />
+
+                                    <View
+                                        style={{
+                                            flex: 1,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 13,
+                                                fontWeight:
+                                                    "500",
+                                            }}
+                                        >
+                                            {pkg.name} {pkg.quantity > 1 ? `(X${pkg.quantity})` : ""}
+                                        </Text>
+
+                                        <Text
+                                            style={{
+                                                fontSize: 13,
+                                                marginTop: 2,
+                                            }}
+                                        >
+                                            Rs.{" "}
+                                            {formatAmount(
+                                                pkg.price
+                                            )}
+                                            {pkg.quantity > 1 ? ` x ${pkg.quantity} = ` : ""}
+                                            {pkg.quantity > 1 ? (
+                                                <Text
+                                                    style={{
+                                                        fontWeight:
+                                                            "600",
+                                                    }}
+                                                >
+                                                    Rs.{" "}
+                                                    {formatAmount(
+                                                        pkg.price *
+                                                        pkg.quantity
+                                                    )}
+                                                </Text>
+                                            ) : null}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
+                {/* ALA CARTE ITEMS */}
+                {cartItems.length > 0 && (
+                    <View
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#DDE3E8",
+                            borderRadius: 20,
+                            paddingHorizontal: 13,
+                            paddingTop: 13,
+                            paddingBottom: 13,
+                            marginBottom: 17,
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontSize: 14,
+                                fontWeight: "600",
+                                marginBottom: 6,
+                            }}
+                        >
+                            Ala Carte Items ({cartItems.length})
+                        </Text>
+
+                        {cartItems.map((item) => (
+                            <View
+                                key={item.id}
+                                style={{
+                                    flexDirection:
+                                        "row",
+                                    alignItems: "center",
+                                    paddingVertical: 10,
+                                    borderTopWidth: 1,
+                                    borderTopColor:
+                                        "#ECEFF2",
+                                }}
+                            >
+                                <Image
+                                    source={{
+                                        uri: item.image,
+                                    }}
+                                    style={{
+                                        width: 50,
+                                        height: 50,
+                                        borderRadius: 20,
+                                        marginRight: 10,
+                                    }}
+                                />
+
+                                <View
+                                    style={{
+                                        flex: 1,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 13,
+                                            fontWeight:
+                                                "500",
+                                        }}
+                                    >
+                                        {item.name}
+                                    </Text>
+
+                                    <Text
+                                        style={{
+                                            fontSize: 12,
+                                            color: "#5A5859",
+                                            marginTop: 2,
+                                        }}
+                                    >
+                                        {item.quantity}
+                                    </Text>
+
+                                    <View
+                                        style={{
+                                            flexDirection:
+                                                "row",
+                                            alignItems:
+                                                "center",
+                                            marginTop: 1,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 13,
+                                                fontWeight:
+                                                    "600",
+                                            }}
+                                        >
+                                            Rs.{" "}
+                                            {formatAmount(
+                                                item.price
+                                            )}
+                                        </Text>
+
+                                        {item.oldPrice && (
+                                            <Text
+                                                style={{
+                                                    fontSize: 11,
+                                                    color:
+                                                        "#5A5859",
+                                                    textDecorationLine:
+                                                        "line-through",
+                                                    marginLeft: 4,
+                                                }}
+                                            >
+                                                Rs.{" "}
+                                                {formatAmount(
+                                                    item.oldPrice
+                                                )}
+                                            </Text>
+                                        )}
+                                    </View>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* SUMMARY */}
+                {(() => {
+                    const isFreeDeliveryCoupon = Boolean(
+                        order?.isCoupon && (
+                            (order?.couponType && String(order.couponType).toLowerCase().includes("free")) ||
+                            (order?.couponType && String(order.couponType).toLowerCase().includes("delivery"))
+                        )
+                    );
+                    const productDiscount = parseFloat(order?.discount || 0);
+                    const couponDiscount = Boolean(order?.isCoupon) && !isFreeDeliveryCoupon ? parseFloat(order?.couponValue || 0) : 0;
+                    const orderFullTotal = parseFloat(order?.fulltotal || order?.fullTotal || 0);
+                    const creditPaid = parseFloat(order?.creditPaid || 0);
+                    const moneyPaid = parseFloat(order?.moneyPaid || 0);
+                    const paymentMethodLower = (order?.paymentMethod || "").toLowerCase();
+                    const isCashOrder = paymentMethodLower === "cash";
+                    const isCardOrder = paymentMethodLower === "card" || paymentMethodLower === "payhere";
+                    const isCreditOrder = paymentMethodLower === "credit" || (creditPaid > 0 && moneyPaid === 0 && !isCashOrder && !isCardOrder);
+                    const isPaid = Number(order?.isPaid) === 1;
+
+                    // Remaining cash amount: fullTotal - creditPaid (as specified by user, since processorders.amount is 0 until paid)
+                    const cashRemainingAmount = Math.max(0, orderFullTotal - creditPaid);
+
+                    // Remaining card amount: moneyPaid if > 0, else fullTotal - creditPaid
+                    const cardRemainingAmount = moneyPaid > 0 ? moneyPaid : Math.max(0, orderFullTotal - creditPaid);
+
+                    // Return calculations
+                    const status = order?.processStatus || order?.status || "Pending";
+                    const isOrderReturned = status === "Return" || status === "Return Received";
+                    const totalPaidByCustomer = isCardOrder ? orderFullTotal : creditPaid;
+                    const handlingFee = parseFloat(order?.returnHandlingFee || 350);
+                    const deliveryFeeDeduction = parseFloat(order?.curDlvrCharge || order?.delivaryCharge || order?.deliveryCharge || 300);
+                    const restoredCredit = totalPaidByCustomer > 0
+                        ? (totalPaidByCustomer - handlingFee - deliveryFeeDeduction)
+                        : -handlingFee;
+
+                    const paymentSummaryTotal = isOrderReturned
+                        ? (isCardOrder ? orderFullTotal : creditPaid)
+                        : orderFullTotal;
+
+                    const isPickup = (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() === "PICKUP";
+
+                    return (
+                        <>
+                            <View
+                                style={{
+                                    borderWidth: 1,
+                                    borderColor: "#DDE3E8",
+                                    borderRadius: 20,
+                                    paddingHorizontal: 13,
+                                    paddingTop: 13,
+                                    paddingBottom: 13,
+                                    marginBottom: 17,
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 14,
+                                        fontWeight: "600",
+                                        marginBottom: 15,
+                                    }}
+                                >
+                                    Summary
+                                </Text>
+
+                                {packages.length > 0 && (
+                                    <>
+                                        <SummaryRow
+                                            label="Packages"
+                                            value={`Rs. ${formatAmount(packages.reduce((acc, p) => acc + p.price * p.quantity, 0))}`}
+                                        />
+                                        <View
+                                            style={{
+                                                height: 1,
+                                                backgroundColor: "#E1E7EE",
+                                                marginVertical: 8,
+                                            }}
+                                        />
+                                    </>
+                                )}
+
+                                {cartItems.length > 0 && (
+                                    <>
+                                        <SummaryRow
+                                            label="Ala Carte Items"
+                                            value={`Rs. ${formatAmount(cartItems.reduce((acc, item) => acc + item.price, 0))}`}
+                                        />
+                                        <View
+                                            style={{
+                                                height: 1,
+                                                backgroundColor: "#E1E7EE",
+                                                marginVertical: 8,
+                                            }}
+                                        />
+                                    </>
+                                )}
+
+                                {productDiscount > 0 && (
+                                    <>
+                                        <SummaryRow
+                                            label="Product Discount"
+                                            value={`- Rs. ${formatAmount(productDiscount)}`}
+                                        />
+                                        <View
+                                            style={{
+                                                height: 1,
+                                                backgroundColor: "#E1E7EE",
+                                                marginVertical: 8,
+                                            }}
+                                        />
+                                    </>
+                                )}
+
+                                {couponDiscount > 0 && (
+                                    <>
+                                        <SummaryRow
+                                            label="Coupon Discount"
+                                            value={`- Rs. ${formatAmount(couponDiscount)}`}
+                                        />
+                                        <View
+                                            style={{
+                                                height: 1,
+                                                backgroundColor: "#E1E7EE",
+                                                marginVertical: 8,
+                                            }}
+                                        />
+                                    </>
+                                )}
+
+                                {!isPickup && (
+                                    <>
+                                        <SummaryRow
+                                            label="Delivery Fee"
+                                            value={
+                                                isFreeDeliveryCoupon
+                                                    ? "+ Rs. 0.00"
+                                                    : `+ Rs. ${formatAmount(parseFloat(order?.delivaryCharge || order?.deliveryCharge) || 0)}`
+                                            }
+                                        />
+
+                                        {isFreeDeliveryCoupon && (
+                                            <Text
+                                                style={{
+                                                    fontSize: 12,
+                                                    color: "#34C759",
+                                                    marginTop: 2,
+                                                    marginBottom: 4,
+                                                }}
+                                            >
+                                                *Applied Delivery Fee Coupon
+                                            </Text>
+                                        )}
+
+                                        <View
+                                            style={{
+                                                height: 1,
+                                                backgroundColor: "#E1E7EE",
+                                                marginVertical: 6,
+                                            }}
+                                        />
+                                    </>
+                                )}
+
+                                <SummaryRow
+                                    label="Total"
+                                    value={`Rs. ${formatAmount(orderFullTotal)}`}
+                                    bold
+                                />
+                            </View>
+
+                            {/* PAYMENT SUMMARY */}
+                            <View
+                                style={{
+                                    borderWidth: 1,
+                                    borderColor: "#DDE3E8",
+                                    borderRadius: 20,
+                                    paddingHorizontal: 13,
+                                    paddingTop: 13,
+                                    paddingBottom: 13,
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 14,
+                                        fontWeight: "600",
+                                        marginBottom: 15,
+                                    }}
+                                >
+                                    Payment Summery
+                                </Text>
+
+                                {/* Paid By Credit */}
+                                {(creditPaid > 0 || isCreditOrder) && (
+                                    <SummaryRow
+                                        label="Paid By Credit"
+                                        value={`Rs. ${formatAmount(creditPaid > 0 ? creditPaid : orderFullTotal)}`}
+                                        icon="wallet"
+                                        iconColor="#8D5B4C"
+                                    />
+                                )}
+
+                                {/* Paid with Card */}
+                                {isCardOrder && cardRemainingAmount > 0 && (
+                                    <SummaryRow
+                                        label="Paid with Card"
+                                        value={`Rs. ${formatAmount(cardRemainingAmount)}`}
+                                        icon="credit-card"
+                                        iconColor="#0088FF"
+                                    />
+                                )}
+
+                                {/* Cash Row:
+                                    If returned: always show "Paid with Cash", "Rs. 0.00", in green (#00B83D).
+                                    If not returned: show "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
+                                */}
+                                {isCashOrder && (isOrderReturned || cashRemainingAmount > 0) && (
+                                    <SummaryRow
+                                        label={isOrderReturned || isPaid ? "Paid with Cash" : "Pay with Cash"}
+                                        value={isOrderReturned ? "Rs. 0.00" : `Rs. ${formatAmount(cashRemainingAmount)}`}
+                                        icon="money-bill-wave"
+                                        iconColor="#00B83D"
+                                        valueColor={isOrderReturned || isPaid ? "#00B83D" : "#FF9114"}
+                                    />
+                                )}
+
+                                {/* Fallback if none of the above matched */}
+                                {!isCardOrder && !isCashOrder && !isCreditOrder && creditPaid === 0 && (
+                                    <SummaryRow
+                                        label={`Paid with ${order?.paymentMethod || "Card"}`}
+                                        value={`Rs. ${formatAmount(orderFullTotal)}`}
+                                        icon="credit-card"
+                                        iconColor="#0088FF"
+                                    />
+                                )}
+
+                                <View style={{ height: 4 }} />
+
+                                <SummaryRow
+                                    label="Total"
+                                    value={`Rs. ${formatAmount(paymentSummaryTotal)}`}
+                                    bold
+                                />
+                            </View>
+
+                            {/* ORDER SUMMARY DUE TO RETURN */}
+                            {isOrderReturned && (
+                                <View
+                                    style={{
+                                        borderWidth: 1,
+                                        borderColor: "#EF4444",
+                                        borderRadius: 20,
+                                        paddingHorizontal: 13,
+                                        paddingTop: 13,
+                                        paddingBottom: 13,
+                                        marginTop: 17,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 14,
+                                            fontWeight: "600",
+                                            color: "#EF4444",
+                                            marginBottom: 15,
+                                        }}
+                                    >
+                                        Order Summery Due to Return
+                                    </Text>
+
+                                    <SummaryRow
+                                        label="Total Pay By Customer"
+                                        value={`Rs. ${formatAmount(totalPaidByCustomer)}`}
+                                    />
+
+                                    <SummaryRow
+                                        label="Handling Fee Deduction"
+                                        value={`- Rs. ${formatAmount(handlingFee)}`}
+                                        valueColor="#EF4444"
+                                    />
+
+                                    {totalPaidByCustomer > 0 && (
+                                        <SummaryRow
+                                            label="Delivery Fee Deduction"
+                                            value={`- Rs. ${formatAmount(deliveryFeeDeduction)}`}
+                                            valueColor="#EF4444"
+                                        />
+                                    )}
+
+                                    <View style={{ height: 6 }} />
+
+                                    <SummaryRow
+                                        label="Restored Credit"
+                                        value={
+                                            restoredCredit < 0
+                                                ? `- Rs. ${formatAmount(Math.abs(restoredCredit))}`
+                                                : `Rs. ${formatAmount(restoredCredit)}`
+                                        }
+                                        valueColor={restoredCredit < 0 ? "#EF4444" : "#00B83D"}
+                                        bold
+                                    />
+
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "flex-start",
+                                            gap: 6,
+                                            marginTop: 8,
+                                        }}
+                                    >
+                                        <Ionicons
+                                            name="information-circle"
+                                            size={16}
+                                            color="#5A5859"
+                                            style={{ marginTop: 1 }}
+                                        />
+                                        <Text
+                                            style={{
+                                                flex: 1,
+                                                fontSize: 12,
+                                                color: "#5A5859",
+                                                lineHeight: 16,
+                                            }}
+                                        >
+                                            {restoredCredit < 0
+                                                ? "Check your profile to view your credit balance. Please clear any negative balance before making your next purchase."
+                                                : "Check your profile to view your credit balance. Use it on your next purchase."}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+
+                            <View style={{ height: 25 }} />
+                        </>
+                    );
+                })()}
+            </ScrollView>
+
+            {/* PACKAGE DETAILS MODAL */}
+            <PackageModal visible={packageModalVisible} onVisible={setPackageModalVisible} packages={packages} />
+>>>>>>> ab29fd3a59b9a8dff323ef0e9daf536df5bd9e2f
         </View>
       </View>
     );

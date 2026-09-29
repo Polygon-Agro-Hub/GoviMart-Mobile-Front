@@ -523,7 +523,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
 
       
 
-      {city.trim().length > 0 && isCityKnown && (
+      {!cityLocked && city.trim().length > 0 && isCityKnown && (
         isCityDeliverable ? (
           <View
             style={{
@@ -860,15 +860,17 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingHorizontal: 11,
           paddingTop: 10,
-          paddingBottom: 85,
-          flexGrow: 1,
+          paddingBottom: 75,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         enableAutomaticScroll={true}
-        extraScrollHeight={Platform.select({ ios: 20, android: 40 })}
-        extraHeight={Platform.select({ ios: 20, android: 40 })}
+        bounces={false}
+        overScrollMode="never"
+        enableResetScrollToCoords={false}
+        extraScrollHeight={0}
+        extraHeight={0}
       >
         {/* SAVE ADDRESS AS */}
         <InputField

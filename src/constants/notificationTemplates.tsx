@@ -70,7 +70,7 @@ export const NOTIFICATION_TEMPLATES: Record<
     `Your order #${p.invoiceNo || "[Invoice No.]"}, has been successfully delivered. We hope you’re happy with our service and had a great experience. Thank you for choosing us!`,
 
   [NOTIFICATION_TITLES.ORDER_ON_HOLD]: (p) =>
-    `Your order #${p.invoiceNo || "[Invoice No.]"}, is currently on hold. Reason : “${p.reason || "Customer didn’t answered the call."}”`,
+    `Your order #${p.invoiceNo || "[Invoice No.]"}, is currently on hold.\nReason : “${p.reason || "Customer didn’t answered the call."}”`,
 
   [NOTIFICATION_TITLES.ORDER_ON_THE_WAY_AGAIN]: (p) =>
     `Your order #${p.invoiceNo || "[Invoice No.]"}, is back on the way to you. Our driver will deliver your order shortly.`,
@@ -80,7 +80,7 @@ export const NOTIFICATION_TEMPLATES: Record<
       p.reason && p.reason.toLowerCase() !== "other"
         ? p.reason
         : (p as any).otherReason || (p as any).returnNote || p.reason || "The customer didn’t answered the call.";
-    return `Your order #${p.invoiceNo || "[Invoice No.]"}, has been returned. Reason : “${reasonText}”`;
+    return `Your order #${p.invoiceNo || "[Invoice No.]"}, has been returned.\nReason : “${reasonText}”`;
   },
 
   [NOTIFICATION_TITLES.ORDER_CANCELLED]: (p) => {
@@ -89,7 +89,7 @@ export const NOTIFICATION_TEMPLATES: Record<
         ? p.reason
         : (p as any).otherReason || (p as any).returnNote || p.reason;
     return reasonText
-      ? `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled. Reason : “${reasonText}”\n\nIf you have already made a payment for this order, the total amount will be added to your credit balance. You can use this credit toward your next order.`
+      ? `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.\nReason : “${reasonText}”\n\nIf you have already made a payment for this order, the total amount will be added to your credit balance. You can use this credit toward your next order.`
       : `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.`;
   },
 };

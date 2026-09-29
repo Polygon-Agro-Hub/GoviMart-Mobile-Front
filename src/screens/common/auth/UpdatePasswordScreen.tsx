@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,9 +12,10 @@ import {
   ActivityIndicator,
   Image,
   Keyboard,
+  BackHandler,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import {
   FontAwesome5,
@@ -50,6 +51,26 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   const dispatch = useDispatch();
   const scrollViewRef = useRef<ScrollView>(null);
   const { customerId, name, number, redirectTo } = route.params || {};
+
+  useFocusEffect(
+    useCallback(() => {
+      const handleBack = () => {
+        if (redirectTo === "Profile") {
+          navigation.navigate("Profile");
+        } else {
+          navigation.navigate("Login");
+        }
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        handleBack,
+      );
+
+      return () => subscription.remove();
+    }, [navigation, redirectTo]),
+  );
 
   // Form Fields State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -259,6 +280,13 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         title="Update My Password"
         showBackButton={true}
         navigation={navigation}
+        onBackPress={() => {
+          if (redirectTo === "Profile") {
+            navigation.navigate("Profile");
+          } else {
+            navigation.navigate("Login");
+          }
+        }}
       />
 
       <ScrollView

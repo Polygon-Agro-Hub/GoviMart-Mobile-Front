@@ -78,6 +78,45 @@ const isValidEmail = (emailStr: string): boolean => {
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
+export const getForgotPwdStorageKeys = (
+  method: "email" | "sms",
+  email?: string,
+  phoneCode?: string,
+  phoneNumber?: string,
+  identifier?: string,
+): { lockoutKeys: string[]; attemptsKeys: string[] } => {
+  const identifiers: string[] = [];
+
+  if (identifier && String(identifier).trim()) {
+    const clean = String(identifier).replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    if (clean) identifiers.push(clean);
+  }
+
+  if (email && String(email).trim()) {
+    const cleanEmail = String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
+    if (cleanEmail) identifiers.push(cleanEmail);
+  }
+
+  if (phoneNumber && String(phoneNumber).trim()) {
+    const rawDigits = String(phoneNumber).trim().replace(/[^0-9]/g, "");
+    const noZero = rawDigits.replace(/^0+/, "");
+    const codeDigits = String(phoneCode || "94").replace(/[^0-9]/g, "");
+
+    if (noZero) {
+      identifiers.push(`${codeDigits}${noZero}`);
+      identifiers.push(`${codeDigits}${rawDigits}`);
+      identifiers.push(noZero);
+      identifiers.push(rawDigits);
+    }
+  }
+
+  const unique = [...new Set(identifiers)];
+  return {
+    lockoutKeys: unique.map((id) => `@forgot_pwd_lockout_${id}`),
+    attemptsKeys: unique.map((id) => `@forgot_pwd_otp_attempts_${id}`),
+  };
+};
+
 const getRecentAttempts = async (key: string): Promise<number[]> => {
   try {
     const raw = await AsyncStorage.getItem(key);
@@ -136,40 +175,47 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (!isValid) return;
 
-    const cleanId = (isEmail ? email.trim() : `${phoneCode}${phoneNumber.trim()}`)
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .toLowerCase();
-    const lockoutKey = `@forgot_pwd_lockout_${cleanId}`;
-    const storageKey = `@forgot_pwd_otp_attempts_${cleanId}`;
+    const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
+      currentMethod,
+      isEmail ? email.trim() : undefined,
+      !isEmail ? phoneCode : undefined,
+      !isEmail ? phoneNumber.trim() : undefined,
+    );
 
-    // Check if this identifier is currently locked out
-    try {
-      const storedLockout = await AsyncStorage.getItem(lockoutKey);
-      if (storedLockout) {
-        const lockoutUntil = parseInt(storedLockout, 10);
-        const remainingMs = lockoutUntil - Date.now();
-        if (remainingMs > 0) {
-          setAlertTitle("Too Many Attempts");
-          setAlertMessage(
-            "Too many verification attempts. Please try again after 15 minutes."
-          );
-          setAlertVisible(true);
-          return;
-        } else {
-          await AsyncStorage.removeItem(lockoutKey);
+    // 1. Check if any key is currently locked out in AsyncStorage
+    for (const key of lockoutKeys) {
+      try {
+        const storedLockout = await AsyncStorage.getItem(key);
+        if (storedLockout) {
+          const lockoutUntil = parseInt(storedLockout, 10);
+          const remainingMs = lockoutUntil - Date.now();
+          if (remainingMs > 0) {
+            setAlertTitle("Too Many Attempts");
+            setAlertMessage(
+              "Too many verification attempts. Please try again after 15 minutes."
+            );
+            setAlertVisible(true);
+            return;
+          } else {
+            await AsyncStorage.removeItem(key);
+          }
         }
+      } catch (e) {
+        console.log("Error checking stored lockout:", e);
       }
+    }
 
-      // Check recent attempts count
-      const attempts = await getRecentAttempts(storageKey);
+    // 2. Check recent attempts count across attempts keys
+    for (const key of attemptsKeys) {
+      const attempts = await getRecentAttempts(key);
       if (attempts.length >= MAX_OTP_ATTEMPTS) {
         const oldest = attempts[0];
         const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
         const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
-        await AsyncStorage.setItem(
-          lockoutKey,
-          String(Date.now() + remainingSec * 1000)
-        );
+        const lockoutUntil = Date.now() + remainingSec * 1000;
+        for (const lockKey of lockoutKeys) {
+          await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+        }
         setAlertTitle("Too Many Attempts");
         setAlertMessage(
           "Too many verification attempts. Please try again after 15 minutes."
@@ -177,8 +223,6 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         setAlertVisible(true);
         return;
       }
-    } catch (e) {
-      console.log("Error checking stored lockout:", e);
     }
 
     setLoading(true);
@@ -193,12 +237,12 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
       });
 
       if (response.data && response.data.status) {
-        const updated = await saveAttempt(storageKey);
-        const identifierClean = (response.data.identifier || (isEmail ? email.trim() : `${phoneCode} ${phoneNumber.trim()}`))
-          .replace(/[^a-zA-Z0-9]/g, "")
-          .toLowerCase();
-        if (identifierClean !== cleanId) {
-          await AsyncStorage.setItem(`@forgot_pwd_otp_attempts_${identifierClean}`, JSON.stringify(updated));
+        const primaryAttemptsKey = attemptsKeys[0];
+        if (primaryAttemptsKey) {
+          const updated = await saveAttempt(primaryAttemptsKey);
+          for (const aKey of attemptsKeys) {
+            await AsyncStorage.setItem(aKey, JSON.stringify(updated));
+          }
         }
 
         navigation.navigate("ForgotPasswordOTP", {
@@ -219,7 +263,9 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           msg.toLowerCase().includes("too many")
         ) {
           const lockoutUntil = Date.now() + 15 * 60 * 1000;
-          await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+          for (const lockKey of lockoutKeys) {
+            await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+          }
           setAlertTitle("Too Many Attempts");
           setAlertMessage(
             "Too many verification attempts. Please try again after 15 minutes."
@@ -238,7 +284,9 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         "An unexpected error occurred. Please try again.";
       if (is429 || msg.toLowerCase().includes("too many")) {
         const lockoutUntil = Date.now() + 15 * 60 * 1000;
-        await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+        for (const lockKey of lockoutKeys) {
+          await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+        }
         setAlertTitle("Too Many Attempts");
         setAlertMessage(
           "Too many verification attempts. Please try again after 15 minutes."

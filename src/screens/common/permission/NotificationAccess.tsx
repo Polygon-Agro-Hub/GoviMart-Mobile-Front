@@ -71,10 +71,18 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
 
   const navigateForward = () => {
     if (navigation) {
-      if (targetReturnParams) {
-        navigation.navigate(targetReturnScreen as any, targetReturnParams);
+      if (typeof navigation.replace === "function") {
+        if (targetReturnParams) {
+          navigation.replace(targetReturnScreen as any, targetReturnParams);
+        } else {
+          navigation.replace(targetReturnScreen as any);
+        }
       } else {
-        navigation.navigate(targetReturnScreen as any);
+        if (targetReturnParams) {
+          navigation.navigate(targetReturnScreen as any, targetReturnParams);
+        } else {
+          navigation.navigate(targetReturnScreen as any);
+        }
       }
     }
   };
