@@ -8,6 +8,7 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.polygonagro.Polygon",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 0,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {

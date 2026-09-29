@@ -27,6 +27,7 @@ import * as SecureStore from "expo-secure-store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import socketService from "@/services/socket/socket.service";
+import pushNotificationService from "@/services/notification/pushNotification.service";
 import { AlertModal } from "@/component/common/AlertModal";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -144,6 +145,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         dispatch(loginSuccess({ token, userProfile, loginTime }));
         if (userProfile.id) {
           socketService.registerUser(userProfile.id, token);
+          pushNotificationService.registerPushToken().catch(() => {});
         }
 
         // Fetch this logged-in user's cart from backend
