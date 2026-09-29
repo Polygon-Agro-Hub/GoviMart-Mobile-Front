@@ -322,7 +322,13 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                           }));
                       }}
                       autoCapitalize="none"
-                      className="text-sm text-black font-semibold p-0 h-9"
+                      style={{
+                        fontSize: 14,
+                        color: "#000",
+                        fontWeight: "600",
+                        padding: 0,
+                        height: 36,
+                      }}
                     />
                   </View>
                 </View>
@@ -376,7 +382,13 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
                       autoCapitalize="none"
-                      className="text-sm text-black font-semibold p-0 h-9"
+                      style={{
+                        fontSize: 14,
+                        color: "#000",
+                        fontWeight: "600",
+                        padding: 0,
+                        height: 36,
+                      }}
                     />
                   </View>
                 </View>
@@ -433,7 +445,13 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                           }));
                       }}
                       autoCapitalize="none"
-                      className="text-sm text-black font-semibold p-0 h-9"
+                      style={{
+                        fontSize: 14,
+                        color: "#000",
+                        fontWeight: "600",
+                        padding: 0,
+                        height: 36,
+                      }}
                     />
                   </View>
                 </View>

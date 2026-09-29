@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Linking,
   Alert,
   Keyboard,
 } from "react-native";
@@ -102,6 +101,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   // Input Refs
   const ref_1 = useRef<TextInput>(null);
@@ -111,6 +111,26 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const ref_5 = useRef<TextInput>(null);
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
+
+  // Track keyboard visibility (used to hide the bottom image)
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () =>
+      setIsKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () =>
+      setIsKeyboardVisible(false),
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Check rate limit on initial mount and record first signup OTP attempt
   useEffect(() => {
@@ -391,9 +411,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.select({ ios: 80, android: 50 })}
-      className="flex-1 bg-white"
+      className="flex-1"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={20}
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
@@ -409,7 +429,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",
-          paddingBottom: 120,
+          paddingBottom: isKeyboardVisible ? 20 : 120,
         }}
         className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
@@ -549,7 +569,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       </ScrollView>
 
       {/* Action Buttons */}
-      <View className="px-6 pb-0 pt-2 bg-white">
+      <View
+        className="px-6 pt-2 bg-white"
+        style={{ paddingBottom: isKeyboardVisible ? 12 : 0 }}
+      >
         {/* Verify Button (Always shown) */}
         <TouchableOpacity
           onPress={handleVerify}
@@ -561,15 +584,19 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             {isVerifying ? "Verifying..." : "Verify"}
           </Text>
         </TouchableOpacity>
-        <View
-          className="h-14 mt-6"
-          style={{ marginLeft: -16, marginRight: -16 }}
-        >
-          <Image
-            source={require("@/assets/images/auth/bottom-line.webp")}
-            style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-          />
-        </View>
+
+        {/* Bottom image: hidden while the keyboard is open */}
+        {!isKeyboardVisible && (
+          <View
+            className="h-14 mt-6"
+            style={{ marginLeft: -16, marginRight: -16 }}
+          >
+            <Image
+              source={require("@/assets/images/auth/bottom-line.webp")}
+              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+            />
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
