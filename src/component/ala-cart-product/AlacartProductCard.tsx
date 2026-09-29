@@ -13,7 +13,7 @@ import FixedMarqueeText from "../marquee-text/MarqueeText";
 // (marketplaceitems.displayType) as used on the Home screen:
 // "AP&SP&D" -> Actual Price (struck through) + Sale Price + Discount% badge
 // "AP&SP"   -> Actual Price (struck through) + Sale Price, no badge
-// "D&AP"    -> Only Sale Price + Discount% badge, no struck-through actual price
+// "D&AP"    -> Discount% badge + Actual Price (normal price), no struck-through price
 type DisplayType = "AP&SP&D" | "D&AP" | "AP&SP";
 
 /**
@@ -96,7 +96,10 @@ export const AlacartProductCard: React.FC<{
         hasDiscount &&
         (displayType === "AP&SP&D" || displayType === "AP&SP" || !displayType);
 
-    const basePrice = hasDiscount ? totalDiscountedPrice : totalNormalPrice;
+    const basePrice =
+        hasDiscount && displayType !== "D&AP"
+            ? totalDiscountedPrice
+            : totalNormalPrice;
 
     // Determine card border color:
     // disabled => red, selected => orange, default => transparent

@@ -83,7 +83,7 @@ interface AddTimeSnapshot {
 // Price display types coming from the backend (marketplaceitems.displayType):
 // "AP&SP&D" -> Actual Price (struck through) + Sale Price + Discount% badge
 // "AP&SP"   -> Actual Price (struck through) + Sale Price, no badge
-// "D&AP"    -> Only Sale Price + Discount% badge, no struck-through actual price
+// "D&AP"    -> Discount% badge + Actual Price (normal price), no struck-through price
 type DisplayType = "AP&SP&D" | "D&AP" | "AP&SP";
 
 const normalizeUnit = (raw?: string | null): "g" | "kg" => {
@@ -1347,7 +1347,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   // ---- Price display type (backend: marketplaceitems.displayType) ----
                   // "AP&SP&D" -> actual price (struck) + sale price + discount% badge
                   // "AP&SP"   -> actual price (struck) + sale price, no badge
-                  // "D&AP"    -> only sale price + discount% badge, no struck price
+                  // "D&AP"    -> discount% badge + actual price (normal price), no struck price
                   // Falls back to showing everything if displayType is unset/unknown,
                   // matching the previous behavior for existing items.
                   const displayType = isProduct
@@ -1375,7 +1375,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       : startNormalPrice;
 
                   const basePrice = isProduct
-                    ? hasDiscount
+                    ? hasDiscount && displayType !== "D&AP"
                       ? startDiscountedPrice
                       : startNormalPrice
                     : parseFloat(String(product.subTotal)) || 0;
@@ -1389,15 +1389,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     ? (cartItem.discountedPrice != null &&
                       cartItem.discountedPrice > 0 &&
                       cartItem.normalPrice != null &&
-                      cartItem.discountedPrice < cartItem.normalPrice
+                      cartItem.discountedPrice < cartItem.normalPrice &&
+                      displayType !== "D&AP"
                       ? cartItem.discountedPrice
                       : (cartItem.discountedPrice != null &&
                         cartItem.discountedPrice > 0 &&
                         cartItem.price != null &&
-                        cartItem.discountedPrice < cartItem.price
+                        cartItem.discountedPrice < cartItem.price &&
+                        displayType !== "D&AP"
                         ? cartItem.discountedPrice
-                        : cartItem.price))
-                    : (hasDiscount ? discountedPerUnit! : normalPerUnit);
+                        : (cartItem.normalPrice != null ? cartItem.normalPrice : cartItem.price)))
+                    : (hasDiscount && displayType !== "D&AP" ? discountedPerUnit! : normalPerUnit);
                   const calculatedProductPrice = cartItem
                     ? effectiveCartUnitPrice * weightMultiplier
                     : basePrice;
