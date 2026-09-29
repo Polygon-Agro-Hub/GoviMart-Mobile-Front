@@ -69,7 +69,7 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                                 "600",
                         }}
                     >
-                        Packages ({String(packages.length).padStart(2, '0')})
+                        Packages ({packages.length})
                     </Text>
 
                     <TouchableOpacity
@@ -124,7 +124,7 @@ export const PackageModal = ({ visible, onVisible, packages }: PackageModalProps
                                         8,
                                 }}
                             >
-                                {pkg.name} {pkg.quantity > 1 ? `(${String(pkg.quantity).padStart(2, '0')})` : ""}
+                                {pkg.name} {pkg.quantity > 1 ? `(X${pkg.quantity})` : ""}
                             </Text>
 
                             {pkg.items && pkg.items.map(
