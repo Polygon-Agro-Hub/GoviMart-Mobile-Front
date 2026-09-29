@@ -38,22 +38,22 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
     >
       {/* Left section for Back Button */}
       <View
-        className="w-11 items-start justify-center"
+        className="w-14 items-start justify-center"
         style={{ width: 44, flexShrink: 0 }}
       >
         {showBackButton && navigation && (
           <TouchableOpacity
             onPress={onBackPress ?? (() => navigation.goBack())}
-            className={`w-11 h-11 rounded-full items-center justify-center shadow-sm border ${
+            className={`w-12 h-12 rounded-full items-center justify-center shadow-sm border ${
               dark ? "bg-[#1F1F1F] border-gray-800" : "bg-white border-gray-200"
             }`}
-            style={{ width: 42, height: 42 }}
+            style={{ width: 44, height: 44 }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Entypo
               name="chevron-left"
-              size={22}
+              size={26}
               color={dark ? "white" : "black"}
             />
           </TouchableOpacity>
