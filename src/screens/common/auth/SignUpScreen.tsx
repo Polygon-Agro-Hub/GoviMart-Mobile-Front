@@ -365,36 +365,58 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       } else {
         const data = response.data;
         const msg = data?.message || "Failed to register.";
-        const allErrors = Array.isArray(data?.errors) ? data.errors.join(" ") : "";
-        const combined = `${msg} ${allErrors}`.toLowerCase();
+        const allErrorsList: string[] = Array.isArray(data?.errors) ? data.errors : [];
+        const combined = `${msg} ${allErrorsList.join(" ")}`.toLowerCase();
 
-        let fieldErrorFound = false;
-        if (
-          combined.includes("company phone") ||
-          combined.includes("company number")
-        ) {
-          setErrors((prev) => ({ ...prev, companyNumber: msg }));
-          fieldErrorFound = true;
-        } else if (
-          combined.includes("mobile") ||
-          combined.includes("phone")
-        ) {
-          setErrors((prev) => ({ ...prev, phoneNumber: msg }));
-          fieldErrorFound = true;
-        } else if (combined.includes("email")) {
-          setErrors((prev) => ({
-            ...prev,
-            email: combined.includes("already")
-              ? "Email already exists"
-              : "Invalid email address",
-          }));
-          fieldErrorFound = true;
-        } else if (combined.includes("nic")) {
-          setErrors((prev) => ({ ...prev, nic: msg }));
-          fieldErrorFound = true;
+        const fieldErrorsToSet: Record<string, string> = {};
+
+        if (data?.fieldErrors && typeof data.fieldErrors === "object") {
+          if (data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber) {
+            fieldErrorsToSet.companyNumber =
+              data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber;
+          }
+          if (data.fieldErrors.phoneNumber) {
+            fieldErrorsToSet.phoneNumber = data.fieldErrors.phoneNumber;
+          }
+          if (data.fieldErrors.email) {
+            fieldErrorsToSet.email = data.fieldErrors.email;
+          }
+          if (data.fieldErrors.nic) {
+            fieldErrorsToSet.nic = data.fieldErrors.nic;
+          }
         }
 
-        if (fieldErrorFound) {
+        if (
+          !fieldErrorsToSet.companyNumber &&
+          (combined.includes("company phone") || combined.includes("company number"))
+        ) {
+          fieldErrorsToSet.companyNumber = "Company Phone Number already exists";
+        }
+
+        if (
+          !fieldErrorsToSet.phoneNumber &&
+          (combined.includes("mobile number already") ||
+            (combined.includes("mobile") && combined.includes("already")) ||
+            (combined.includes("phone") && combined.includes("already") && !combined.includes("company")))
+        ) {
+          fieldErrorsToSet.phoneNumber = "Mobile Number already exists";
+        }
+
+        if (
+          !fieldErrorsToSet.email &&
+          (combined.includes("email already") ||
+            combined.includes("email in use") ||
+            (combined.includes("email") && combined.includes("exists")))
+        ) {
+          fieldErrorsToSet.email = "Email already exists.";
+        }
+
+        if (!fieldErrorsToSet.nic && combined.includes("nic")) {
+          fieldErrorsToSet.nic = "NIC number already exists";
+        }
+
+        if (Object.keys(fieldErrorsToSet).length > 0) {
+          setErrors((prev) => ({ ...prev, ...fieldErrorsToSet }));
           scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         } else {
           showAlert("Signup Failed", msg);
@@ -404,36 +426,58 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       console.error("Signup error:", err);
       const data = err.response?.data;
       const msg = data?.message || "An unexpected error occurred.";
-      const allErrors = Array.isArray(data?.errors) ? data.errors.join(" ") : "";
-      const combined = `${msg} ${allErrors}`.toLowerCase();
+      const allErrorsList: string[] = Array.isArray(data?.errors) ? data.errors : [];
+      const combined = `${msg} ${allErrorsList.join(" ")}`.toLowerCase();
 
-      let fieldErrorFound = false;
-      if (
-        combined.includes("company phone") ||
-        combined.includes("company number")
-      ) {
-        setErrors((prev) => ({ ...prev, companyNumber: msg }));
-        fieldErrorFound = true;
-      } else if (
-        combined.includes("mobile") ||
-        combined.includes("phone")
-      ) {
-        setErrors((prev) => ({ ...prev, phoneNumber: msg }));
-        fieldErrorFound = true;
-      } else if (combined.includes("email")) {
-        setErrors((prev) => ({
-          ...prev,
-          email: combined.includes("already")
-            ? "Email already exists"
-            : "Invalid email address",
-        }));
-        fieldErrorFound = true;
-      } else if (combined.includes("nic")) {
-        setErrors((prev) => ({ ...prev, nic: msg }));
-        fieldErrorFound = true;
+      const fieldErrorsToSet: Record<string, string> = {};
+
+      if (data?.fieldErrors && typeof data.fieldErrors === "object") {
+        if (data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber) {
+          fieldErrorsToSet.companyNumber =
+            data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber;
+        }
+        if (data.fieldErrors.phoneNumber) {
+          fieldErrorsToSet.phoneNumber = data.fieldErrors.phoneNumber;
+        }
+        if (data.fieldErrors.email) {
+          fieldErrorsToSet.email = data.fieldErrors.email;
+        }
+        if (data.fieldErrors.nic) {
+          fieldErrorsToSet.nic = data.fieldErrors.nic;
+        }
       }
 
-      if (fieldErrorFound) {
+      if (
+        !fieldErrorsToSet.companyNumber &&
+        (combined.includes("company phone") || combined.includes("company number"))
+      ) {
+        fieldErrorsToSet.companyNumber = "Company Phone Number already exists";
+      }
+
+      if (
+        !fieldErrorsToSet.phoneNumber &&
+        (combined.includes("mobile number already") ||
+          (combined.includes("mobile") && combined.includes("already")) ||
+          (combined.includes("phone") && combined.includes("already") && !combined.includes("company")))
+      ) {
+        fieldErrorsToSet.phoneNumber = "Mobile Number already exists";
+      }
+
+      if (
+        !fieldErrorsToSet.email &&
+        (combined.includes("email already") ||
+          combined.includes("email in use") ||
+          (combined.includes("email") && combined.includes("exists")))
+      ) {
+        fieldErrorsToSet.email = "Email already in use.";
+      }
+
+      if (!fieldErrorsToSet.nic && combined.includes("nic")) {
+        fieldErrorsToSet.nic = "NIC number already exists";
+      }
+
+      if (Object.keys(fieldErrorsToSet).length > 0) {
+        setErrors((prev) => ({ ...prev, ...fieldErrorsToSet }));
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       } else {
         showAlert("Signup Error", msg);
