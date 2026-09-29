@@ -55,7 +55,17 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
       const response = await customerService.getAccountDetails();
       if (response.data && response.data.data) {
         const data = response.data.data;
-        const { creditBalance, image, firstName, lastName, title, buyerType, email, phoneNumber, cusId } = data;
+        const {
+          creditBalance,
+          image,
+          firstName,
+          lastName,
+          title,
+          buyerType,
+          email,
+          phoneNumber,
+          cusId,
+        } = data;
         setCreditBalance(Number(creditBalance || 0));
 
         const updatedProfile = {
@@ -72,7 +82,10 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
         };
 
         dispatch(updateUserProfile(updatedProfile));
-        await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
+        await AsyncStorage.setItem(
+          "userProfile",
+          JSON.stringify(updatedProfile),
+        );
       }
     } catch (error) {
       console.log("error fetching acc details: ", error);
@@ -96,7 +109,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
       );
 
       return () => subscription.remove();
-    }, [handleBackPress])
+    }, [handleBackPress]),
   );
 
   const handleLogoutPress = () => {
@@ -108,10 +121,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
     try {
       // Call backend logout API to expire/clear token
       await authService.logout().catch((err) => {
-        console.log(
-          "Server logout failed, proceeding with local logout:",
-          err,
-        );
+        console.log("Server logout failed, proceeding with local logout:", err);
       });
     } catch (e) {
       console.log("Logout API call error:", e);
@@ -175,42 +185,50 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
 
           <View
             style={{
-              shadowColor: "#000",
-              shadowOffset: {
-                width: 0,
-                height: 2,
-              },
-              shadowOpacity: 0.15,
-              shadowRadius: 5,
-              elevation: 3,
+              alignItems: "center",
+              paddingHorizontal: 24, 
             }}
           >
-            <Image
-              source={hasValidUserImage ? { uri: user.image } : defaultUserIcon}
-              onError={() => setImageError(true)}
+            <View
               style={{
-                width: 110,
-                height: 110,
-                borderRadius: 55,
-                borderWidth: 4,
-                borderColor: "#F3F4F6",
-                backgroundColor: "#EAEFF5",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 5,
+                elevation: 3,
               }}
-            />
+            >
+              <Image
+                source={
+                  hasValidUserImage ? { uri: user.image } : defaultUserIcon
+                }
+                onError={() => setImageError(true)}
+                style={{
+                  width: 110,
+                  height: 110,
+                  borderRadius: 55,
+                  borderWidth: 4,
+                  borderColor: "#F3F4F6",
+                  backgroundColor: "#EAEFF5",
+                }}
+              />
+            </View>
+
+            {/* Name */}
+            <Text
+              style={{
+                color: "#000",
+                fontSize: 23,
+                fontWeight: "800",
+                marginTop: 12,
+                textAlign: "center", 
+                maxWidth: "90%", 
+              }}
+              numberOfLines={2} 
+            >
+              {fullName}
+            </Text>
           </View>
-
-          {/* Name */}
-
-          <Text
-            style={{
-              color: "#000",
-              fontSize: 23,
-              fontWeight: "800",
-              marginTop: 12,
-            }}
-          >
-            {fullName}
-          </Text>
         </View>
 
         {/* CREDIT BALANCE */}
@@ -396,7 +414,9 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
               onPress={() => {
                 navigation.navigate("ExcludeListSummery", {
                   customerId: user?.id || 1002,
-                  name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || undefined,
+                  name:
+                    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+                    undefined,
                   title: user?.title || undefined,
                   phoneNumber: user?.phoneNumber || undefined,
                   cusId: user?.cusId || undefined,
