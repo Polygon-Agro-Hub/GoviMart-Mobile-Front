@@ -4,16 +4,18 @@ import { ReviewProduct, ProductType } from "@/types/types";
 export interface PackageMeta {
   id: string;
   name: string;
-  icon?: string;
-  image?: string;
+  icon: string;
+  image?: any;
   qty: number;
   unitPrice: number;
   serviceFee: number;
   packingFee: number;
+  discountPerUnit?: number; // NEW: definepackage.price - marketplacepackages.productPrice
 }
 
 export interface AlacartSelectedProduct {
   id: number | string;
+  additionalItemId?: number;
   productId?: number | string;
   displayName: string;
   image?: any;
@@ -53,6 +55,7 @@ export interface PackageReviewState {
   productTemplatesState: Record<string, ReviewProduct[]>;
   orderPackageDbIds: Record<string, number>;
   alacartSelection: Record<string | number, AlacartSelectedProduct>;
+  deletedAdditionalItemIds: number[];
   isLocked: boolean;
   loadingReview: boolean;
   availableSlots: number;
@@ -80,6 +83,7 @@ const initialState: PackageReviewState = {
   productTemplatesState: {},
   orderPackageDbIds: {},
   alacartSelection: {},
+  deletedAdditionalItemIds: [],
   isLocked: false,
   loadingReview: false,
   availableSlots: 50,
@@ -124,6 +128,7 @@ export const packageReviewSlice = createSlice({
         moneyPaid?: number;
         creditPaid?: number;
         paymentMethod?: string;
+        deliveryMethod?: string;
         isPaid?: boolean;
         processOrderAmount?: number;
         packagesMeta: PackageMeta[];
@@ -156,6 +161,9 @@ export const packageReviewSlice = createSlice({
       }
       if (typeof payload.paymentMethod === "string") {
         state.paymentMethod = payload.paymentMethod;
+      }
+      if (typeof payload.deliveryMethod === "string") {
+        state.deliveryMethod = payload.deliveryMethod;
       }
       if (typeof payload.isPaid === "boolean") {
         state.isPaid = payload.isPaid;
@@ -209,6 +217,7 @@ export const packageReviewSlice = createSlice({
       state.packageProducts = mergedProducts;
 
       state.alacartSelection = payload.alacartSelection ? { ...payload.alacartSelection } : {};
+      state.deletedAdditionalItemIds = [];
     },
     replacePackageProduct: (
       state,
@@ -406,6 +415,17 @@ export const packageReviewSlice = createSlice({
       }
     },
     removeAlacartItem: (state, action: PayloadAction<string | number>) => {
+      const item = state.alacartSelection[action.payload];
+      if (item && !item.isAddedNow) {
+        const dbId =
+          item.additionalItemId ||
+          (typeof item.id === "number"
+            ? item.id
+            : parseInt(String(item.id).replace(/[^0-9]/g, "")) || 0);
+        if (dbId && !state.deletedAdditionalItemIds.includes(dbId)) {
+          state.deletedAdditionalItemIds.push(dbId);
+        }
+      }
       delete state.alacartSelection[action.payload];
     },
     toggleAlacartItemUnit: (
@@ -485,6 +505,7 @@ export const packageReviewSlice = createSlice({
         }
       });
       state.alacartSelection = restoredAlacart;
+      state.deletedAdditionalItemIds = [];
     },
     clearPackageReview: () => initialState,
   },

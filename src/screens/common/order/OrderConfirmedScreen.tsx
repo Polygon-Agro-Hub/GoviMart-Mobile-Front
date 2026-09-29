@@ -89,12 +89,34 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   const discount = orderContext?.discount || 0;
   const deliveryFee = orderContext?.deliveryCharge || 0;
 
+  const isFreeDeliveryCoupon = Boolean(
+    orderContext?.isFreeDeliveryCoupon ||
+    orderContext?.appliedCoupon?.isFreeDelivery ||
+    orderContext?.checkoutDetails?.couponType?.toLowerCase()?.includes("free") ||
+    orderContext?.checkoutDetails?.couponType?.toLowerCase()?.includes("delivery") ||
+    orderContext?.couponType?.toLowerCase()?.includes("free") ||
+    orderContext?.couponType?.toLowerCase()?.includes("delivery")
+  );
+
+  const couponDiscount =
+    orderContext?.couponDiscount !== undefined && Number(orderContext?.couponDiscount) > 0
+      ? parseFloat(String(orderContext.couponDiscount)) || 0
+      : orderContext?.couponValue !== undefined && Number(orderContext?.couponValue) > 0
+        ? parseFloat(String(orderContext.couponValue)) || 0
+        : orderContext?.checkoutDetails?.couponValue !== undefined && Number(orderContext?.checkoutDetails?.couponValue) > 0
+          ? parseFloat(String(orderContext.checkoutDetails.couponValue)) || 0
+          : orderContext?.appliedCoupon?.discount !== undefined && Number(orderContext?.appliedCoupon?.discount) > 0
+            ? parseFloat(String(orderContext.appliedCoupon.discount)) || 0
+            : route.params?.couponValue !== undefined && Number(route.params?.couponValue) > 0
+              ? parseFloat(String(route.params.couponValue)) || 0
+              : 0;
+
   const total =
     passedTotal !== undefined
       ? passedTotal
       : orderContext?.grandTotal !== undefined
         ? orderContext.grandTotal
-        : Math.max(0, packageTotal + productTotal - discount + deliveryFee);
+        : Math.max(0, packageTotal + productTotal - discount - couponDiscount + (isFreeDeliveryCoupon ? 0 : deliveryFee));
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("en-US", {
@@ -118,11 +140,11 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
 
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        onBackPress
+        onBackPress,
       );
 
       return () => subscription.remove();
-    }, [navigation])
+    }, [navigation]),
   );
 
   const convertLogoToBase64 = async (): Promise<string> => {
@@ -181,7 +203,10 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
     return `+94 ${cleaned}`;
   };
 
-  const resolveInvoiceData = async (): Promise<{ invoiceData: InvoiceData; logoBase64: string }> => {
+  const resolveInvoiceData = async (): Promise<{
+    invoiceData: InvoiceData;
+    logoBase64: string;
+  }> => {
     const logoBase64 = await convertLogoToBase64();
     const orderId = route.params?.orderId;
     let apiInvoice: any = null;
@@ -193,7 +218,10 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
           apiInvoice = res.data.invoice.invoice || res.data.invoice;
         }
       } catch (e) {
-        console.warn("Could not fetch full invoice from API, falling back to local data:", e);
+        console.warn(
+          "Could not fetch full invoice from API, falling back to local data:",
+          e,
+        );
       }
     }
 
@@ -212,7 +240,9 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
     const checkout: any = orderContext?.checkoutDetails || {};
     const orderCtx: any = orderContext || {};
     const userProf: any = userProfile || {};
-    const isApartment = (checkout.buildingType || userProf.buildingType || "").toLowerCase() === "apartment";
+    const isApartment =
+      (checkout.buildingType || userProf.buildingType || "").toLowerCase() ===
+      "apartment";
 
     const resolvedInvoiceNumber =
       apiInvoice?.invoiceNumber ||
@@ -224,69 +254,155 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       invoiceNumber: resolvedInvoiceNumber,
       invoiceDate: apiInvoice?.invoiceDate || new Date().toISOString(),
       scheduledDate: apiInvoice?.scheduledDate || displayScheduleDate,
-      deliveryMethod: apiInvoice?.deliveryMethod || orderCtx.deliveryMethod || "Home Delivery",
-      paymentMethod: apiInvoice?.paymentMethod || orderCtx.paymentMethod || "Cash",
-      isPaid: apiInvoice?.isPaid !== undefined ? apiInvoice.isPaid : (orderCtx.paymentMethod?.toLowerCase() === "card" ? 1 : 0),
-      creditPaid: apiInvoice?.creditPaid !== undefined ? apiInvoice.creditPaid : (orderCtx.creditPaid || 0),
-      moneyPaid: apiInvoice?.moneyPaid !== undefined ? apiInvoice.moneyPaid : (orderCtx.moneyPaid || 0),
+      deliveryMethod:
+        apiInvoice?.deliveryMethod ||
+        orderCtx.deliveryMethod ||
+        "Home Delivery",
+      paymentMethod:
+        apiInvoice?.paymentMethod || orderCtx.paymentMethod || "Cash",
+      isPaid:
+        apiInvoice?.isPaid !== undefined
+          ? apiInvoice.isPaid
+          : orderCtx.paymentMethod?.toLowerCase() === "card"
+            ? 1
+            : 0,
+      creditPaid:
+        apiInvoice?.creditPaid !== undefined
+          ? apiInvoice.creditPaid
+          : orderCtx.creditPaid || 0,
+      moneyPaid:
+        apiInvoice?.moneyPaid !== undefined
+          ? apiInvoice.moneyPaid
+          : orderCtx.moneyPaid || 0,
       amountDue: apiInvoice?.amountDue,
       isFreeDeliveryCoupon: apiInvoice?.isFreeDeliveryCoupon,
-      familyPackItems: apiInvoice?.familyPackItems || (orderCtx.packageInfo ? [{
-        id: 1,
-        name: orderCtx.packageInfo.displayName || "Family Pack",
-        unitPrice: orderCtx.packageInfo.productPrice || packageTotal,
-        quantity: 1,
-        amount: orderCtx.packageInfo.productPrice || packageTotal,
-        packageDetails: orderCtx.packageInfo.packageDetails || [],
-      }] : []),
-      additionalItems: apiInvoice?.additionalItems || (orderCtx.additionalItems || []).map((item: any, idx: number) => ({
-        id: item.id || idx + 1,
-        name: item.displayName || item.name || "Item",
-        unitPrice: item.normalPrice || item.unitPrice || 0,
-        quantity: item.qty || item.quantity || 1,
-        unit: item.unit || "kg",
-        amount: item.amount || item.price || item.finalPrice || ((item.normalPrice || 0) * (item.qty || 1)),
-      })),
-      familyPackTotal: apiInvoice?.familyPackTotal !== undefined ? apiInvoice.familyPackTotal : packageTotal,
-      additionalItemsTotal: apiInvoice?.additionalItemsTotal !== undefined ? apiInvoice.additionalItemsTotal : productTotal,
-      deliveryFee: apiInvoice?.deliveryFee !== undefined ? apiInvoice.deliveryFee : deliveryFee,
-      discount: apiInvoice?.discount !== undefined ? apiInvoice.discount : discount,
-      couponDiscount: apiInvoice?.couponDiscount !== undefined ? apiInvoice.couponDiscount : (orderCtx.couponDiscount || 0),
-      grandTotal: apiInvoice?.grandTotal !== undefined ? apiInvoice.grandTotal : total,
-      billingInfo: apiInvoice?.billingInfo ? {
-        ...apiInvoice.billingInfo,
-        phone: formatPhoneNumber(apiInvoice.billingInfo.phone),
-      } : {
-        title: customerObj?.title || userProf.title || "",
-        fullName: customerObj?.fullName || `${userProf.firstName || ""} ${userProf.lastName || ""}`.trim() || checkout.fullName || "Valued Customer",
-        email: customerObj?.email || userProf.email || "N/A",
-        phone: formatPhoneNumber(customerObj?.phoneNumber || userProf.phoneNumber || checkout.phone1 || "N/A"),
-        buildingType: isApartment ? "Apartment" : "House",
-        houseNo: checkout.houseNo || "",
-        street: checkout.street || checkout.streetName || "",
-        city: checkout.cityName || checkout.city || "",
-        buildingNo: checkout.buildingNo || "",
-        apartmentName: checkout.buildingName || "",
-        flatNo: checkout.flatNumber || checkout.flatNo || "",
-        floorNo: checkout.floorNumber || checkout.floorNo || "",
-      },
-      pickupInfo: apiInvoice?.pickupInfo || (orderCtx.pickupCenter ? {
-        centerId: String(orderCtx.pickupCenter.id || ""),
-        centerName: orderCtx.pickupCenter.centerName || orderCtx.pickupCenter.name || "Unknown",
-        contact01: orderCtx.pickupCenter.phone1 || orderCtx.pickupCenter.contact01 || "Not Available",
-        address: {
-          street: orderCtx.pickupCenter.street || "",
-          city: orderCtx.pickupCenter.city || "",
-          district: orderCtx.pickupCenter.district || "",
-          province: orderCtx.pickupCenter.province || "",
-          country: "Sri Lanka",
-          zipCode: orderCtx.pickupCenter.zipcode || "",
-        }
-      } : undefined),
+      familyPackItems:
+        apiInvoice?.familyPackItems ||
+        (orderCtx.packageInfo
+          ? [
+              {
+                id: 1,
+                name: orderCtx.packageInfo.displayName || "Family Pack",
+                unitPrice: orderCtx.packageInfo.productPrice || packageTotal,
+                quantity: 1,
+                amount: orderCtx.packageInfo.productPrice || packageTotal,
+                packageDetails: orderCtx.packageInfo.packageDetails || [],
+              },
+            ]
+          : []),
+      additionalItems:
+        apiInvoice?.additionalItems ||
+        (orderCtx.additionalItems || []).map((item: any, idx: number) => ({
+          id: item.id || idx + 1,
+          name: item.displayName || item.name || "Item",
+          unitPrice: item.normalPrice || item.unitPrice || 0,
+          quantity: item.qty || item.quantity || 1,
+          unit: item.unit || "kg",
+          amount:
+            item.amount ||
+            item.price ||
+            item.finalPrice ||
+            (item.normalPrice || 0) * (item.qty || 1),
+        })),
+      familyPackTotal:
+        apiInvoice?.familyPackTotal !== undefined
+          ? apiInvoice.familyPackTotal
+          : packageTotal,
+      additionalItemsTotal:
+        apiInvoice?.additionalItemsTotal !== undefined
+          ? apiInvoice.additionalItemsTotal
+          : productTotal,
+      deliveryFee:
+        apiInvoice?.deliveryFee !== undefined
+          ? apiInvoice.deliveryFee
+          : deliveryFee,
+      discount:
+        apiInvoice?.discount !== undefined ? apiInvoice.discount : discount,
+      couponDiscount:
+        apiInvoice?.couponDiscount !== undefined
+          ? apiInvoice.couponDiscount
+          : couponDiscount,
+      grandTotal:
+        apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
+          ? apiInvoice.fullTotal
+          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+            ? apiInvoice.grandTotal
+            : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
+              ? orderCtx.fullTotal
+              : total,
+      fullTotal:
+        apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
+          ? apiInvoice.fullTotal
+          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+            ? apiInvoice.grandTotal
+            : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
+              ? orderCtx.fullTotal
+              : total,
+      billingInfo: apiInvoice?.billingInfo
+        ? {
+            ...apiInvoice.billingInfo,
+            phone: formatPhoneNumber(apiInvoice.billingInfo.phone),
+          }
+        : {
+            title: customerObj?.title || userProf.title || "",
+            fullName:
+              customerObj?.fullName ||
+              `${userProf.firstName || ""} ${userProf.lastName || ""}`.trim() ||
+              checkout.fullName ||
+              "Valued Customer",
+            email: customerObj?.email || userProf.email || "N/A",
+            phone: formatPhoneNumber(
+              customerObj?.phoneNumber ||
+                userProf.phoneNumber ||
+                checkout.phone1 ||
+                "N/A",
+            ),
+            buildingType: isApartment ? "Apartment" : "House",
+            houseNo: checkout.houseNo || "",
+            street: checkout.street || checkout.streetName || "",
+            city: checkout.cityName || checkout.city || "",
+            buildingNo: checkout.buildingNo || "",
+            apartmentName: checkout.buildingName || "",
+            flatNo: checkout.flatNumber || checkout.flatNo || "",
+            floorNo: checkout.floorNumber || checkout.floorNo || "",
+          },
+           pickupInfo: (() => {
+        const apiPickup = apiInvoice?.pickupInfo;
+        const localPickup = orderCtx.pickupCenter
+          ? {
+              centerId: String(orderCtx.pickupCenter.id || orderCtx.pickupCenter.centerId || ""),
+              centerName:
+                orderCtx.pickupCenter.centerName ||
+                orderCtx.pickupCenter.name ||
+                null,
+              contact01:
+                orderCtx.pickupCenter.contact01 ||
+                orderCtx.pickupCenter.phone1 ||
+                null,
+              address: {
+                street: orderCtx.pickupCenter.street || "",
+                city: orderCtx.pickupCenter.city || "",
+                district: orderCtx.pickupCenter.district || "",
+                province: orderCtx.pickupCenter.province || "",
+                country: "Sri Lanka",
+                zipCode: orderCtx.pickupCenter.zipcode || orderCtx.pickupCenter.zipCode || "",
+              },
+            }
+          : undefined;
+
+        const apiHasName =
+          apiPickup?.centerName && apiPickup.centerName !== "Unknown";
+        if (apiHasName) return apiPickup;
+        return localPickup || apiPickup || undefined;
+      })(),
     };
+    console.log("API pickupInfo:", JSON.stringify(apiInvoice?.pickupInfo));
+
 
     return { invoiceData, logoBase64 };
   };
+
+  
 
   const handleDownloadInvoice = async () => {
     if (isDownloading || isSharing) return;
@@ -302,7 +418,10 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         base64: true,
       });
 
-      const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(
+        /[^a-zA-Z0-9_-]/g,
+        "_",
+      );
       const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
 
       if (Platform.OS === "android") {
@@ -345,53 +464,104 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+  // ─── SHARE INVOICE (FIXED) ────────────────────────────────────────────────
+  // History of this bug:
+  // 1) Original code generated the PDF, then tried FileSystem.copyAsync() on
+  //    the Print module's cache uri to rename it. Android blocks that copy
+  //    ("isn't readable"), and the old catch block generated a SECOND
+  //    throwaway PDF and shared that instead — also unreadable.
+  // 2) Next attempt asked printToFileAsync for base64: true so the file could
+  //    be written ourselves (like the download flow does). But base64:true
+  //    forces expo-print to hold the whole PDF in memory as a base64 string
+  //    (on top of the invoice HTML + embedded logo image), and on many
+  //    Android devices that encode/write step itself fails natively:
+  //    "An error occured while writing the PDF data".
+  //
+  // Fix: share doesn't need base64 at all (only the SAF-based download flow
+  // does). Just get the plain `uri` from printToFileAsync and hand it
+  // straight to Sharing.shareAsync — no base64 encoding, no copyAsync, no
+  // rename, no second PDF. This is the standard, reliable expo-print +
+  // expo-sharing pattern.
   const handleShareInvoice = async () => {
     if (isDownloading || isSharing) return;
 
     try {
       setIsSharing(true);
-      const { invoiceData, logoBase64 } = await resolveInvoiceData();
-      const htmlContent = buildInvoiceHtml(invoiceData, logoBase64);
-
-      const { uri } = await Print.printToFileAsync({
-        html: htmlContent,
-        width: 595,
-      });
-
-      let shareUri = uri;
-      try {
-        const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
-        const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
-        const targetUri = `${FileSystem.cacheDirectory}${targetFileName}`;
-
-        // Ensure old file is deleted if already exists to prevent copyAsync failure
-        const fileInfo = await FileSystem.getInfoAsync(targetUri);
-        if (fileInfo.exists) {
-          await FileSystem.deleteAsync(targetUri, { idempotent: true });
-        }
-        await FileSystem.copyAsync({
-          from: uri,
-          to: targetUri,
-        });
-        shareUri = targetUri;
-      } catch (copyErr) {
-        console.warn("Could not rename invoice file for sharing, using original uri:", copyErr);
-        shareUri = uri;
-      }
 
       const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        await Sharing.shareAsync(shareUri, {
-          UTI: ".pdf",
-          mimeType: "application/pdf",
-          dialogTitle: `Share Invoice #${invoiceData.invoiceNumber}`,
-        });
-      } else {
-        Alert.alert("Sharing Unavailable", "Sharing is not available on this device.");
+      if (!isAvailable) {
+        Alert.alert(
+          "Sharing Unavailable",
+          "Sharing is not available on this device.",
+        );
+        return;
       }
+
+      const { invoiceData, logoBase64 } = await resolveInvoiceData();
+      const htmlContent = buildInvoiceHtml(invoiceData, logoBase64);
+      const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(
+        /[^a-zA-Z0-9_-]/g,
+        "_",
+      );
+
+      // Attempt 1: share the Print module's own cache uri directly. This is
+      // the standard, lowest-overhead path and is what a dev/production
+      // build should use successfully.
+      try {
+        const { uri } = await Print.printToFileAsync({
+          html: htmlContent,
+          width: 595,
+        });
+
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          UTI: "com.adobe.pdf",
+          dialogTitle: `Invoice_${cleanInvoiceNumber}.pdf`,
+        });
+        return;
+      } catch (primaryError) {
+        console.warn(
+          "Primary share path failed, retrying via documentDirectory:",
+          primaryError,
+        );
+      }
+
+      // Attempt 2 (fallback, mainly needed under Expo Go's stricter file
+      // provider sandbox): regenerate as base64 and write it into
+      // documentDirectory ourselves — a location Expo Go's provider does
+      // expose — then share that copy instead.
+      const { base64: pdfBase64 } = await Print.printToFileAsync({
+        html: htmlContent,
+        width: 595,
+        base64: true,
+      });
+
+      if (!pdfBase64) {
+        throw new Error("Failed to generate invoice PDF.");
+      }
+
+      const fallbackUri = `${FileSystem.documentDirectory}Invoice_${cleanInvoiceNumber}.pdf`;
+
+      const existing = await FileSystem.getInfoAsync(fallbackUri);
+      if (existing.exists) {
+        await FileSystem.deleteAsync(fallbackUri, { idempotent: true });
+      }
+
+      await FileSystem.writeAsStringAsync(fallbackUri, pdfBase64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      await Sharing.shareAsync(fallbackUri, {
+        mimeType: "application/pdf",
+        UTI: "com.adobe.pdf",
+        dialogTitle: `Invoice_${cleanInvoiceNumber}.pdf`,
+      });
     } catch (error: any) {
       console.error("Invoice sharing error:", error);
-      Alert.alert("Error", error?.message || "Failed to share invoice. Please try again.");
+      Alert.alert(
+        "Error",
+        error?.message || "Failed to share invoice. Please try again.",
+      );
     } finally {
       setIsSharing(false);
     }
@@ -694,6 +864,26 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             </View>
           )}
 
+          {/* Coupon Discount (only if > 0) */}
+          {couponDiscount > 0 && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: "#60647A" }}>
+                Coupon Discount
+              </Text>
+              <Text
+                style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
+              >
+                - Rs. {formatAmount(couponDiscount)}
+              </Text>
+            </View>
+          )}
+
           {/* Delivery Fee (ONLY if > 0 - never show if 0) */}
           {deliveryFee > 0 && (
             <View
@@ -710,6 +900,26 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 style={{ fontSize: 13, fontWeight: "600", color: "#222222" }}
               >
                 + Rs. {formatAmount(deliveryFee)}
+              </Text>
+            </View>
+          )}
+
+          {/* Free Delivery Coupon note */}
+          {isFreeDeliveryCoupon && deliveryFee === 0 && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: "#60647A" }}>
+                Delivery Fee
+              </Text>
+              <Text
+                style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
+              >
+                FREE (Coupon)
               </Text>
             </View>
           )}

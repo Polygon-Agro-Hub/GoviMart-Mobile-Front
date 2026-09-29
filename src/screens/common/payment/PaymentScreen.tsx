@@ -21,6 +21,7 @@ import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
+import { AlertModal } from "@/component/common/AlertModal";
 // Note: PayHere adapter and modal files are preserved in the codebase and can be relinked if needed.
 
 type PaymentScreenNavigationProp = StackNavigationProp<
@@ -45,12 +46,28 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   const [loading, setLoading] = useState<boolean>(!initialAmount);
 
   // ─── CARD PAYMENT STATE ───────────────────────────────────────────────────
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [nameOnCard, setNameOnCard] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [cardError, setCardError] = useState("");
+
+  // ─── ALERT MODAL STATE ────────────────────────────────────────────────────
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: "success" | "error" = "error"
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   const dispatch = useDispatch();
   const [submitting, setSubmitting] = useState(false);
@@ -180,11 +197,16 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         const response = await customerService.updateCreditBalance(subTotal);
 
         if (response.data && response.data.status) {
-          setShowSuccessModal(true);
-        } else {
-          setCardError(
-            response.data?.message || "Failed to clear credit balance.",
+          showAlert(
+            "Payment Successful",
+            "Your negative credit balance has been cleared successfully. You can now continue placing orders without restrictions!",
+            "success"
           );
+        } else {
+          const msg =
+            response.data?.message || "Failed to clear credit balance.";
+          setCardError(msg);
+          showAlert("Payment Failed", msg, "error");
         }
       } else {
         // Direct card flow for order placement
@@ -211,6 +233,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             orderId: response.data.data.orderId,
             invoiceNumber: response.data.data.invoiceNumber,
             total: response.data.data.total,
+            couponValue: orderContext?.couponValue,
             orderContext,
           });
         } else {
@@ -239,9 +262,11 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  const handleFinishSuccess = () => {
-    setShowSuccessModal(false);
-    navigation.goBack();
+  const handleAlertClose = () => {
+    setAlertVisible(false);
+    if (alertType === "success" && isClearBalanceFlow) {
+      navigation.goBack();
+    }
   };
 
   return (
@@ -712,103 +737,17 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     )}
 
 
-      {/* ─── PAYMENT SUCCESS MODAL ────────────────────────────────────────── */}
-      <Modal
-        visible={showSuccessModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleFinishSuccess}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 24,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: 24,
-              paddingHorizontal: 24,
-              paddingVertical: 28,
-              width: "100%",
-              maxWidth: 340,
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
-              shadowRadius: 10,
-              elevation: 8,
-            }}
-          >
-            <View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 36,
-                backgroundColor: "#DCFCE7",
-                justifyContent: "center",
-                alignItems: "center",
-                marginBottom: 16,
-              }}
-            >
-              <Ionicons name="checkmark-circle" size={54} color="#16A34A" />
-            </View>
-
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "700",
-                color: "#0F172A",
-                textAlign: "center",
-                marginBottom: 8,
-              }}
-            >
-              Payment Successful!
-            </Text>
-
-            <Text
-              style={{
-                fontSize: 13,
-                color: "#64748B",
-                textAlign: "center",
-                lineHeight: 19,
-                marginBottom: 24,
-              }}
-            >
-              {isClearBalanceFlow
-                ? "Your negative credit balance has been cleared successfully. You can now continue placing orders without restrictions!"
-                : "Your order payment has been completed successfully."}
-            </Text>
-
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={handleFinishSuccess}
-              style={{
-                width: "100%",
-                height: 48,
-                backgroundColor: "#000000",
-                borderRadius: 24,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontSize: 15,
-                  fontWeight: "700",
-                }}
-              >
-                {isClearBalanceFlow ? "Back to Profile" : "Done"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* ─── ALERT MODAL ──────────────────────────────────────────────────── */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+        autoClose={false}
+        showOkButton={true}
+        okButtonText={alertType === "success" && isClearBalanceFlow ? "Back to Profile" : "OK"}
+      />
 
       {/* ─── UNAVAILABLE ITEMS MODAL ─────────────────────────────────────── */}
       <UnavailableItemsModal

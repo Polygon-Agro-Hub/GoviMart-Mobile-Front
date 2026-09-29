@@ -9,7 +9,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StatusBar,
   ScrollView,
   Image,
   Animated,
@@ -17,6 +16,8 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -45,6 +46,7 @@ import { TimeRanOutBanner } from "@/component/package/TimeRanOutBanner";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
+import { AlertModal } from "@/component/common/AlertModal";
 import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
@@ -149,10 +151,16 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
+// Parse a DB value exactly. A real 0 stays 0 (no `|| 50` style fallbacks).
+const num = (v: any): number => {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+};
+
 const formatWeightDisplay = (
   display?: string,
   amount?: number,
-  unit?: string
+  unit?: string,
 ): string => {
   if (amount != null && !isNaN(Number(amount)) && unit) {
     return `${parseFloat(String(amount))} ${unit.toLowerCase()}`;
@@ -167,6 +175,27 @@ const formatWeightDisplay = (
   }
   return "";
 };
+
+// Store price is PER KG (needed for the stepper and totals).
+// The card SHOWS the line price = price x quantity, which equals
+// definepackageitems.price at the define quantity (e.g. Ginger 120/kg x 0.5 = 60).
+const toDisplayProduct = (p: ReviewProduct): ReviewProduct => ({
+  ...p,
+  price: Number(((p.price || 0) * (p.quantity || 0)).toFixed(2)),
+  originalProduct: p.originalProduct
+    ? {
+        ...p.originalProduct,
+        price: Number(
+          (
+            (p.originalProduct.price || 0) * (p.originalProduct.quantity || 0)
+          ).toFixed(2),
+        ),
+      }
+    : undefined,
+});
+
+// NEW: shape of what we remember about ala carte rows already saved in the DB
+type OriginalAlacartEntry = { amount: number; unit: string };
 
 /* ---------------------------------------------------------
    Small pieces
@@ -197,6 +226,48 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
   </View>
 );
 
+const PriceRow: React.FC<{
+  label: string;
+  value: string;
+  valueColor?: string;
+  strong?: boolean;
+  big?: boolean;
+  marginBottom?: number;
+}> = ({ label, value, valueColor = "#000000", strong, big, marginBottom }) => (
+  <View
+    style={{
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 2,
+      marginBottom,
+    }}
+  >
+    <Text
+      style={{
+        fontSize: big ? 18 : 16,
+        fontWeight: strong ? "700" : "400",
+        color: "#000000",
+      }}
+    >
+      {label}
+    </Text>
+    <Text
+      style={{
+        fontSize: big ? 18 : 16,
+        fontWeight: strong ? "700" : "600",
+        color: valueColor,
+      }}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
+const RowDivider = () => (
+  <View style={{ height: 1, backgroundColor: "#E1E7EE", marginVertical: 14 }} />
+);
+
 /* ---------------------------------------------------------
    Main Screen Component
 --------------------------------------------------------- */
@@ -213,12 +284,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     productTemplatesState,
     orderPackageDbIds,
     alacartSelection,
+    deletedAdditionalItemIds,
     invoiceNo: reduxInvoiceNo,
     scheduleDateStr,
     initialPaidAmount,
     moneyPaid,
     creditPaid,
     paymentMethod,
+    deliveryMethod,
     isPaid,
     processOrderAmount,
     processOrderId,
@@ -238,15 +311,32 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [mode, setMode] = useState<ScreenMode>("overview");
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
 
   const [selectedAlaCartCategory, setSelectedAlaCartCategory] =
     useState<string>("Vegetables");
-  const [alaCartProducts, setAlaCartProducts] =
-    useState<ProductType[]>([]);
+  const [alaCartProducts, setAlaCartProducts] = useState<ProductType[]>([]);
   const [loadingAlaCartProducts, setLoadingAlaCartProducts] =
     useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [unavailablePackageIds, setUnavailablePackageIds] = useState<Record<string, boolean>>({});
+  const [unavailablePackageIds, setUnavailablePackageIds] = useState<
+    Record<string, boolean>
+  >({});
+  // Tracks product IDs (as strings) that have been disabled via socket — used
+  // to show "No longer available" red style in BOTH the ala carte grid AND the confirm step.
+  const [disabledAlacartProductIds, setDisabledAlacartProductIds] = useState<
+    Set<string>
+  >(new Set());
+
+  const [originalAlacartTotal, setOriginalAlacartTotal] = useState<number>(0);
+
+  // NEW: the qty + unit each SAVED ala carte row had when the review loaded
+  // (key = orderadditionalitems.id). Used to detect which saved rows the
+  // customer edited so we can send them to the backend for an UPDATE.
+  const [originalAlacartMap, setOriginalAlacartMap] = useState<
+    Record<number, OriginalAlacartEntry>
+  >({});
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -313,21 +403,86 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
+  const buyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+  );
+
+  // Wholesale guard: Block Wholesale users from viewing ReviewPackage
+  useEffect(() => {
+    if (buyerType && buyerType.toLowerCase() !== "retail") {
+      Alert.alert(
+        "Access Denied",
+        "Package review feature is only available for Retail users.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (effectiveOrderId) {
+                navigation.replace("OrderDetails", {
+                  orderId: String(effectiveOrderId),
+                });
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.replace("Home");
+              }
+            },
+          },
+        ],
+      );
+    }
+  }, [buyerType, effectiveOrderId, navigation]);
+
   // Fetch review data from backend
   const fetchReviewData = useCallback(
     async (force = false) => {
+      if (buyerType && buyerType.toLowerCase() !== "retail") {
+        return;
+      }
       dispatch(setLoadingReview(true));
       try {
         const res = await orderService.getPackageReview(effectiveOrderId);
         if (res.data?.status && res.data?.data) {
           const { orderInfo, packages, additionalItems, packingSlots } =
             res.data.data;
+
+          if (
+            orderInfo?.status &&
+            orderInfo.status.toLowerCase() === "cancelled"
+          ) {
+            dispatch(setLoadingReview(false));
+            Alert.alert(
+              "Cannot Proceed!",
+              "You have already cancelled this order. You cannot proceed to the payment.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (effectiveOrderId) {
+                      navigation.replace("OrderDetails", {
+                        orderId: String(effectiveOrderId),
+                      });
+                    } else if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    } else {
+                      navigation.replace("Home");
+                    }
+                  },
+                },
+              ],
+              { cancelable: false },
+            );
+            return;
+          }
+
           let resolvedProcessOrderId = null;
           let resolvedInvNo = "INV-2660000";
           let resolvedPaidAmount = 0;
           let resolvedMoneyPaid = 0;
           let resolvedCreditPaid = 0;
           let resolvedPaymentMethod = "";
+          // delivaryMethod is the DB column name (typo in schema — kept as-is for compatibility)
+          let resolvedDeliveryMethod = "";
           let resolvedIsPaid = false;
           let resolvedProcessOrderAmount = 0;
           let resolvedDeliveryCharge = 0;
@@ -354,6 +509,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             if (orderInfo.paymentMethod) {
               resolvedPaymentMethod = orderInfo.paymentMethod;
             }
+            // DB column is "delivaryMethod" (typo in the DB schema — intentionally kept).
+            if (orderInfo.delivaryMethod) {
+              resolvedDeliveryMethod = String(orderInfo.delivaryMethod).trim();
+            }
             resolvedIsPaid =
               parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
             if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
@@ -374,37 +533,72 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           if (Array.isArray(additionalItems) && additionalItems.length > 0) {
             additionalItems.forEach((item: any) => {
               const prodId = item.productId || item.additionalItemId;
-              const basePrice = parseFloat(item.normalPrice || item.price || 0);
+              // price = line total for the ordered qty (from orderadditionalitems)
               const price = parseFloat(item.price || item.normalPrice || 0);
+              // per-kg marketplace rates, used when the user changes qty/unit
+              const perKgNormal = parseFloat(
+                item.perKgNormalPrice || item.normalPrice || 0,
+              );
+              const perKgDiscounted = parseFloat(
+                item.perKgDiscountedPrice || item.discountedPrice || 0,
+              );
+              const perKgPrice =
+                perKgDiscounted > 0 ? perKgDiscounted : perKgNormal;
+              const basePrice =
+                perKgNormal || parseFloat(item.normalPrice || item.price || 0);
               const dbUnitType = (item.unitType || "g").toLowerCase();
-              const unit = (item.unit?.toLowerCase() === "g" ? "g" : (dbUnitType === "g" ? "g" : "kg")) as
-                | "kg"
-                | "g";
+              const unit = (
+                item.unit?.toLowerCase() === "g"
+                  ? "g"
+                  : dbUnitType === "g"
+                    ? "g"
+                    : "kg"
+              ) as "kg" | "g";
               const rawQty = item.qty || item.quantity || item.weight || 1;
               const parsedAmount = parseFloat(String(rawQty));
               const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
 
-              const rawChangeBy = item.changeby != null && String(item.changeby).trim() !== "" && parseFloat(String(item.changeby)) > 0
-                ? parseFloat(String(item.changeby))
-                : (item.startValue ? parseFloat(String(item.startValue)) : 0.5);
+              const rawChangeBy =
+                item.changeby != null &&
+                String(item.changeby).trim() !== "" &&
+                parseFloat(String(item.changeby)) > 0
+                  ? parseFloat(String(item.changeby))
+                  : item.startValue
+                    ? parseFloat(String(item.startValue))
+                    : 0.5;
 
-              const step = unit === "g"
-                ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
-                : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+              const step =
+                unit === "g"
+                  ? dbUnitType === "kg" || rawChangeBy <= 10
+                    ? Math.round(rawChangeBy * 1000)
+                    : Math.round(rawChangeBy)
+                  : dbUnitType === "kg" || rawChangeBy <= 10
+                    ? parseFloat(rawChangeBy.toFixed(3))
+                    : parseFloat((rawChangeBy / 1000).toFixed(3));
 
-              const rawStart = parseFloat(item.startValue) > 0 ? parseFloat(item.startValue) : rawChangeBy;
-              const minQuantity = unit === "g"
-                ? (dbUnitType === "kg" || rawStart <= 10 ? Math.round(rawStart * 1000) : Math.round(rawStart))
-                : (dbUnitType === "kg" || rawStart <= 10 ? parseFloat(rawStart.toFixed(3)) : parseFloat((rawStart / 1000).toFixed(3)));
+              const rawStart =
+                parseFloat(item.startValue) > 0
+                  ? parseFloat(item.startValue)
+                  : rawChangeBy;
+              const minQuantity =
+                unit === "g"
+                  ? dbUnitType === "kg" || rawStart <= 10
+                    ? Math.round(rawStart * 1000)
+                    : Math.round(rawStart)
+                  : dbUnitType === "kg" || rawStart <= 10
+                    ? parseFloat(rawStart.toFixed(3))
+                    : parseFloat((rawStart / 1000).toFixed(3));
 
               const itemKey = `prev-${item.id || prodId}`;
               loadedAlacart[itemKey] = {
                 id: itemKey,
+                additionalItemId: item.id ? Number(item.id) : undefined,
                 productId: prodId,
                 displayName: item.productName || item.cropNameEnglish || "Item",
                 image: item.productImage,
                 price: price,
                 basePrice: basePrice,
+                perKgPrice: perKgPrice,
                 weightDisplay: `${amount} ${unit}`,
                 unit: unit,
                 amount: amount,
@@ -419,6 +613,32 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             });
           }
 
+          // Remember what the customer ORIGINALLY paid for ala carte items,
+          // so "Pay Additional" only counts real changes.
+          setOriginalAlacartTotal(
+            Object.values(loadedAlacart).reduce(
+              (sum, item) => sum + item.price * item.quantity,
+              0,
+            ),
+          );
+
+          // NEW: remember the original qty + unit of every SAVED ala carte row
+          // (keyed by orderadditionalitems.id) so we can detect edits later.
+          setOriginalAlacartMap(
+            Object.values(loadedAlacart).reduce(
+              (acc, item) => {
+                if (item.additionalItemId) {
+                  acc[item.additionalItemId] = {
+                    amount: item.amount,
+                    unit: item.unit,
+                  };
+                }
+                return acc;
+              },
+              {} as Record<number, OriginalAlacartEntry>,
+            ),
+          );
+
           const newMeta: PackageMeta[] = [];
           const newTemplates: Record<string, ReviewProduct[]> = {};
           const newProducts: Record<string, ReviewProduct[]> = {};
@@ -431,6 +651,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               dbIdMap[pkgKey] = pkg.orderPackageId;
               if (pkg.isLock === 1) anyLocked = true;
 
+              // Use DB values exactly (no `|| 1000` / `|| 50` fallbacks).
               newMeta.push({
                 id: pkgKey,
                 name: pkg.packageName || "Custom Package",
@@ -439,18 +660,23 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   : "🥗",
                 image: pkg.packageImage,
                 qty: parseInt(pkg.qty) || 1,
-                unitPrice: parseFloat(pkg.unitPrice) || 1000,
-                serviceFee: parseFloat(pkg.serviceFee) || 50,
-                packingFee: parseFloat(pkg.packingFee) || 50,
+                unitPrice: num(pkg.unitPrice), // marketplacepackages.productPrice
+                serviceFee: num(pkg.serviceFee), // marketplacepackages.serviceFee
+                packingFee: num(pkg.packingFee), // marketplacepackages.packingFee
+                discountPerUnit: num(pkg.discountPerUnit), // definepackage.price - productPrice
               });
 
               // Map active items
               const activeItems: ReviewProduct[] = (pkg.items || []).map(
                 (i: any, itemIdx: number) => {
                   const itemStep = parseFloat(i.step || i.changeby || 0.5);
-                  const itemMin = parseFloat(i.minQuantity || i.startValue || i.qty || itemStep);
+                  const itemMin = parseFloat(
+                    i.minQuantity || i.startValue || i.qty || itemStep,
+                  );
                   return {
-                    id: String(i.productId || i.itemId || `${pkgKey}-${itemIdx}`),
+                    id: String(
+                      i.productId || i.itemId || `${pkgKey}-${itemIdx}`,
+                    ),
                     itemId: i.itemId ? Number(i.itemId) : undefined,
                     productId: i.productId ? Number(i.productId) : undefined,
                     category:
@@ -458,8 +684,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     name: i.productName || "Product",
                     icon: "🥗",
                     image: i.productImage,
-                    price: parseFloat(i.discountedPrice || i.baseUnitPrice || i.price || 0),
-                    quantity: parseFloat(i.qty || 1),
+                    // PER-KG price. For definepackageitems fallback rows the backend
+                    // sends discountedPrice = null and baseUnitPrice = definePrice / qty.
+                    price: parseFloat(
+                      i.discountedPrice || i.baseUnitPrice || i.price || 0,
+                    ),
+                    // definepackageitems.qty (fallback) or orderpackageitems.qty
+                    quantity: parseFloat(i.qty ?? 1),
                     minQuantity: itemMin,
                     // orderpackageitems.qty is always stored in kg — never use 'g' here
                     unit: "kg" as "kg" | "g",
@@ -482,14 +713,19 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             : i.productId
                               ? Number(i.productId)
                               : undefined,
-                          category: i.originalProduct.category || "Original Item",
+                          category:
+                            i.originalProduct.category || "Original Item",
                           name: i.originalProduct.name,
                           icon: "🥗",
                           image: i.originalProduct.image,
                           price: parseFloat(i.originalProduct.price || 0),
-                          quantity: parseFloat(i.originalProduct.quantity || 1),
+                          quantity: parseFloat(i.originalProduct.quantity ?? 1),
                           unit: "kg" as "kg" | "g",
-                          step: parseFloat(i.originalProduct.step || i.originalProduct.changeby || itemStep),
+                          step: parseFloat(
+                            i.originalProduct.step ||
+                              i.originalProduct.changeby ||
+                              itemStep,
+                          ),
                           productType: i.originalProduct.productType,
                           productTypeId: i.originalProduct.productType,
                         }
@@ -503,7 +739,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 pkg.baselineProducts || []
               ).map((b: any, bIdx: number) => {
                 const baseStep = parseFloat(b.step || b.changeby || 0.5);
-                const baseMin = parseFloat(b.minQuantity || b.startValue || b.qty || baseStep);
+                const baseMin = parseFloat(
+                  b.minQuantity || b.startValue || b.qty || baseStep,
+                );
                 return {
                   id: String(
                     b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
@@ -518,8 +756,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   name: b.productName || "Product",
                   icon: "🥗",
                   image: b.productImage,
-                  price: parseFloat(b.discountedPrice || b.baseUnitPrice || b.price || 0),
-                  quantity: parseFloat(b.qty || 1),
+                  price: parseFloat(
+                    b.discountedPrice || b.baseUnitPrice || b.price || 0,
+                  ),
+                  quantity: parseFloat(b.qty ?? 1),
                   minQuantity: baseMin,
                   unit: "kg" as "kg" | "g",
                   step: baseStep,
@@ -530,7 +770,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               });
 
               newProducts[pkgKey] = activeItems;
-              newTemplates[pkgKey] = baseItems.length > 0 ? baseItems : activeItems;
+              newTemplates[pkgKey] =
+                baseItems.length > 0 ? baseItems : activeItems;
             });
           }
 
@@ -545,6 +786,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               moneyPaid: resolvedMoneyPaid,
               creditPaid: resolvedCreditPaid,
               paymentMethod: resolvedPaymentMethod,
+              deliveryMethod: resolvedDeliveryMethod,
               isPaid: resolvedIsPaid,
               processOrderAmount: resolvedProcessOrderAmount,
               deliveryCharge: resolvedDeliveryCharge,
@@ -567,7 +809,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         dispatch(setLoadingReview(false));
       }
     },
-    [dispatch, effectiveOrderId],
+    [dispatch, effectiveOrderId, buyerType, navigation],
   );
 
   // Refresh review data from backend whenever user is on/enters overview screen
@@ -643,58 +885,73 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
   }, [packagesMeta]);
 
-const fetchCategoryProducts = async (categoryId: string) => {
-  try {
-    setSelectedAlaCartCategory(categoryId);
-    setLoadingAlaCartProducts(true);
-    const response = await productService.getProductsByCategory(categoryId);
+  const fetchCategoryProducts = async (categoryId: string) => {
+    try {
+      setSelectedAlaCartCategory(categoryId);
+      setLoadingAlaCartProducts(true);
+      const response = await productService.getProductsByCategory(categoryId);
 
-    if (
-      response.data?.status &&
-      Array.isArray(response.data.products)
-    ) {
-      if (response.data.products.length > 0) {
-        const products = response.data.products
-          .map((item: any) => ({
+      if (response.data?.status && Array.isArray(response.data.products)) {
+        if (response.data.products.length > 0) {
+          // Keep ALL products (enabled AND disabled) so that when a product
+          // is disabled via socket, the card turns red ("No longer available")
+          // instead of disappearing — giving the user clear visual feedback.
+          const products = response.data.products.map((item: any) => ({
             ...item,
             type: "product",
-          }))
-          // Defensive: never show a disabled product even if it slips
-          // through the backend filter (e.g. isEnable is null/0/"0").
-          .filter((item: any) => item.isEnable === undefined || item.isEnable === 1 || item.isEnable === true);
-        setAlaCartProducts(products);
+          }));
+          setAlaCartProducts(products);
+        } else {
+          setAlaCartProducts([]);
+        }
       } else {
         setAlaCartProducts([]);
+        const message =
+          response.data?.message || `No products available for ${categoryId}.`;
+        Alert.alert("Notice", message);
       }
-    } else {
+    } catch (error: any) {
+      console.error("Failed to load products by category from API:", error);
       setAlaCartProducts([]);
-      const message =
-        response.data?.message || `No products available for ${categoryId}.`;
-      Alert.alert("Notice", message);
+      const errorMsg =
+        error?.response?.data?.message ||
+        `Failed to load products for ${categoryId}. Please check your connection and try again.`;
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setLoadingAlaCartProducts(false);
     }
-  } catch (error: any) {
-    console.error("Failed to load products by category from API:", error);
-    setAlaCartProducts([]);
-    const errorMsg =
-      error?.response?.data?.message ||
-      `Failed to load products for ${categoryId}. Please check your connection and try again.`;
-    Alert.alert("Error", errorMsg);
-  } finally {
-    setLoadingAlaCartProducts(false);
-  }
-};
+  };
 
   useEffect(() => {
     fetchCategoryProducts("Vegetables");
   }, []);
 
-  // Helper: check if any packages in the current review are still enabled
-  const checkPackageAvailability = useCallback(async () => {
-    if (packagesMeta.length === 0) return;
+  // Helper: check if any packages or ala carte items in the current review are still enabled in marketplaceitems/marketplacepackages
+  const checkAllAvailability = useCallback(async () => {
     try {
-      const packageIds = packagesMeta.map((p) => parseInt(p.id)).filter((id) => !isNaN(id));
-      if (packageIds.length === 0) return;
-      const res = await productService.checkAvailability([], packageIds);
+      const packageIds = packagesMeta
+        .map((p) => parseInt(p.id))
+        .filter((id) => !isNaN(id));
+
+      const productIds = Object.values(alacartSelection)
+        .map((item) => {
+          if (typeof item.productId === "number" && !isNaN(item.productId))
+            return item.productId;
+          const parsed = parseInt(
+            String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            10,
+          );
+          return isNaN(parsed) ? 0 : parsed;
+        })
+        .filter((id) => id > 0);
+
+      if (packageIds.length === 0 && productIds.length === 0) return;
+
+      const res = await productService.checkAvailability(
+        productIds,
+        packageIds,
+      );
+
       if (res.data?.packages) {
         const unavailable: Record<string, boolean> = {};
         packagesMeta.forEach((p) => {
@@ -705,11 +962,29 @@ const fetchCategoryProducts = async (categoryId: string) => {
         });
         setUnavailablePackageIds(unavailable);
       }
-    } catch (err) {
-      console.log("[ReviewPackageScreen] checkPackageAvailability error:", err);
-    }
-  }, [packagesMeta]);
 
+      if (res.data?.products) {
+        setDisabledAlacartProductIds((prev) => {
+          const next = new Set(prev);
+          Object.entries(res.data.products).forEach(([idStr, isAvailable]) => {
+            if (isAvailable === false) {
+              next.add(String(idStr));
+            } else if (isAvailable === true) {
+              next.delete(String(idStr));
+            }
+          });
+          return next;
+        });
+      }
+    } catch (err) {
+      console.log("[ReviewPackageScreen] checkAllAvailability error:", err);
+    }
+  }, [packagesMeta, alacartSelection]);
+
+  // Re-check availability whenever packagesMeta or alacartSelection changes
+  useEffect(() => {
+    checkAllAvailability();
+  }, [checkAllAvailability]);
 
   const toggleAlacartProduct = (product: ProductType) => {
     dispatch(toggleAlacartProductAction(product));
@@ -740,12 +1015,22 @@ const fetchCategoryProducts = async (categoryId: string) => {
     dispatch(updateProductQuantityAction({ packageId, productId, delta }));
   };
 
-  // Overview total = actual items sum + fees across all packages
-  const overviewTotal = packagesMeta.reduce((sum, pkg) => {
-    const prods = packageProducts[pkg.id] || [];
-    const itemsSum = prods.reduce((s: number, p: any) => s + p.price * p.quantity, 0);
-    return sum + (itemsSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
-  }, 0);
+  // ── Overview totals ────────────────────────────────────────────────────────
+  // Full Total = marketplacepackages (productPrice + packingFee + serviceFee) x qty
+  const overviewFullTotal = packagesMeta.reduce(
+    (sum, pkg) =>
+      sum + (pkg.unitPrice + pkg.packingFee + pkg.serviceFee) * pkg.qty,
+    0,
+  );
+
+  // Discount Received = (definepackage.price - marketplacepackages.productPrice) x qty
+  const overviewDiscount = packagesMeta.reduce(
+    (sum, pkg) => sum + (pkg.discountPerUnit ?? 0) * pkg.qty,
+    0,
+  );
+
+  // Total = Full Total + Discount Received (price before discount)
+  const overviewTotal = overviewFullTotal + overviewDiscount;
 
   const currentStep = steps[currentStepIndex] ||
     steps[0] || { type: "confirm" as const };
@@ -753,42 +1038,76 @@ const fetchCategoryProducts = async (categoryId: string) => {
   // Real-time Ala Carte Products & Package Availability update via Socket.IO
   useEffect(() => {
     const unsubscribe = socketService.onCatalogUpdate((data) => {
-      console.log("📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:", data);
-      // Re-fetch the currently selected ala carte category (don't reset category)
+      console.log(
+        "📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:",
+        data,
+      );
+      // Re-fetch the currently selected ala carte category (don't reset category).
+      // Keep ALL products (including newly-disabled ones) so AlacartProductCard
+      // can show them as red "No longer available" instead of silently vanishing.
       if (mode === "flow" && currentStep.type === "alacart") {
         productService
           .getProductsByCategory(selectedAlaCartCategory)
           .then((response) => {
-            if (response.data?.status && Array.isArray(response.data.products)) {
-              const products = response.data.products
-                .map((item: any) => ({ ...item, type: "product" }))
-                .filter(
-                  (item: any) =>
-                    item.isEnable === undefined ||
-                    item.isEnable === 1 ||
-                    item.isEnable === true
-                );
+            if (
+              response.data?.status &&
+              Array.isArray(response.data.products)
+            ) {
+              const products = response.data.products.map((item: any) => ({
+                ...item,
+                type: "product",
+              }));
               setAlaCartProducts(products);
             }
           })
           .catch(() => {});
       }
-      // Re-check package availability on confirm step
-      if (mode === "flow" && currentStep.type === "confirm") {
-        checkPackageAvailability();
-      }
+      // Re-check both packages and ala carte items availability in real time via socket
+      checkAllAvailability();
     });
     return () => {
       unsubscribe();
     };
-  }, [mode, currentStep, selectedAlaCartCategory, checkPackageAvailability]);
+  }, [mode, currentStep, selectedAlaCartCategory, checkAllAvailability]);
 
-  // Check package availability whenever the user enters the confirm step
+  // Check package & product availability whenever the user enters the confirm step
   useEffect(() => {
     if (mode === "flow" && currentStep.type === "confirm") {
-      checkPackageAvailability();
+      checkAllAvailability();
     }
-  }, [mode, currentStep, checkPackageAvailability]);
+  }, [mode, currentStep, checkAllAvailability]);
+
+  // When alaCartProducts updates (initial load or socket catalog update),
+  // collect any product IDs marked as disabled (isEnable === 0 / false).
+  // These IDs are used to render "No longer available" red cards in BOTH:
+  //   • the ala carte selection grid (step: alacart)
+  //   • the ala carte items list     (step: confirm)
+  // Items are NOT auto-removed from alacartSelection so the user can see
+  // what became unavailable and decide to delete manually via the trash icon.
+  useEffect(() => {
+    if (alaCartProducts.length === 0) return;
+    const newDisabledIds = new Set(
+      alaCartProducts
+        .filter((p) => p.isEnable === 0 || p.isEnable === false)
+        .map((p) => String(p.id)),
+    );
+    setDisabledAlacartProductIds((prev) => {
+      // Merge: once a product is marked disabled it stays disabled
+      // until a fresh category load clears/replaces the set.
+      const merged = new Set([...prev, ...newDisabledIds]);
+      // If the product appears again as enabled, remove it from disabled set.
+      alaCartProducts.forEach((p) => {
+        if (
+          p.isEnable === 1 ||
+          p.isEnable === true ||
+          p.isEnable === undefined
+        ) {
+          merged.delete(String(p.id));
+        }
+      });
+      return merged;
+    });
+  }, [alaCartProducts]);
 
   const goToPrevStep = () => {
     if (currentStepIndex === 0) {
@@ -803,6 +1122,30 @@ const fetchCategoryProducts = async (categoryId: string) => {
       setCurrentStepIndex((prev) => prev + 1);
     } else {
       // Confirm order completion & finalize review (BATCH UPDATE ON LAST STEP)
+
+      // Detect payment method early so we can show loading overlay immediately
+      const pMethod = (paymentMethod || "").trim().toLowerCase();
+      const isCard =
+        pMethod.includes("card") ||
+        pMethod.includes("payhere") ||
+        pMethod.includes("online") ||
+        (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
+
+      // Detect Cash on Delivery or Cash on Pickup — skip OrderConfirmed for these
+      const dMethod = (deliveryMethod || "").trim().toLowerCase();
+      const isCashOrder =
+        pMethod.includes("cash") ||
+        pMethod === "cod" ||
+        pMethod.includes("pickup");
+      const isCashOnPickup =
+        dMethod.includes("pickup") || pMethod.includes("pickup");
+      const shouldSkipConfirmScreen = isCashOrder || isCashOnPickup;
+
+      // For cash/pickup orders: show loading overlay immediately
+      if (shouldSkipConfirmScreen) {
+        setIsSubmitting(true);
+      }
+
       try {
         const replacements: Array<{
           orderPackageId: number;
@@ -858,6 +1201,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
           }
         });
 
+        // Ala carte items ADDED in this review session (new rows / merge by productId)
         const additionalItemsPayload = Object.values(alacartSelection)
           .filter((item) => item.isAddedNow)
           .map((item) => ({
@@ -871,6 +1215,34 @@ const fetchCategoryProducts = async (categoryId: string) => {
             unit: item.unit,
             normalPrice: item.basePrice,
             price: item.price,
+          }));
+
+        // NEW: Ala carte items ALREADY SAVED in the order whose qty or unit the
+        // customer changed. Sent with their orderadditionalitems.id so the
+        // backend UPDATEs that exact row (qty, unit, normalPrice, price, discount).
+        const updatedAdditionalItemsPayload = Object.values(alacartSelection)
+          .filter((item) => {
+            if (item.isAddedNow || !item.additionalItemId) return false;
+            if (isItemUnavailable(item)) return false;
+            const orig = originalAlacartMap[item.additionalItemId];
+            if (!orig) return false;
+            return (
+              Number(orig.amount) !== Number(item.amount) ||
+              orig.unit !== item.unit
+            );
+          })
+          .map((item) => ({
+            id: item.additionalItemId as number, // orderadditionalitems.id
+            productId:
+              typeof item.productId === "number"
+                ? item.productId
+                : parseInt(
+                    String(item.productId || item.id).replace(/[^0-9]/g, ""),
+                  ) || 0,
+            qty: item.amount,
+            unit: item.unit,
+            // fallback only: backend recalculates from marketplace per-kg rates
+            price: Number((item.price * item.quantity).toFixed(2)),
           }));
 
         // Build packages payload for initial insert into orderpackageitems (Todo packages)
@@ -909,23 +1281,17 @@ const fetchCategoryProducts = async (categoryId: string) => {
               (route.params as any)?.newScheduleDate || undefined,
             replacements,
             additionalItems: additionalItemsPayload,
+            updatedAdditionalItems: updatedAdditionalItemsPayload,
             packagesCount: packagesPayload.length,
           },
         );
 
-        // Detect payment method for backend branching
-        const pMethod = (paymentMethod || "").trim().toLowerCase();
-        const isCard =
-          pMethod.includes("card") ||
-          pMethod.includes("payhere") ||
-          pMethod.includes("online") ||
-          (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
-
         // Net package diff (pure package + alacart items, without delivery fee)
-        const netDiff = confirmGrandTotal - packagesTotal;
-        const netRefundSavings = (isCard || isPaid) && netDiff < 0
-          ? Number(Math.abs(netDiff).toFixed(2))
-          : 0;
+        const netDiff = totalDiff;
+        const netRefundSavings =
+          (isCard || isPaid) && netDiff < 0
+            ? Number(Math.abs(netDiff).toFixed(2))
+            : 0;
 
         const confirmRes = await orderService.confirmPackageReview({
           orderId: actualOrderId || effectiveOrderId,
@@ -938,6 +1304,14 @@ const fetchCategoryProducts = async (categoryId: string) => {
           creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
+          updatedAdditionalItems:
+            updatedAdditionalItemsPayload.length > 0
+              ? updatedAdditionalItemsPayload
+              : undefined, // NEW
+          deletedAdditionalItemIds:
+            deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+              ? deletedAdditionalItemIds
+              : undefined,
           packages: packagesPayload,
         });
         console.log(
@@ -945,11 +1319,22 @@ const fetchCategoryProducts = async (categoryId: string) => {
           confirmRes.data,
           { isCard, netRefundSavings, finalOrderTotalWithDelivery },
         );
+
+        if (shouldSkipConfirmScreen) {
+          // Hide loading spinner, show AlertModal success message.
+          // Navigation to Home is handled inside AlertModal's onClose callback.
+          setIsSubmitting(false);
+          setShowSuccessOverlay(true);
+          return;
+        }
       } catch (err) {
         console.error("[ReviewPackageScreen] Confirm review API error:", err);
+        setIsSubmitting(false);
+        setShowSuccessOverlay(false);
+        if (shouldSkipConfirmScreen) return;
       }
 
-      // Navigate directly to OrderConfirmed
+      // Navigate directly to OrderConfirmed (card/online payment methods only)
       navigation.navigate("OrderConfirmed", {
         orderId: String(effectiveOrderId),
         invoiceNumber: invoiceNo,
@@ -958,7 +1343,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
     }
   };
 
- const onChangeProduct = (packageId: string, product: ReviewProduct) => {
+  const onChangeProduct = (packageId: string, product: ReviewProduct) => {
     navigation.navigate("ReplaceProduct", {
       orderId: effectiveOrderId,
       fromProduct: product,
@@ -966,7 +1351,8 @@ const fetchCategoryProducts = async (categoryId: string) => {
       orderPackageId: orderPackageDbIds[packageId],
       replceId: product.itemId || parseInt(product.id) || undefined,
       stepIndex: currentStepIndex,
-      paymentMethod: paymentMethod, // NEW — Redux value, e.g. "Cash on Delivery"
+      paymentMethod: paymentMethod, // Redux value, e.g. "Cash on Delivery"
+      deliveryMethod: deliveryMethod as "home" | "pickup" | undefined, // Redux value, e.g. "Pickup" / "Delivery"
     });
   };
 
@@ -1067,13 +1453,14 @@ const fetchCategoryProducts = async (categoryId: string) => {
         const currentSum = prods.reduce((s, p) => s + p.price * p.quantity, 0);
         const diff = currentSum - templateSum;
 
-        // originalPrice = template items total + fees (what was originally expected)
+        // originalPrice = marketplacepackages (productPrice + fees) x qty
+        // (what the customer originally paid for)
         const originalPrice =
-          (templateSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
+          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty;
         const additionalChanges = diff * pkg.qty; // signed
-        // currentPrice = actual items total + fees
+        // currentPrice = original package price + changes
         const currentPrice =
-          (currentSum + pkg.serviceFee + pkg.packingFee) * pkg.qty;
+          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee + diff) * pkg.qty;
 
         list.push({
           pkg,
@@ -1093,18 +1480,36 @@ const fetchCategoryProducts = async (categoryId: string) => {
     0,
   );
 
+  // Helper to check if an ala carte item is currently marked disabled
+  const isItemUnavailable = useCallback(
+    (item: any) => {
+      const rawPid = item.productId ?? item.id;
+      const pidStr = String(rawPid);
+      const numericPid = String(
+        typeof rawPid === "number"
+          ? rawPid
+          : parseInt(String(rawPid).replace(/[^0-9]/g, ""), 10),
+      );
+      return (
+        disabledAlacartProductIds.has(pidStr) ||
+        disabledAlacartProductIds.has(numericPid)
+      );
+    },
+    [disabledAlacartProductIds],
+  );
+
   // Totals for the final confirm step
-  // originalPrice in packageSummaries = templateSum + fees (what was originally expected)
+  // originalPrice in packageSummaries = productPrice + fees (what was originally paid)
   const packagesTotal = packageSummaries.reduce(
     (sum, item) => sum + item.originalPrice,
     0,
   );
-  const alacartTotal = Object.values(alacartSelection).reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
+  // Only available ala carte items count towards the price
+  const alacartTotal = Object.values(alacartSelection)
+    .filter((item) => !isItemUnavailable(item))
+    .reduce((sum, item) => sum + item.price * item.quantity, 0);
   const newlyAddedAlacartTotal = Object.values(alacartSelection)
-    .filter((item) => item.isAddedNow)
+    .filter((item) => item.isAddedNow && !isItemUnavailable(item))
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const deliveryCharge = Number(reduxDeliveryCharge || 0);
@@ -1113,19 +1518,34 @@ const fetchCategoryProducts = async (categoryId: string) => {
   const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
   // Signed diff between the original paid-for total and the reviewed total.
   // Positive => customer owes more. Negative => total went down (reduced / refundable).
-  const totalDiff = confirmGrandTotal - packagesTotal;
+  // Compare against what the customer ORIGINALLY paid:
+  // original packages + ala carte items that were already in the order.
+  const originalPaidTotal = packagesTotal + originalAlacartTotal;
+  const totalDiff = confirmGrandTotal - originalPaidTotal;
   const additionalPayAmount = Math.max(0, totalDiff);
   const totalSavingsAmount = Math.max(0, -totalDiff);
 
   // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
+  // Cash payment (COD or pickup) vs card/online — used to word the "Please Note" box
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
+  const dMethodLower = (deliveryMethod || "").trim().toLowerCase();
+  const isCashPayment = pMethodLower.includes("cash") || pMethodLower === "cod";
+  const isPickup =
+    dMethodLower.includes("pickup") || pMethodLower.includes("pickup");
+  const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
 
   // True when at least one package in the confirm step is no longer available
   const hasUnavailablePackage = packagesMeta.some(
-    (p) => unavailablePackageIds[p.id] === true
+    (p) => unavailablePackageIds[p.id] === true,
   );
+
+  // True when at least one ala carte item in alacartSelection is disabled / no longer available
+  const hasDisabledAlacartItem =
+    Object.values(alacartSelection).some(isItemUnavailable);
+
+  const isConfirmDisabled = hasUnavailablePackage || hasDisabledAlacartItem;
 
   return (
     <View className="flex-1 bg-white">
@@ -1427,14 +1847,12 @@ const fetchCategoryProducts = async (categoryId: string) => {
                         <Text className="font-bold text-black">
                           Rs.{" "}
                           {formatPrice(
-                            pkg.unitPrice +
-                            pkg.serviceFee +
-                            pkg.packingFee
+                            pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
                           )}{" "}
                           x {pkg.qty} = Rs.{" "}
                           {formatPrice(
                             (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
-                            pkg.qty
+                              pkg.qty,
                           )}
                         </Text>
                       </Text>
@@ -1478,15 +1896,31 @@ const fetchCategoryProducts = async (categoryId: string) => {
             (s, p) => s + p.price * p.quantity,
             0,
           );
-          // diff = extra cost the user incurred by changing/replacing items
+          // diff = extra cost / saving the user caused by changing/replacing items
           const diff = currentSum - templateSum;
 
-          // Original Package = actual sum of current item prices × quantities
-          const originalPackagePrice = currentSum;
           const serviceFee = pkg.serviceFee;
           const packingFee = pkg.packingFee;
-          const totalFor1Package = originalPackagePrice + serviceFee + packingFee;
+
+          // Discount Received = definepackage.price - marketplacepackages.productPrice
+          const discountPerUnit = pkg.discountPerUnit ?? 0;
+
+          // Original Package = definepackage.price (productPrice + discount)
+          const originalPackagePrice = pkg.unitPrice + discountPerUnit;
+
+          // Full Total (1 package) = productPrice + packingFee + serviceFee (+ changes)
+          const totalFor1Package =
+            pkg.unitPrice + packingFee + serviceFee + diff;
           const totalForNPackages = totalFor1Package * pkg.qty;
+
+          // Count how many products fall under each category within
+          // THIS package only, so the header shown on every card in
+          // that category reflects the correct group size.
+          const categoryCounts: Record<string, number> = {};
+          products.forEach((p) => {
+            const key = p.category || "Other";
+            categoryCounts[key] = (categoryCounts[key] || 0) + 1;
+          });
 
           return (
             <ScrollView
@@ -1495,7 +1929,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
               contentContainerStyle={{
                 flexGrow: 1,
                 justifyContent: "space-between",
-                paddingBottom: Platform.OS === "ios" ? 34 : 24,
+                paddingBottom: 0,
               }}
             >
               <View>
@@ -1506,7 +1940,10 @@ const fetchCategoryProducts = async (categoryId: string) => {
                     showCancelLink
                     onCancelOrder={onCancelOrder}
                   />
-                  <ProgressDots total={steps.length} current={currentStepIndex} />
+                  <ProgressDots
+                    total={steps.length}
+                    current={currentStepIndex}
+                  />
                 </View>
 
                 <Text className="text-[19px] font-bold text-black mx-5 mt-4">
@@ -1517,34 +1954,53 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   You can change the products and quantity as needed.
                 </Text>
 
-                {(() => {
-  // Count how many products fall under each category within
-  // THIS package only, so the header shown on every card in
-  // that category reflects the correct group size.
-  const categoryCounts: Record<string, number> = {};
-  products.forEach((p) => {
-    const key = p.category || "Other";
-    categoryCounts[key] = (categoryCounts[key] || 0) + 1;
-  });
+                {products.map((product, index) => (
+                  <React.Fragment
+                    key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
+                  >
+                    <ProductReviewCard
+                      // display-only copy: price shown = price x quantity.
+                      // excludedWarning is cleared here so the card does not
+                      // draw it inside itself; it is rendered below the card.
+                      product={{
+                        ...toDisplayProduct(product),
+                        excludedWarning: undefined,
+                      }}
+                      categoryCount={
+                        categoryCounts[product.category || "Other"]
+                      }
+                      onIncrease={() =>
+                        updateProductQuantity(pkg.id, product.id, 1)
+                      }
+                      onDecrease={() =>
+                        updateProductQuantity(pkg.id, product.id, -1)
+                      }
+                      // these use the ORIGINAL product (per-kg price)
+                      onChangeProduct={() => onChangeProduct(pkg.id, product)}
+                      onResetToOriginal={() =>
+                        onResetToOriginal(pkg.id, product.id)
+                      }
+                    />
 
-  return products.map((product, index) => (
-    <ProductReviewCard
-      key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
-      product={product}
-      categoryCount={categoryCounts[product.category || "Other"]}
-      onIncrease={() =>
-        updateProductQuantity(pkg.id, product.id, 1)
-      }
-      onDecrease={() =>
-        updateProductQuantity(pkg.id, product.id, -1)
-      }
-      onChangeProduct={() => onChangeProduct(pkg.id, product)}
-      onResetToOriginal={() =>
-        onResetToOriginal(pkg.id, product.id)
-      }
-    />
-  ));
-})()}
+                    {/* Exclude warning: shown UNDER the card, outside it */}
+                    {!!product.excludedWarning && (
+                      <View className="mx-5 mt-2 mb-3 flex-row items-start">
+                        <Ionicons
+                          name="information-circle"
+                          size={14}
+                          color="#FF383C"
+                          style={{ marginTop: 2, marginRight: 6 }}
+                        />
+                        <Text
+                          className="flex-1 text-[13px] leading-5"
+                          style={{ color: "#FF383C" }}
+                        >
+                          {product.excludedWarning}
+                        </Text>
+                      </View>
+                    )}
+                  </React.Fragment>
+                ))}
               </View>
 
               {/* Price Breakdown & Confirm Button (Inside ScrollView) */}
@@ -1555,7 +2011,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   borderTopRightRadius: 28,
                   paddingHorizontal: 20,
                   paddingTop: 22,
-                  paddingBottom: Platform.OS === "ios" ? 34 : 28,
+                  paddingBottom: Platform.OS === "ios" ? 34 : 12,
                   marginTop: 20,
                   shadowColor: "#000",
                   shadowOpacity: 0.12,
@@ -1567,230 +2023,65 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   elevation: 15,
                 }}
               >
-                {/* Original Package */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "400",
-                      color: "#000000",
-                    }}
-                  >
-                    Original Package
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(originalPackagePrice)}
-                  </Text>
-                </View>
-
-                {/* HR line 1 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#E1E7EE",
-                    marginVertical: 14,
-                  }}
+                <PriceRow
+                  label="Original Package"
+                  value={`Rs. ${formatPrice(originalPackagePrice)}`}
                 />
 
-                {/* Service Fee */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "400",
-                      color: "#000000",
-                    }}
-                  >
-                    Service Fee
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(serviceFee)}
-                  </Text>
-                </View>
+                {discountPerUnit > 0 && (
+                  <>
+                    <RowDivider />
+                    <PriceRow
+                      label="Discount Received"
+                      value={`- Rs. ${formatPrice(discountPerUnit)}`}
+                      valueColor="#1B8A3A"
+                    />
+                  </>
+                )}
 
-                {/* HR line 2 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#E1E7EE",
-                    marginVertical: 14,
-                  }}
+                <RowDivider />
+                <PriceRow
+                  label="Service Fee"
+                  value={`Rs. ${formatPrice(serviceFee)}`}
                 />
 
-                {/* Packing Fee */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "400",
-                      color: "#000000",
-                    }}
-                  >
-                    Packing Fee
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(packingFee)}
-                  </Text>
-                </View>
-
-                {/* HR line 3 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#E1E7EE",
-                    marginVertical: 14,
-                  }}
+                <RowDivider />
+                <PriceRow
+                  label="Packing Fee"
+                  value={`Rs. ${formatPrice(packingFee)}`}
                 />
 
                 {/* Due to Changes — shown only when user has modified products */}
                 {diff !== 0 && (
                   <>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingVertical: 2,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 16,
-                          fontWeight: "400",
-                          color: "#000000",
-                        }}
-                      >
-                        Due to Changes
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 16,
-                          fontWeight: "600",
-                          color: diff > 0 ? "#FF2D55" : "#0088FF",
-                        }}
-                      >
-                        {diff > 0 ? "+" : ""}Rs. {formatPrice(diff)}
-                      </Text>
-                    </View>
-
-                    {/* HR line before Total */}
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: "#E1E7EE",
-                        marginVertical: 14,
-                      }}
+                    <RowDivider />
+                    <PriceRow
+                      label="Due to Changes"
+                      value={`${diff > 0 ? "+ " : "- "}Rs. ${formatPrice(Math.abs(diff))}`}
+                      valueColor={diff > 0 ? "#FF2D55" : "#0088FF"}
                     />
                   </>
                 )}
 
-                {/* Total for 1 Package */}
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    paddingVertical: 2,
-                    marginBottom: pkg.qty > 1 ? 0 : 20,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: pkg.qty > 1 ? 16 : 18,
-                      fontWeight: pkg.qty > 1 ? "600" : "700",
-                      color: "#000000",
-                    }}
-                  >
-                    Total for 1 Package
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: pkg.qty > 1 ? 16 : 18,
-                      fontWeight: pkg.qty > 1 ? "600" : "700",
-                      color: "#000000",
-                    }}
-                  >
-                    Rs. {formatPrice(totalFor1Package)}
-                  </Text>
-                </View>
+                <RowDivider />
+                <PriceRow
+                  label="Total for a Package"
+                  value={`Rs. ${formatPrice(totalFor1Package)}`}
+                  strong
+                  big={pkg.qty === 1}
+                  marginBottom={pkg.qty > 1 ? 0 : 20}
+                />
 
                 {pkg.qty > 1 && (
                   <>
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: "#E1E7EE",
-                        marginVertical: 14,
-                      }}
+                    <RowDivider />
+                    <PriceRow
+                      label={`Total for ${pkg.qty} Packages`}
+                      value={`Rs. ${formatPrice(totalForNPackages)}`}
+                      strong
+                      big
+                      marginBottom={20}
                     />
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        paddingVertical: 2,
-                        marginBottom: 20,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          fontWeight: "700",
-                          color: "#000000",
-                        }}
-                      >
-                        Total for {pkg.qty} Packages
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          fontWeight: "700",
-                          color: "#000000",
-                        }}
-                      >
-                        Rs. {formatPrice(totalForNPackages)}
-                      </Text>
-                    </View>
                   </>
                 )}
 
@@ -1929,7 +2220,11 @@ const fetchCategoryProducts = async (categoryId: string) => {
             </View>
           ) : alaCartProducts.length === 0 ? (
             <View className="py-12 items-center justify-center">
-              <Ionicons name="basket-outline" size={48} color="#CCCCCC" />
+              <Image
+                source={require("@/assets/images/order/no-replce-products.webp")}
+                style={{ width: 56, height: 56 }}
+                resizeMode="contain"
+              />
               <Text className="text-[#8A8A8A] text-[14px] mt-3">
                 No items available in this category
               </Text>
@@ -1946,18 +2241,42 @@ const fetchCategoryProducts = async (categoryId: string) => {
                     key={`alacart-row-${rowIndex}`}
                     className="flex-row justify-between mb-4"
                   >
-                    {row.map((product, pIdx) => (
-                      <AlacartProductCard
-                        key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
-                        product={product}
-                        selected={Object.values(alacartSelection).some(
-                          (item) =>
-                            String(item.productId || item.id) ===
-                              String(product.id) && Boolean(item.isAddedNow),
-                        )}
-                        onToggle={() => toggleAlacartProduct(product)}
-                      />
-                    ))}
+                    {row.map((product, pIdx) => {
+                      const isDisabled =
+                        product.isEnable === 0 ||
+                        product.isEnable === false ||
+                        disabledAlacartProductIds.has(String(product.id));
+                      const isSelected = Object.values(alacartSelection).some(
+                        (item) =>
+                          String(item.productId || item.id) ===
+                            String(product.id) && Boolean(item.isAddedNow),
+                      );
+                      return (
+                        <AlacartProductCard
+                          key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
+                          product={product}
+                          selected={isSelected && !isDisabled}
+                          disabled={isDisabled}
+                          onToggle={() => {
+                            if (!isDisabled) {
+                              // If it was previously selected and is now disabled,
+                              // remove it from selection
+                              if (isSelected && isDisabled) {
+                                removeAlacartItem(
+                                  Object.values(alacartSelection).find(
+                                    (item) =>
+                                      String(item.productId || item.id) ===
+                                      String(product.id),
+                                  )?.id ?? product.id,
+                                );
+                              } else {
+                                toggleAlacartProduct(product);
+                              }
+                            }
+                          }}
+                        />
+                      );
+                    })}
                     {row.length === 1 && <View className="flex-1 mx-2" />}
                   </View>
                 ));
@@ -2043,11 +2362,15 @@ const fetchCategoryProducts = async (categoryId: string) => {
                           <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                             Additional Changes :{" "}
                             {item.diff === 0 ? (
-                              <Text className="font-bold text-black">Rs. 0.00</Text>
+                              <Text className="font-bold text-black">
+                                Rs. 0.00
+                              </Text>
                             ) : (
                               <Text
                                 className="font-bold"
-                                style={{ color: item.diff > 0 ? "#FF2D55" : "#0088FF" }}
+                                style={{
+                                  color: item.diff > 0 ? "#FF2D55" : "#0088FF",
+                                }}
                               >
                                 {item.diff > 0 ? "+ " : "- "}Rs.{" "}
                                 {formatPrice(Math.abs(item.additionalChanges))}
@@ -2063,10 +2386,22 @@ const fetchCategoryProducts = async (categoryId: string) => {
 
                   {isUnavailable ? (
                     <View className="flex-row items-center justify-between">
-                      <Text style={{ fontSize: 14, color: "#FF383C", fontWeight: "600" }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#FF383C",
+                          fontWeight: "600",
+                        }}
+                      >
                         Qty: {item.pkg.qty}
                       </Text>
-                      <Text style={{ fontSize: 14, color: "#FF383C", fontWeight: "700" }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#FF383C",
+                          fontWeight: "700",
+                        }}
+                      >
                         No longer available
                       </Text>
                     </View>
@@ -2083,7 +2418,11 @@ const fetchCategoryProducts = async (categoryId: string) => {
                         activeOpacity={0.8}
                         className="w-7 h-7 rounded-full bg-black items-center justify-center"
                       >
-                        <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                        <Ionicons
+                          name="arrow-forward"
+                          size={15}
+                          color="#FFFFFF"
+                        />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -2091,7 +2430,6 @@ const fetchCategoryProducts = async (categoryId: string) => {
               );
             })}
           </View>
-
 
           {/* Ala Carte Items Section (only if order has ala carte items or user added them) */}
           {Object.keys(alacartSelection).length > 0 && (
@@ -2108,175 +2446,300 @@ const fetchCategoryProducts = async (categoryId: string) => {
                   )
                 </Text>
 
-                {Object.values(alacartSelection).map((item, aIdx) => (
-                  <View
-                    key={`alacart-item-${item.id}-${aIdx}`}
-                    className="border border-[#EEEEEE] rounded-2xl p-4 mb-3 mx-5 bg-white"
-                  >
-                    {/* Top row: Image, Name & Price, Trash, Added Now */}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center flex-1">
-                        <View className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]">
-                          {item.image ? (
-                            typeof item.image === "string" ? (
-                              <Image
-                                source={{ uri: item.image }}
-                                className="w-12 h-12"
-                                resizeMode="contain"
-                              />
+                {Object.values(alacartSelection).map((item, aIdx) => {
+                  const isItemDisabled = isItemUnavailable(item);
+
+                  return (
+                    <View
+                      key={`alacart-item-${item.id}-${aIdx}`}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: isItemDisabled ? "#F04438" : "#EEEEEE",
+                        borderRadius: 16,
+                        padding: 16,
+                        marginBottom: 12,
+                        marginHorizontal: 20,
+                        backgroundColor: "#FFFFFF",
+                      }}
+                    >
+                      {/* Top row: Image, Name & Price, Trash, Added Now */}
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center flex-1">
+                          <View
+                            className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
+                            style={{ opacity: isItemDisabled ? 0.6 : 1 }}
+                          >
+                            {item.image ? (
+                              typeof item.image === "string" ? (
+                                <Image
+                                  source={{ uri: item.image }}
+                                  className="w-12 h-12"
+                                  resizeMode="contain"
+                                />
+                              ) : (
+                                <Image
+                                  source={item.image}
+                                  className="w-12 h-12"
+                                  resizeMode="contain"
+                                />
+                              )
                             ) : (
-                              <Image
-                                source={item.image}
-                                className="w-12 h-12"
-                                resizeMode="contain"
+                              <Ionicons
+                                name="leaf-outline"
+                                size={24}
+                                color={isItemDisabled ? "#CCCCCC" : "#92D01B"}
                               />
-                            )
-                          ) : (
+                            )}
+                          </View>
+                          <View className="flex-1 pr-2">
+                            <Text
+                              className="text-[16px] font-bold text-black"
+                              numberOfLines={1}
+                            >
+                              {item.displayName}
+                            </Text>
+                            <Text
+                              className="text-[15px] font-bold mt-0.5"
+                              style={{
+                                color: isItemDisabled
+                                  ? "#F04438"
+                                  : item.isAddedNow
+                                    ? "#F04438"
+                                    : "#000000",
+                              }}
+                            >
+                              Rs. {formatPrice(item.price)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View className="items-end justify-between h-14">
+                          {/* Trash button: red background & red icon when disabled */}
+                          <TouchableOpacity
+                            onPress={() => removeAlacartItem(item.id)}
+                            activeOpacity={0.7}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: isItemDisabled
+                                ? "#FEE4E2"
+                                : "#F5F5F5",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
                             <Ionicons
-                              name="leaf-outline"
-                              size={24}
-                              color="#92D01B"
+                              name="trash-outline"
+                              size={16}
+                              color={isItemDisabled ? "#F04438" : "#000000"}
                             />
+                          </TouchableOpacity>
+
+                          {!isItemDisabled && item.isAddedNow && (
+                            <Text className="text-[12px] font-medium text-[#F04438]">
+                              Added Now
+                            </Text>
                           )}
                         </View>
-                        <View className="flex-1 pr-2">
+                      </View>
+
+                      {/* Dashed separator */}
+                      <View
+                        style={{
+                          borderBottomWidth: 1,
+                          borderStyle: "dashed",
+                          borderColor: isItemDisabled ? "#FDA29B" : "#E5E5EA",
+                          marginVertical: 14,
+                        }}
+                      />
+
+                      {/* Disabled: show weight in red + "No longer available" label in red */}
+                      {isItemDisabled ? (
+                        <View className="flex-row items-center justify-between">
                           <Text
-                            className="text-[16px] font-bold text-black"
-                            numberOfLines={1}
+                            style={{
+                              fontSize: 13,
+                              color: "#F04438",
+                              fontWeight: "500",
+                            }}
                           >
-                            {item.displayName}
+                            {formatWeightDisplay(
+                              item.weightDisplay,
+                              item.amount,
+                              item.unit,
+                            )}
                           </Text>
                           <Text
-                            className={`text-[15px] font-bold mt-0.5 ${
-                              item.isAddedNow ? "text-[#F04438]" : "text-black"
-                            }`}
+                            style={{
+                              fontSize: 13,
+                              color: "#F04438",
+                              fontWeight: "600",
+                            }}
                           >
-                            Rs. {formatPrice(item.price)}
+                            No longer available
                           </Text>
                         </View>
-                      </View>
+                      ) : (
+                        /* Normal: Unit selector & Stepper */
+                        <View className="flex-row items-center justify-between">
+                          <View className="flex-row items-center">
+                            <Text className="text-[13px] text-[#6B6B6B] mr-2">
+                              Unit :
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() =>
+                                toggleAlacartItemUnit(item.id, "kg")
+                              }
+                              activeOpacity={0.8}
+                              className={`px-3.5 py-1 rounded-full mr-1.5 ${
+                                item.unit === "kg"
+                                  ? "bg-[#FF9114]"
+                                  : "bg-[#FCE1C5]"
+                              }`}
+                            >
+                              <Text className="text-white font-bold text-[12px]">
+                                kg
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() =>
+                                toggleAlacartItemUnit(item.id, "g")
+                              }
+                              activeOpacity={0.8}
+                              className={`px-3.5 py-1 rounded-full ${
+                                item.unit === "g"
+                                  ? "bg-[#FF9114]"
+                                  : "bg-[#FCE1C5]"
+                              }`}
+                            >
+                              <Text className="text-white font-bold text-[12px]">
+                                g
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
 
-                      <View className="items-end justify-between h-14">
-                        <TouchableOpacity
-                          onPress={() => removeAlacartItem(item.id)}
-                          activeOpacity={0.7}
-                          className="w-8 h-8 rounded-full bg-[#F5F5F5] items-center justify-center"
-                        >
-                          <Ionicons
-                            name="trash-outline"
-                            size={16}
-                            color="#000"
-                          />
-                        </TouchableOpacity>
+                          <View className="flex-row items-center">
+                            {(() => {
+                              const stepVal =
+                                item.step && item.step > 0
+                                  ? item.step
+                                  : item.unit === "kg"
+                                    ? 0.5
+                                    : 500;
+                              const minVal =
+                                item.minQuantity && item.minQuantity > 0
+                                  ? item.minQuantity
+                                  : stepVal;
+                              const isAtMin = item.amount <= minVal;
 
-                        {item.isAddedNow && (
-                          <Text className="text-[12px] font-medium text-[#F04438]">
-                            Added Now
-                          </Text>
-                        )}
-                      </View>
+                              return (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateAlacartItemQuantity(item.id, -1)
+                                  }
+                                  disabled={isAtMin}
+                                  activeOpacity={0.7}
+                                  className={`w-6 h-6 rounded-full items-center justify-center ${
+                                    isAtMin ? "bg-[#D1D1D6]" : "bg-black"
+                                  }`}
+                                >
+                                  <Ionicons
+                                    name="remove"
+                                    size={14}
+                                    color="#FFF"
+                                  />
+                                </TouchableOpacity>
+                              );
+                            })()}
+
+                            <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
+                              {formatWeightDisplay(
+                                item.weightDisplay,
+                                item.amount,
+                                item.unit,
+                              )}
+                            </Text>
+
+                            <TouchableOpacity
+                              onPress={() =>
+                                updateAlacartItemQuantity(item.id, 1)
+                              }
+                              activeOpacity={0.7}
+                              className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                            >
+                              <Ionicons name="add" size={14} color="#FFF" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
                     </View>
-
-                    {/* Dashed line */}
-                    <View className="border-b border-dashed border-[#E5E5EA] my-3.5" />
-
-                    {/* Bottom row: Unit selector & Stepper */}
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center">
-                        <Text className="text-[13px] text-[#6B6B6B] mr-2">
-                          Unit :
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => toggleAlacartItemUnit(item.id, "kg")}
-                          activeOpacity={0.8}
-                          className={`px-3.5 py-1 rounded-full mr-1.5 ${
-                            item.unit === "kg" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
-                          }`}
-                        >
-                          <Text className="text-white font-bold text-[12px]">
-                            kg
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => toggleAlacartItemUnit(item.id, "g")}
-                          activeOpacity={0.8}
-                          className={`px-3.5 py-1 rounded-full ${
-                            item.unit === "g" ? "bg-[#FF9114]" : "bg-[#FCE1C5]"
-                          }`}
-                        >
-                          <Text className="text-white font-bold text-[12px]">
-                            g
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <View className="flex-row items-center">
-                        <TouchableOpacity
-                          onPress={() => updateAlacartItemQuantity(item.id, -1)}
-                          activeOpacity={0.7}
-                          className="w-6 h-6 rounded-full bg-[#D1D1D6] items-center justify-center"
-                        >
-                          <Ionicons name="remove" size={14} color="#FFF" />
-                        </TouchableOpacity>
-
-                        <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
-                          {formatWeightDisplay(item.weightDisplay, item.amount, item.unit)}
-                        </Text>
-
-                        <TouchableOpacity
-                          onPress={() => updateAlacartItemQuantity(item.id, 1)}
-                          activeOpacity={0.7}
-                          className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                        >
-                          <Ionicons name="add" size={14} color="#FFF" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </>
           )}
 
-          {/* Please Note Box — wording/color depend on whether the reviewed total
-              went UP (extra payment due) or DOWN (reduced / refundable) vs. what
-              was originally paid for. */}
           {totalDiff > 0 ? (
             <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
               <Text className="text-[14px] font-bold text-black mb-1">
                 Please Note :
               </Text>
-              <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                You have already paid for this order. The additional amount{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(additionalPayAmount)}
-                </Text>{" "}
-                will need to be paid at the end of this process.
-              </Text>
+              {isCashPayment ? (
+                <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                  Your {cashLabel} order total has increased by{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(additionalPayAmount)}
+                  </Text>
+                  . Your new total is{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(confirmGrandTotal)}
+                  </Text>
+                  .
+                </Text>
+              ) : (
+                <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                  You have already paid for this order. The additional amount{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(additionalPayAmount)}
+                  </Text>{" "}
+                  will need to be paid at the end of this process.
+                </Text>
+              )}
             </View>
           ) : totalDiff < 0 ? (
             <View className="bg-[#EDFDF2] border border-[#A6F4C5] rounded-2xl p-4 mx-5 my-4">
               <Text className="text-[14px] font-bold text-black mb-1">
                 Please Note :
               </Text>
-              <Text className="text-[13px] text-[#475467] leading-5">
-                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total
-                has been reduced by{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(totalSavingsAmount)}
+              {isCashPayment ? (
+                <Text className="text-[13px] text-[#475467] leading-5">
+                  Your {cashLabel} order total has been reduced by{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(totalSavingsAmount)}
+                  </Text>
+                  . Your new total is{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(confirmGrandTotal)}
+                  </Text>
+                  .
                 </Text>
-                . Your new total is{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(finalOrderTotalWithDelivery)}
+              ) : (
+                <Text className="text-[13px] text-[#475467] leading-5">
+                  You have already paid for this order, so the remaining balance
+                  of{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(totalSavingsAmount)}
+                  </Text>{" "}
+                  will be credited to your account.
                 </Text>
-                .
-              </Text>
+              )}
             </View>
           ) : null}
         </ScrollView>
       )}
 
-      {/* Fixed Bottom Payment & Action Section */}
+      {/* Fixed Bottom Payment & Action Section (overview) */}
       {mode === "overview" && !loadingReview && !isTimeRanOut && (
         <View
           style={{
@@ -2285,7 +2748,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
             borderTopRightRadius: 28,
             paddingHorizontal: 20,
             paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 28,
+            paddingBottom: Platform.OS === "ios" ? 34 : 12,
             shadowColor: "#000",
             shadowOpacity: 0.12,
             shadowRadius: 8,
@@ -2293,20 +2756,53 @@ const fetchCategoryProducts = async (categoryId: string) => {
             elevation: 15,
           }}
         >
+          {/* Total = Full Total + Discount Received */}
+          <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
+
+          <RowDivider />
+
+          {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
+          <PriceRow
+            label="Discount Received"
+            value={`- Rs. ${formatPrice(overviewDiscount)}`}
+            valueColor="#1B8A3A"
+          />
+
+          <RowDivider />
+
+          {/* Full Total = productPrice + packingFee + serviceFee */}
+          <PriceRow
+            label="Full Total"
+            value={`Rs. ${formatPrice(overviewFullTotal)}`}
+            strong
+            big
+            marginBottom={14}
+          />
+
+          {/* Note about what is shown from this point onward */}
           <View
             style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-              marginBottom: 20,
+              backgroundColor: "#F5F8FF",
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 18,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Total
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: "#000000",
+                marginBottom: 4,
+              }}
+            >
+              Please Note :
             </Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(overviewTotal)}
+            <Text style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}>
+              From this point onward, only the package prices and à la carte
+              prices will be shown. Any à la carte discounts, coupon discounts,
+              delivery fees will not be reflected here.
             </Text>
           </View>
 
@@ -2349,7 +2845,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
             borderTopRightRadius: 28,
             paddingHorizontal: 20,
             paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 28,
+            paddingBottom: Platform.OS === "ios" ? 34 : 12,
             shadowColor: "#000",
             shadowOpacity: 0.12,
             shadowRadius: 8,
@@ -2357,22 +2853,13 @@ const fetchCategoryProducts = async (categoryId: string) => {
             elevation: 15,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-              marginBottom: 20,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              For Ala Carte Items
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(newlyAddedAlacartTotal)}
-            </Text>
-          </View>
+          <PriceRow
+            label="For Ala Carte Items"
+            value={`Rs. ${formatPrice(newlyAddedAlacartTotal)}`}
+            strong
+            big
+            marginBottom={20}
+          />
 
           <TouchableOpacity
             onPress={goToNextStep}
@@ -2405,7 +2892,7 @@ const fetchCategoryProducts = async (categoryId: string) => {
             borderTopRightRadius: 28,
             paddingHorizontal: 20,
             paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 28,
+            paddingBottom: Platform.OS === "ios" ? 34 : 12,
             shadowColor: "#000",
             shadowOpacity: 0.12,
             shadowRadius: 8,
@@ -2413,105 +2900,107 @@ const fetchCategoryProducts = async (categoryId: string) => {
             elevation: 15,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}>
-              For Packages
-            </Text>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}>
-              Rs. {formatPrice(confirmPackagesTotal)}
-            </Text>
-          </View>
+          <PriceRow
+            label="For Packages"
+            value={`Rs. ${formatPrice(confirmPackagesTotal)}`}
+          />
 
           {Object.keys(alacartSelection).length > 0 && (
             <>
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: "#E1E7EE",
-                  marginVertical: 14,
-                }}
+              <RowDivider />
+              <PriceRow
+                label="Ala Carte Items"
+                value={`Rs. ${formatPrice(alacartTotal)}`}
               />
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingVertical: 2,
-                }}
-              >
-                <Text
-                  style={{ fontSize: 16, fontWeight: "400", color: "#000000" }}
-                >
-                  Ala Carte Items
-                </Text>
-                <Text
-                  style={{ fontSize: 16, fontWeight: "600", color: "#000000" }}
-                >
-                  Rs. {formatPrice(alacartTotal)}
-                </Text>
-              </View>
             </>
           )}
 
-          <View
-            style={{
-              height: 1,
-              backgroundColor: "#E1E7EE",
-              marginVertical: 14,
-            }}
+          <RowDivider />
+
+          <PriceRow
+            label="Total"
+            value={`Rs. ${formatPrice(confirmGrandTotal)}`}
+            strong
+            big
+            marginBottom={20}
           />
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 2,
-              marginBottom: 20,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Total
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#000000" }}>
-              Rs. {formatPrice(finalOrderTotalWithDelivery)}
-            </Text>
-          </View>
-
           <TouchableOpacity
-            onPress={hasUnavailablePackage ? undefined : goToNextStep}
-            disabled={hasUnavailablePackage}
+            onPress={isConfirmDisabled ? undefined : goToNextStep}
+            disabled={isConfirmDisabled}
             activeOpacity={0.85}
             style={{
               height: 54,
-              backgroundColor: hasUnavailablePackage ? "#7F919C" : "#000000",
+              backgroundColor: isConfirmDisabled ? "#7F919C" : "#000000",
               borderRadius: 30,
               justifyContent: "center",
               alignItems: "center",
               shadowColor: "#000",
-              shadowOpacity: hasUnavailablePackage ? 0 : 0.15,
+              shadowOpacity: isConfirmDisabled ? 0 : 0.15,
               shadowRadius: 6,
               shadowOffset: { width: 0, height: 3 },
-              elevation: hasUnavailablePackage ? 0 : 5,
+              elevation: isConfirmDisabled ? 0 : 5,
             }}
           >
             <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              {hasUnavailablePackage
-                ? "Some Packages Unavailable"
-                : totalDiff > 0
-                  ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)}`
-                  : "Confirm Order Details"}
+              Confirm Order Details
             </Text>
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Loading overlay — shown while API call is in progress (cash orders) */}
+      <Modal visible={isSubmitting} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Confirming your order...
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success alert — shown briefly after API succeeds (cash orders) */}
+      <AlertModal
+        visible={showSuccessOverlay}
+        type="success"
+        title="Order Confirmed!"
+        message="Order reviewed and dispatched successfully!"
+        autoClose={true}
+        duration={2000}
+        onClose={() => {
+          setShowSuccessOverlay(false);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Home" }],
+          });
+        }}
+      />
 
       {/* Confirmation Modal when navigating back */}
       <ConfirmationModal

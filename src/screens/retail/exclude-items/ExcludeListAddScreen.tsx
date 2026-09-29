@@ -57,6 +57,7 @@ interface RouteParams {
   title?: string;
   number?: string;
   id?: number;
+  cusId?: string;
 }
 
 interface ExcludeListAddProps {
@@ -131,7 +132,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   route,
   navigation,
 }) => {
-  const { customerId = 1002, name, title, number, id } =
+  const { customerId = 1002, name, title, number, id, cusId } =
     (route.params as RouteParams) || {};
 
   const [crops, setCrops] = useState<Crop[]>([]);
@@ -170,6 +171,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   }, []);
 
   const getCurrentCustomerData = () => {
+    const effectiveCusId = customerData?.cusId?.toString() || cusId || "";
     if (customerData) {
       const fullName =
         `${customerData.firstName || ""} ${customerData.lastName || ""}`.trim();
@@ -179,7 +181,8 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         title: customerData.title || title || "",
         number: customerData.phoneNumber || number || "",
         id: customerData.id?.toString() || id?.toString() || "",
-        customerId: customerData.cusId?.toString() || customerId.toString(),
+        customerId: effectiveCusId || customerId.toString(),
+        cusId: effectiveCusId,
       };
     }
     return {
@@ -187,7 +190,8 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       title: title || "",
       number: number || "",
       id: id?.toString() || "",
-      customerId: customerId.toString(),
+      customerId: effectiveCusId || customerId.toString(),
+      cusId: effectiveCusId,
     };
   };
 

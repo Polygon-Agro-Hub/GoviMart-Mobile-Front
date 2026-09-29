@@ -26,7 +26,10 @@ class CustomerService {
 
   async updateAddress(addressId: number, data: AddressPayload) {
     const headers = await getAuthHeader();
-    const url = ENDPOINTS.CUSTOMER.UPDATE_ADDRESS.replace(":addressId", String(addressId));
+    const url = ENDPOINTS.CUSTOMER.UPDATE_ADDRESS.replace(
+      ":addressId",
+      String(addressId),
+    );
     return apiClient.put(url, data, { headers });
   }
 
@@ -34,13 +37,15 @@ class CustomerService {
     const headers = await getAuthHeader();
     return apiClient.delete(
       `${ENDPOINTS.CUSTOMER.DELETE_ADDRESS}/${addressId}?buildingType=${buildingType}`,
-      { headers }
+      { headers },
     );
   }
 
   async updateUserDetails(data: UpdateUserDetailsPayload) {
     const headers = await getAuthHeader();
-    return apiClient.put(ENDPOINTS.CUSTOMER.UPDATE_USER_DETAILS, data, { headers });
+    return apiClient.put(ENDPOINTS.CUSTOMER.UPDATE_USER_DETAILS, data, {
+      headers,
+    });
   }
 
   async deleteAccount() {
@@ -50,22 +55,30 @@ class CustomerService {
 
   async getDeleteAccountStatus() {
     const headers = await getAuthHeader();
-    return apiClient.get(ENDPOINTS.CUSTOMER.GET_DELETE_ACCOUNT_STATUS, { headers });
+    return apiClient.get(ENDPOINTS.CUSTOMER.GET_DELETE_ACCOUNT_STATUS, {
+      headers,
+    });
   }
 
   async sendPhoneChangeOtp(data: PhoneChangeOtpPayload) {
     const headers = await getAuthHeader();
-    return apiClient.post(ENDPOINTS.CUSTOMER.SEND_PHONE_CHANGE_OTP, data, { headers });
+    return apiClient.post(ENDPOINTS.CUSTOMER.SEND_PHONE_CHANGE_OTP, data, {
+      headers,
+    });
   }
 
   async verifyPhoneChange(data: VerifyPhoneChangePayload) {
     const headers = await getAuthHeader();
-    return apiClient.post(ENDPOINTS.CUSTOMER.VERIFY_PHONE_CHANGE_OTP, data, { headers });
+    return apiClient.post(ENDPOINTS.CUSTOMER.VERIFY_PHONE_CHANGE_OTP, data, {
+      headers,
+    });
   }
 
   async resendPhoneChangeOtp(data: { signupToken: string }) {
     const headers = await getAuthHeader();
-    return apiClient.post(ENDPOINTS.CUSTOMER.RESEND_PHONE_CHANGE_OTP, data, { headers });
+    return apiClient.post(ENDPOINTS.CUSTOMER.RESEND_PHONE_CHANGE_OTP, data, {
+      headers,
+    });
   }
 
   async updateCreditBalance(creditBalance: number) {
@@ -73,11 +86,22 @@ class CustomerService {
     return apiClient.put(
       ENDPOINTS.CUSTOMER.UPDATE_CREDIT_BALANCE,
       { creditBalance },
-      { headers }
+      { headers },
     );
   }
 
-  async uploadProfileImage(uri: string, name = "profile.jpg", type = "image/jpeg") {
+  async getDeliveryEligibility() {
+    const headers = await getAuthHeader();
+    return apiClient.get(ENDPOINTS.CUSTOMER.GET_DELIVERY_ELIGIBILITY, {
+      headers,
+    });
+  }
+
+  async uploadProfileImage(
+    uri: string,
+    name = "profile.jpg",
+    type = "image/jpeg",
+  ) {
     const headers = await getAuthHeader();
     const formData = new FormData();
     formData.append("profileImage", {

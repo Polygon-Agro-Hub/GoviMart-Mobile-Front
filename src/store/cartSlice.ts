@@ -22,6 +22,8 @@ export interface ProductCartItem {
   weight: number;
   unit: "g" | "kg";
   minimumWeight: number;
+  maxWeight?: number;
+  maxQuantity?: number;
   step: number;
   isUnavailable?: boolean;
 }
@@ -55,6 +57,8 @@ const cartSlice = createSlice({
           discountedPrice: action.payload.discountedPrice ?? state.products[existingIndex].discountedPrice,
           comPrice: action.payload.comPrice ?? state.products[existingIndex].comPrice,
           minimumWeight: action.payload.minimumWeight ?? state.products[existingIndex].minimumWeight,
+          maxWeight: action.payload.maxWeight ?? state.products[existingIndex].maxWeight,
+          maxQuantity: action.payload.maxQuantity ?? state.products[existingIndex].maxQuantity,
           step: action.payload.step ?? state.products[existingIndex].step,
           isUnavailable: false,
         };
@@ -68,9 +72,16 @@ const cartSlice = createSlice({
     increaseProductWeight: (state, action: PayloadAction<number>) => {
       const product = state.products.find((p) => p.id === action.payload);
       if (product) {
-        product.weight = product.unit === "kg"
+        const nextWeight = product.unit === "kg"
           ? parseFloat((product.weight + product.step).toFixed(3))
           : Math.round(product.weight + product.step);
+        if (product.maxWeight != null && product.maxWeight > 0) {
+          if (product.weight < product.maxWeight) {
+            product.weight = Math.min(product.maxWeight, nextWeight);
+          }
+        } else {
+          product.weight = nextWeight;
+        }
       }
     },
     decreaseProductWeight: (state, action: PayloadAction<number>) => {
@@ -94,11 +105,17 @@ const cartSlice = createSlice({
           product.weight = parseFloat((product.weight / 1000).toFixed(3));
           product.minimumWeight = parseFloat((product.minimumWeight / 1000).toFixed(3));
           product.step = parseFloat((product.step / 1000).toFixed(3));
+          if (product.maxWeight != null && product.maxWeight > 0) {
+            product.maxWeight = parseFloat((product.maxWeight / 1000).toFixed(3));
+          }
           product.unit = "kg";
         } else {
           product.weight = Math.round(product.weight * 1000);
           product.minimumWeight = Math.round(product.minimumWeight * 1000);
           product.step = Math.round(product.step * 1000);
+          if (product.maxWeight != null && product.maxWeight > 0) {
+            product.maxWeight = Math.round(product.maxWeight * 1000);
+          }
           product.unit = "g";
         }
       }
@@ -148,8 +165,74 @@ const cartSlice = createSlice({
         cartUserId?: number | null;
       }>
     ) => {
-      state.products = action.payload.products;
-      state.packages = action.payload.packages;
+      const incomingProducts = action.payload.products || [];
+      const incomingPackages = action.payload.packages || [];
+
+      // 1. Stable merge for products: preserve current order of items already visible
+      const newProductsMap = new Map(incomingProducts.map((p) => [p.id, p]));
+      const mergedProducts: ProductCartItem[] = [];
+
+      for (const existing of state.products) {
+        if (newProductsMap.has(existing.id)) {
+          const fresh = newProductsMap.get(existing.id)!;
+          mergedProducts.push({
+            ...existing,
+            ...fresh,
+          });
+          newProductsMap.delete(existing.id);
+        }
+      }
+      for (const remaining of newProductsMap.values()) {
+        mergedProducts.push(remaining);
+      }
+
+      // 2. Stable merge for packages
+      const newPackagesMap = new Map(incomingPackages.map((p) => [p.id, p]));
+      const mergedPackages: PackageCartItem[] = [];
+
+      for (const existing of state.packages) {
+        if (newPackagesMap.has(existing.id)) {
+          const fresh = newPackagesMap.get(existing.id)!;
+          mergedPackages.push({
+            ...existing,
+            ...fresh,
+          });
+          newPackagesMap.delete(existing.id);
+        }
+      }
+      for (const remaining of newPackagesMap.values()) {
+        mergedPackages.push(remaining);
+      }
+
+      // 3. Only update array reference if contents actually changed
+      const productsChanged =
+        state.products.length !== mergedProducts.length ||
+        state.products.some(
+          (p, i) =>
+            p.id !== mergedProducts[i]?.id ||
+            p.weight !== mergedProducts[i]?.weight ||
+            p.unit !== mergedProducts[i]?.unit ||
+            p.price !== mergedProducts[i]?.price ||
+            p.isUnavailable !== mergedProducts[i]?.isUnavailable
+        );
+
+      const packagesChanged =
+        state.packages.length !== mergedPackages.length ||
+        state.packages.some(
+          (pkg, i) =>
+            pkg.id !== mergedPackages[i]?.id ||
+            pkg.quantity !== mergedPackages[i]?.quantity ||
+            pkg.price !== mergedPackages[i]?.price ||
+            pkg.isUnavailable !== mergedPackages[i]?.isUnavailable
+        );
+
+      if (productsChanged) {
+        state.products = mergedProducts;
+      }
+      if (packagesChanged) {
+        state.packages = mergedPackages;
+      }
+
       if (action.payload.cartUserId !== undefined) {
         state.cartUserId = action.payload.cartUserId;
       }

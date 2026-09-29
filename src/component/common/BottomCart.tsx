@@ -4,6 +4,7 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 interface Props {
     minimumValue: number;
+    maximumValue?: number;
     quantity: number;
     unit?: any;
     step?: number;
@@ -20,6 +21,7 @@ interface Props {
 
 const ProductBottomCart: React.FC<Props> = ({
     minimumValue,
+    maximumValue,
     quantity,
     unit,
     step,
@@ -87,6 +89,7 @@ const ProductBottomCart: React.FC<Props> = ({
     };
 
     const isMinimum = quantity <= minimumValue;
+    const isMaximum = maximumValue != null && quantity >= maximumValue;
 
     return (
         <View
@@ -215,30 +218,49 @@ const ProductBottomCart: React.FC<Props> = ({
                 </Text>
 
                 {/* Plus Button */}
-                <TouchableOpacity
-                    onPress={increase}
-                    activeOpacity={0.8}
-                    style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: "#000",
-                        justifyContent: "center",
-                        alignItems: "center",
+                {isMaximum ? (
+                    <View
+                        style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "#D9D9D9",
+                            justifyContent: "center",
+                            alignItems: "center",
+                        }}
+                    >
+                        <Ionicons
+                            name="add"
+                            size={24}
+                            color="#FFF"
+                        />
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        onPress={increase}
+                        activeOpacity={0.8}
+                        style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: "#000",
+                            justifyContent: "center",
+                            alignItems: "center",
 
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 3,
-                        elevation: 3,
-                    }}
-                >
-                    <Ionicons
-                        name="add"
-                        size={24}
-                        color="#FFF"
-                    />
-                </TouchableOpacity>
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 3,
+                            elevation: 3,
+                        }}
+                    >
+                        <Ionicons
+                            name="add"
+                            size={24}
+                            color="#FFF"
+                        />
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Right Action Button */}

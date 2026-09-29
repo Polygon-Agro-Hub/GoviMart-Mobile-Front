@@ -109,6 +109,7 @@ class OrderService {
             newQty: number;
             newPrice: number;
         }>;
+        // Ala carte items newly ADDED in this review (insert / merge by productId)
         additionalItems?: Array<{
             productId: number;
             qty: number;
@@ -116,6 +117,17 @@ class OrderService {
             normalPrice?: number;
             price: number;
         }>;
+        // NEW: Ala carte rows ALREADY in the order whose qty/unit changed.
+        // `id` = orderadditionalitems.id. The backend recalculates
+        // qty, unit, normalPrice, price and discount for that row.
+        updatedAdditionalItems?: Array<{
+            id: number;
+            productId: number;
+            qty: number;
+            unit?: string;
+            price?: number; // fallback only
+        }>;
+        deletedAdditionalItemIds?: number[];
         packages?: Array<{
             orderPackageId: number;
             packageId?: string | number;

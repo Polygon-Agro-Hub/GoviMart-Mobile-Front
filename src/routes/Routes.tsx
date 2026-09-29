@@ -14,6 +14,7 @@ import Splash from "@/screens/common/splash/SplashScreen";
 import ChooseAuth from "@/screens/common/auth/ChooseAuth";
 import Login from "@/screens/common/auth/SignInScreen";
 import SignUp from "@/screens/common/auth/SignUpScreen";
+import PrivacyPolicy from "@/screens/common/privacy-policy/PrivacyPolicyScreen";
 import SignUpOTP from "@/screens/common/auth/SignUpOTPScreen";
 import UpdatePassword from "@/screens/common/auth/UpdatePasswordScreen";
 import ForgotPassword from "@/screens/common/auth/ForgotPasswordScreen";
@@ -170,6 +171,7 @@ export const PUBLIC_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ChooseAuth", component: ChooseAuth, allowedRoles: "PUBLIC" },
   { name: "Login", component: Login, allowedRoles: "PUBLIC" },
   { name: "SignUp", component: SignUp, allowedRoles: "PUBLIC" },
+  { name: "PrivacyPolicy", component: PrivacyPolicy, allowedRoles: "PUBLIC" },
   { name: "SignUpOTP", component: SignUpOTP, allowedRoles: "PUBLIC" },
   { name: "UpdatePassword", component: UpdatePassword, allowedRoles: "PUBLIC" },
   { name: "ForgotPassword", component: ForgotPassword, allowedRoles: "PUBLIC" },
@@ -211,8 +213,6 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "Notification", component: Notifications, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
-  { name: "ExcludeListAdd", component: ExcludeListAdd, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
-  { name: "ExcludeListSummery", component: ExcludeListSummery, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
 ];
 
 // ============================================================================
@@ -224,6 +224,8 @@ export const RETAIL_STACK_SCREENS: StackRouteConfig[] = [
   { name: "SetQauntity", component: ChangeProductQuantity, allowedRoles: [ROLES.RETAIL] },
   { name: "ReplaceProduct", component: ReplaceProduct, allowedRoles: [ROLES.RETAIL] },
   { name: "PackageConfirmation", component: PackageConfirmation, allowedRoles: [ROLES.RETAIL] },
+  { name: "ExcludeListAdd", component: ExcludeListAdd, allowedRoles: [ROLES.RETAIL] },
+  { name: "ExcludeListSummery", component: ExcludeListSummery, allowedRoles: [ROLES.RETAIL] },
 ];
 
 // ============================================================================

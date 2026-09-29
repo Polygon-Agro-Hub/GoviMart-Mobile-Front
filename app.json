@@ -8,7 +8,8 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.polygonagro.Polygon",
-      "versionCode": 0,
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/public/app-icon-android.png",
@@ -21,7 +22,10 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.FOREGROUND_SERVICE"
       ],
       "blockedPermissions": [
         "com.google.android.gms.permission.AD_ID",
@@ -37,21 +41,18 @@
         "android.permission.CALL_PHONE",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.CHANGE_WIFI_STATE",
         "android.permission.CHANGE_NETWORK_STATE"
       ]
     },
     "ios": {
-      "icon": "./src/assets/images/public/app-icon-android.png",
+      "icon": "./src/assets/images/public/app-icon-ios.png",
       "bundleIdentifier": "com.polygonagro.Polygon",
       "buildNumber": "1",
       "supportsTablet": false,
@@ -63,8 +64,7 @@
         "NSCameraUsageDescription": "Camera access is required to take profile photos and capture images.",
         "NSPhotoLibraryUsageDescription": "Photo library access is required to upload profile and complaint images.",
         "NSPhotoLibraryAddUsageDescription": "Photo library access is required to save related images.",
-        "NSLocationWhenInUseUsageDescription": "Location access is required to detect and set delivery addresses.",
-        "NSUserTrackingUsageDescription": "Tracking is used to improve app experience."
+        "NSLocationWhenInUseUsageDescription": "Location access is required to detect and set delivery addresses."
       }
     },
     "web": {
@@ -107,8 +107,10 @@
       [
         "expo-notifications",
         {
-          "icon": "./src/assets/images/public/app-icon-ios.png",
-          "color": "#FFFFFF"
+          "icon": "./src/assets/images/public/polygon-notification-icon.png",
+          "color": "#FF8A00",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       "./plugins/withCustomAndroidPermissions"

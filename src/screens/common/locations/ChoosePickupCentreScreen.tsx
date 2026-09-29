@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-    View,
-    Text,
-    TouchableOpacity,
-    ScrollView,
-    ActivityIndicator,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import OpenStreetMap from "@/component/common/OpenStreetMap";
@@ -17,511 +17,469 @@ import CustomHeader from "@/component/common/CustomHeader";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 
-type ChoosePickupCentreNavigationProp =
-    StackNavigationProp<
-        RootStackParamList,
-        "ChoosePickupCentre"
-    >;
+type ChoosePickupCentreNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "ChoosePickupCentre"
+>;
 
-type ChoosePickupCentreRouteProp =
-    RouteProp<
-        RootStackParamList,
-        "ChoosePickupCentre"
-    >;
+type ChoosePickupCentreRouteProp = RouteProp<
+  RootStackParamList,
+  "ChoosePickupCentre"
+>;
 
 interface Props {
-    navigation: ChoosePickupCentreNavigationProp;
-    route: ChoosePickupCentreRouteProp;
+  navigation: ChoosePickupCentreNavigationProp;
+  route: ChoosePickupCentreRouteProp;
 }
 
 interface PickupCentre {
-    id: number;
-    name: string;
-    city: string;
-    district: string;
-    province: string;
-    country: string;
-    status: string;
-    openingTime: string;
-    closingTime: string;
-    latitude: number;
-    longitude: number;
-    mapImage?: string;
+  id: number;
+  name: string;
+  city: string;
+  district: string;
+  province: string;
+  country: string;
+  status: string;
+  openingTime: string;
+  closingTime: string;
+  latitude: number;
+  longitude: number;
+  mapImage?: string;
 }
 
-const isCentreCurrentlyOpen = (openingTime = "08:00 AM", closingTime = "09:00 PM"): boolean => {
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+const isCentreCurrentlyOpen = (
+  openingTime = "08:00 AM",
+  closingTime = "09:00 PM",
+): boolean => {
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // 8:00 AM = 8 * 60 = 480 minutes
-    // 9:00 PM = 21 * 60 = 1260 minutes
-    const openMinutes = 8 * 60;
-    const closeMinutes = 21 * 60;
+  // 8:00 AM = 8 * 60 = 480 minutes
+  // 9:00 PM = 21 * 60 = 1260 minutes
+  const openMinutes = 8 * 60;
+  const closeMinutes = 21 * 60;
 
-    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+  return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
 };
 
-const ChoosePickupCentre: React.FC<Props> = ({
-    navigation,
-    route,
-}) => {
-    const [cityOpen, setCityOpen] = useState(false);
-    const [selectedCity, setSelectedCity] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [pickupCentres, setPickupCentres] = useState<PickupCentre[]>([]);
+const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
+  const [cityOpen, setCityOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [pickupCentres, setPickupCentres] = useState<PickupCentre[]>([]);
 
-    const [selectedCentre, setSelectedCentre] =
-        useState<PickupCentre | null>(null);
+  const [selectedCentre, setSelectedCentre] = useState<PickupCentre | null>(
+    null,
+  );
 
-    const userProfile = useSelector((state: RootState) => state.auth.userProfile);
+  const userProfile = useSelector((state: RootState) => state.auth.userProfile);
 
-    useEffect(() => {
-        const fetchCenters = async () => {
-            try {
-                setLoading(true);
-                const response = await orderService.getPickupCenters();
-                if (response.data && response.data.status && Array.isArray(response.data.data)) {
-                    const isOpen = isCentreCurrentlyOpen("08:00 AM", "09:00 PM");
-                    const mapped: PickupCentre[] = response.data.data.map((item: any) => ({
-                        id: item.centerId || item.id,
-                        name: item.centerName || item.name || "Pickup Centre",
-                        city: item.city || "",
-                        district: item.district || "",
-                        province: item.province || "",
-                        country: item.country || "Sri Lanka",
-                        status: isOpen ? "Open" : "Closed",
-                        openingTime: "08:00 AM",
-                        closingTime: "09:00 PM",
-                        latitude: parseFloat(item.latitude) || 6.9271,
-                        longitude: parseFloat(item.longitude) || 79.8612,
-                    }));
-                    setPickupCentres(mapped);
-                    // Keep unselected by default so user sees "Select Your City"
-                }
-            } catch (error) {
-                console.error("Error fetching pickup centres:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchCenters();
-    }, []);
-
-    const handleConfirm = () => {
-        if (!selectedCentre) return;
-
-        const currentContext = route.params?.orderContext || {
-            grandTotal: 0,
-            packageTotal: 0,
-            productTotal: 0,
-            discount: 0,
-        };
-
-        const userFullName = userProfile
-            ? `${userProfile.firstName || ""} ${userProfile.lastName || ""}`.trim()
-            : "";
-
-        navigation.navigate("ScheduleOrder", {
-            orderContext: {
-                ...currentContext,
-                deliveryMethod: "pickup",
-                checkoutDetails: {
-                    ...(currentContext.checkoutDetails || {}),
-                    deliveryMethod: "pickup",
-                    centerId: selectedCentre.id,
-                    centreName: selectedCentre.name,
-                    fullName: userFullName || undefined,
-                    phone1: userProfile?.phoneNumber || undefined,
-                    phoneCode1: "+94",
-                },
-            },
-        });
+  useEffect(() => {
+    const fetchCenters = async () => {
+      try {
+        setLoading(true);
+        const response = await orderService.getPickupCenters();
+        if (
+          response.data &&
+          response.data.status &&
+          Array.isArray(response.data.data)
+        ) {
+          const isOpen = isCentreCurrentlyOpen("08:00 AM", "09:00 PM");
+          const mapped: PickupCentre[] = response.data.data.map(
+            (item: any) => ({
+              id: item.centerId || item.id,
+              name: item.centerName || item.name || "Pickup Centre",
+              city: item.city || "",
+              district: item.district || "",
+              province: item.province || "",
+              country: item.country || "Sri Lanka",
+              status: isOpen ? "Open" : "Closed",
+              openingTime: "08:00 AM",
+              closingTime: "09:00 PM",
+              latitude: parseFloat(item.latitude) || 6.9271,
+              longitude: parseFloat(item.longitude) || 79.8612,
+            }),
+          );
+          setPickupCentres(mapped);
+          // Keep unselected by default so user sees "Select Your City"
+        }
+      } catch (error) {
+        console.error("Error fetching pickup centres:", error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    return (
-        <View
-            style={{
-                flex: 1,
-                backgroundColor: "#FFFFFF",
-            }}
+    fetchCenters();
+  }, []);
+
+  const handleConfirm = () => {
+    if (!selectedCentre) return;
+
+    const currentContext = route.params?.orderContext || {
+      grandTotal: 0,
+      packageTotal: 0,
+      productTotal: 0,
+      discount: 0,
+    };
+
+    const userFullName = userProfile
+      ? `${userProfile.firstName || ""} ${userProfile.lastName || ""}`.trim()
+      : "";
+
+    navigation.navigate("ScheduleOrder", {
+      orderContext: {
+        ...currentContext,
+        deliveryMethod: "pickup",
+        checkoutDetails: {
+          ...(currentContext.checkoutDetails || {}),
+          deliveryMethod: "pickup",
+          centerId: selectedCentre.id,
+          centreName: selectedCentre.name,
+          fullName: userFullName || undefined,
+          phone1: userProfile?.phoneNumber || undefined,
+          phoneCode1: "+94",
+        },
+      },
+    });
+  };
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      {/* ─── CUSTOM HEADER ─────────────────────────────────────────────── */}
+      <CustomHeader
+        title="Choose Pickup Centre"
+        titleColor="#0F172A"
+        showBackButton={true}
+        navigation={navigation}
+      />
+
+      {/* ─── SCROLLABLE CONTENT ────────────────────────────────────────── */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 6,
+          paddingBottom: 120,
+        }}
+      >
+        {/* Description */}
+        <Text
+          style={{
+            textAlign: "center",
+            fontSize: 14,
+            lineHeight: 20,
+            color: "#64748B",
+            marginBottom: 20,
+            paddingHorizontal: 16,
+          }}
         >
-            {/* ─── CUSTOM HEADER ─────────────────────────────────────────────── */}
-            <CustomHeader
-                title="Choose Pickup Centre"
-                titleColor="#0F172A"
-                showBackButton={true}
-                navigation={navigation}
-            />
+          Select a centre to pick up your order{"\n"}on the delivery date.
+        </Text>
 
-            {/* ─── SCROLLABLE CONTENT ────────────────────────────────────────── */}
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                    paddingHorizontal: 16,
-                    paddingTop: 6,
-                    paddingBottom: 120,
-                }}
-            >
-                {/* Description */}
-                <Text
-                    style={{
-                        textAlign: "center",
-                        fontSize: 14,
-                        lineHeight: 20,
-                        color: "#64748B",
-                        marginBottom: 20,
-                        paddingHorizontal: 16,
-                    }}
-                >
-                    Select a centre to pick up your order{"\n"}on the delivery date.
-                </Text>
+        {/* City Dropdown Label */}
+        <Text
+          style={{
+            fontSize: 13,
+            color: "#475569",
+            fontWeight: "600",
+            marginBottom: 8,
+          }}
+        >
+          Select Pickup Centre
+        </Text>
 
-                {/* City Dropdown Label */}
-                <Text
-                    style={{
-                        fontSize: 13,
-                        color: "#475569",
-                        fontWeight: "600",
-                        marginBottom: 8,
-                    }}
-                >
-                    Select Pickup Centre
-                </Text>
+        {/* City Dropdown Button */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setCityOpen(true)}
+          style={{
+            height: 50,
+            borderWidth: 1.5,
+            borderColor: "#FF8A00",
+            borderRadius: 25,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 16,
+            backgroundColor: "#FFFFFF",
+          }}
+        >
+          <Ionicons name="location-sharp" size={20} color="#000000" />
 
-                {/* City Dropdown Button */}
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setCityOpen(true)}
-                    style={{
-                        height: 50,
-                        borderWidth: 1.5,
-                        borderColor: "#FF8A00",
-                        borderRadius: 25,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingHorizontal: 16,
-                        backgroundColor: "#FFFFFF",
-                    }}
-                >
-                    <Ionicons
-                        name="location-sharp"
-                        size={20}
-                        color="#000000"
-                    />
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 15,
+              color: selectedCentre ? "#0F172A" : "#64748B",
+              fontWeight: selectedCentre ? "700" : "500",
+              marginLeft: 10,
+            }}
+          >
+            {selectedCentre ? selectedCentre.name : "Select Your City"}
+          </Text>
 
-                    <Text
-                        style={{
-                            flex: 1,
-                            fontSize: 15,
-                            color: selectedCentre ? "#0F172A" : "#64748B",
-                            fontWeight: selectedCentre ? "700" : "500",
-                            marginLeft: 10,
-                        }}
-                    >
-                        {selectedCentre ? selectedCentre.name : "Select Your City"}
-                    </Text>
+          <Ionicons name="chevron-down" size={20} color="#000000" />
+        </TouchableOpacity>
 
-                    <Ionicons
-                        name="chevron-down"
-                        size={20}
-                        color="#000000"
-                    />
-                </TouchableOpacity>
-
-                {/* Map View Container */}
-                <View
-                    style={{
-                        height: 287,
-                        marginTop: 17,
-                        borderRadius: 9,
-                        overflow: "hidden",
-                        backgroundColor: "#E7EEF0",
-                    }}
-                >
-                    {loading ? (
-                        <View
-                            style={{
-                                flex: 1,
-                                justifyContent: "center",
-                                alignItems: "center",
-                                backgroundColor: "#DDF2F7",
-                            }}
-                        >
-                            <ActivityIndicator size="large" color="#FF8A00" />
-                        </View>
-                    ) : selectedCentre ? (
-                        <>
-                            <OpenStreetMap
-                                key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
-                                latitude={selectedCentre.latitude}
-                                longitude={selectedCentre.longitude}
-                                zoom={15}
-                                interactive={true}
-                                pinColor="#FF8A00"
-                                markers={[{
-                                    id: selectedCentre.id,
-                                    latitude: selectedCentre.latitude,
-                                    longitude: selectedCentre.longitude,
-                                    title: selectedCentre.name,
-                                    description: `${selectedCentre.city}, ${selectedCentre.district}`,
-                                    color: "#FF8A00"
-                                }]}
-                                onMarkerSelect={(id) => {
-                                    const found = pickupCentres.find((c) => c.id === id || String(c.id) === String(id));
-                                    if (found) {
-                                        setSelectedCentre(found);
-                                        setSelectedCity(found.name);
-                                    }
-                                }}
-                            />
-
-                            {/* Map centre popup badge overlay - NO DROP SHADOW */}
-                            <View
-                                style={{
-                                    position: "absolute",
-                                    top: 12,
-                                    left: 12,
-                                    right: 12,
-                                    backgroundColor: "#FFFFFF",
-                                    borderRadius: 10,
-                                    paddingHorizontal: 14,
-                                    paddingVertical: 10,
-                                    borderWidth: 1,
-                                    borderColor: "#E2E8F0",
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontSize: 13,
-                                        fontWeight: "700",
-                                        color: "#0F172A",
-                                    }}
-                                >
-                                    {selectedCentre.name}
-                                </Text>
-
-                                <View
-                                    style={{
-                                        flexDirection: "row",
-                                        alignItems: "center",
-                                        marginTop: 4,
-                                    }}
-                                >
-                                    <View
-                                        style={{
-                                            width: 7,
-                                            height: 7,
-                                            borderRadius: 4,
-                                            backgroundColor: isCentreCurrentlyOpen(selectedCentre.openingTime, selectedCentre.closingTime) ? "#059669" : "#DC2626",
-                                            marginRight: 6,
-                                        }}
-                                    />
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            color: isCentreCurrentlyOpen(selectedCentre.openingTime, selectedCentre.closingTime) ? "#059669" : "#DC2626",
-                                            fontWeight: "700",
-                                        }}
-                                    >
-                                        {isCentreCurrentlyOpen(selectedCentre.openingTime, selectedCentre.closingTime) ? "Open" : "Closed"}
-                                    </Text>
-
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            color: "#64748B",
-                                            marginLeft: 6,
-                                        }}
-                                    >
-                                        • {selectedCentre.openingTime} - {selectedCentre.closingTime}
-                                    </Text>
-                                </View>
-                            </View>
-                        </>
-                    ) : (
-                        <OpenStreetMap
-                            key={`map-all-centres-${pickupCentres.length}`}
-                            latitude={7.8731}
-                            longitude={80.7718}
-                            zoom={7}
-                            interactive={true}
-                            pinColor="#FF8A00"
-                            markers={pickupCentres.map((c) => ({
-                                id: c.id,
-                                latitude: c.latitude,
-                                longitude: c.longitude,
-                                title: c.name,
-                                description: `${c.city}${c.district ? ', ' + c.district : ''}`,
-                                color: "#FF8A00",
-                            }))}
-                            onMarkerSelect={(id) => {
-                                const found = pickupCentres.find((c) => c.id === id || String(c.id) === String(id));
-                                if (found) {
-                                    setSelectedCentre(found);
-                                    setSelectedCity(found.name);
-                                }
-                            }}
-                        />
-                    )}
-                </View>
-
-                {/* ─── CENTRE DETAILS / ADDRESS SECTION (Hidden if not selected) ─── */}
-                {selectedCentre && (
-                    <View
-                        style={{
-                            marginTop: 18,
-                            backgroundColor: "#FFFFFF",
-                            borderWidth: 1,
-                            borderColor: "#E2E8F0",
-                            borderRadius: 16,
-                            padding: 16,
-                            flexDirection: "row",
-                            alignItems: "center", // VERTICALLY CENTERED!
-                        }}
-                    >
-                        {/* Map Pin Icon Circle — Vertically Centered */}
-                        <View
-                            style={{
-                                width: 48,
-                                height: 48,
-                                borderRadius: 24,
-                                backgroundColor: "#FFF4E8",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                marginRight: 14,
-                            }}
-                        >
-                            <Ionicons
-                                name="location-sharp"
-                                size={24}
-                                color="#FF8A00"
-                            />
-                        </View>
-
-                        {/* Details */}
-                        <View style={{ flex: 1 }}>
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    fontWeight: "700",
-                                    color: "#0F172A",
-                                    marginBottom: 5,
-                                }}
-                            >
-                                {selectedCentre.name}
-                            </Text>
-
-                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
-                                <Text style={{ color: "#494A65" }}>City : </Text>
-                                {selectedCentre.city || "N/A"}
-                            </Text>
-
-                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
-                                <Text style={{ color: "#494A65" }}>District : </Text>
-                                {selectedCentre.district || "N/A"}
-                            </Text>
-
-                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
-                                <Text style={{ color: "#494A65" }}>Province : </Text>
-                                {selectedCentre.province || "N/A"}
-                            </Text>
-
-                            <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
-                                <Text style={{ color: "#494A65" }}>Country : </Text>
-                                {selectedCentre.country || "Sri Lanka"}
-                            </Text>
-                        </View>
-                    </View>
-                )}
-            </ScrollView>
-
-            {/* ─── BOTTOM CONFIRM BUTTON ─────────────────────────────────────── */}
+        {/* Map View Container */}
+        <View
+          style={{
+            height: 287,
+            marginTop: 17,
+            borderRadius: 9,
+            overflow: "hidden",
+            backgroundColor: "#E7EEF0",
+          }}
+        >
+          {loading ? (
             <View
-                style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    backgroundColor: "#FFFFFF",
-                    borderTopLeftRadius: 18,
-                    borderTopRightRadius: 18,
-                    paddingHorizontal: 16,
-                    paddingTop: 12,
-                    paddingBottom: 24,
-                    shadowColor: "#000",
-                    shadowOffset: {
-                        width: 0,
-                        height: -2,
-                    },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 5,
-                    elevation: 10,
-                }}
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "#DDF2F7",
+              }}
             >
-                <TouchableOpacity
-                    activeOpacity={selectedCentre ? 0.85 : 1}
-                    disabled={!selectedCentre}
-                    onPress={handleConfirm}
-                    style={{
-                        height: 52,
-                        borderRadius: 26,
-                        backgroundColor:
-                            selectedCentre
-                                ? "#000000"
-                                : "#8799A3", // Matches disabled grey button in image
-                        justifyContent: "center",
-                        alignItems: "center",
-                        shadowColor: "#000",
-                        shadowOffset: {
-                            width: 0,
-                            height: 3,
-                        },
-                        shadowOpacity: selectedCentre ? 0.18 : 0.05,
-                        shadowRadius: 4,
-                        elevation: selectedCentre ? 4 : 1,
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
-                            fontSize: 16,
-                            fontWeight: "700",
-                            letterSpacing: 0.3,
-                        }}
-                    >
-                        Confirm Pickup Centre
-                    </Text>
-                </TouchableOpacity>
+              <ActivityIndicator size="large" color="#FF8A00" />
+            </View>
+          ) : selectedCentre ? (
+            <OpenStreetMap
+              key={`map-${selectedCentre.id}-${selectedCentre.latitude}-${selectedCentre.longitude}`}
+              latitude={selectedCentre.latitude}
+              longitude={selectedCentre.longitude}
+              zoom={15}
+              interactive={true}
+              pinColor="#FF0000"
+              markers={[
+                {
+                  id: selectedCentre.id,
+                  latitude: selectedCentre.latitude,
+                  longitude: selectedCentre.longitude,
+                  title: selectedCentre.name,
+                  isOpen: isCentreCurrentlyOpen(
+                    selectedCentre.openingTime,
+                    selectedCentre.closingTime,
+                  ),
+                  statusText: isCentreCurrentlyOpen(
+                    selectedCentre.openingTime,
+                    selectedCentre.closingTime,
+                  )
+                    ? "Open"
+                    : "Closed",
+                  statusColor: isCentreCurrentlyOpen(
+                    selectedCentre.openingTime,
+                    selectedCentre.closingTime,
+                  )
+                    ? "#FF9114"
+                    : "#FF2D55",
+                  timeText: `${selectedCentre.openingTime || "08:00 AM"} – ${selectedCentre.closingTime || "09:00 PM"}`,
+                  color: "#FF0000",
+                  autoOpenPopup: true,
+                },
+              ]}
+              onMarkerSelect={(id) => {
+                const found = pickupCentres.find(
+                  (c) => c.id === id || String(c.id) === String(id),
+                );
+                if (found) {
+                  setSelectedCentre(found);
+                  setSelectedCity(found.name);
+                }
+              }}
+            />
+          ) : (
+            <OpenStreetMap
+              key={`map-all-centres-${pickupCentres.length}`}
+              latitude={7.8731}
+              longitude={80.7718}
+              zoom={7}
+              interactive={true}
+              pinColor="#FF0000"
+              markers={pickupCentres.map((c) => {
+                const isOpen = isCentreCurrentlyOpen(
+                  c.openingTime,
+                  c.closingTime,
+                );
+                return {
+                  id: c.id,
+                  latitude: c.latitude,
+                  longitude: c.longitude,
+                  title: c.name,
+                  isOpen: isOpen,
+                  statusText: isOpen ? "Open" : "Closed",
+                  statusColor: isOpen ? "#FF9114" : "#FF2D55",
+                  timeText: `${c.openingTime || "08:00 AM"} – ${c.closingTime || "09:00 PM"}`,
+                  color: "#FF0000",
+                  autoOpenPopup: false,
+                };
+              })}
+              onMarkerSelect={(id) => {
+                const found = pickupCentres.find(
+                  (c) => c.id === id || String(c.id) === String(id),
+                );
+                if (found) {
+                  setSelectedCentre(found);
+                  setSelectedCity(found.name);
+                }
+              }}
+            />
+          )}
+        </View>
+
+        {/* ─── CENTRE DETAILS / ADDRESS SECTION (Hidden if not selected) ─── */}
+        {selectedCentre && (
+          <View
+            style={{
+              marginTop: 18,
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              borderRadius: 16,
+              padding: 16,
+              flexDirection: "row",
+              alignItems: "center", // VERTICALLY CENTERED!
+            }}
+          >
+            {/* Map Pin Icon Circle — Vertically Centered */}
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: "#FFF4E8",
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 14,
+              }}
+            >
+              <Ionicons name="location-sharp" size={24} color="#FF8A00" />
             </View>
 
-            {/* ─── GLOBAL SEARCH MODAL FOR PICKUP CENTRES ─────────────────────── */}
-            <GlobalSearchModal
-                visible={cityOpen}
-                onClose={() => setCityOpen(false)}
-                title="Select Pickup Centre"
-                searchPlaceholder="Search centre or city..."
-                data={pickupCentres.map((c) => ({
-                    label: `${c.name} (${c.city})`,
-                    value: String(c.id),
-                    city: c.city,
-                    name: c.name,
-                }))}
-                searchKeys={["label", "name", "city"]}
-                selectedItems={selectedCentre ? [String(selectedCentre.id)] : []}
-                onSelect={(selectedValues) => {
-                    if (selectedValues.length > 0) {
-                        const id = Number(selectedValues[0]);
-                        const centre = pickupCentres.find((c) => c.id === id);
-                        if (centre) {
-                            setSelectedCentre(centre);
-                            setSelectedCity(centre.name);
-                        }
-                    }
+            {/* Details */}
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: "#0F172A",
+                  marginBottom: 5,
                 }}
-            />
-        </View>
-    );
+              >
+                {selectedCentre.name}
+              </Text>
+
+              <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
+                <Text style={{ color: "#494A65" }}>City : </Text>
+                {selectedCentre.city || "N/A"}
+              </Text>
+
+              <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
+                <Text style={{ color: "#494A65" }}>District : </Text>
+                {selectedCentre.district || "N/A"}
+              </Text>
+
+              <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
+                <Text style={{ color: "#494A65" }}>Province : </Text>
+                {selectedCentre.province || "N/A"}
+              </Text>
+
+              <Text style={{ fontSize: 13, color: "#000000", lineHeight: 19 }}>
+                <Text style={{ color: "#494A65" }}>Country : </Text>
+                {selectedCentre.country || "Sri Lanka"}
+              </Text>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ─── BOTTOM CONFIRM BUTTON ─────────────────────────────────────── */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: "#FFFFFF",
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: 24,
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: -2,
+          },
+          shadowOpacity: 0.08,
+          shadowRadius: 5,
+          elevation: 10,
+        }}
+      >
+        <TouchableOpacity
+          activeOpacity={selectedCentre ? 0.85 : 1}
+          disabled={!selectedCentre}
+          onPress={handleConfirm}
+          style={{
+            height: 52,
+            borderRadius: 26,
+            backgroundColor: selectedCentre ? "#000000" : "#8799A3", // Matches disabled grey button in image
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: selectedCentre ? 0.18 : 0.05,
+            shadowRadius: 4,
+            elevation: selectedCentre ? 4 : 1,
+          }}
+        >
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 16,
+              fontWeight: "700",
+              letterSpacing: 0.3,
+            }}
+          >
+            Confirm Pickup Centre
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ─── GLOBAL SEARCH MODAL FOR PICKUP CENTRES ─────────────────────── */}
+      <GlobalSearchModal
+        visible={cityOpen}
+        onClose={() => setCityOpen(false)}
+        title="Select Pickup Centre"
+        searchPlaceholder="Search centre or city..."
+        data={pickupCentres.map((c) => ({
+          label: `${c.name} (${c.city})`,
+          value: String(c.id),
+          city: c.city,
+          name: c.name,
+        }))}
+        searchKeys={["label", "name", "city"]}
+        selectedItems={selectedCentre ? [String(selectedCentre.id)] : []}
+        onSelect={(selectedValues) => {
+          if (selectedValues.length > 0) {
+            const id = Number(selectedValues[0]);
+            const centre = pickupCentres.find((c) => c.id === id);
+            if (centre) {
+              setSelectedCentre(centre);
+              setSelectedCity(centre.name);
+            }
+          }
+        }}
+      />
+    </View>
+  );
 };
 
 export default ChoosePickupCentre;
