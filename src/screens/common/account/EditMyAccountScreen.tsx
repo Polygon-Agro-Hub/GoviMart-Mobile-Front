@@ -697,10 +697,13 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: 20,
+            paddingBottom: Platform.OS === "ios" ? 30 : 20,
+            flexGrow: 1,
+            justifyContent: "space-between",
           }}
         >
-          {/* PROFILE IMAGE */}
+          <View style={{ flex: 1 }}>
+            {/* PROFILE IMAGE */}
           <View
             style={{
               alignItems: "center",
@@ -1025,7 +1028,41 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               </>
             )}
           </View>
-        </KeyboardAwareScrollView>
+        </View>
+
+        {/* BOTTOM UPDATE BUTTON */}
+        <View
+          style={{
+            marginTop: 24,
+            marginBottom: Platform.OS === "ios" ? 16 : 8,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleUpdate}
+            disabled={updating}
+            style={{
+              width: "100%",
+              height: 52,
+              borderRadius: 27,
+              backgroundColor: updating ? "#8B9DA7" : "#000",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "#FFFFFF",
+                fontSize: 14,
+                fontWeight: "700",
+                letterSpacing: 0.2,
+              }}
+            >
+              {updating ? "Updating..." : "Update Account Info"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
       )}
 
       {updating && (
@@ -1045,71 +1082,6 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           <LoadingPage message="Updating Account..." fullScreen={false} />
         </View>
       )}
-
-      {/* BOTTOM UPDATE BUTTON */}
-      <View
-        style={{
-          position: "absolute",
-
-          left: 0,
-          right: 0,
-          bottom: 0,
-
-          paddingHorizontal: 16,
-          paddingTop: 8,
-          paddingBottom: 12,
-
-          backgroundColor: "#FFFFFF",
-
-          shadowColor: "#000",
-          shadowOffset: {
-            width: 0,
-            height: -2,
-          },
-          shadowOpacity: 0.08,
-          shadowRadius: 5,
-
-          elevation: 8,
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={handleUpdate}
-          disabled={updating}
-          style={{
-            width: "100%",
-            height: 52,
-
-            borderRadius: 27,
-
-            backgroundColor: updating ? "#8B9DA7" : "#000",
-
-            justifyContent: "center",
-            alignItems: "center",
-
-            shadowColor: "#000",
-            shadowOffset: {
-              width: 0,
-              height: 2,
-            },
-            shadowOpacity: 0.12,
-            shadowRadius: 4,
-
-            elevation: 3,
-          }}
-        >
-          <Text
-            style={{
-              color: "#FFFFFF",
-              fontSize: 14,
-              fontWeight: "700",
-              letterSpacing: 0.2,
-            }}
-          >
-            {updating ? "Updating..." : "Update Account Info"}
-          </Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Phone Code GlobalSearchModal */}
       <GlobalSearchModal

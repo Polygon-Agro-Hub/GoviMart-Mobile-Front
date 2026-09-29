@@ -526,27 +526,27 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             </View>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Update Password Submission Button */}
-      <View className="px-6 pb-6 pt-2 bg-white">
-        <TouchableOpacity
-          onPress={handleUpdatePassword}
-          disabled={loading || !isValid}
-          activeOpacity={isValid ? 0.8 : 1}
-          className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
-            isValid ? "bg-black" : "bg-[#7F919C]"
-          }`}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" size="small" />
-          ) : (
-            <Text className="text-white text-base font-bold">
-              Update Password
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {/* Update Password Submission Button */}
+        <View className="pb-6 pt-6">
+          <TouchableOpacity
+            onPress={handleUpdatePassword}
+            disabled={loading || !isValid}
+            activeOpacity={isValid ? 0.8 : 1}
+            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
+              isValid ? "bg-black" : "bg-[#7F919C]"
+            }`}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text className="text-white text-base font-bold">
+                Update Password
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       {/* Alert Modal */}
       <AlertModal

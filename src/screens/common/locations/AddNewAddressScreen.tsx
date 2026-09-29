@@ -860,7 +860,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingHorizontal: 11,
           paddingTop: 10,
-          paddingBottom: 24,
+          paddingBottom: Platform.OS === "ios" ? 30 : 20,
+          flexGrow: 1,
+          justifyContent: "space-between",
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -872,7 +874,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         extraScrollHeight={Platform.select({ ios: 20, android: 80 })}
         extraHeight={Platform.select({ ios: 20, android: 80 })}
       >
-        {/* SAVE ADDRESS AS */}
+        <View style={{ flex: 1 }}>
+          {/* SAVE ADDRESS AS */}
         <InputField
           icon="bookmark"
           label="Save Address As *"
@@ -1350,6 +1353,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             {geoLocationError}
           </Text>
         ) : null}
+        </View>
 
         {/* SAVE BUTTON */}
         <View style={{ marginTop: 24, marginBottom: 16 }}>
