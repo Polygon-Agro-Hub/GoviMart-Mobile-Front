@@ -1468,6 +1468,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       displayType !== "D&AP"
                       ? cartItem.discountedPrice
 <<<<<<< HEAD
+<<<<<<< HEAD
                       : cartItem.discountedPrice != null &&
                           cartItem.discountedPrice > 0 &&
                           cartItem.price != null &&
@@ -1478,6 +1479,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       ? discountedPerUnit!
                       : normalPerUnit;
 =======
+=======
+>>>>>>> 7951f5395bc9ff78304d11fa2f53f246cb7ea0b3
                       : (cartItem.discountedPrice != null &&
                         cartItem.discountedPrice > 0 &&
                         cartItem.price != null &&
@@ -1486,7 +1489,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         ? cartItem.discountedPrice
                         : (cartItem.normalPrice != null ? cartItem.normalPrice : cartItem.price)))
                     : (hasDiscount && displayType !== "D&AP" ? discountedPerUnit! : normalPerUnit);
+<<<<<<< HEAD
 >>>>>>> ab29fd3a59b9a8dff323ef0e9daf536df5bd9e2f
+=======
+>>>>>>> 7951f5395bc9ff78304d11fa2f53f246cb7ea0b3
                   const calculatedProductPrice = cartItem
                     ? effectiveCartUnitPrice * weightMultiplier
                     : basePrice;
