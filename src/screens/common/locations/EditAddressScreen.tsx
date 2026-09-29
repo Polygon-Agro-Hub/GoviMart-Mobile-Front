@@ -918,15 +918,15 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         contentContainerStyle={{
           paddingHorizontal: 11,
           paddingTop: 10,
-          paddingBottom: Platform.OS === "ios" ? 30 : 20,
+          paddingBottom: 24,
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         enableAutomaticScroll={true}
-        extraScrollHeight={Platform.select({ ios: 20, android: 40 })}
-        extraHeight={Platform.select({ ios: 20, android: 40 })}
+        extraScrollHeight={Platform.select({ ios: 20, android: 80 })}
+        extraHeight={Platform.select({ ios: 20, android: 80 })}
       >
         {/* SAVE ADDRESS AS */}
         <InputField

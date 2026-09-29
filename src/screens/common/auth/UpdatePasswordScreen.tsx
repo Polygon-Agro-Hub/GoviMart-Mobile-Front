@@ -270,8 +270,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-white"
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={20}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
@@ -297,7 +297,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
-          paddingBottom: 120,
+          paddingBottom: 24,
         }}
       >
         <View className="flex-1 justify-start">
