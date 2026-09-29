@@ -113,6 +113,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           refreshToken,
           firstName,
           lastName,
+          title,
           email,
           phoneNumber,
           image,
@@ -120,6 +121,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           buyerType,
           isDashUser,
           isPswUpdated,
+          cusId,
         } = response.data.data;
         const loginTime = Date.now();
 
@@ -128,11 +130,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         const userProfile = {
           firstName,
           lastName,
+          title,
           email,
           phoneNumber,
           image,
           firstTimeUser,
           buyerType,
+          cusId,
           id: response.data.data.id,
         };
         await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
@@ -190,6 +194,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           {
             text: "OK",
             onPress: async () => {
+              const isWholesale =
+                (buyerType || "").toLowerCase() === "wholesale";
+
               let targetScreen: keyof RootStackParamList = "Home";
               let targetParams: any = undefined;
 
@@ -198,15 +205,20 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 targetParams = {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
+                  title: title,
                   number: phoneNumber,
-                  redirectTo: "ExcludeListAdd",
+                  cusId: cusId,
+                  buyerType: buyerType,
+                  redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
                 };
-              } else if (firstTimeUser === 0) {
+              } else if (firstTimeUser === 0 && !isWholesale) {
                 targetScreen = "ExcludeListAdd";
                 targetParams = {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
+                  title: title,
                   number: phoneNumber,
+                  cusId: cusId,
                 };
               } else {
                 targetScreen = "Home";

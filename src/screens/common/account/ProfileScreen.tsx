@@ -35,6 +35,7 @@ interface ProfileProps {
 
 const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
+  const isWholesale = (user?.buyerType || "").toLowerCase() === "wholesale";
 
   const dispatch = useDispatch();
 
@@ -54,7 +55,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
       const response = await customerService.getAccountDetails();
       if (response.data && response.data.data) {
         const data = response.data.data;
-        const { creditBalance, image, firstName, lastName, title, buyerType, email, phoneNumber } = data;
+        const { creditBalance, image, firstName, lastName, title, buyerType, email, phoneNumber, cusId } = data;
         setCreditBalance(Number(creditBalance || 0));
 
         const updatedProfile = {
@@ -65,6 +66,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           buyerType: buyerType || user?.buyerType || "Retail",
           email: email || user?.email || "",
           phoneNumber: phoneNumber || user?.phoneNumber || "",
+          cusId: cusId || user?.cusId,
           firstTimeUser: user?.firstTimeUser ?? 0,
           id: data.id || user?.id,
         };
@@ -386,21 +388,22 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             }}
           />
 
-          {/* Package Preferences */}
-
-          <ProfileMenuItem
-            icon="thumbs-up"
-            title="My Package Preferences"
-            onPress={() => {
-              navigation.navigate("ExcludeListSummery", {
-                customerId: user?.id || 1002,
-                name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || undefined,
-                title: user?.title || undefined,
-                phoneNumber: user?.phoneNumber || undefined,
-                cusId: String(user?.id || 1002),
-              });
-            }}
-          />
+          {/* Package Preferences - Retail Only */}
+          {!isWholesale && (
+            <ProfileMenuItem
+              icon="thumbs-up"
+              title="My Package Preferences"
+              onPress={() => {
+                navigation.navigate("ExcludeListSummery", {
+                  customerId: user?.id || 1002,
+                  name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || undefined,
+                  title: user?.title || undefined,
+                  phoneNumber: user?.phoneNumber || undefined,
+                  cusId: user?.cusId || undefined,
+                });
+              }}
+            />
+          )}
 
           {/* Saved Addresses */}
 

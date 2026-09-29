@@ -17,6 +17,7 @@ import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import authService from "@/services/auth/auth.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AlertModal } from "@/component/common/AlertModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -75,6 +76,8 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (!newPassword) {
       newErrors.newPassword = "New password is required";
+    } else if (/\s/.test(newPassword)) {
+      newErrors.newPassword = "Password cannot contain spaces";
     } else {
       const hasUppercase = /[A-Z]/.test(newPassword);
       const hasNumber = /[0-9]/.test(newPassword);
@@ -103,6 +106,8 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (!confirmNewPassword) {
       newErrors.confirmNewPassword = "Confirm password is required";
+    } else if (/\s/.test(confirmNewPassword)) {
+      newErrors.confirmNewPassword = "Password cannot contain spaces";
     } else if (confirmNewPassword !== newPassword) {
       newErrors.confirmNewPassword = "Passwords do not match";
     }
@@ -123,6 +128,16 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
       });
 
       if (response.data && response.data.status) {
+        try {
+          const allKeys = await AsyncStorage.getAllKeys();
+          const forgotPwdKeys = allKeys.filter((k) =>
+            k.startsWith("@forgot_pwd_")
+          );
+          if (forgotPwdKeys.length > 0) {
+            await AsyncStorage.multiRemove(forgotPwdKeys);
+          }
+        } catch (e) {}
+
         Alert.alert(
           "Success",
           "Your password has been successfully reset. Please sign in with your new password.",
@@ -220,7 +235,8 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showNewPassword}
                       value={newPassword}
                       onChangeText={(t) => {
-                        setNewPassword(t);
+                        const clean = t.replace(/\s/g, "");
+                        setNewPassword(clean);
                         if (errors.newPassword)
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
@@ -273,7 +289,8 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showConfirmNewPassword}
                       value={confirmNewPassword}
                       onChangeText={(t) => {
-                        setConfirmNewPassword(t);
+                        const clean = t.replace(/\s/g, "");
+                        setConfirmNewPassword(clean);
                         if (errors.confirmNewPassword)
                           setErrors((prev) => ({
                             ...prev,

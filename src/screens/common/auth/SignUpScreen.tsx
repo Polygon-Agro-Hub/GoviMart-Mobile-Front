@@ -59,13 +59,31 @@ const getFlagUrl = (countryCode: string): string => {
   return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
 };
 
-const NAME_ALLOWED_REGEX = /^[a-zA-Z\s'-]*$/;
+const NAME_ALLOWED_REGEX = /^[a-zA-Z'-]*$/;
 
-const sanitizeName = (text: string): string => {
+const capitalizeName = (text: string): string => {
+  if (!text) return "";
   return text
-    .replace(/[^a-zA-Z\s'-]/g, "")
-    .replace(/^[\s'-]+/, "")
-    .replace(/\s{2,}/g, " ");
+    .trim()
+    .replace(/(?:^|\s|-)([a-z])/g, (_, c) => c.toUpperCase());
+};
+
+const sanitizeNameLive = (text: string, prevText: string = ""): string => {
+  let cleaned = text.replace(/[^a-zA-Z'-]/g, "");
+
+  if (!cleaned) return "";
+
+  // If previous text was a single letter (e.g. "A" or "") and IME buffer sent duplicate (e.g. "Aas" or "Aa"), strip ghost duplicate
+  if (
+    prevText.length <= 1 &&
+    cleaned.length >= 2 &&
+    cleaned[0].toLowerCase() === cleaned[1].toLowerCase()
+  ) {
+    cleaned = cleaned[0] + cleaned.slice(2);
+  }
+
+  // Capitalize first character live
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
 const sanitizeNIC = (text: string): string => {
@@ -153,7 +171,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     /^7[0-9]{8}$/.test(num);
 
   const isValidGenericMobile = (num: string): boolean =>
-    /^[0-9]{9,10}$/.test(num);
+    /^[0-9]{9}$/.test(num);
 
   // Validate fields helper
   const validate = () => {
@@ -163,23 +181,28 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
     if (!firstName.trim()) {
       newErrors.firstName = "First name is required";
+    } else if (/\s/.test(firstName)) {
+      newErrors.firstName = "First name cannot contain spaces";
     } else if (!NAME_ALLOWED_REGEX.test(firstName.trim())) {
       newErrors.firstName = "First name must contain only letters";
     }
 
     if (!lastName.trim()) {
       newErrors.lastName = "Last name is required";
+    } else if (/\s/.test(lastName)) {
+      newErrors.lastName = "Last name cannot contain spaces";
     } else if (!NAME_ALLOWED_REGEX.test(lastName.trim())) {
       newErrors.lastName = "Last name must contain only letters";
     }
 
-    // User Mobile Phone Validate (Separated)
     // User Mobile Phone Validate (Separated)
     if (!phoneCode) {
       newErrors.phoneCode = "Country code is required";
     }
     if (!phoneNumber.trim()) {
       newErrors.phoneNumber = "Mobile number is required";
+    } else if (/\s/.test(phoneNumber)) {
+      newErrors.phoneNumber = "Mobile number cannot contain spaces";
     } else {
       const cleanedPhone = phoneNumber.trim().replace(/^0+/, ""); // strip ALL leading zeros, not just one
       if (phoneCode === "+94") {
@@ -194,12 +217,16 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
+    } else if (/\s/.test(email)) {
+      newErrors.email = "Email cannot contain spaces";
     } else if (!isValidEmail(email)) {
       newErrors.email = "Invalid email address";
     }
 
     if (!nic.trim()) {
-      newErrors.nic = "NIC Number is required";
+      newErrors.nic = "NIC number is required";
+    } else if (/\s/.test(nic)) {
+      newErrors.nic = "NIC number cannot contain spaces";
     } else if (
       !/^[0-9]{9}[vV]$/.test(nic.trim()) &&
       !/^[0-9]{12}$/.test(nic.trim())
@@ -208,8 +235,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     }
 
     if (tab === "business") {
-      if (!companyName.trim())
+      if (!companyName.trim()) {
         newErrors.companyName = "Company name is required";
+      } else if (/\s/.test(companyName)) {
+        newErrors.companyName = "Company name cannot contain spaces";
+      }
 
       // Company Mobile Phone Validate (Separated)
       if (!companyPhoneCode) {
@@ -217,6 +247,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       }
       if (!companyNumber.trim()) {
         newErrors.companyNumber = "Company number is required";
+      } else if (/\s/.test(companyNumber)) {
+        newErrors.companyNumber = "Company number cannot contain spaces";
       } else {
         const cleanedCompanyPhone = companyNumber.trim().replace(/^0+/, "");
         if (companyPhoneCode === "+94") {
@@ -231,8 +263,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     }
 
     // Password validations
-    if (!password) newErrors.password = "Password is required";
-    else {
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (/\s/.test(password)) {
+      newErrors.password = "Password cannot contain spaces";
+    } else {
       const hasUppercase = /[A-Z]/.test(password);
       const hasNumber = /[0-9]/.test(password);
       const hasSpecialChar =
@@ -258,9 +293,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       }
     }
 
-    if (!confirmPassword)
+    if (!confirmPassword) {
       newErrors.confirmPassword = "Confirm password is required";
-    else if (confirmPassword !== password) {
+    } else if (/\s/.test(confirmPassword)) {
+      newErrors.confirmPassword = "Confirm password cannot contain spaces";
+    } else if (confirmPassword !== password) {
       newErrors.confirmPassword = "Passwords do not match";
     }
 
@@ -286,8 +323,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
       const payload = {
         title,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: capitalizeName(firstName.trim()),
+        lastName: capitalizeName(lastName.trim()),
         phoneCode,
         phoneNumber: cleanedPhone,
         buyerType: tab === "home" ? "Retail" : "Wholesale",
@@ -321,43 +358,65 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         } else {
           Alert.alert(
             "Registration Successful",
-            "Your account has been created. Please sign in.",
+            "Your Polygon account created successfully.",
             [{ text: "OK", onPress: () => navigation.navigate("Login") }],
           );
         }
       } else {
         const data = response.data;
         const msg = data?.message || "Failed to register.";
-        const allErrors = Array.isArray(data?.errors) ? data.errors.join(" ") : "";
-        const combined = `${msg} ${allErrors}`.toLowerCase();
+        const allErrorsList: string[] = Array.isArray(data?.errors) ? data.errors : [];
+        const combined = `${msg} ${allErrorsList.join(" ")}`.toLowerCase();
 
-        let fieldErrorFound = false;
-        if (
-          combined.includes("company phone") ||
-          combined.includes("company number")
-        ) {
-          setErrors((prev) => ({ ...prev, companyNumber: msg }));
-          fieldErrorFound = true;
-        } else if (
-          combined.includes("mobile") ||
-          combined.includes("phone")
-        ) {
-          setErrors((prev) => ({ ...prev, phoneNumber: msg }));
-          fieldErrorFound = true;
-        } else if (combined.includes("email")) {
-          setErrors((prev) => ({
-            ...prev,
-            email: combined.includes("already")
-              ? "Email already in use"
-              : "Invalid email address",
-          }));
-          fieldErrorFound = true;
-        } else if (combined.includes("nic")) {
-          setErrors((prev) => ({ ...prev, nic: msg }));
-          fieldErrorFound = true;
+        const fieldErrorsToSet: Record<string, string> = {};
+
+        if (data?.fieldErrors && typeof data.fieldErrors === "object") {
+          if (data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber) {
+            fieldErrorsToSet.companyNumber =
+              data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber;
+          }
+          if (data.fieldErrors.phoneNumber) {
+            fieldErrorsToSet.phoneNumber = data.fieldErrors.phoneNumber;
+          }
+          if (data.fieldErrors.email) {
+            fieldErrorsToSet.email = data.fieldErrors.email;
+          }
+          if (data.fieldErrors.nic) {
+            fieldErrorsToSet.nic = data.fieldErrors.nic;
+          }
         }
 
-        if (fieldErrorFound) {
+        if (
+          !fieldErrorsToSet.companyNumber &&
+          (combined.includes("company phone") || combined.includes("company number"))
+        ) {
+          fieldErrorsToSet.companyNumber = "Company Phone Number already exists";
+        }
+
+        if (
+          !fieldErrorsToSet.phoneNumber &&
+          (combined.includes("mobile number already") ||
+            (combined.includes("mobile") && combined.includes("already")) ||
+            (combined.includes("phone") && combined.includes("already") && !combined.includes("company")))
+        ) {
+          fieldErrorsToSet.phoneNumber = "Mobile Number already exists";
+        }
+
+        if (
+          !fieldErrorsToSet.email &&
+          (combined.includes("email already") ||
+            combined.includes("email in use") ||
+            (combined.includes("email") && combined.includes("exists")))
+        ) {
+          fieldErrorsToSet.email = "Email already exists.";
+        }
+
+        if (!fieldErrorsToSet.nic && combined.includes("nic")) {
+          fieldErrorsToSet.nic = "NIC number already exists";
+        }
+
+        if (Object.keys(fieldErrorsToSet).length > 0) {
+          setErrors((prev) => ({ ...prev, ...fieldErrorsToSet }));
           scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         } else {
           showAlert("Signup Failed", msg);
@@ -367,36 +426,58 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       console.error("Signup error:", err);
       const data = err.response?.data;
       const msg = data?.message || "An unexpected error occurred.";
-      const allErrors = Array.isArray(data?.errors) ? data.errors.join(" ") : "";
-      const combined = `${msg} ${allErrors}`.toLowerCase();
+      const allErrorsList: string[] = Array.isArray(data?.errors) ? data.errors : [];
+      const combined = `${msg} ${allErrorsList.join(" ")}`.toLowerCase();
 
-      let fieldErrorFound = false;
-      if (
-        combined.includes("company phone") ||
-        combined.includes("company number")
-      ) {
-        setErrors((prev) => ({ ...prev, companyNumber: msg }));
-        fieldErrorFound = true;
-      } else if (
-        combined.includes("mobile") ||
-        combined.includes("phone")
-      ) {
-        setErrors((prev) => ({ ...prev, phoneNumber: msg }));
-        fieldErrorFound = true;
-      } else if (combined.includes("email")) {
-        setErrors((prev) => ({
-          ...prev,
-          email: combined.includes("already")
-            ? "Email already in use"
-            : "Invalid email address",
-        }));
-        fieldErrorFound = true;
-      } else if (combined.includes("nic")) {
-        setErrors((prev) => ({ ...prev, nic: msg }));
-        fieldErrorFound = true;
+      const fieldErrorsToSet: Record<string, string> = {};
+
+      if (data?.fieldErrors && typeof data.fieldErrors === "object") {
+        if (data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber) {
+          fieldErrorsToSet.companyNumber =
+            data.fieldErrors.companyNumber || data.fieldErrors.companyPhoneNumber;
+        }
+        if (data.fieldErrors.phoneNumber) {
+          fieldErrorsToSet.phoneNumber = data.fieldErrors.phoneNumber;
+        }
+        if (data.fieldErrors.email) {
+          fieldErrorsToSet.email = data.fieldErrors.email;
+        }
+        if (data.fieldErrors.nic) {
+          fieldErrorsToSet.nic = data.fieldErrors.nic;
+        }
       }
 
-      if (fieldErrorFound) {
+      if (
+        !fieldErrorsToSet.companyNumber &&
+        (combined.includes("company phone") || combined.includes("company number"))
+      ) {
+        fieldErrorsToSet.companyNumber = "Company Phone Number already exists";
+      }
+
+      if (
+        !fieldErrorsToSet.phoneNumber &&
+        (combined.includes("mobile number already") ||
+          (combined.includes("mobile") && combined.includes("already")) ||
+          (combined.includes("phone") && combined.includes("already") && !combined.includes("company")))
+      ) {
+        fieldErrorsToSet.phoneNumber = "Mobile Number already exists";
+      }
+
+      if (
+        !fieldErrorsToSet.email &&
+        (combined.includes("email already") ||
+          combined.includes("email in use") ||
+          (combined.includes("email") && combined.includes("exists")))
+      ) {
+        fieldErrorsToSet.email = "Email already in use.";
+      }
+
+      if (!fieldErrorsToSet.nic && combined.includes("nic")) {
+        fieldErrorsToSet.nic = "NIC number already exists";
+      }
+
+      if (Object.keys(fieldErrorsToSet).length > 0) {
+        setErrors((prev) => ({ ...prev, ...fieldErrorsToSet }));
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       } else {
         showAlert("Signup Error", msg);
@@ -416,9 +497,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     <TouchableOpacity
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
-      className={`px-5 py-3.5 flex-row justify-between items-center ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row justify-between items-center ${!isLast ? "border-b border-gray-100" : ""
+        }`}
     >
       <View className="flex-row items-center gap-x-3">
         <Image
@@ -468,11 +548,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "home"
-                  ? "font-bold text-black"
-                  : "font-semibold text-gray-400"
-              }`}
+              className={`text-sm ${tab === "home"
+                ? "font-bold text-black"
+                : "font-semibold text-gray-400"
+                }`}
             >
               I'm Buying for Home
             </Text>
@@ -496,11 +575,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "business"
-                  ? "font-bold text-black"
-                  : "font-semibold text-gray-400"
-              }`}
+              className={`text-sm ${tab === "business"
+                ? "font-bold text-black"
+                : "font-semibold text-gray-400"
+                }`}
             >
               I'm Buying for Business
             </Text>
@@ -528,11 +606,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 onPress={() => setIsTitleModalOpen(true)}
                 activeOpacity={0.8}
                 style={{ height: 50 }}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
-                  errors.title
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-black bg-white"
-                }`}
+                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${errors.title
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-black bg-white"
+                  }`}
               >
                 <View className="flex-row items-center gap-x-2">
                   <FontAwesome6 name="user-large" size={14} color="black" />
@@ -552,11 +629,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             <View className="flex-1">
               <View
                 style={{ height: 50 }}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                  errors.firstName
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-black bg-white"
-                }`}
+                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.firstName
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-black bg-white"
+                  }`}
               >
                 <FontAwesome6 name="user-large" size={14} color="black" />
                 <TextInput
@@ -564,11 +640,14 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   placeholderTextColor="#000000"
                   value={firstName}
                   onChangeText={(text) => {
-                    setFirstName(sanitizeName(text));
+                    setFirstName((prev) => sanitizeNameLive(text, prev));
                     if (errors.firstName)
                       setErrors((prev) => ({ ...prev, firstName: "" }));
                   }}
+                  onBlur={() => setFirstName((prev) => capitalizeName(prev))}
+                  autoCapitalize="words"
                   autoCorrect={false}
+                  spellCheck={false}
                   maxLength={50}
                   style={{
                     flex: 1,
@@ -599,11 +678,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.lastName
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.lastName
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome6 name="user-large" size={14} color="black" />
               <TextInput
@@ -611,11 +689,14 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 placeholderTextColor="#000000"
                 value={lastName}
                 onChangeText={(text) => {
-                  setLastName(sanitizeName(text));
+                  setLastName((prev) => sanitizeNameLive(text, prev));
                   if (errors.lastName)
                     setErrors((prev) => ({ ...prev, lastName: "" }));
                 }}
+                onBlur={() => setLastName((prev) => capitalizeName(prev))}
+                autoCapitalize="words"
                 autoCorrect={false}
+                spellCheck={false}
                 maxLength={50}
                 style={{
                   flex: 1,
@@ -648,11 +729,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   onPress={() => setIsPhoneCodeModalOpen(true)}
                   activeOpacity={0.8}
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                    errors.phoneCode
-                      ? "border-red-500 bg-red-50/10"
-                      : "border-black"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.phoneCode
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-black"
+                    }`}
                 >
                   <View className="flex-row items-center gap-x-2">
                     {phoneCode ? (
@@ -691,11 +771,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View className="flex-1">
                 <View
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.phoneNumber
-                      ? "border-red-500 bg-red-50/10"
-                      : "border-black bg-white"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.phoneNumber
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-black bg-white"
+                    }`}
                 >
                   <FontAwesome5 name="phone-alt" size={14} color="black" />
                   <TextInput
@@ -704,11 +783,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     keyboardType="number-pad"
                     value={phoneNumber}
                     onChangeText={(text) => {
-                      setPhoneNumber(text.replace(/[^0-9]/g, ""));
+                      const clean = text.replace(/[^0-9]/g, "").slice(0, 9);
+                      setPhoneNumber(clean);
                       if (errors.phoneNumber)
                         setErrors((prev) => ({ ...prev, phoneNumber: "" }));
                     }}
-                    maxLength={phoneCode === "+94" ? 9 : 10}
+                    maxLength={9}
                     style={{
                       flex: 1,
                       paddingTop: 0,
@@ -750,11 +830,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.email
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.email
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <Entypo name="mail" size={16} color="black" />
               <TextInput
@@ -764,7 +843,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 autoCapitalize="none"
                 value={email}
                 onChangeText={(text) => {
-                  setEmail(text);
+                  const clean = text.replace(/\s/g, "");
+                  setEmail(clean);
                   if (errors.email)
                     setErrors((prev) => ({ ...prev, email: "" }));
                 }}
@@ -796,11 +876,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.nic
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.nic
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome name="id-card" size={16} color="black" />
               <TextInput
@@ -843,11 +922,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View>
                 <View
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.companyName
-                      ? "border-red-500 bg-red-50/10"
-                      : "border-black bg-white"
-                  }`}
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyName
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-black bg-white"
+                    }`}
                 >
                   <FontAwesome name="building" size={16} color="black" />
                   <TextInput
@@ -855,7 +933,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     placeholderTextColor="#000000"
                     value={companyName}
                     onChangeText={(text) => {
-                      setCompanyName(text);
+                      const clean = text.replace(/\s/g, "");
+                      setCompanyName(clean);
                       if (errors.companyName)
                         setErrors((prev) => ({ ...prev, companyName: "" }));
                     }}
@@ -892,11 +971,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                       onPress={() => setIsCompanyPhoneCodeModalOpen(true)}
                       activeOpacity={0.8}
                       style={{ height: 50 }}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                        errors.companyPhoneCode
-                          ? "border-red-500 bg-red-50/10"
-                          : "border-black"
-                      }`}
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.companyPhoneCode
+                        ? "border-red-500 bg-red-50/10"
+                        : "border-black"
+                        }`}
                     >
                       <View className="flex-row items-center gap-x-2">
                         {companyPhoneCode ? (
@@ -942,11 +1020,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   <View className="flex-1">
                     <View
                       style={{ height: 50 }}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                        errors.companyNumber
-                          ? "border-red-500 bg-red-50/10"
-                          : "border-black bg-white"
-                      }`}
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyNumber
+                        ? "border-red-500 bg-red-50/10"
+                        : "border-black bg-white"
+                        }`}
                     >
                       <FontAwesome5 name="phone-alt" size={14} color="black" />
                       <TextInput
@@ -955,14 +1032,15 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         keyboardType="number-pad"
                         value={companyNumber}
                         onChangeText={(text) => {
-                          setCompanyNumber(text.replace(/[^0-9]/g, ""));
+                          const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "").slice(0, 9);
+                          setCompanyNumber(clean);
                           if (errors.companyNumber)
                             setErrors((prev) => ({
                               ...prev,
                               companyNumber: "",
                             }));
                         }}
-                        maxLength={10}
+                        maxLength={9}
                         style={{
                           flex: 1,
                           paddingTop: 0,
@@ -1010,11 +1088,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.password
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.password
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -1023,7 +1100,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={(text) => {
-                  setPassword(text);
+                  const clean = text.replace(/\s/g, "");
+                  setPassword(clean);
                   if (errors.password)
                     setErrors((prev) => ({ ...prev, password: "" }));
                 }}
@@ -1079,11 +1157,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.confirmPassword
-                  ? "border-red-500 bg-red-50/10"
-                  : "border-black bg-white"
-              }`}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.confirmPassword
+                ? "border-red-500 bg-red-50/10"
+                : "border-black bg-white"
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -1092,7 +1169,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={(text) => {
-                  setConfirmPassword(text);
+                  const clean = text.replace(/\s/g, "");
+                  setConfirmPassword(clean);
                   if (errors.confirmPassword)
                     setErrors((prev) => ({ ...prev, confirmPassword: "" }));
                 }}
@@ -1141,11 +1219,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 className="flex-row items-start gap-x-3 mt-2 px-1"
               >
                 <View
-                  className={`w-5 h-5 rounded border items-center justify-center ${
-                    agreeToTerms
-                      ? "bg-black border-black"
-                      : "border-black bg-white"
-                  }`}
+                  className={`w-5 h-5 rounded border items-center justify-center ${agreeToTerms
+                    ? "bg-black border-black"
+                    : "border-black bg-white"
+                    }`}
                 >
                   {agreeToTerms && (
                     <Ionicons name="checkmark" size={14} color="white" />
@@ -1266,6 +1343,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         onSelect={(items) => {
           if (items.length > 0) {
             setPhoneCode(items[0]);
+            setPhoneNumber((prev) => prev.slice(0, 9));
             setErrors((prev) => ({ ...prev, phoneCode: "" }));
           }
           setIsPhoneCodeModalOpen(false);
@@ -1293,6 +1371,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         onSelect={(items) => {
           if (items.length > 0) {
             setCompanyPhoneCode(items[0]);
+            setCompanyNumber((prev) => prev.slice(0, 9));
             setErrors((prev) => ({ ...prev, companyPhoneCode: "" }));
           }
           setIsCompanyPhoneCodeModalOpen(false);

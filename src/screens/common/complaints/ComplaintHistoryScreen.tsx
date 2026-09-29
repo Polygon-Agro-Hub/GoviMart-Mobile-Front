@@ -6,6 +6,7 @@ import {
   ScrollView,
   Modal,
   BackHandler,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -56,26 +57,39 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint>();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchComplaints = async (isManualRefresh = false) => {
+    try {
+      if (!isManualRefresh) {
+        setLoading(true);
+      }
+      const response = await complaintService.getMyComplaints();
+      if (response.data && response.data.status && response.data.data) {
+        setComplaints(response.data.data);
+      } else {
+        setComplaints([]);
+      }
+    } catch (error) {
+      console.log("failed to fetch complaints: ", error);
+      setComplaints([]);
+    } finally {
+      if (!isManualRefresh) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
+      }
+    }
+  };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchComplaints(true);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      const fetchComplaints = async () => {
-        try {
-          setLoading(true);
-          const response = await complaintService.getMyComplaints();
-          if (response.data && response.data.status && response.data.data) {
-            setComplaints(response.data.data);
-          } else {
-            setComplaints([]);
-          }
-        } catch (error) {
-          console.log("failed to fetch complaints: ", error);
-          setComplaints([]);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchComplaints();
+      fetchComplaints(false);
     }, []),
   );
 
@@ -133,15 +147,23 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
           <LoadingPage message="Loading Complaints..." fullScreen={false} />
         </View>
       ) : complaints.length === 0 ? (
-        <View
-          style={{
-            flex: 1,
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
             justifyContent: "center",
             alignItems: "center",
             paddingHorizontal: 24,
             paddingBottom: 60,
-            width: "100%",
           }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#FF9114"]}
+              tintColor="#FF9114"
+            />
+          }
         >
           <NoDataFound
             message="No Complaint Found"
@@ -152,7 +174,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
               paddingVertical: 0,
             }}
           />
-        </View>
+        </ScrollView>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -161,6 +183,14 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
             paddingTop: 18,
             paddingBottom: 30,
           }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#FF9114"]}
+              tintColor="#FF9114"
+            />
+          }
         >
           {complaints.map((complaint) => (
             <View
