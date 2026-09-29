@@ -404,6 +404,19 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           onPress={onReplace}
           activeOpacity={0.85}
           className="mx-6 mt-6 mb-8 h-[54px] bg-black rounded-full justify-center items-center shadow-sm"
+          style={{
+            height: 50,
+            borderRadius: 40,
+
+            // iOS shadow (X 0, Y 2, Blur 4, #000000 @ 20%)
+            shadowColor: "#000000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+
+            // Android shadow
+            elevation: 6,
+          }}
         >
           <Text className="text-white text-[16px] font-bold">Replace</Text>
         </TouchableOpacity>

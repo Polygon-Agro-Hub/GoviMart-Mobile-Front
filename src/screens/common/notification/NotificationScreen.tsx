@@ -520,15 +520,15 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                     <View
                         style={{
                             position: "absolute",
-                            top: 68,
+                            top: 50,
                             right: 16,
                             zIndex: 999,
                             backgroundColor: "#FFFFFF",
                             borderRadius: 12,
                             borderWidth: 1,
                             borderColor: "#E5E7EB",
-                            paddingVertical: 4,
-                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                            paddingHorizontal: 2,
                             shadowColor: "#000",
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: 0.12,
