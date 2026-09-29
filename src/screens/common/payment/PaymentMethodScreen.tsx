@@ -197,6 +197,13 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           creditPaid: creditUsed,
           moneyPaid: paymentAmount,
           paymentMethod: "card",
+          appliedCoupon,
+          isCoupon: Boolean(appliedCoupon),
+          couponValue: couponVal,
+          couponDiscount: couponVal,
+          couponType: appliedCoupon?.type || null,
+          couponCode: appliedCoupon?.code || null,
+          isFreeDeliveryCoupon: isFreeDelivery,
           checkoutDetails: {
             ...(orderContext?.checkoutDetails || {}),
             isCoupon: Boolean(appliedCoupon),
@@ -243,6 +250,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           orderId: response.data.data.orderId,
           invoiceNumber: response.data.data.invoiceNumber,
           total: response.data.data.total,
+          couponValue: couponVal,
           orderContext: {
             ...(orderContext as any),
             grandTotal: totalAmount,
@@ -250,6 +258,22 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             discount: itemDiscount,
             creditPaid: creditUsed,
             moneyPaid: paymentAmount,
+            appliedCoupon,
+            isCoupon: Boolean(appliedCoupon),
+            couponValue: couponVal,
+            couponDiscount: couponVal,
+            couponType: appliedCoupon?.type || null,
+            couponCode: appliedCoupon?.code || null,
+            isFreeDeliveryCoupon: isFreeDelivery,
+            checkoutDetails: {
+              ...(orderContext?.checkoutDetails || {
+                deliveryMethod: orderContext?.deliveryMethod || "home",
+              }),
+              isCoupon: Boolean(appliedCoupon),
+              couponValue: couponVal,
+              couponType: appliedCoupon?.type || null,
+              couponCode: appliedCoupon?.code || null,
+            },
             paymentMethod:
               paymentAmount === 0
                 ? "Card"

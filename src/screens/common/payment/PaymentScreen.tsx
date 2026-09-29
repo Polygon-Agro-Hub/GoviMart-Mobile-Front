@@ -233,6 +233,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             orderId: response.data.data.orderId,
             invoiceNumber: response.data.data.invoiceNumber,
             total: response.data.data.total,
+            couponValue: orderContext?.couponValue,
             orderContext,
           });
         } else {

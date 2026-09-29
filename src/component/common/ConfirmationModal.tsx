@@ -85,6 +85,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   width: "100%",
                   alignSelf: "stretch",
                   minHeight: 50,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 8,
+                  elevation: 4,
                 }}
                 className="w-full py-3.5 px-4 rounded-full items-center justify-center mb-3"
               >
@@ -111,6 +116,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   width: "100%",
                   alignSelf: "stretch",
                   minHeight: 50,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 6,
+                  elevation: 3,
                 }}
                 className="w-full py-3.5 px-4 rounded-full items-center justify-center"
               >
@@ -134,7 +144,14 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               <TouchableOpacity
                 onPress={onCancel}
                 activeOpacity={0.7}
-                style={{ minHeight: 48 }}
+                style={{
+                  minHeight: 48,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
                 className="flex-1 py-3 px-3 border-2 border-gray-200 rounded-full items-center justify-center bg-white"
               >
                 <Text
@@ -151,7 +168,15 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               <TouchableOpacity
                 onPress={onConfirm}
                 activeOpacity={0.8}
-                style={{ backgroundColor: confirmButtonColor, minHeight: 48 }}
+                style={{
+                  backgroundColor: confirmButtonColor,
+                  minHeight: 48,
+                  shadowColor: confirmButtonColor || "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 6,
+                  elevation: 4,
+                }}
                 className="flex-1 py-3 px-3 rounded-full items-center justify-center"
               >
                 <Text
