@@ -301,11 +301,12 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         {/* Bottom Card */}
 
         <View
-          className="bg-white flex-1 mt-2 px-6 pt-7 h-screen"
+          className="bg-white flex-1 mt-2 px-6 pt-7"
           style={{
             flex: 1,
             borderTopLeftRadius: 34,
             borderTopRightRadius: 34,
+            paddingBottom: 150,
             shadowColor: "#000",
             shadowOpacity: 0.12,
             shadowRadius: 8,
