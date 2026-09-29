@@ -198,7 +198,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         id: product!.id,
         name: product!.displayName,
         image: product!.image,
-        price: effectiveUnitPrice,
+        price: normalPriceVal,
         normalPrice: normalPriceVal,
         discountedPrice: discountedPriceVal || undefined,
         comPrice: comPrice || undefined,
