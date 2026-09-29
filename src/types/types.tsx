@@ -51,6 +51,13 @@ export interface OrderContext {
   paymentMethod?: "cash" | "card";
   creditPaid?: number;
   moneyPaid?: number;
+  isCoupon?: boolean;
+  couponValue?: number;
+  couponDiscount?: number;
+  couponType?: string;
+  couponCode?: string;
+  isFreeDeliveryCoupon?: boolean;
+  appliedCoupon?: any;
 }
 
 export type RootStackParamList = {
@@ -84,6 +91,7 @@ export type RootStackParamList = {
   ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
+  PrivacyPolicy: undefined;
   Home: undefined;
   SignUpOTP: {
     phoneCode: string;
@@ -128,6 +136,7 @@ export type RootStackParamList = {
     orderId?: string | number;
     invoiceNumber?: string;
     total?: number;
+    couponValue?: number;
     orderContext?: OrderContext;
     deliveryDate?: string;
     scheduleDate?: string;
@@ -200,6 +209,7 @@ export interface ProductType {
   normalPrice: string;
   startValue?: string;
   varietyNameEnglish?: string;
+  maxQuantity?: number | string;
   bgColor?: string;
   /** marketplaceitems.isEnable — 1/true = active, 0/false = disabled */
   isEnable?: number | boolean;

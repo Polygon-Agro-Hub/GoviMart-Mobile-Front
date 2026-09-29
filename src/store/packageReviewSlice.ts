@@ -4,12 +4,13 @@ import { ReviewProduct, ProductType } from "@/types/types";
 export interface PackageMeta {
   id: string;
   name: string;
-  icon?: string;
-  image?: string;
+  icon: string;
+  image?: any;
   qty: number;
   unitPrice: number;
   serviceFee: number;
   packingFee: number;
+  discountPerUnit?: number; // NEW: definepackage.price - marketplacepackages.productPrice
 }
 
 export interface AlacartSelectedProduct {
@@ -127,6 +128,7 @@ export const packageReviewSlice = createSlice({
         moneyPaid?: number;
         creditPaid?: number;
         paymentMethod?: string;
+        deliveryMethod?: string;
         isPaid?: boolean;
         processOrderAmount?: number;
         packagesMeta: PackageMeta[];
@@ -159,6 +161,9 @@ export const packageReviewSlice = createSlice({
       }
       if (typeof payload.paymentMethod === "string") {
         state.paymentMethod = payload.paymentMethod;
+      }
+      if (typeof payload.deliveryMethod === "string") {
+        state.deliveryMethod = payload.deliveryMethod;
       }
       if (typeof payload.isPaid === "boolean") {
         state.isPaid = payload.isPaid;

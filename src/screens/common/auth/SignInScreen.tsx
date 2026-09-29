@@ -10,6 +10,7 @@ import {
   Image,
   Dimensions,
   BackHandler,
+  Platform,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -26,6 +27,7 @@ import * as SecureStore from "expo-secure-store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import socketService from "@/services/socket/socket.service";
+import pushNotificationService from "@/services/notification/pushNotification.service";
 import { AlertModal } from "@/component/common/AlertModal";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -112,6 +114,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           refreshToken,
           firstName,
           lastName,
+          title,
           email,
           phoneNumber,
           image,
@@ -119,6 +122,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           buyerType,
           isDashUser,
           isPswUpdated,
+          cusId,
         } = response.data.data;
         const loginTime = Date.now();
 
@@ -127,11 +131,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         const userProfile = {
           firstName,
           lastName,
+          title,
           email,
           phoneNumber,
           image,
           firstTimeUser,
           buyerType,
+          cusId,
           id: response.data.data.id,
         };
         await AsyncStorage.setItem("userProfile", JSON.stringify(userProfile));
@@ -139,6 +145,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         dispatch(loginSuccess({ token, userProfile, loginTime }));
         if (userProfile.id) {
           socketService.registerUser(userProfile.id, token);
+          pushNotificationService.registerPushToken().catch(() => {});
         }
 
         // Fetch this logged-in user's cart from backend
@@ -189,6 +196,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           {
             text: "OK",
             onPress: async () => {
+              const isWholesale =
+                (buyerType || "").toLowerCase() === "wholesale";
+
               let targetScreen: keyof RootStackParamList = "Home";
               let targetParams: any = undefined;
 
@@ -197,15 +207,20 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 targetParams = {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
+                  title: title,
                   number: phoneNumber,
-                  redirectTo: "ExcludeListAdd",
+                  cusId: cusId,
+                  buyerType: buyerType,
+                  redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
                 };
-              } else if (firstTimeUser === 0) {
+              } else if (firstTimeUser === 0 && !isWholesale) {
                 targetScreen = "ExcludeListAdd";
                 targetParams = {
                   customerId: response.data.data.id,
                   name: `${firstName} ${lastName}`,
+                  title: title,
                   number: phoneNumber,
+                  cusId: cusId,
                 };
               } else {
                 targetScreen = "Home";
@@ -336,11 +351,17 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   style={{
-                    height: 50,
+                    flex: 1,
+                    paddingTop: 0,
+                    paddingBottom: 0,
                     paddingVertical: 0,
-                    textAlignVertical: "center",
+                    fontSize: 14,
+                    color: "#000000",
+                    ...(Platform.OS === "android"
+                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      : { alignSelf: "center" }),
                   }}
-                  className="flex-1 text-sm text-black"
+                  className="flex-1 text-[14px] text-black"
                 />
               </View>
             </View>
@@ -362,11 +383,17 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   style={{
-                    height: 50,
+                    flex: 1,
+                    paddingTop: 0,
+                    paddingBottom: 0,
                     paddingVertical: 0,
-                    textAlignVertical: "center",
+                    fontSize: 14,
+                    color: "#000000",
+                    ...(Platform.OS === "android"
+                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      : { alignSelf: "center" }),
                   }}
-                  className="flex-1 text-sm text-black"
+                  className="flex-1 text-[14px] text-black"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}

@@ -22,7 +22,9 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import complaintService from "@/services/complaint/complaint.service";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
+import { AlertModal } from "@/component/common/AlertModal";
 
 type ReportComplaintNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -68,8 +70,28 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const [images, setImages] = useState<
     { uri: string; name: string; type: string }[]
   >([]);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // AlertModal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: "success" | "error" = "error"
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -125,30 +147,76 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_IMAGES,
+      selectionLimit: MAX_IMAGES - images.length,
       aspect: [4, 3],
       quality: 0.7,
     });
-    if (images.length + result.assets!.length > MAX_IMAGES) {
-      Alert.alert(
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return;
+    }
+
+    if (images.length + result.assets.length > MAX_IMAGES) {
+      showAlert(
         "Limit Reached",
         `You can attach up to ${MAX_IMAGES} images.`,
+        "error"
       );
       return;
     }
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const selectedPhotos = result.assets.map((asset, index) => ({
-        uri: asset.uri,
-        name: asset.fileName || `image_${Date.now()}_${index}.jpg`,
-        type: asset.mimeType || "image/jpeg",
-      }));
-      setImages((prev) => [...prev, ...selectedPhotos]);
+    let hasOversized = false;
+    const validPhotos: { uri: string; name: string; type: string }[] = [];
+
+    for (let i = 0; i < result.assets.length; i++) {
+      const asset = result.assets[i];
+      let size = asset.fileSize || 0;
+      if (!size) {
+        try {
+          const info = await FileSystem.getInfoAsync(asset.uri);
+          if (info.exists && typeof (info as any).size === "number") {
+            size = (info as any).size;
+          }
+        } catch (e) {
+          console.log("Failed to get asset size:", e);
+        }
+      }
+
+      if (size > MAX_IMAGE_SIZE) {
+        hasOversized = true;
+      } else {
+        validPhotos.push({
+          uri: asset.uri,
+          name: asset.fileName || `image_${Date.now()}_${i}.jpg`,
+          type: asset.mimeType || "image/jpeg",
+        });
+      }
+    }
+
+    if (hasOversized) {
+      setImageError("Image size must not exceed 5MB");
+      showAlert(
+        "Image Too Large",
+        "Image size must not exceed 5MB. Please choose a smaller image.",
+        "error"
+      );
+    } else {
+      setImageError(null);
+    }
+
+    if (validPhotos.length > 0) {
+      setImages((prev) => [...prev, ...validPhotos]);
     }
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) {
+        setImageError(null);
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async () => {
@@ -544,6 +612,34 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           ))}
         </View>
 
+        {/* INLINE ERROR MESSAGE */}
+        {imageError ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: 4,
+              marginBottom: 8,
+            }}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={16}
+              color="#FF3B30"
+              style={{ marginRight: 5 }}
+            />
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#FF3B30",
+                fontWeight: "500",
+              }}
+            >
+              {imageError}
+            </Text>
+          </View>
+        ) : null}
+
         {/* ================================================= */}
         {/* SUBMIT BUTTON */}
         {/* ================================================= */}
@@ -589,6 +685,15 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* ALERT MODAL */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 };

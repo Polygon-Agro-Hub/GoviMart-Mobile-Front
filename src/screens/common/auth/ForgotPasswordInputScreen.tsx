@@ -25,6 +25,7 @@ import {
 import CustomHeader from "@/component/common/CustomHeader";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import authService from "@/services/auth/auth.service";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
@@ -74,6 +75,71 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_OTP_ATTEMPTS = 5;
+
+export const getForgotPwdStorageKeys = (
+  method: "email" | "sms",
+  email?: string,
+  phoneCode?: string,
+  phoneNumber?: string,
+  identifier?: string,
+): { lockoutKeys: string[]; attemptsKeys: string[] } => {
+  const identifiers: string[] = [];
+
+  if (identifier && String(identifier).trim()) {
+    const clean = String(identifier).replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    if (clean) identifiers.push(clean);
+  }
+
+  if (email && String(email).trim()) {
+    const cleanEmail = String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
+    if (cleanEmail) identifiers.push(cleanEmail);
+  }
+
+  if (phoneNumber && String(phoneNumber).trim()) {
+    const rawDigits = String(phoneNumber).trim().replace(/[^0-9]/g, "");
+    const noZero = rawDigits.replace(/^0+/, "");
+    const codeDigits = String(phoneCode || "94").replace(/[^0-9]/g, "");
+
+    if (noZero) {
+      identifiers.push(`${codeDigits}${noZero}`);
+      identifiers.push(`${codeDigits}${rawDigits}`);
+      identifiers.push(noZero);
+      identifiers.push(rawDigits);
+    }
+  }
+
+  const unique = [...new Set(identifiers)];
+  return {
+    lockoutKeys: unique.map((id) => `@forgot_pwd_lockout_${id}`),
+    attemptsKeys: unique.map((id) => `@forgot_pwd_otp_attempts_${id}`),
+  };
+};
+
+const getRecentAttempts = async (key: string): Promise<number[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return [];
+    const timestamps: number[] = JSON.parse(raw);
+    const now = Date.now();
+    return timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+  } catch {
+    return [];
+  }
+};
+
+const saveAttempt = async (key: string): Promise<number[]> => {
+  try {
+    const recent = await getRecentAttempts(key);
+    const updated = [...recent, Date.now()];
+    await AsyncStorage.setItem(key, JSON.stringify(updated));
+    return updated;
+  } catch {
+    return [];
+  }
+};
+
 const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const initialMethod = route.params?.method || "email";
@@ -109,6 +175,56 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (!isValid) return;
 
+    const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
+      currentMethod,
+      isEmail ? email.trim() : undefined,
+      !isEmail ? phoneCode : undefined,
+      !isEmail ? phoneNumber.trim() : undefined,
+    );
+
+    // 1. Check if any key is currently locked out in AsyncStorage
+    for (const key of lockoutKeys) {
+      try {
+        const storedLockout = await AsyncStorage.getItem(key);
+        if (storedLockout) {
+          const lockoutUntil = parseInt(storedLockout, 10);
+          const remainingMs = lockoutUntil - Date.now();
+          if (remainingMs > 0) {
+            setAlertTitle("Too Many Attempts");
+            setAlertMessage(
+              "Too many verification attempts. Please try again after 15 minutes."
+            );
+            setAlertVisible(true);
+            return;
+          } else {
+            await AsyncStorage.removeItem(key);
+          }
+        }
+      } catch (e) {
+        console.log("Error checking stored lockout:", e);
+      }
+    }
+
+    // 2. Check recent attempts count across attempts keys
+    for (const key of attemptsKeys) {
+      const attempts = await getRecentAttempts(key);
+      if (attempts.length >= MAX_OTP_ATTEMPTS) {
+        const oldest = attempts[0];
+        const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+        const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+        const lockoutUntil = Date.now() + remainingSec * 1000;
+        for (const lockKey of lockoutKeys) {
+          await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+        }
+        setAlertTitle("Too Many Attempts");
+        setAlertMessage(
+          "Too many verification attempts. Please try again after 15 minutes."
+        );
+        setAlertVisible(true);
+        return;
+      }
+    }
+
     setLoading(true);
     setErrorText("");
 
@@ -121,6 +237,14 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
       });
 
       if (response.data && response.data.status) {
+        const primaryAttemptsKey = attemptsKeys[0];
+        if (primaryAttemptsKey) {
+          const updated = await saveAttempt(primaryAttemptsKey);
+          for (const aKey of attemptsKeys) {
+            await AsyncStorage.setItem(aKey, JSON.stringify(updated));
+          }
+        }
+
         navigation.navigate("ForgotPasswordOTP", {
           method: currentMethod,
           identifier: response.data.identifier,
@@ -134,17 +258,43 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         const msg =
           response.data?.message ||
           "Failed to request verification code. Please check your details.";
-        setAlertTitle("Request Failed");
-        setAlertMessage(msg);
+        if (
+          response.data?.isRateLimited ||
+          msg.toLowerCase().includes("too many")
+        ) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          for (const lockKey of lockoutKeys) {
+            await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+          }
+          setAlertTitle("Too Many Attempts");
+          setAlertMessage(
+            "Too many verification attempts. Please try again after 15 minutes."
+          );
+        } else {
+          setAlertTitle("Request Failed");
+          setAlertMessage(msg);
+        }
         setAlertVisible(true);
       }
     } catch (err: any) {
       console.error("Forgot password request error:", err);
+      const is429 = err.response?.status === 429;
       const msg =
         err.response?.data?.message ||
         "An unexpected error occurred. Please try again.";
-      setAlertTitle("Error");
-      setAlertMessage(msg);
+      if (is429 || msg.toLowerCase().includes("too many")) {
+        const lockoutUntil = Date.now() + 15 * 60 * 1000;
+        for (const lockKey of lockoutKeys) {
+          await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+        }
+        setAlertTitle("Too Many Attempts");
+        setAlertMessage(
+          "Too many verification attempts. Please try again after 15 minutes."
+        );
+      } else {
+        setAlertTitle("Error");
+        setAlertMessage(msg);
+      }
       setAlertVisible(true);
     } finally {
       setLoading(false);
@@ -161,9 +311,8 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
     <TouchableOpacity
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
-      className={`px-5 py-3.5 flex-row justify-between items-center ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row justify-between items-center ${!isLast ? "border-b border-gray-100" : ""
+        }`}
     >
       <View className="flex-row items-center gap-x-3">
         <Image
@@ -230,7 +379,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           </Text>
 
           {/* Subtitle */}
-          <Text className="text-xs text-[#777A7D] text-center px-4 mt-2 leading-relaxed">
+          <Text className="text-[13px] text-[#777A7D] text-center px-4 mt-2 leading-relaxed">
             {isEmail
               ? "Make sure the email address you enter is the same one you used to create the account."
               : "Make sure the mobile number you enter is the same one you used to create the account."}
@@ -347,11 +496,10 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
 
           {/* Continue Button - positioned right after the input fields */}
-          <View className="mt-8">
+          <View className="mt-16">
             <TouchableOpacity
-              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${
-                isValid ? "bg-black" : "bg-[#7F919C]"
-              }`}
+              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"
+                }`}
               activeOpacity={isValid ? 0.8 : 1}
               onPress={handleContinue}
               disabled={loading || !isValid}

@@ -22,13 +22,18 @@ import {
     renderBoldInvoiceMessage,
 } from "@/constants/notificationTemplates";
 import { Ionicons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { updateGlobalUnreadCount } from "@/store/notificationStore";
+import { AlertModal } from "@/component/common/AlertModal";
 
 export interface UiNotificationItem {
     id: number;
     processOrderId?: number;
     orderId?: number;
     invNo?: string;
+    orderStatus?: string;
+    isFinalized: boolean;
     title: string;
     message: string;
     time: string;
@@ -94,6 +99,7 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     const group = getNotificationGroup(item.createdAt);
     const time = formatNotificationTime(item.createdAt, group);
     const isReadBool = Number(item.isRead) === 1 || Boolean(item.isRead);
+    const isFinalizedBool = Number(item.isFinalized) === 1 || item.isFinalized === true;
     const actionRequired = isActionRequiredNotification(item.title);
 
     let messageText = item.message || "";
@@ -111,11 +117,23 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
         );
     }
 
+    // Move Reason section to a second line (newline)
+    messageText = messageText.replace(
+        /([^\n\r])\s*(?:[.]\s*)?(Reason\s*[:：])/gi,
+        (match, prefix, reasonTag) => {
+            const trimmedPrefix = prefix.trimEnd();
+            const hasPunctuation = /[.!?]$/.test(trimmedPrefix);
+            return trimmedPrefix + (hasPunctuation ? "" : ".") + "\n" + reasonTag;
+        }
+    );
+
     return {
         id: item.id,
         processOrderId: item.processOrderId,
         orderId: item.orderId,
         invNo: item.invNo,
+        orderStatus: item.orderStatus,
+        isFinalized: isFinalizedBool,
         title: item.title,
         message: messageText,
         time,
@@ -126,11 +144,36 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     };
 };
 
+const isPackageReviewTitle = (title?: string) => {
+    const t = (title || "").toLowerCase();
+    return (
+        t.includes("package finalization review") ||
+        t.includes("review package") ||
+        t.includes("package review")
+    );
+};
+
 const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
+    const buyerType = useSelector(
+        (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+    );
+    const isRetail = buyerType.toLowerCase() === "retail";
+
     const [notifications, setNotifications] = useState<UiNotificationItem[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
     const [showMenu, setShowMenu] = useState<boolean>(false);
+    const [alertConfig, setAlertConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type: "success" | "error" | "warning";
+    }>({
+        visible: false,
+        title: "",
+        message: "",
+        type: "error",
+    });
 
     // Handle system back button with context-aware dismissal of action menu
     useFocusEffect(
@@ -159,7 +202,10 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         try {
             const res = await notificationService.getNotifications(50, 0);
             if (res.data?.status && Array.isArray(res.data?.notifications)) {
-                const uiItems = res.data.notifications.map(mapServerItemToUi);
+                let uiItems = res.data.notifications.map(mapServerItemToUi);
+                if (!isRetail) {
+                    uiItems = uiItems.filter((n) => !isPackageReviewTitle(n.title));
+                }
                 setNotifications(uiItems);
                 // Keep global store in sync for badge on all tabs
                 updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
@@ -170,7 +216,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, []);
+    }, [isRetail]);
 
     useEffect(() => {
         loadNotifications(true);
@@ -181,6 +227,9 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         // Listen for live socket notifications
         const unsubscribeNotif = socketService.onNewNotification((serverItem) => {
             const uiItem = mapServerItemToUi(serverItem);
+            if (!isRetail && isPackageReviewTitle(uiItem.title)) {
+                return;
+            }
             setNotifications((prev) => {
                 // Avoid duplicates
                 if (prev.some((n) => n.id === uiItem.id)) {
@@ -203,7 +252,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             unsubscribeNotif();
             unsubscribeCount();
         };
-    }, [loadNotifications]);
+    }, [loadNotifications, isRetail]);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
@@ -232,8 +281,28 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         }
 
         // Navigate based on notification title/type
-        const titleLower = (item.title || "").toLowerCase();
-        if (titleLower.includes("package finalization review") || titleLower.includes("review package") || titleLower.includes("package review")) {
+        if (isRetail && isPackageReviewTitle(item.title)) {
+            if (item.orderStatus && item.orderStatus.toLowerCase() === "cancelled") {
+                setAlertConfig({
+                    visible: true,
+                    title: "Cannot Proceed!",
+                    message: "You have already cancelled this order. You cannot proceed to the payment.",
+                    type: "error",
+                });
+                return;
+            }
+
+            // Order already finalized (processorders.isFinalized = 1)
+            if (item.isFinalized) {
+                setAlertConfig({
+                    visible: true,
+                    title: "Already Finalized!",
+                    message: "You have already reviewed and finalized your order. You cannot make any further changes.",
+                    type: "warning",
+                });
+                return;
+            }
+
             navigation.navigate("ReviewPackage", {
                 orderId: item.processOrderId || item.orderId,
                 invoiceNo: item.invNo,
@@ -476,15 +545,15 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                     <View
                         style={{
                             position: "absolute",
-                            top: 68,
+                            top: 50,
                             right: 16,
                             zIndex: 999,
                             backgroundColor: "#FFFFFF",
                             borderRadius: 12,
                             borderWidth: 1,
                             borderColor: "#E5E7EB",
-                            paddingVertical: 4,
-                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                            paddingHorizontal: 2,
                             shadowColor: "#000",
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: 0.12,
@@ -642,6 +711,19 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
             {/* Floating Bottom Navigation Bar */}
             <BottomNavigation activeScreen="Notification" navigation={navigation} />
+
+            {/* Alert Modal */}
+            <AlertModal
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type="success"
+                autoClose={false}
+                showOkButton={true}
+                okButtonText="OK"
+                onOkPress={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+                onClose={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+            />
         </View>
     );
 };

@@ -54,7 +54,7 @@ import ViewCartPopup from "@/component/common/ViewCartPopup";
 import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
 import socketService from "@/services/socket/socket.service";
-import FixedMarqueeText from "@/component/marquee-text/MarqueeText";
+
 
 export type { ProductType, PackageType } from "@/types/types";
 
@@ -83,8 +83,21 @@ interface AddTimeSnapshot {
 // Price display types coming from the backend (marketplaceitems.displayType):
 // "AP&SP&D" -> Actual Price (struck through) + Sale Price + Discount% badge
 // "AP&SP"   -> Actual Price (struck through) + Sale Price, no badge
-// "D&AP"    -> Only Sale Price + Discount% badge, no struck-through actual price
+// "D&AP"    -> Discount% badge + Actual Price (normal price), no struck-through price
 type DisplayType = "AP&SP&D" | "D&AP" | "AP&SP";
+
+const normalizeUnit = (raw?: string | null): "g" | "kg" => {
+  const norm = (raw || "g").toString().trim().toLowerCase();
+  if (
+    norm === "kg" ||
+    norm === "kgs" ||
+    norm === "kilogram" ||
+    norm === "kilograms"
+  ) {
+    return "kg";
+  }
+  return "g";
+};
 
 const CATEGORY_IMAGES: Record<string, any> = {
   Packages: require("@/assets/images/home/packages.webp"),
@@ -287,8 +300,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       (state as RootState & { cart: CartState }).cart.packages,
   );
   const totalCartItems =
-  cartProducts.length +
-  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
+    cartProducts.length +
+    cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const visibleCategories = isRetail
     ? CATEGORIES
@@ -374,7 +387,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 id: data.id || current?.id,
               };
               dispatch(updateUserProfile(updatedProfile));
-              await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
+              await AsyncStorage.setItem(
+                "userProfile",
+                JSON.stringify(updatedProfile),
+              );
             }
           }
         } catch (error) {
@@ -387,7 +403,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
         // Sync this user's cart from backend only if not actively modifying locally
         if (!isCartSyncingRef.current) {
-          cartService.getUserCart()
+          cartService
+            .getUserCart()
             .then((dbCartRes) => {
               if (isCartSyncingRef.current) return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
@@ -398,11 +415,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     products: dbProducts,
                     packages: dbPackages,
                     cartUserId: userProfileRef.current?.id ?? null,
-                  })
+                  }),
                 );
               }
             })
-            .catch(() => { });
+            .catch(() => {});
         }
       } else {
         // No token — clear any stale cart items from a previous session
@@ -640,7 +657,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             }
             if (isRetail) {
               try {
-                const pkgResponse = await productService.getAllPackages(buyerType);
+                const pkgResponse =
+                  await productService.getAllPackages(buyerType);
                 if (pkgResponse.data?.status && pkgResponse.data.product) {
                   const matchingPkgs = pkgResponse.data.product
                     .filter((pkg: any) =>
@@ -654,11 +672,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch { }
+              } catch {}
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => { });
+          .catch(() => {});
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -669,13 +687,19 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     };
 
     const unsubscribeCatalog = socketService.onCatalogUpdate((data) => {
-      console.log("📦 [HomeScreen] Real-time catalog update received via Socket.IO:", data);
+      console.log(
+        "📦 [HomeScreen] Real-time catalog update received via Socket.IO:",
+        data,
+      );
       fetchBanners();
       handleRefreshItems();
     });
 
     const unsubscribeBanner = socketService.onBannerUpdate((data) => {
-      console.log("🎨 [HomeScreen] Real-time banner update received via Socket.IO:", data);
+      console.log(
+        "🎨 [HomeScreen] Real-time banner update received via Socket.IO:",
+        data,
+      );
       fetchBanners();
     });
 
@@ -701,10 +725,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   firstName: data.firstName || userProfile?.firstName || "",
                   lastName: data.lastName || userProfile?.lastName || "",
                   title: data.title || userProfile?.title,
-                  image: data.image !== undefined ? data.image : userProfile?.image,
-                  buyerType: data.buyerType || userProfile?.buyerType || "Retail",
+                  image:
+                    data.image !== undefined ? data.image : userProfile?.image,
+                  buyerType:
+                    data.buyerType || userProfile?.buyerType || "Retail",
                   email: data.email || userProfile?.email || "",
-                  phoneNumber: data.phoneNumber || userProfile?.phoneNumber || "",
+                  phoneNumber:
+                    data.phoneNumber || userProfile?.phoneNumber || "",
                   firstTimeUser: userProfile?.firstTimeUser ?? 0,
                   id: data.id || userProfile?.id,
                 };
@@ -715,12 +742,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
 
         // Also refresh the cart from backend
         promises.push(
-          cartService.getUserCart()
+          cartService
+            .getUserCart()
             .then((dbCartRes) => {
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
@@ -730,11 +758,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     products: dbProducts,
                     packages: dbPackages,
                     cartUserId: userProfile?.id ?? null,
-                  })
+                  }),
                 );
               }
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
       }
 
@@ -768,11 +796,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch { }
+                } catch {}
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -815,17 +843,25 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleToggleUnit = useCallback(
     (productId: number, unit: "g" | "kg") => {
-      const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+      const item = cartProducts.find(
+        (p: ProductCartItem) => p.id === productId,
+      );
       if (!item || item.unit === unit) return;
       isCartSyncingRef.current = true;
       dispatch(changeProductUnit({ id: productId, newUnit: unit }));
       showToast("Cart Updated");
       if (userToken) {
-        const newWeight = unit === "kg" ? parseFloat((item.weight / 1000).toFixed(3)) : Math.round(item.weight * 1000);
-        cartService.syncCartProduct(productId, newWeight, unit)
+        const newWeight =
+          unit === "kg"
+            ? parseFloat((item.weight / 1000).toFixed(3))
+            : Math.round(item.weight * 1000);
+        cartService
+          .syncCartProduct(productId, newWeight, unit)
           .catch((err) => console.error("Cart DB sync error:", err))
           .finally(() => {
-            setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            setTimeout(() => {
+              isCartSyncingRef.current = false;
+            }, 1000);
           });
       } else {
         isCartSyncingRef.current = false;
@@ -836,19 +872,34 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleIncrement = useCallback(
     (productId: number) => {
+      const item = cartProducts.find(
+        (p: ProductCartItem) => p.id === productId,
+      );
+      if (item && item.maxWeight != null && item.weight >= item.maxWeight) {
+        showToast(`Maximum limit of ${item.maxWeight} ${item.unit} reached`);
+        return;
+      }
       isCartSyncingRef.current = true;
       dispatch(increaseProductWeight(productId));
       showToast("Cart Updated");
       if (userToken) {
-        const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+        const item = cartProducts.find(
+          (p: ProductCartItem) => p.id === productId,
+        );
         if (item) {
-          const newWeight = item.unit === "kg"
-            ? parseFloat((item.weight + item.step).toFixed(3))
-            : Math.round(item.weight + item.step);
-          cartService.syncCartProduct(productId, newWeight, item.unit)
+          const nextW =
+            item.unit === "kg"
+              ? parseFloat((item.weight + item.step).toFixed(3))
+              : Math.round(item.weight + item.step);
+          const newWeight =
+            item.maxWeight != null ? Math.min(item.maxWeight, nextW) : nextW;
+          cartService
+            .syncCartProduct(productId, newWeight, item.unit)
             .catch((err) => console.error("Cart DB sync error:", err))
             .finally(() => {
-              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+              setTimeout(() => {
+                isCartSyncingRef.current = false;
+              }, 1000);
             });
         }
       } else {
@@ -874,10 +925,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         });
         showToast("Removed from cart");
         if (userToken) {
-          cartService.removeCartProduct(productId)
+          cartService
+            .removeCartProduct(productId)
             .catch((err) => console.error("Cart DB sync error:", err))
             .finally(() => {
-              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+              setTimeout(() => {
+                isCartSyncingRef.current = false;
+              }, 1000);
             });
         } else {
           isCartSyncingRef.current = false;
@@ -886,14 +940,18 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         dispatch(decreaseProductWeight(productId));
         showToast("Cart Updated");
         if (existing && userToken) {
-          const decremented = existing.unit === "kg"
-            ? parseFloat((existing.weight - existing.step).toFixed(3))
-            : Math.round(existing.weight - existing.step);
+          const decremented =
+            existing.unit === "kg"
+              ? parseFloat((existing.weight - existing.step).toFixed(3))
+              : Math.round(existing.weight - existing.step);
           const newWeight = Math.max(existing.minimumWeight, decremented);
-          cartService.syncCartProduct(productId, newWeight, existing.unit)
+          cartService
+            .syncCartProduct(productId, newWeight, existing.unit)
             .catch((err) => console.error("Cart DB sync error:", err))
             .finally(() => {
-              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+              setTimeout(() => {
+                isCartSyncingRef.current = false;
+              }, 1000);
             });
         } else {
           isCartSyncingRef.current = false;
@@ -910,27 +968,40 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       isCartSyncingRef.current = true;
 
       const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
-      const dbUnitType = (product.unitType || "g").toLowerCase();
+      const initialUnit: "g" | "kg" = normalizeUnit(product.unitType);
 
-      let initialUnit: "g" | "kg" = (dbUnitType === "kg" && rawStartValue < 1) || dbUnitType === "g" ? "g" : "kg";
-      let initialWeight = initialUnit === "g"
-        ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-        : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+      const initialWeight =
+        initialUnit === "g"
+          ? Math.round(rawStartValue * 1000)
+          : parseFloat(rawStartValue.toFixed(3));
 
       const rawChangeBy =
-        product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
+        product.changeby != null &&
+        String(product.changeby).trim() !== "" &&
+        parseFloat(String(product.changeby)) > 0
           ? parseFloat(String(product.changeby))
           : rawStartValue;
 
       const step =
         initialUnit === "g"
-          ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
-          : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+          ? Math.round(rawChangeBy * 1000)
+          : parseFloat(rawChangeBy.toFixed(3));
 
-      const minWeight =
-        initialUnit === "g"
-          ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-          : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+      const minWeight = initialWeight;
+
+      const rawMaxQuantity =
+        product.maxQuantity != null &&
+        String(product.maxQuantity).trim() !== "" &&
+        parseFloat(String(product.maxQuantity)) > 0
+          ? parseFloat(String(product.maxQuantity))
+          : null;
+
+      const maxWeight =
+        rawMaxQuantity != null
+          ? initialUnit === "g"
+            ? Math.round(rawMaxQuantity * 1000)
+            : parseFloat(rawMaxQuantity.toFixed(3))
+          : undefined;
 
       const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
       const discountedPerUnit =
@@ -955,10 +1026,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           price: normalPerUnit,
           normalPrice: normalPerUnit,
           discountedPrice: discountedPerUnit || undefined,
-          comPrice: product.comPrice != null ? parseFloat(String(product.comPrice)) : undefined,
+          comPrice:
+            product.comPrice != null
+              ? parseFloat(String(product.comPrice))
+              : undefined,
           weight: initialWeight,
           unit: initialUnit,
           minimumWeight: minWeight,
+          maxWeight: maxWeight,
+          maxQuantity: rawMaxQuantity ?? undefined,
           step: step,
         }),
       );
@@ -977,7 +1053,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       if (userToken) {
         try {
-          await cartService.syncCartProduct(product.id, initialWeight, initialUnit);
+          await cartService.syncCartProduct(
+            product.id,
+            initialWeight,
+            initialUnit,
+          );
         } catch (err) {
           console.error("Cart DB sync error:", err);
         }
@@ -1038,13 +1118,20 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (packageId: number) => {
       isCartSyncingRef.current = true;
       dispatch(increasePackageQuantity(packageId));
-      const existing = cartPackages.find((p: PackageCartItem) => p.id === packageId);
+      const existing = cartPackages.find(
+        (p: PackageCartItem) => p.id === packageId,
+      );
       const newQty = (existing?.quantity || 1) + 1;
       if (userToken) {
-        cartService.syncCartPackage(packageId, newQty)
-          .catch((err) => console.error("Cart DB sync package increment error:", err))
+        cartService
+          .syncCartPackage(packageId, newQty)
+          .catch((err) =>
+            console.error("Cart DB sync package increment error:", err),
+          )
           .finally(() => {
-            setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+            setTimeout(() => {
+              isCartSyncingRef.current = false;
+            }, 1000);
           });
       } else {
         isCartSyncingRef.current = false;
@@ -1063,10 +1150,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       if (existing && existing.quantity <= 1) {
         dispatch(removePackage(packageId));
         if (userToken) {
-          cartService.removeCartPackage(packageId)
+          cartService
+            .removeCartPackage(packageId)
             .catch((err) => console.error("Cart DB remove package error:", err))
             .finally(() => {
-              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+              setTimeout(() => {
+                isCartSyncingRef.current = false;
+              }, 1000);
             });
         } else {
           isCartSyncingRef.current = false;
@@ -1082,10 +1172,15 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         dispatch(decreasePackageQuantity(packageId));
         const newQty = (existing?.quantity || 1) - 1;
         if (userToken) {
-          cartService.syncCartPackage(packageId, newQty)
-            .catch((err) => console.error("Cart DB sync package decrement error:", err))
+          cartService
+            .syncCartPackage(packageId, newQty)
+            .catch((err) =>
+              console.error("Cart DB sync package decrement error:", err),
+            )
             .finally(() => {
-              setTimeout(() => { isCartSyncingRef.current = false; }, 1000);
+              setTimeout(() => {
+                isCartSyncingRef.current = false;
+              }, 1000);
             });
         } else {
           isCartSyncingRef.current = false;
@@ -1159,7 +1254,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 6, gap: 12 }}
+            contentContainerStyle={{
+              paddingHorizontal: 24,
+              paddingVertical: 6,
+              gap: 12,
+            }}
             className="flex-row"
           >
             {visibleCategories.map((category) => {
@@ -1222,7 +1321,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       color: isActive ? "#FFFFFF" : "#1E1E1E",
                       textAlign: "center",
                       marginTop: 6,
-                      fontSize: 12
+                      fontSize: 12,
                     }}
                   >
                     {category.name}
@@ -1250,7 +1349,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         ) : itemRows.length === 0 ? (
           searchQuery.trim().length > 0 ? (
             <View className="items-center justify-center py-10 px-6">
-              <NoDataFound message={`No products found matching "${searchQuery.trim()}"`} />
+              <NoDataFound
+                message={`No products found matching "${searchQuery.trim()}"`}
+              />
             </View>
           ) : (
             <View className="items-center justify-center py-10 px-6">
@@ -1260,19 +1361,19 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         ) : (
           <View className="mt-8 px-4">
             {itemRows.map((row, rowIndex) => (
-              <View key={rowIndex} className="flex-row justify-between mb-4">
+              <View key={rowIndex} className="flex-row justify-between mb-4 items-stretch">
                 {row.map((product) => {
                   const isProduct = product.type === "product";
                   const isPackage = product.type === "package";
                   const cartItem = isProduct
                     ? cartProducts.find(
-                      (p: ProductCartItem) => p.id === product.id,
-                    )
+                        (p: ProductCartItem) => p.id === product.id,
+                      )
                     : null;
                   const cartPackage = isPackage
                     ? cartPackages.find(
-                      (p: PackageCartItem) => p.id === product.id,
-                    )
+                        (p: PackageCartItem) => p.id === product.id,
+                      )
                     : null;
 
                   const isExpanded = product.id === expandedItemId;
@@ -1281,14 +1382,27 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const rawStartValue = isProduct
                     ? parseFloat(String(product.startValue ?? "1")) || 1
                     : 1;
-                  const rawUnitType = isProduct
-                    ? (product.unitType || "g").toLowerCase()
+                  const normUnit = isProduct
+                    ? normalizeUnit(product.unitType)
                     : "g";
+                  const rawMaxQuantity =
+                    isProduct &&
+                    (product as any).maxQuantity != null &&
+                    String((product as any).maxQuantity).trim() !== "" &&
+                    parseFloat(String((product as any).maxQuantity)) > 0
+                      ? parseFloat(String((product as any).maxQuantity))
+                      : null;
+                  const displayMaxQuantityText =
+                    rawMaxQuantity != null && !isNaN(rawMaxQuantity)
+                      ? normUnit === "g"
+                        ? `${Math.round(rawMaxQuantity * 1000)} g`
+                        : `${rawMaxQuantity} kg`
+                      : null;
 
                   const displayWeightText = isProduct
-                    ? rawStartValue < 1
+                    ? normUnit === "g"
                       ? `${Math.round(rawStartValue * 1000)} g`
-                      : `${rawStartValue} ${rawUnitType}`
+                      : `${rawStartValue} kg`
                     : "";
 
                   const normalPerUnit = isProduct
@@ -1308,7 +1422,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   // ---- Price display type (backend: marketplaceitems.displayType) ----
                   // "AP&SP&D" -> actual price (struck) + sale price + discount% badge
                   // "AP&SP"   -> actual price (struck) + sale price, no badge
-                  // "D&AP"    -> only sale price + discount% badge, no struck price
+                  // "D&AP"    -> discount% badge + actual price (normal price), no struck price
                   // Falls back to showing everything if displayType is unset/unknown,
                   // matching the previous behavior for existing items.
                   const displayType = isProduct
@@ -1336,7 +1450,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       : startNormalPrice;
 
                   const basePrice = isProduct
-                    ? hasDiscount
+                    ? hasDiscount && displayType !== "D&AP"
                       ? startDiscountedPrice
                       : startNormalPrice
                     : parseFloat(String(product.subTotal)) || 0;
@@ -1346,8 +1460,26 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       ? cartItem.weight
                       : cartItem.weight / 1000
                     : 1;
+                  // NOTE: Written as if/else instead of nested ternaries to avoid
+                  // Babel JSX parser misinterpreting `<` as a JSX tag opener.
+                  let effectiveCartUnitPrice: number;
+                  if (cartItem) {
+                    const _cd = cartItem.discountedPrice;
+                    const _cn = cartItem.normalPrice;
+                    const _cp = cartItem.price;
+                    const _notDAP = displayType !== "D&AP";
+                    if (_cd != null && _cd > 0 && _cn != null && _cd < _cn && _notDAP) {
+                      effectiveCartUnitPrice = _cd;
+                    } else if (_cd != null && _cd > 0 && _cp != null && _cd < _cp && _notDAP) {
+                      effectiveCartUnitPrice = _cd;
+                    } else {
+                      effectiveCartUnitPrice = _cn != null ? _cn : (_cp ?? 0);
+                    }
+                  } else {
+                    effectiveCartUnitPrice = hasDiscount && displayType !== "D&AP" ? discountedPerUnit! : normalPerUnit;
+                  }
                   const calculatedProductPrice = cartItem
-                    ? cartItem.price * weightMultiplier
+                    ? effectiveCartUnitPrice * weightMultiplier
                     : basePrice;
                   const calculatedPackagePrice = cartPackage
                     ? basePrice * cartPackage.quantity
@@ -1355,6 +1487,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isMinimum = cartItem
                     ? cartItem.weight <= cartItem.minimumWeight
                     : false;
+                  const isItemAtMax =
+                    cartItem && cartItem.maxWeight != null
+                      ? cartItem.weight >= cartItem.maxWeight
+                      : false;
 
                   return (
                     <TouchableOpacity
@@ -1378,7 +1514,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     >
                       <View
                         key={product.id!}
-                        className="flex-1 bg-[#F4F3F3] pt-10 pb-5 px-3 items-center mx-2 relative mb-6 min-h-[220px]"
+                        className="flex-1 bg-[#F4F3F3] pt-4 pb-4 px-3 items-center mx-2 relative mb-6 min-h-[220px]"
                         style={{
                           borderTopLeftRadius: 100,
                           borderTopRightRadius: 100,
@@ -1415,7 +1551,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           </View>
                         )}
 
-
                         <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
                           <Image
                             source={{ uri: product?.image! }}
@@ -1426,32 +1561,34 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
                         {/* Product Details */}
                         <View style={{ width: "100%", marginTop: 4 }}>
-                          <FixedMarqueeText
-                            key={product.id}
-                            text={product?.displayName!}
+                          <Text
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
                             style={{
                               color: "#000000",
                               fontWeight: "bold",
                               fontSize: 13,
                               textAlign: "center",
                             }}
-                          />
+                          >
+                            {product?.displayName}
+                          </Text>
                         </View>
 
                         {/* PRODUCT CARD: Not in cart */}
                         {isProduct && !cartItem && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
                               {displayWeightText}
                             </Text>
 
                             {showStruckNormalPrice && (
-                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
                               Rs. {formatPrice(basePrice)}
                             </Text>
 
@@ -1472,9 +1609,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               }}
                             >
                               {addingItemId === product.id ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
                               ) : (
-                                <Ionicons name="add" size={22} color="#FFFFFF" />
+                                <Ionicons
+                                  name="add"
+                                  size={22}
+                                  color="#FFFFFF"
+                                />
                               )}
                             </TouchableOpacity>
                           </>
@@ -1602,11 +1746,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               {/* Plus Button */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
+                                disabled={isItemAtMax}
                                 onPress={(e) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                className={`w-6 h-6 rounded-full items-center justify-center ${
+                                  isItemAtMax ? "bg-gray-300" : "bg-black"
+                                }`}
                               >
                                 <Ionicons
                                   name="add"
@@ -1626,17 +1773,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
                         {isProduct && cartItem && !isExpanded && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
                               {displayWeightText}
                             </Text>
 
                             {showStruckNormalPrice && (
-                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
                               Rs. {formatPrice(basePrice)}
                             </Text>
 
@@ -1685,9 +1832,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               }}
                             >
                               {addingItemId === product.id ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
                               ) : (
-                                <Ionicons name="add" size={22} color="#FFFFFF" />
+                                <Ionicons
+                                  name="add"
+                                  size={22}
+                                  color="#FFFFFF"
+                                />
                               )}
                             </TouchableOpacity>
                           </>

@@ -10,6 +10,7 @@ interface UserProfile {
   buyerType: string;
   id?: number;
   title?: string;
+  cusId?: string;
 }
 
 interface RememberedDetails {

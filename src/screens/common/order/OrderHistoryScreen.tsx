@@ -96,22 +96,38 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         });
     };
 
+    const datePickerVisibleRef = React.useRef(datePickerVisible);
+    const dateFilterOpenRef = React.useRef(dateFilterOpen);
+    const alertVisibleRef = React.useRef(alertVisible);
+
+    React.useEffect(() => {
+        datePickerVisibleRef.current = datePickerVisible;
+    }, [datePickerVisible]);
+
+    React.useEffect(() => {
+        dateFilterOpenRef.current = dateFilterOpen;
+    }, [dateFilterOpen]);
+
+    React.useEffect(() => {
+        alertVisibleRef.current = alertVisible;
+    }, [alertVisible]);
+
     const handleBackPress = useCallback(() => {
-        if (datePickerVisible) {
+        if (datePickerVisibleRef.current) {
             setDatePickerVisible(false);
             return true;
         }
-        if (dateFilterOpen) {
+        if (dateFilterOpenRef.current) {
             setDateFilterOpen(false);
             return true;
         }
-        if (alertVisible) {
+        if (alertVisibleRef.current) {
             setAlertVisible(false);
             return true;
         }
         navigation.navigate("Home");
         return true;
-    }, [datePickerVisible, dateFilterOpen, alertVisible, navigation]);
+    }, [navigation]);
 
     useFocusEffect(
         useCallback(() => {
@@ -209,34 +225,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
         }
 
         setSelectedDateStr(dateStr);
-        setAppliedFilter(true);
-        setFilterLoading(true);
-
-        const matches = orders.filter((order) => {
-            if (selectedFilter === "Ordered Date") {
-                return (
-                    isSameCalendarDate(order.rawOrderDate, dateStr) ||
-                    isSameCalendarDate(order.orderDate, dateStr)
-                );
-            } else if (selectedFilter === "Scheduled Date") {
-                return (
-                    isSameCalendarDate(order.rawScheduleDate, dateStr) ||
-                    isSameCalendarDate(order.deliveryDate, dateStr)
-                );
-            }
-            return true;
-        });
-
-        setTimeout(() => {
-            setFilterLoading(false);
-            if (matches.length === 0) {
-                showAlert(
-                    "No Orders Found",
-                    `No orders found matching ${selectedFilter}: ${dateStr}.`,
-                    "error"
-                );
-            }
-        }, 350);
+        setAppliedFilter(false);
     };
 
     const handleApplyFilter = () => {
@@ -248,6 +237,21 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
             );
             return;
         }
+
+        if (selectedFilter === "Ordered Date") {
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            const picked = new Date(selectedDateStr.replace(/\//g, "-"));
+            if (picked > today) {
+                showAlert(
+                    "Invalid Date",
+                    "Ordered date cannot be in the future. Please select today or an earlier date.",
+                    "error"
+                );
+                return;
+            }
+        }
+
         setAppliedFilter(true);
         setFilterLoading(true);
 
@@ -490,46 +494,7 @@ const OrderHistory: React.FC<Props> = ({ navigation }) => {
                                             onPress={() => {
                                                 setSelectedFilter(option);
                                                 setDateFilterOpen(false);
-                                                if (selectedDateStr) {
-                                                    if (option === "Ordered Date") {
-                                                        const today = new Date();
-                                                        today.setHours(23, 59, 59, 999);
-                                                        const picked = new Date(selectedDateStr.replace(/\//g, "-"));
-                                                        if (picked > today) {
-                                                            showAlert(
-                                                                "Invalid Date",
-                                                                "Ordered date cannot be in the future. Please select today or an earlier date.",
-                                                                "error"
-                                                            );
-                                                            return;
-                                                        }
-                                                    }
-                                                    setFilterLoading(true);
-                                                    const matches = orders.filter((order) => {
-                                                        if (option === "Ordered Date") {
-                                                            return (
-                                                                isSameCalendarDate(order.rawOrderDate, selectedDateStr) ||
-                                                                isSameCalendarDate(order.orderDate, selectedDateStr)
-                                                            );
-                                                        } else if (option === "Scheduled Date") {
-                                                            return (
-                                                                isSameCalendarDate(order.rawScheduleDate, selectedDateStr) ||
-                                                                isSameCalendarDate(order.deliveryDate, selectedDateStr)
-                                                            );
-                                                        }
-                                                        return true;
-                                                    });
-                                                    setTimeout(() => {
-                                                        setFilterLoading(false);
-                                                        if (matches.length === 0) {
-                                                            showAlert(
-                                                                "No Orders Found",
-                                                                `No orders found matching ${option}: ${selectedDateStr}.`,
-                                                                "error"
-                                                            );
-                                                        }
-                                                    }, 350);
-                                                }
+                                                setAppliedFilter(false);
                                             }}
                                             style={{
                                                 height: 48,
