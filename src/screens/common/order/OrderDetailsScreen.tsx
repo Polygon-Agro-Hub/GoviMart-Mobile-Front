@@ -892,15 +892,51 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                 </View>
 
                                 {(status as any).description ? (
-                                    <Text
-                                        style={{
-                                            fontSize: 11,
-                                            color: "#5A5859",
-                                            marginTop: 3,
-                                        }}
-                                    >
-                                        {(status as any).description}
-                                    </Text>
+                                    (() => {
+                                        const desc = (status as any).description as string;
+                                        if (desc.startsWith("Reason : ") || desc.startsWith("Reason:")) {
+                                            const prefix = desc.startsWith("Reason : ") ? "Reason : " : "Reason: ";
+                                            const text = desc.slice(prefix.length);
+                                            return (
+                                                <View
+                                                    style={{
+                                                        flexDirection: "row",
+                                                        marginTop: 3,
+                                                        alignItems: "flex-start",
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontSize: 11,
+                                                            color: "#5A5859",
+                                                        }}
+                                                    >
+                                                        {prefix}
+                                                    </Text>
+                                                    <Text
+                                                        style={{
+                                                            flex: 1,
+                                                            fontSize: 11,
+                                                            color: "#5A5859",
+                                                        }}
+                                                    >
+                                                        {text}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        }
+                                        return (
+                                            <Text
+                                                style={{
+                                                    fontSize: 11,
+                                                    color: "#5A5859",
+                                                    marginTop: 3,
+                                                }}
+                                            >
+                                                {desc}
+                                            </Text>
+                                        );
+                                    })()
                                 ) : null}
                             </View>
                         </View>
