@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Alert,
 } from "react-native";
@@ -28,7 +29,10 @@ type PackageItem = {
   icon?: string;
   image?: string;
   qty: number;
-  unitPrice: number;
+  productPrice?: number;
+  unitPrice?: number; // base product price when productPrice isn't passed
+  packingFee?: number;
+  serviceFee?: number;
 };
 
 type AlaCarteItem = {
@@ -42,8 +46,14 @@ type AlaCarteItem = {
 };
 
 /* ---------------------------------------------------------
-   Small presentational helpers
+   Helpers
 --------------------------------------------------------- */
+
+// Package price = (productPrice | unitPrice) + packingFee + serviceFee
+const getPackageUnitPrice = (pkg: PackageItem): number =>
+  Number(pkg.productPrice ?? pkg.unitPrice ?? 0) +
+  Number(pkg.packingFee ?? 0) +
+  Number(pkg.serviceFee ?? 0);
 
 const ItemAvatar: React.FC<{ icon?: string; image?: string }> = ({
   icon,
@@ -96,6 +106,26 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () =>
+      setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () =>
+      setKeyboardVisible(false),
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const isConfirmed = useMemo(
     () => confirmText.trim().toUpperCase() === "CANCEL",
@@ -103,7 +133,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const packagesTotal = packages.reduce(
-    (sum, p) => sum + p.qty * p.unitPrice,
+    (sum, p) => sum + p.qty * getPackageUnitPrice(p),
     0,
   );
   const alaCarteTotal = alaCarteItems.reduce((sum, i) => sum + i.price, 0);
@@ -118,38 +148,33 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   /* ---------------------------------------------------------
      Payment breakdown
-     IMPORTANT: `paymentMethod` on the order record reflects the
-     method the order was *placed* with, not necessarily what was
-     actually charged. A "Card" order can still end up fully paid
-     via credit balance (see processorders.creditPaid). So:
-       1. Resolve credit paid FIRST, straight from what was passed
-          (which should ultimately come from the DB's creditPaid
-          column, not from parsing paymentMethod).
-       2. Card paid is only ever non-zero when creditPaid is 0 —
-          an order is settled by ONE method, never both.
+     An order can be split: Credit + Card, or Credit + Cash.
+     Each part is shown on its own line.
+       - Credit: as passed (DB creditPaid).
+       - Card: as passed, else (card order) total - credit.
+       - Cash due: as passed, else (cash/COD order) total - credit.
   --------------------------------------------------------- */
+
+  const method = (paymentMethod || "").toLowerCase();
 
   const totalPaidCredit =
     passedTotalPaidCredit !== undefined ? passedTotalPaidCredit : 0;
 
   const totalPaidCard =
-    totalPaidCredit > 0
-      ? 0 // credit covered it — never show card paid alongside credit
-      : passedTotalPaidCard !== undefined
-        ? passedTotalPaidCard
-        : paymentMethod && paymentMethod.toLowerCase() === "card"
-          ? (passedTotalPaid ?? processOrderTotal)
-          : 0;
+    passedTotalPaidCard !== undefined
+      ? passedTotalPaidCard
+      : method === "card"
+        ? Math.max(0, processOrderTotal - totalPaidCredit)
+        : 0;
 
   const totalCashDue =
     passedTotalCashDue !== undefined
       ? passedTotalCashDue
-      : paymentMethod &&
-          (paymentMethod.toLowerCase().includes("cash") ||
-            paymentMethod.toLowerCase() === "cod")
+      : method.includes("cash") || method === "cod"
         ? Math.max(0, processOrderTotal - totalPaidCredit)
         : 0;
 
+  // Cash is not paid yet, so only card + credit get refunded as credit
   const refundCreditAmount =
     passedRefundCreditAmount !== undefined
       ? passedRefundCreditAmount
@@ -213,11 +238,12 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={90}
+        keyboardVerticalOffset={20}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 16 }}
         >
           {/* Warning banner */}
           <View className="mx-5 mt-2 bg-[#FDECEC] rounded-2xl p-4 flex-row">
@@ -244,30 +270,33 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             <SectionCard
               title={`Packages (${String(packages.length).padStart(2, "0")})`}
             >
-              {packages.map((pkg, idx) => (
-                <View key={pkg.id}>
-                  {idx > 0 && <View className="h-[1px] bg-[#ECECEC] my-3" />}
-                  <View className="flex-row items-center pb-3">
-                    <ItemAvatar icon={pkg.icon} image={pkg.image} />
-                    <View className="ml-3">
-                      <Text className="text-[15px] font-bold text-black">
-                        {pkg.name}{" "}
-                        <Text className="text-[13px] font-normal text-[#8A8A8A]">
-                          (x{pkg.qty})
+              {packages.map((pkg, idx) => {
+                const unitPrice = getPackageUnitPrice(pkg);
+                return (
+                  <View key={pkg.id}>
+                    {idx > 0 && <View className="h-[1px] bg-[#ECECEC] my-3" />}
+                    <View className="flex-row items-center pb-3">
+                      <ItemAvatar icon={pkg.icon} image={pkg.image} />
+                      <View className="ml-3">
+                        <Text className="text-[15px] font-bold text-black">
+                          {pkg.name}{" "}
+                          <Text className="text-[13px] font-normal text-[#8A8A8A]">
+                            (x{pkg.qty})
+                          </Text>
                         </Text>
-                      </Text>
-                      <Text className="text-[13px] text-black mt-0.5">
-                        Rs. {pkg.unitPrice.toFixed(2)}
-                        {pkg.qty > 1
-                          ? ` x ${pkg.qty} = Rs. ${(
-                              pkg.unitPrice * pkg.qty
-                            ).toFixed(2)}`
-                          : ""}
-                      </Text>
+                        <Text className="text-[13px] text-black mt-0.5">
+                          Rs. {unitPrice.toFixed(2)}
+                          {pkg.qty > 1
+                            ? ` x ${pkg.qty} = Rs. ${(
+                                unitPrice * pkg.qty
+                              ).toFixed(2)}`
+                            : ""}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </SectionCard>
           )}
 
@@ -403,20 +432,31 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
               placeholderTextColor="#B0B0B0"
               autoCapitalize="characters"
               autoCorrect={false}
-              className={`mt-4 border rounded-full px-4 py-3 text-[14px] text-center font-semibold border-[#E11D48] text-black}`}
+              className="mt-4 border rounded-full px-4 py-3 text-[14px] text-center font-semibold border-[#E11D48] text-black"
             />
           </View>
         </ScrollView>
 
         {/* Fixed bottom action */}
-        <View className="px-5 pb-5 pt-3 bg-white ">
+        <View
+          className={`px-5 bg-white ${
+            keyboardVisible ? "pt-2 pb-2" : "pt-3 pb-5"
+          }`}
+        >
           <TouchableOpacity
             onPress={onCancelOrder}
             disabled={!isConfirmed || loading}
             activeOpacity={0.85}
-            className={`rounded-full py-4 items-center ${
+          className={`rounded-full py-4 items-center ${
               isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
+            style={{
+              shadowColor: "#000000",
+              shadowOpacity: 0.2,
+              shadowRadius: 2,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 3,
+            }}
           >
             <Text className="text-white text-[16px] font-bold">
               {loading ? "Cancelling..." : "Cancel Order"}

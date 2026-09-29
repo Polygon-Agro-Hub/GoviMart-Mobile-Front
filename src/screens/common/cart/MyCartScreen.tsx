@@ -27,9 +27,11 @@ import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
 import AuthPromptModal from "@/component/common/AuthPromptModal";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
+import LottieView from "lottie-react-native";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
 import customerService from "@/services/customer/customer.service";
+import socketService from "@/services/socket/socket.service";
 import { RootStackParamList, OrderContext } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
@@ -62,6 +64,12 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         productsRef.current = products;
         packagesRef.current = packages;
     }, [products, packages]);
+
+    const sortedProducts = React.useMemo(() => {
+        return [...products].sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+        );
+    }, [products]);
 
     // Clear debounce timers on unmount
     React.useEffect(() => {
@@ -119,6 +127,20 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             console.error("Cart sync/availability check error:", error);
         }
     }, [dispatch, token]);
+
+    // ─── REAL-TIME SOCKET SUBSCRIPTION FOR PRODUCT/PACKAGE STATUS ──────────────
+    React.useEffect(() => {
+        socketService.connect();
+        const unsubscribe = socketService.onCatalogUpdate((data) => {
+            console.log("📦 [MyCartScreen] Real-time catalog/status update received via Socket.IO:", data);
+            isCartSyncingRef.current = false;
+            syncAndCheckCart(true);
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [syncAndCheckCart]);
 
     useFocusEffect(
         useCallback(() => {
@@ -423,114 +445,138 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 }
                 contentContainerStyle={{
                     flexGrow: 1,
-                    justifyContent: "space-between",
+                    justifyContent: packages.length === 0 && products.length === 0 ? "center" : "space-between",
                 }}
             >
-                {/* Cart Items */}
-                <View style={{ flex: 1, paddingHorizontal: 16 }}>
-                    {/* Package Section */}
-                    {packages.length > 0 && (
-                        <>
-                            <Text
-                                style={{
-                                    fontSize: 15,
-                                    fontWeight: "700",
-                                    marginBottom: 12,
-                                    marginTop: 6,
-                                }}
-                            >
-                                Packages ({packages.length.toString().padStart(2, "0")})
-                            </Text>
-
-                            {packages.map((item) => (
-                                <PackageCartCard
-                                    key={item.id}
-                                    item={item}
-                                    onIncrease={increasePackage}
-                                    onDecrease={decreasePackage}
-                                    onDelete={deletePackage}
-                                />
-                            ))}
-                        </>
-                    )}
-
-                    {/* Product Section */}
-                    {products.length > 0 && (
-                        <>
-                            <Text
-                                style={{
-                                    fontSize: 15,
-                                    fontWeight: "700",
-                                    marginTop: packages.length > 0 ? 20 : 6,
-                                    marginBottom: 12,
-                                }}
-                            >
-                                Ala Carte Items ({products.length.toString().padStart(2, "0")})
-                            </Text>
-
-                            {products.map((item) => (
-                                <ProductCartCard
-                                    key={item.id}
-                                    item={item}
-                                    onIncrease={increaseWeight}
-                                    onDecrease={decreaseWeight}
-                                    onDelete={deleteProduct}
-                                    onChangeUnit={changeProductUnitHandler}
-                                />
-                            ))}
-                        </>
-                    )}
-
-                    {/* Saving Price Box */}
-                    {savedAmount > 0 && (
-                        <View
+                {packages.length === 0 && products.length === 0 ? (
+                    <View
+                        style={{
+                            flex: 1,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            paddingHorizontal: 20,
+                            paddingBottom: 40,
+                        }}
+                    >
+                        <LottieView
+                            source={require("@/assets/json/cart/no-cart-item.json")}
+                            style={{ width: 140, height: 140 }}
+                            autoPlay
+                            loop
+                        />
+                        <Text
                             style={{
-                                backgroundColor: "#EDFBF2",
-                                borderRadius: 20,
-                                paddingVertical: 14,
-                                paddingHorizontal: 18,
-                                marginTop: 14,
-                                marginBottom: 14,
+                                fontSize: 15,
+                                color: "#8B96A5",
+                                fontWeight: "400",
+                                marginTop: 12,
+                                textAlign: "center",
                             }}
                         >
-                            <Text
-                                style={{
-                                    fontSize: 16,
-                                    fontWeight: "700",
-                                    color: "#166534",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                Great News!
-                            </Text>
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    color: "#334155",
-                                    lineHeight: 20,
-                                }}
-                            >
-                                You’ll save Rs. {formatPrice(savedAmount)} compared to the market price.
-                            </Text>
-                        </View>
-                    )}
+                            Your cart is empty.
+                        </Text>
+                    </View>
+                ) : (
+                    <>
+                        {/* Cart Items */}
+                        <View style={{ flex: 1, paddingHorizontal: 16 }}>
+                            {/* Package Section */}
+                            {packages.length > 0 && (
+                                <>
+                                    <Text
+                                        style={{
+                                            fontSize: 15,
+                                            fontWeight: "700",
+                                            marginBottom: 12,
+                                            marginTop: 6,
+                                        }}
+                                    >
+                                        Packages ({packages.length.toString().padStart(2, "0")})
+                                    </Text>
 
-                    {packages.length === 0 && products.length === 0 && (
-                        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 60 }}>
-                            <Text style={{ fontSize: 16, color: "#64748B", fontWeight: "500" }}>
-                                Your cart is empty
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                                    {packages.map((item) => (
+                                        <PackageCartCard
+                                            key={item.id}
+                                            item={item}
+                                            onIncrease={increasePackage}
+                                            onDecrease={decreasePackage}
+                                            onDelete={deletePackage}
+                                        />
+                                    ))}
+                                </>
+                            )}
 
-                {/* Order Summary — displays at bottom if low data, or scrolls naturally if many items */}
-                <OrderSummary
-                    packageTotal={packageTotal}
-                    productTotal={productTotal}
-                    discount={totalDiscount}
-                    onCheckout={handleCheckout}
-                />
+                            {/* Product Section */}
+                            {products.length > 0 && (
+                                <>
+                                    <Text
+                                        style={{
+                                            fontSize: 15,
+                                            fontWeight: "700",
+                                            marginTop: packages.length > 0 ? 20 : 6,
+                                            marginBottom: 12,
+                                        }}
+                                    >
+                                        Ala Carte Items ({products.length.toString().padStart(2, "0")})
+                                    </Text>
+
+                                    {sortedProducts.map((item) => (
+                                        <ProductCartCard
+                                            key={item.id}
+                                            item={item}
+                                            onIncrease={increaseWeight}
+                                            onDecrease={decreaseWeight}
+                                            onDelete={deleteProduct}
+                                            onChangeUnit={changeProductUnitHandler}
+                                        />
+                                    ))}
+                                </>
+                            )}
+
+                            {/* Saving Price Box */}
+                            {savedAmount > 0 && (
+                                <View
+                                    style={{
+                                        backgroundColor: "#EDFBF2",
+                                        borderRadius: 20,
+                                        paddingVertical: 14,
+                                        paddingHorizontal: 18,
+                                        marginTop: 14,
+                                        marginBottom: 14,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 16,
+                                            fontWeight: "700",
+                                            color: "#166534",
+                                            marginBottom: 4,
+                                        }}
+                                    >
+                                        Great News!
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontSize: 14,
+                                            color: "#334155",
+                                            lineHeight: 20,
+                                        }}
+                                    >
+                                        You’ll save Rs. {formatPrice(savedAmount)} compared to the market price.
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Order Summary */}
+                        <OrderSummary
+                            packageTotal={packageTotal}
+                            productTotal={productTotal}
+                            discount={totalDiscount}
+                            onCheckout={handleCheckout}
+                        />
+                    </>
+                )}
             </ScrollView>
 
             <AuthPromptModal

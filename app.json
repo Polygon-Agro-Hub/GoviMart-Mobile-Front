@@ -9,7 +9,7 @@
     "android": {
       "package": "com.polygonagro.Polygon",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 0,
+      "versionCode": 1,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/public/app-icon-android.png",
@@ -107,15 +107,17 @@
       [
         "expo-notifications",
         {
-          "icon": "./src/assets/images/public/app-icon-ios.png",
-          "color": "#FFFFFF"
+          "icon": "./src/assets/images/public/polygon-notification-icon.png",
+          "color": "#FF8A00",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       "./plugins/withCustomAndroidPermissions"
     ],
     "extra": {
       "eas": {
-        "projectId": "1c8baa2b-5982-43e9-9f80-a01886235093"
+        "projectId": ""
       }
     }
   }

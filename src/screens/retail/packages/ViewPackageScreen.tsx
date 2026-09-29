@@ -167,15 +167,15 @@ const totalCartCount =
 
   if (loading) {
     return (
-      <View className="flex-1 bg-[#FCEFD9] items-center justify-center">
+      <View className="flex-1 bg-[#F2F2F6] items-center justify-center">
         <ActivityIndicator size="large" color="#000" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-[#FCEFD9]">
-      <StatusBar backgroundColor="#FCEFD9" barStyle="dark-content" />
+    <View className="flex-1 bg-[#F2F2F6]">
+      <StatusBar backgroundColor="#F2F2F6" barStyle="dark-content" />
 
       {/* Close Button */}
       <TouchableOpacity

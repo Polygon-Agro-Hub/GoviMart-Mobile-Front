@@ -399,6 +399,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         showBackButton={true}
         navigation={navigation}
         onBackPress={handleBackNavigation}
+        titleLines={2}
       />
 
       <View className="mx-auto w-full max-w-[500px]">

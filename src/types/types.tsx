@@ -51,6 +51,13 @@ export interface OrderContext {
   paymentMethod?: "cash" | "card";
   creditPaid?: number;
   moneyPaid?: number;
+  isCoupon?: boolean;
+  couponValue?: number;
+  couponDiscount?: number;
+  couponType?: string;
+  couponCode?: string;
+  isFreeDeliveryCoupon?: boolean;
+  appliedCoupon?: any;
 }
 
 export type RootStackParamList = {
@@ -129,6 +136,7 @@ export type RootStackParamList = {
     orderId?: string | number;
     invoiceNumber?: string;
     total?: number;
+    couponValue?: number;
     orderContext?: OrderContext;
     deliveryDate?: string;
     scheduleDate?: string;
