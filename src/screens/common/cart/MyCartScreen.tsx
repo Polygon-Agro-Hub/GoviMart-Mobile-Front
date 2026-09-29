@@ -142,13 +142,17 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const increaseWeight = (id: number) => {
         const item = productsRef.current.find((p) => p.id === id);
         if (!item) return;
+        if (item.maxWeight != null && item.weight >= item.maxWeight) {
+            return;
+        }
         isCartSyncingRef.current = true;
         dispatch(increaseProductWeight(id));
 
         if (token) {
-            const newWeight = item.unit === "kg"
+            const nextW = item.unit === "kg"
                 ? parseFloat((item.weight + item.step).toFixed(3))
                 : Math.round(item.weight + item.step);
+            const newWeight = item.maxWeight != null ? Math.min(item.maxWeight, nextW) : nextW;
 
             if (productSyncTimersRef.current[id]) {
                 clearTimeout(productSyncTimersRef.current[id]);

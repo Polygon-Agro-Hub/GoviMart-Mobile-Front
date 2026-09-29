@@ -6,21 +6,12 @@ import {
     TouchableOpacity,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
+import { ProductCartItem } from "@/store/cartSlice";
 
-interface ProductItem {
-    id: number;
-    name: string;
-    image: string;
-    price: number;
-    weight: number;
-    unit: "g" | "kg";
-    minimumWeight: number;
-    step: number;
-    isUnavailable?: boolean;
-}
+export type ProductItem = ProductCartItem;
 
 interface Props {
-    item: ProductItem;
+    item: ProductCartItem;
     onIncrease: (id: number) => void;
     onDecrease: (id: number) => void;
     onDelete: (id: number) => void;
@@ -29,10 +20,20 @@ interface Props {
 
 const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrease, onChangeUnit }) => {
     const isMinimum = item.weight <= item.minimumWeight;
+    const isMaximum = item.maxWeight != null && item.weight >= item.maxWeight;
     const isUnavailable = !!item.isUnavailable;
 
     const weightMultiplier = item.unit === "kg" ? item.weight : item.weight / 1000;
-    const itemTotalPrice = item.price * weightMultiplier;
+    const effectiveUnitPrice =
+        item.discountedPrice != null &&
+        item.discountedPrice > 0 &&
+        item.normalPrice != null &&
+        item.discountedPrice < item.normalPrice
+            ? item.discountedPrice
+            : (item.discountedPrice != null && item.discountedPrice > 0 && item.price != null && item.discountedPrice < item.price
+                ? item.discountedPrice
+                : (item.price || item.normalPrice || 0));
+    const itemTotalPrice = effectiveUnitPrice * weightMultiplier;
 
     const formatPrice = (value: number) =>
         value.toLocaleString("en-US", {
@@ -279,20 +280,35 @@ const ProductCartCard: React.FC<Props> = ({ item, onDecrease, onDelete, onIncrea
                         </Text>
 
                         {/* Plus */}
-                        <TouchableOpacity
-                            onPress={() => onIncrease(item.id)}
-                            activeOpacity={0.8}
-                            style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: 16,
-                                backgroundColor: "#000",
-                                justifyContent: "center",
-                                alignItems: "center",
-                            }}
-                        >
-                            <Ionicons name="add" size={18} color="#FFF" />
-                        </TouchableOpacity>
+                        {isMaximum ? (
+                            <View
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: "#D9D9D9",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Ionicons name="add" size={18} color="#FFF" />
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={() => onIncrease(item.id)}
+                                activeOpacity={0.8}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: "#000",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Ionicons name="add" size={18} color="#FFF" />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             )}

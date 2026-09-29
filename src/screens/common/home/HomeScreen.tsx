@@ -836,15 +836,21 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleIncrement = useCallback(
     (productId: number) => {
+      const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+      if (item && item.maxWeight != null && item.weight >= item.maxWeight) {
+        showToast(`Maximum limit of ${item.maxWeight} ${item.unit} reached`);
+        return;
+      }
       isCartSyncingRef.current = true;
       dispatch(increaseProductWeight(productId));
       showToast("Cart Updated");
       if (userToken) {
         const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
         if (item) {
-          const newWeight = item.unit === "kg"
+          const nextW = item.unit === "kg"
             ? parseFloat((item.weight + item.step).toFixed(3))
             : Math.round(item.weight + item.step);
+          const newWeight = item.maxWeight != null ? Math.min(item.maxWeight, nextW) : nextW;
           cartService.syncCartProduct(productId, newWeight, item.unit)
             .catch((err) => console.error("Cart DB sync error:", err))
             .finally(() => {
@@ -932,6 +938,24 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
           : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
 
+      const rawMaxQuantity =
+        product.maxQuantity != null &&
+          String(product.maxQuantity).trim() !== "" &&
+          parseFloat(String(product.maxQuantity)) > 0
+          ? parseFloat(String(product.maxQuantity))
+          : null;
+
+      const maxWeight =
+        rawMaxQuantity != null
+          ? initialUnit === "g"
+            ? dbUnitType === "kg" || rawMaxQuantity <= 10
+              ? Math.round(rawMaxQuantity * 1000)
+              : Math.round(rawMaxQuantity)
+            : dbUnitType === "kg" || rawMaxQuantity <= 10
+              ? parseFloat(rawMaxQuantity.toFixed(3))
+              : parseFloat((rawMaxQuantity / 1000).toFixed(3))
+          : undefined;
+
       const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
       const discountedPerUnit =
         product.discountedPrice != null
@@ -959,6 +983,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           weight: initialWeight,
           unit: initialUnit,
           minimumWeight: minWeight,
+          maxWeight: maxWeight,
+          maxQuantity: rawMaxQuantity ?? undefined,
           step: step,
         }),
       );
@@ -1284,6 +1310,19 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const rawUnitType = isProduct
                     ? (product.unitType || "g").toLowerCase()
                     : "g";
+                  const rawMaxQuantity =
+                    isProduct &&
+                      (product as any).maxQuantity != null &&
+                      String((product as any).maxQuantity).trim() !== "" &&
+                      parseFloat(String((product as any).maxQuantity)) > 0
+                      ? parseFloat(String((product as any).maxQuantity))
+                      : null;
+                  const displayMaxQuantityText =
+                    rawMaxQuantity != null && !isNaN(rawMaxQuantity)
+                      ? rawMaxQuantity < 1
+                        ? `${Math.round(rawMaxQuantity * 1000)} g`
+                        : `${rawMaxQuantity} ${rawUnitType}`
+                      : null;
 
                   const displayWeightText = isProduct
                     ? rawStartValue < 1
@@ -1367,6 +1406,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     : basePrice;
                   const isMinimum = cartItem
                     ? cartItem.weight <= cartItem.minimumWeight
+                    : false;
+                  const isItemAtMax = cartItem && cartItem.maxWeight != null
+                    ? cartItem.weight >= cartItem.maxWeight
                     : false;
 
                   return (
@@ -1615,11 +1657,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               {/* Plus Button */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
+                                disabled={isItemAtMax}
                                 onPress={(e) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
+                                  }`}
                               >
                                 <Ionicons
                                   name="add"
