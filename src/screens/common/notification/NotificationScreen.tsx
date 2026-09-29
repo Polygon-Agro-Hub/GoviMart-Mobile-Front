@@ -33,6 +33,7 @@ export interface UiNotificationItem {
     orderId?: number;
     invNo?: string;
     orderStatus?: string;
+    isFinalized: boolean;
     title: string;
     message: string;
     time: string;
@@ -98,6 +99,7 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     const group = getNotificationGroup(item.createdAt);
     const time = formatNotificationTime(item.createdAt, group);
     const isReadBool = Number(item.isRead) === 1 || Boolean(item.isRead);
+    const isFinalizedBool = Number(item.isFinalized) === 1 || item.isFinalized === true;
     const actionRequired = isActionRequiredNotification(item.title);
 
     let messageText = item.message || "";
@@ -121,6 +123,7 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
         orderId: item.orderId,
         invNo: item.invNo,
         orderStatus: item.orderStatus,
+        isFinalized: isFinalizedBool,
         title: item.title,
         message: messageText,
         time,
@@ -154,7 +157,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         visible: boolean;
         title: string;
         message: string;
-        type: "success" | "error";
+        type: "success" | "error" | "warning";
     }>({
         visible: false,
         title: "",
@@ -278,6 +281,18 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 });
                 return;
             }
+
+            // Order already finalized (processorders.isFinalized = 1)
+            if (item.isFinalized) {
+                setAlertConfig({
+                    visible: true,
+                    title: "Already Finalized!",
+                    message: "You have already reviewed and finalized your order. You cannot make any further changes.",
+                    type: "warning",
+                });
+                return;
+            }
+
             navigation.navigate("ReviewPackage", {
                 orderId: item.processOrderId || item.orderId,
                 invoiceNo: item.invNo,
@@ -520,15 +535,15 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                     <View
                         style={{
                             position: "absolute",
-                            top: 68,
+                            top: 50,
                             right: 16,
                             zIndex: 999,
                             backgroundColor: "#FFFFFF",
                             borderRadius: 12,
                             borderWidth: 1,
                             borderColor: "#E5E7EB",
-                            paddingVertical: 4,
-                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                            paddingHorizontal: 2,
                             shadowColor: "#000",
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: 0.12,
@@ -692,7 +707,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 visible={alertConfig.visible}
                 title={alertConfig.title}
                 message={alertConfig.message}
-                type={alertConfig.type}
+                type="success"
                 autoClose={false}
                 showOkButton={true}
                 okButtonText="OK"

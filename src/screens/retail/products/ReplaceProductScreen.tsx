@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -81,10 +82,10 @@ const normalizeToKg = (product: ProductType): NormalizedProduct => {
     unitType: "kg",
     startValue: qtyKg.toString(),
     changeby: stepKg.toString(),
-    perKgPrice,                   // rate per kg, for any live recompute
+    perKgPrice, // rate per kg, for any live recompute
     normalPrice: perKgPrice.toString(), // rate, NOT pre-multiplied
-    discountedPrice: perKgPrice,        // rate, NOT pre-multiplied
-    totalPrice,                   // <-- use THIS for display, not discountedPrice
+    discountedPrice: perKgPrice, // rate, NOT pre-multiplied
+    totalPrice, // <-- use THIS for display, not discountedPrice
     weightDisplay,
   };
 };
@@ -107,7 +108,9 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
   );
   const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
   const [availableProducts, setAvailableProducts] = useState<ProductType[]>([]);
- const [alacartSelection, setAlacartSelection] = useState<Record<string | number, AlacartSelectedProduct>>({});
+  const [alacartSelection, setAlacartSelection] = useState<
+    Record<string | number, AlacartSelectedProduct>
+  >({});
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -138,8 +141,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
 
       if (targetProductTypeId) {
         // 1. Query by productTypeId using producttypes table, filtered by user buyerType
-        const res =
-          await productService.getProductsByProductType(targetProductTypeId, buyerType);
+        const res = await productService.getProductsByProductType(
+          targetProductTypeId,
+          buyerType,
+        );
         if (
           res.data?.status &&
           Array.isArray(res.data.products) &&
@@ -159,8 +164,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
           .includes("fruit")
           ? "Fruits"
           : "Vegetables";
-        const catRes =
-          await productService.getProductsByCategory(cleanCategory, buyerType);
+        const catRes = await productService.getProductsByCategory(
+          cleanCategory,
+          buyerType,
+        );
         if (
           catRes.data?.status &&
           Array.isArray(catRes.data.products) &&
@@ -182,7 +189,8 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
         .filter((p: any) => {
           const pid = String(p.id).toLowerCase();
           const pname = String(p.displayName || "").toLowerCase();
-          const isEnabled = p.isEnable === 1 || p.isEnable === undefined || p.isEnable === null;
+          const isEnabled =
+            p.isEnable === 1 || p.isEnable === undefined || p.isEnable === null;
           return pid !== fromIdStr && pname !== fromNameStr && isEnabled;
         });
 
@@ -202,7 +210,10 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
   // Real-time Replacement Products update via Socket.IO
   useEffect(() => {
     const unsubscribe = socketService.onCatalogUpdate((data) => {
-      console.log("📦 [ReplaceProductScreen] Real-time catalog update received via Socket.IO:", data);
+      console.log(
+        "📦 [ReplaceProductScreen] Real-time catalog update received via Socket.IO:",
+        data,
+      );
       fetchReplacementsByProductType();
     });
 
@@ -211,30 +222,30 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [targetProductTypeId, buyerType]);
 
-const toggleAlacartProduct = (product: ProductType) => {
-  const normalized = normalizeToKg(product);
+  const toggleAlacartProduct = (product: ProductType) => {
+    const normalized = normalizeToKg(product);
 
-  const price = Number(normalized.discountedPrice) || 0;
+    const price = Number(normalized.discountedPrice) || 0;
 
-  const cleanStartVal = parseFloat(String(normalized.startValue || "1")) || 1;
-  const weightDisplay = normalized.weightDisplay || `${cleanStartVal} kg`;
+    const cleanStartVal = parseFloat(String(normalized.startValue || "1")) || 1;
+    const weightDisplay = normalized.weightDisplay || `${cleanStartVal} kg`;
 
-  setAlacartSelection((prev) => {
-    if (prev[normalized.id]) {
-      return {};
-    }
-    return {
-      [normalized.id]: {
-        id: normalized.id,
-        displayName: normalized.displayName,
-        image: normalized.image,
-        price,
-        weightDisplay,
-        quantity: 1,
-      },
-    };
-  });
-};
+    setAlacartSelection((prev) => {
+      if (prev[normalized.id]) {
+        return {};
+      }
+      return {
+        [normalized.id]: {
+          id: normalized.id,
+          displayName: normalized.displayName,
+          image: normalized.image,
+          price,
+          weightDisplay,
+          quantity: 1,
+        },
+      };
+    });
+  };
 
   return (
     <View className="flex-1 bg-white">
@@ -264,10 +275,21 @@ const toggleAlacartProduct = (product: ProductType) => {
           </View>
         </View>
       ) : availableProducts.length === 0 ? (
-        <View className="py-20 items-center justify-center flex-1">
-          <Ionicons name="basket-outline" size={52} color="#CCCCCC" />
-          <Text className="text-[#8A8A8A] text-[15px] font-medium mt-3">
-            No replacement products available for {resolvedTypeName}
+        <View className="flex-1 items-center" style={{ paddingTop: 180 }}>
+          <Image
+            source={require("@/assets/images/order/no-replce-products.webp")}
+            style={{ width: 56, height: 56 }}
+            resizeMode="contain"
+          />
+          <Text
+            style={{
+              color: "#747990",
+              fontSize: 14,
+              marginTop: 8,
+              textAlign: "center",
+            }}
+          >
+            No products available at the moment.
           </Text>
         </View>
       ) : (
@@ -310,41 +332,60 @@ const toggleAlacartProduct = (product: ProductType) => {
 
       {/* Bottom Floating Action Button */}
       <View className="absolute bottom-0 left-0 right-0 bg-white py-4 px-6 border-t border-[#F0F0F0]">
-        <TouchableOpacity
-          disabled={Object.keys(alacartSelection).length === 0}
-          onPress={() => {
-            const selectedId = Object.keys(alacartSelection)[0];
-            const selectedProduct = availableProducts.find(
-              (p) => p.id.toString() === selectedId.toString(),
-            );
-            if (!selectedProduct) return;
+        <View
+          style={{
+            height: 50,
+            borderRadius: 40,
+            backgroundColor:
+              Object.keys(alacartSelection).length === 0
+                ? "#7F919C"
+                : "#000000",
 
-          navigation.navigate("SetQauntity", {
-  orderId: route.params?.orderId,
-  fromProduct: route.params?.fromProduct,
-  toProduct: normalizeToKg(selectedProduct),
-  packageId: route.params?.packageId,
-  orderPackageId: route.params?.orderPackageId,
-  replceId: route.params?.fromProduct?.itemId || route.params?.replceId,
-  stepIndex: route.params?.stepIndex,
-  paymentMethod: route.params?.paymentMethod,
-  deliveryMethod: route.params?.deliveryMethod,
-});
+            // iOS shadow (X 0, Y 2, Blur 4, #000000 @ 20%)
+            shadowColor: "#000000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+
+            // Android shadow
+            elevation: 6,
           }}
-          activeOpacity={0.85}
         >
-          <Text
-            className="text-[15px] text-center text-white font-semibold py-4 rounded-full"
+          <TouchableOpacity
+            disabled={Object.keys(alacartSelection).length === 0}
+            onPress={() => {
+              const selectedId = Object.keys(alacartSelection)[0];
+              const selectedProduct = availableProducts.find(
+                (p) => p.id.toString() === selectedId.toString(),
+              );
+              if (!selectedProduct) return;
+
+              navigation.navigate("SetQauntity", {
+                orderId: route.params?.orderId,
+                fromProduct: route.params?.fromProduct,
+                toProduct: normalizeToKg(selectedProduct),
+                packageId: route.params?.packageId,
+                orderPackageId: route.params?.orderPackageId,
+                replceId:
+                  route.params?.fromProduct?.itemId || route.params?.replceId,
+                stepIndex: route.params?.stepIndex,
+                paymentMethod: route.params?.paymentMethod,
+                deliveryMethod: route.params?.deliveryMethod,
+              });
+            }}
+            activeOpacity={0.85}
             style={{
-              backgroundColor:
-                Object.keys(alacartSelection).length === 0
-                  ? "#7F919C"
-                  : "#000000",
+              flex: 1,
+              borderRadius: 40,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Select
-          </Text>
-        </TouchableOpacity>
+            <Text className="text-[15px] text-center text-white font-semibold">
+              Select
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
