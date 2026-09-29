@@ -1311,8 +1311,195 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                       Rs. {formatAmount(item.price)}
                     </Text>
 
-                    {item.oldPrice && (
-                      <Text
+                    {getStatusItems().map((status, index) => (
+                        <View
+                            key={`${status.title}-${index}`}
+                            style={{
+                                flexDirection: "row",
+                                minHeight:
+                                    (status as any).description
+                                        ? 46
+                                        : index === getStatusItems().length - 1
+                                            ? 21
+                                            : 27,
+                            }}
+                        >
+                            {/* Timeline */}
+
+                            <View
+                                style={{
+                                    width: 18,
+                                    alignItems: "center",
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 99,
+                                        backgroundColor:
+                                            status.active ? "#000" : "#E2E5EB",
+                                        justifyContent:
+                                            "center",
+                                        alignItems:
+                                            "center",
+                                        zIndex: 2,
+                                        marginBottom: 20,
+                                    }}
+                                >
+                                    <FontAwesome6
+                                        name={
+                                            status.icon as any
+                                        }
+                                        size={8}
+                                        color="#FFF"
+                                    />
+                                </View>
+
+                                {index !==
+                                    getStatusItems().length -
+                                    1 && (
+                                        <View
+                                            style={{
+                                                position:
+                                                    "absolute",
+                                                top: 13,
+                                                width: 1,
+                                                height: 40,
+                                                backgroundColor:
+                                                    status.active ? "#000" : "#E2E5EB",
+                                            }}
+                                        />
+                                    )}
+                            </View>
+
+                            {/* Status text */}
+
+                            <View
+                                style={{
+                                    flex: 1,
+                                    alignSelf:
+                                        "flex-start",
+                                    paddingLeft: 10,
+                                }}
+                            >
+                                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                                    <Text
+                                        style={{
+                                            fontSize: 13,
+                                            color: status.active ? "#111" : "#A5ABB9",
+                                            fontWeight: "600",
+                                        }}
+                                    >
+                                        {status.title}
+                                    </Text>
+
+                                    {status.date ? (
+                                        <Text
+                                            style={{
+                                                fontSize: 11,
+                                                color: "#5A5859",
+                                                marginLeft: 5,
+                                            }}
+                                        >
+                                            (At {status.date})
+                                        </Text>
+                                    ) : null}
+                                </View>
+
+                                {(status as any).description ? (
+                                    (() => {
+                                        const desc = (status as any).description as string;
+                                        if (desc.startsWith("Reason : ") || desc.startsWith("Reason:")) {
+                                            const prefix = desc.startsWith("Reason : ") ? "Reason : " : "Reason: ";
+                                            const text = desc.slice(prefix.length);
+                                            return (
+                                                <View
+                                                    style={{
+                                                        flexDirection: "row",
+                                                        marginTop: 3,
+                                                        alignItems: "flex-start",
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontSize: 11,
+                                                            color: "#5A5859",
+                                                        }}
+                                                    >
+                                                        {prefix}
+                                                    </Text>
+                                                    <Text
+                                                        style={{
+                                                            flex: 1,
+                                                            fontSize: 11,
+                                                            color: "#5A5859",
+                                                        }}
+                                                    >
+                                                        {text}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        }
+                                        return (
+                                            <Text
+                                                style={{
+                                                    fontSize: 11,
+                                                    color: "#5A5859",
+                                                    marginTop: 3,
+                                                }}
+                                            >
+                                                {desc}
+                                            </Text>
+                                        );
+                                    })()
+                                ) : null}
+                            </View>
+                        </View>
+                    ))}
+                </View>
+
+                {/* DELIVERY / PICKUP INFORMATION */}
+                {order?.delivaryMethod === 'PICKUP' && order?.pickupInfo ? (
+                    <View
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#DDE3E8",
+                            borderRadius: 20,
+                            paddingHorizontal: 13,
+                            paddingTop: 13,
+                            paddingBottom: 13,
+                            marginBottom: 17,
+                        }}
+                    >
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#111", marginBottom: 8 }}>
+                            Pickup Store Information
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
+                            Store: {order.pickupInfo.centerName}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Contact: {order.pickupInfo.contact01}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Address: {[
+                                order.pickupInfo.address?.street,
+                                order.pickupInfo.address?.city,
+                                order.pickupInfo.address?.district,
+                            ].filter(Boolean).join(", ")}
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#222", marginTop: 10 }}>
+                            Pickup Person
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Name: {order.pickupInfo.pickupPerson?.fullName}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
+                            Phone: {order.pickupInfo.pickupPerson?.phone1}
+                        </Text>
+                    </View>
+                ) : order?.delivaryMethod === 'DELIVERY' && order?.deliveryInfo ? (
+                    <View
                         style={{
                           fontSize: 11,
                           color: "#5A5859",

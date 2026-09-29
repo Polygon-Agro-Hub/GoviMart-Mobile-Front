@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,9 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Keyboard,
 } from "react-native";
-import { FontAwesome6} from "@expo/vector-icons";
+import { FontAwesome6 } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
@@ -32,12 +33,39 @@ interface DeleteAccountProps {
 
 const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
   const dispatch = useDispatch();
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const [confirmation, setConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [hasNegativeCredit, setHasNegativeCredit] = useState(false);
   const [hasProcessingOrders, setHasProcessingOrders] = useState(false);
   const [creditBalance, setCreditBalance] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const height = e?.endCoordinates?.height || 280;
+      setKeyboardHeight(height);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -123,7 +151,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
         flex: 1,
         backgroundColor: "#FFFFFF",
       }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View
         style={{
@@ -150,11 +178,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
         ) : (
           <>
             <ScrollView
+              ref={scrollViewRef}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{
                 paddingHorizontal: 14,
-                paddingBottom: 140,
+                paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 140,
               }}
             >
               {/* Delete Icon */}
@@ -438,6 +467,13 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                       value={confirmation}
                       onChangeText={(text) => {
                         setConfirmation(text.toUpperCase());
+                      }}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollToEnd({
+                            animated: true,
+                          });
+                        }, 120);
                       }}
                       placeholder="Type DELETE to confirm"
                       placeholderTextColor="#747990"

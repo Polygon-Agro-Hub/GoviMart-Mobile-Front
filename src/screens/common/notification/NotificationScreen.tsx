@@ -117,6 +117,16 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
         );
     }
 
+    // Move Reason section to a second line (newline)
+    messageText = messageText.replace(
+        /([^\n\r])\s*(?:[.]\s*)?(Reason\s*[:：])/gi,
+        (match, prefix, reasonTag) => {
+            const trimmedPrefix = prefix.trimEnd();
+            const hasPunctuation = /[.!?]$/.test(trimmedPrefix);
+            return trimmedPrefix + (hasPunctuation ? "" : ".") + "\n" + reasonTag;
+        }
+    );
+
     return {
         id: item.id,
         processOrderId: item.processOrderId,
