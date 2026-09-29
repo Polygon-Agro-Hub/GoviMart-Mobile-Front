@@ -17,8 +17,10 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
+import { getForgotPwdStorageKeys } from "./ForgotPasswordInputScreen";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -48,9 +50,16 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     route.params?.resetToken || ""
   );
 
+  const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
+    method,
+    undefined,
+    undefined,
+    undefined,
+    identifier,
+  );
   const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-  const storageKey = `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
-  const lockoutKey = `@forgot_pwd_lockout_${cleanIdentifier}`;
+  const storageKey = attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
+  const lockoutKey = lockoutKeys[0] || `@forgot_pwd_lockout_${cleanIdentifier}`;
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -109,42 +118,44 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   useEffect(() => {
     const checkInitialRateLimit = async () => {
       // 1. Check persistent lockout
-      try {
-        const storedLockout = await AsyncStorage.getItem(lockoutKey);
-        if (storedLockout) {
-          const lockoutUntil = parseInt(storedLockout, 10);
-          const remainingMs = lockoutUntil - Date.now();
-          if (remainingMs > 0) {
-            const remainingSec = Math.ceil(remainingMs / 1000);
-            setTimeLeft(remainingSec);
-            setIsRateLimited(true);
-            setIsExpired(false);
-            setAlertType("error");
-            setAlertTitle("Too Many Attempts");
-            setAlertMessage(
-              "Too many verification attempts. Please try again after 15 minutes."
-            );
-            setAlertVisible(true);
-            return;
-          } else {
-            await AsyncStorage.removeItem(lockoutKey);
+      for (const key of lockoutKeys) {
+        try {
+          const storedLockout = await AsyncStorage.getItem(key);
+          if (storedLockout) {
+            const lockoutUntil = parseInt(storedLockout, 10);
+            const remainingMs = lockoutUntil - Date.now();
+            if (remainingMs > 0) {
+              const remainingSec = Math.ceil(remainingMs / 1000);
+              setTimeLeft(remainingSec);
+              setIsRateLimited(true);
+              setIsExpired(false);
+              setAlertType("error");
+              setAlertTitle("Too Many Attempts");
+              setAlertMessage(
+                "Too many verification attempts. Please try again after 15 minutes."
+              );
+              setAlertVisible(true);
+              return;
+            } else {
+              await AsyncStorage.removeItem(key);
+            }
           }
+        } catch (e) {
+          console.log("Error checking stored lockout:", e);
         }
-      } catch (e) {
-        console.log("Error checking stored lockout:", e);
       }
 
       // 2. Check recent attempts count
-      const attempts = await getRecentAttempts(storageKey);
-      if (attempts.length >= MAX_OTP_ATTEMPTS) {
-        const oldest = attempts[0];
-        const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-        const remainingSec = Math.ceil(remainingMs / 1000);
-        if (remainingSec > 0) {
-          await AsyncStorage.setItem(
-            lockoutKey,
-            String(Date.now() + remainingMs)
-          );
+      for (const key of attemptsKeys) {
+        const attempts = await getRecentAttempts(key);
+        if (attempts.length >= MAX_OTP_ATTEMPTS) {
+          const oldest = attempts[0];
+          const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+          const lockoutUntil = Date.now() + remainingSec * 1000;
+          for (const lockKey of lockoutKeys) {
+            await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+          }
           setTimeLeft(remainingSec);
           setIsRateLimited(true);
           setIsExpired(false);
@@ -157,13 +168,17 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           return;
         }
       }
+
+      const attempts = await getRecentAttempts(storageKey);
       const lastAttempt = attempts[attempts.length - 1];
       if (!lastAttempt || Date.now() - lastAttempt > 30000) {
-        await saveAttempt(storageKey);
+        for (const attKey of attemptsKeys) {
+          await saveAttempt(attKey);
+        }
       }
     };
     checkInitialRateLimit();
-  }, [storageKey, lockoutKey]);
+  }, [identifier]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -245,8 +260,12 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       });
 
       if (response.data && response.data.status) {
-        await clearAttempts(storageKey);
-        await AsyncStorage.removeItem(lockoutKey);
+        for (const key of attemptsKeys) {
+          await clearAttempts(key);
+        }
+        for (const key of lockoutKeys) {
+          await AsyncStorage.removeItem(key);
+        }
         navigation.navigate("ResetPassword", {
           verifiedResetToken: response.data.verifiedResetToken,
         });
@@ -256,7 +275,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         setAlertType("error");
         if (is429 || msg.toLowerCase().includes("too many")) {
           const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-          await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+          for (const key of lockoutKeys) {
+            await AsyncStorage.setItem(key, String(lockoutUntil));
+          }
           setTimeLeft(900);
           setIsRateLimited(true);
           setIsExpired(false);
@@ -280,7 +301,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       setAlertType("error");
       if (is429 || msg.toLowerCase().includes("too many")) {
         const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-        await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+        for (const key of lockoutKeys) {
+          await AsyncStorage.setItem(key, String(lockoutUntil));
+        }
         setTimeLeft(900);
         setIsRateLimited(true);
         setIsExpired(false);
@@ -302,49 +325,52 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const handleResend = async () => {
     // 1. Check persistent lockout
-    try {
-      const storedLockout = await AsyncStorage.getItem(lockoutKey);
-      if (storedLockout) {
-        const lockoutUntil = parseInt(storedLockout, 10);
-        const remainingMs = lockoutUntil - Date.now();
-        if (remainingMs > 0) {
-          const remainingSec = Math.ceil(remainingMs / 1000);
-          setTimeLeft(remainingSec);
-          setIsRateLimited(true);
-          setIsExpired(false);
-          setAlertType("error");
-          setAlertTitle("Too Many Attempts");
-          setAlertMessage(
-            "Too many verification attempts. Please try again after 15 minutes."
-          );
-          setAlertVisible(true);
-          return;
-        } else {
-          await AsyncStorage.removeItem(lockoutKey);
+    for (const key of lockoutKeys) {
+      try {
+        const storedLockout = await AsyncStorage.getItem(key);
+        if (storedLockout) {
+          const lockoutUntil = parseInt(storedLockout, 10);
+          const remainingMs = lockoutUntil - Date.now();
+          if (remainingMs > 0) {
+            const remainingSec = Math.ceil(remainingMs / 1000);
+            setTimeLeft(remainingSec);
+            setIsRateLimited(true);
+            setIsExpired(false);
+            setAlertType("error");
+            setAlertTitle("Too Many Attempts");
+            setAlertMessage(
+              "Too many verification attempts. Please try again after 15 minutes."
+            );
+            setAlertVisible(true);
+            return;
+          } else {
+            await AsyncStorage.removeItem(key);
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
 
-    const attempts = await getRecentAttempts(storageKey);
-    if (attempts.length >= MAX_OTP_ATTEMPTS) {
-      const oldest = attempts[0];
-      const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-      const remainingSec = Math.ceil(remainingMs / 1000);
-      const waitTime = remainingSec > 0 ? remainingSec : 900;
-      await AsyncStorage.setItem(
-        lockoutKey,
-        String(Date.now() + waitTime * 1000)
-      );
-      setTimeLeft(waitTime);
-      setIsRateLimited(true);
-      setIsExpired(false);
-      setAlertType("error");
-      setAlertTitle("Too Many Attempts");
-      setAlertMessage(
-        "Too many verification attempts. Please try again after 15 minutes."
-      );
-      setAlertVisible(true);
-      return;
+    for (const key of attemptsKeys) {
+      const attempts = await getRecentAttempts(key);
+      if (attempts.length >= MAX_OTP_ATTEMPTS) {
+        const oldest = attempts[0];
+        const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+        const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+        const lockoutUntil = Date.now() + remainingSec * 1000;
+        for (const lockKey of lockoutKeys) {
+          await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+        }
+        setTimeLeft(remainingSec);
+        setIsRateLimited(true);
+        setIsExpired(false);
+        setAlertType("error");
+        setAlertTitle("Too Many Attempts");
+        setAlertMessage(
+          "Too many verification attempts. Please try again after 15 minutes."
+        );
+        setAlertVisible(true);
+        return;
+      }
     }
 
     setOtp(["", "", "", "", ""]);
@@ -355,25 +381,26 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       });
 
       if (response.data && response.data.status) {
-        const updated = await saveAttempt(storageKey);
+        let updatedLength = 0;
+        for (const key of attemptsKeys) {
+          const updated = await saveAttempt(key);
+          updatedLength = updated.length;
+        }
         setReferenceId(response.data.referenceId);
         setResetToken(response.data.resetToken);
 
-        if (updated.length >= MAX_OTP_ATTEMPTS) {
-          const oldest = updated[0];
-          const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
-          await AsyncStorage.setItem(
-            lockoutKey,
-            String(Date.now() + remainingSec * 1000)
-          );
-          setTimeLeft(remainingSec);
+        if (updatedLength >= MAX_OTP_ATTEMPTS) {
+          const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+          for (const key of lockoutKeys) {
+            await AsyncStorage.setItem(key, String(lockoutUntil));
+          }
+          setTimeLeft(900);
           setIsRateLimited(true);
           setIsExpired(false);
           setAlertType("error");
           setAlertTitle("Code Resent");
           setAlertMessage(
-            "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes."
+            "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
           );
           setAlertVisible(true);
         } else {
@@ -397,7 +424,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         setAlertType("error");
         if (is429 || msg.toLowerCase().includes("too many")) {
           const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-          await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+          for (const key of lockoutKeys) {
+            await AsyncStorage.setItem(key, String(lockoutUntil));
+          }
           setTimeLeft(900);
           setIsRateLimited(true);
           setIsExpired(false);
@@ -419,7 +448,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       setAlertType("error");
       if (is429 || msg.toLowerCase().includes("too many")) {
         const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-        await AsyncStorage.setItem(lockoutKey, String(lockoutUntil));
+        for (const key of lockoutKeys) {
+          await AsyncStorage.setItem(key, String(lockoutUntil));
+        }
         setTimeLeft(900);
         setIsRateLimited(true);
         setIsExpired(false);
@@ -448,8 +479,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         navigation={navigation}
       />
 
-      <ScrollView
-        ref={scrollViewRef}
+      <KeyboardAwareScrollView
+        innerRef={(ref) => (scrollViewRef.current = ref as any)}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
@@ -458,6 +489,10 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={Platform.OS === "ios" ? 20 : 0}
+        extraHeight={Platform.OS === "ios" ? 40 : 0}
+        keyboardOpeningTime={0}
       >
         {/* Verification Content */}
         <View className="w-full py-4">
@@ -615,7 +650,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             />
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Alert Modal */}
       <AlertModal
