@@ -301,7 +301,21 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
           ? apiInvoice.couponDiscount
           : orderCtx.couponDiscount || 0,
       grandTotal:
-        apiInvoice?.grandTotal !== undefined ? apiInvoice.grandTotal : total,
+        apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
+          ? apiInvoice.fullTotal
+          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+            ? apiInvoice.grandTotal
+            : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
+              ? orderCtx.fullTotal
+              : total,
+      fullTotal:
+        apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
+          ? apiInvoice.fullTotal
+          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+            ? apiInvoice.grandTotal
+            : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
+              ? orderCtx.fullTotal
+              : total,
       billingInfo: apiInvoice?.billingInfo
         ? {
             ...apiInvoice.billingInfo,

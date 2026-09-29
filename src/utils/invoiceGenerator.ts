@@ -259,6 +259,9 @@ export const buildInvoiceHtml = (
 
   const isApartment = billing.buildingType === "Apartment";
 
+  // Remove trailing dots from the title so "Mrs." doesn't become "Mrs.."
+  const cleanTitle = (billing.title || "").trim().replace(/\.+$/, "");
+
   const familyPacks = invoice.familyPackItems || [];
   const additionalItems = invoice.additionalItems || [];
 
@@ -310,7 +313,7 @@ export const buildInvoiceHtml = (
   <style>
     @page {
       size: A4;
-      margin: 24px 32px;
+      margin: 0;
     }
     * {
       box-sizing: border-box;
@@ -323,7 +326,7 @@ export const buildInvoiceHtml = (
       color: #212121;
       font-size: 11px;
       line-height: 1.4;
-      padding: 24px 32px;
+      padding: 16px 20px;
     }
     .invoice-title {
       text-align: center;
@@ -331,13 +334,13 @@ export const buildInvoiceHtml = (
       font-weight: bold;
       letter-spacing: 0.2em;
       color: #3E206D;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
     .company-header {
       display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      column-gap: 36px;
-      margin-bottom: 20px;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 16px;
+      margin-bottom: 12px;
       align-items: flex-start;
     }
     .company-details {
@@ -373,11 +376,11 @@ export const buildInvoiceHtml = (
     }
     .info-grid {
       display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      column-gap: 36px;
-      row-gap: 12px;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 16px;
+      row-gap: 8px;
       font-size: 11px;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
     .info-block {
       line-height: 1.5;
@@ -404,8 +407,8 @@ export const buildInvoiceHtml = (
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 20px;
-      margin-bottom: 6px;
+      margin-top: 12px;
+      margin-bottom: 4px;
     }
     .section-header h2 {
       font-size: 12px;
@@ -419,13 +422,13 @@ export const buildInvoiceHtml = (
     }
     .divider {
       border-top: 1px solid #D7D7D7;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .table-container {
       border: 1px solid #D1D5DB;
       border-radius: 6px;
       overflow: hidden;
-      margin-bottom: 18px;
+      margin-bottom: 12px;
     }
     table {
       width: 100%;
@@ -435,7 +438,7 @@ export const buildInvoiceHtml = (
     th {
       background-color: #F8F8F8;
       border-bottom: 1px solid #D1D5DB;
-      padding: 6px 10px;
+      padding: 5px 8px;
       text-align: left;
       font-weight: bold;
       color: #111111;
@@ -443,7 +446,7 @@ export const buildInvoiceHtml = (
     }
     td {
       border-bottom: 1px solid #E5E7EB;
-      padding: 6px 10px;
+      padding: 5px 8px;
       font-size: 10px;
       color: #212121;
       vertical-align: middle;
@@ -461,11 +464,11 @@ export const buildInvoiceHtml = (
       width: 100%;
       border-collapse: collapse;
       margin-top: 4px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .summary-table td {
       border: none;
-      padding: 4px 6px;
+      padding: 3px 6px;
       font-size: 11px;
       color: #212121;
     }
@@ -475,7 +478,7 @@ export const buildInvoiceHtml = (
       font-weight: bold;
       font-size: 12px;
       color: #000000;
-      padding: 6px 6px;
+      padding: 5px 6px;
     }
     .summary-table tr.paid-row td {
       font-weight: bold;
@@ -491,7 +494,7 @@ export const buildInvoiceHtml = (
       font-size: 9.5px;
       color: #4B5563;
       margin-top: 4px;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
       gap: 4px;
@@ -510,7 +513,7 @@ export const buildInvoiceHtml = (
       font-weight: bold;
     }
     .remarks-section {
-      margin-top: 20px;
+      margin-top: 12px;
       font-size: 10px;
       color: #374151;
       line-height: 1.5;
@@ -525,7 +528,7 @@ export const buildInvoiceHtml = (
       margin-bottom: 2px;
     }
     .footer-section {
-      margin-top: 24px;
+      margin-top: 14px;
       text-align: center;
       font-size: 9px;
       color: #4B5563;
@@ -541,7 +544,7 @@ export const buildInvoiceHtml = (
     .footer-section .promo {
       font-style: italic;
       color: #212121;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .footer-section .computer-generated {
       font-style: italic;
@@ -575,7 +578,7 @@ export const buildInvoiceHtml = (
     <div>
       <div class="info-block">
         <p class="bold-label">Bill To:</p>
-        <p>${billing.title ? `${billing.title}. ` : ""}${billing.fullName || "Valued Customer"}</p>
+        <p>${cleanTitle ? `${cleanTitle}. ` : ""}${billing.fullName || "Valued Customer"}</p>
         <p style="word-break: break-all;">${billing.email || "N/A"}</p>
         <p>${formatPhoneNumberStr(billing.phone)}</p>
       </div>
@@ -583,7 +586,7 @@ export const buildInvoiceHtml = (
       ${
         !isPickup
           ? `
-      <div class="info-block" style="margin-top: 8px;">
+      <div class="info-block" style="margin-top: 5px;">
         ${
           isApartment
             ? `
@@ -608,12 +611,12 @@ export const buildInvoiceHtml = (
           : ""
       }
 
-      <div class="info-block" style="margin-top: 8px;">
+      <div class="info-block" style="margin-top: 5px;">
         <p class="bold-label">Invoice No:</p>
         <p>${invoice.invoiceNumber}</p>
       </div>
 
-      <div class="info-block" style="margin-top: 8px;">
+      <div class="info-block" style="margin-top: 5px;">
         <p class="bold-label">Delivery Method:</p>
         <p>${deliveryMethodLabel}</p>
       </div>
@@ -621,7 +624,7 @@ export const buildInvoiceHtml = (
       ${
         isPickup && invoice.pickupInfo
           ? `
-      <div class="info-block" style="margin-top: 8px;">
+      <div class="info-block" style="margin-top: 5px;">
         <p class="bold-label"><span style="color: #000000;">Centre :</span> ${invoice.pickupInfo.centerName || "N/A"}</p>
         <p><span class="lbl-grey">City :</span> ${invoice.pickupInfo.address?.city || "N/A"}</p>
         <p><span class="lbl-grey">District :</span> ${invoice.pickupInfo.address?.district || "N/A"}</p>
@@ -639,17 +642,17 @@ export const buildInvoiceHtml = (
         <p class="grand-total-display">${formatCurrencyWithCommas(finalGrandTotal)}</p>
       </div>
 
-      <div class="info-block" style="margin-top: 10px;">
+      <div class="info-block" style="margin-top: 5px;">
         <p class="bold-label">Payment Method:</p>
         <p>${paymentTypeLabel}</p>
       </div>
 
-      <div class="info-block" style="margin-top: 10px;">
+      <div class="info-block" style="margin-top: 5px;">
         <p class="bold-label">Ordered Date:</p>
         <p>${formatDateStr(invoice.invoiceDate)}</p>
       </div>
 
-      <div class="info-block" style="margin-top: 8px;">
+      <div class="info-block" style="margin-top: 5px;">
         <p class="bold-label">Scheduled Date:</p>
         <p>${formatDateStr(invoice.scheduledDate)}</p>
       </div>
@@ -694,7 +697,7 @@ export const buildInvoiceHtml = (
                   .join("")
               : `
             <tr>
-              <td colspan="3" class="text-center" style="color: #6B7280; padding: 12px;">No package details available.</td>
+              <td colspan="3" class="text-center" style="color: #6B7280; padding: 10px;">No package details available.</td>
             </tr>
           `
           }
@@ -747,7 +750,7 @@ export const buildInvoiceHtml = (
   }
 
   <!-- Grand Total for all items Section -->
-  <div class="section-header" style="margin-top: 24px;">
+  <div class="section-header" style="margin-top: 14px;">
     <h2>Grand Total for all items</h2>
   </div>
   <div class="divider"></div>
