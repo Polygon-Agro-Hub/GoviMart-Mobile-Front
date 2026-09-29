@@ -137,6 +137,7 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
       await AsyncStorage.setItem("hasAskedNotificationPermission", "true");
 
       if (isGranted) {
+        pushNotificationService.registerPushToken().catch(() => {});
         if (onPermissionGranted) {
           onPermissionGranted();
         } else if (navigation) {

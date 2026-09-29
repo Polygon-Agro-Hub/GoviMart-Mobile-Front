@@ -4,7 +4,7 @@ import {
     Text,
     TouchableOpacity,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Octicons } from "@expo/vector-icons";
 import { CountdownTimer } from "./CountDownTimer";
 
 export const HurryBanner: React.FC<{
@@ -16,7 +16,7 @@ export const HurryBanner: React.FC<{
     <View className="mx-5 border border-[#EEEEEE] rounded-2xl p-4 flex-row justify-between items-start">
         <View className="flex-1 pr-3">
             <View className="flex-row items-center">
-                <Ionicons name="time-outline" size={16} color="#000" />
+                <Octicons name="clock-fill" size={16} color="#000" />
                 <Text className="ml-1.5 text-[15px] font-semibold text-black">
                     Hurry up please,
                 </Text>
@@ -43,4 +43,4 @@ export const HurryBanner: React.FC<{
 
         <CountdownTimer startHour={8} endHour={18} endMinute={0} />
     </View>
-);
+);

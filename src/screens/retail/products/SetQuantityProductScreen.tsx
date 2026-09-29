@@ -25,8 +25,8 @@ type ProductInfo = {
   name: string;
   icon?: string; // emoji fallback if no image
   image?: string; // uri — takes priority over icon
-  unit: "kg" | "g";
-  baseQty: number; // qty the price below refers to, e.g. 0.5, 1
+  unit: "kg";
+  baseQty: number; // qty (in kg) the price below refers to
   pricePerBaseQty: number;
 };
 
@@ -88,9 +88,8 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
-// Formats a quantity: always shows unit "kg" and value in kg
-const formatQty = (qtyKg: number, _unit?: string) =>
-  `${parseFloat(String(qtyKg))} kg`;
+// Quantities are ALWAYS shown in kg. The unit type is never switched.
+const formatQty = (qtyKg: number) => `${parseFloat(String(qtyKg))} kg`;
 
 /* ---------------------------------------------------------
    Screen
@@ -99,54 +98,41 @@ const formatQty = (qtyKg: number, _unit?: string) =>
 const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
   const rawFrom = route.params?.fromProduct;
   const rawTo = route.params?.toProduct;
-  const packageId = route.params?.packageId || "";
   const stepIndex = route.params?.stepIndex ?? 0;
 
   // ---------------------------------------------------------------------
   // Payment / delivery method — drives which "Please Note" copy is shown.
   // Forwarded from ReviewPackage -> ReplaceProduct -> here via route.params.
   // ---------------------------------------------------------------------
-  const paymentMethod: string = String(
-    route.params?.paymentMethod || "",
-  ).toLowerCase();
-  const deliveryMethod: string = String(
-    route.params?.deliveryMethod || "",
-  ).toLowerCase();
+  // Delivery method -> orders.delivaryMethod       ("Pickup" / "Delivery")
+  // Payment method  -> processorders.paymentMethod ("Cash" / "Card")
+  const paymentMethod: string = String(route.params?.paymentMethod || "")
+    .trim()
+    .toLowerCase();
+  const deliveryMethod: string = String(route.params?.deliveryMethod || "")
+    .trim()
+    .toLowerCase();
 
-  const isCashOnDelivery =
-    paymentMethod === "cash" || paymentMethod === "cod";
-  const isPickup = deliveryMethod === "pickup";
-
-  // Show the "you'll owe/be refunded at the end" note when the order is
-  // Cash on Delivery OR being picked up (i.e. money hasn't been settled yet).
-  const showConditionalNote = isCashOnDelivery || isPickup;
-  const deliveryWord = isPickup ? "pickup" : "delivery";
-
-  // Display unit for each side, taken from their own unitType — NOT
-  // hardcoded to "kg". Internal math always stays in kg regardless.
-  const fromDisplayUnit: "kg" | "g" =
-    (rawFrom?.unitType || rawFrom?.unit || "kg").toLowerCase() === "g"
-      ? "g"
-      : "kg";
-  const toDisplayUnit: "kg" | "g" =
-    (rawTo?.unitType || "kg").toLowerCase() === "g" ? "g" : "kg";
+  // "pickup" (or "Pickup" from the DB) -> pickup. "home" / "delivery" -> delivery.
+  const isPickup = deliveryMethod.includes("pickup");
+  const isCard =
+    paymentMethod.includes("card") ||
+    paymentMethod.includes("payhere") ||
+    paymentMethod.includes("online");
 
   const fromProduct: ProductInfo = useMemo(() => {
-    const rawUnit = (rawFrom?.unit || rawFrom?.unitType || "kg").toLowerCase();
-    let rawQty =
-      parseFloat(String(rawFrom?.quantity || rawFrom?.qty || 1)) || 1;
+    // The package item quantity is always stored in kg, so it is used as-is.
+    // (No "> 10 means grams" guessing — with no max limit, 10+ kg is valid.)
+    const rawQty =
+      parseFloat(String(rawFrom?.quantity ?? rawFrom?.qty ?? 1)) || 1;
     const rawPrice = rawFrom?.price || 0;
-    if (rawUnit === "g" || rawQty > 10) {
-      rawQty = Number((rawQty / 1000).toFixed(3));
-    }
-    const cleanBaseQty = parseFloat(String(rawQty)) || 1;
     return {
       id: rawFrom?.id?.toString() || "from",
       name: rawFrom?.name || "Original Product",
       icon: rawFrom?.icon || "🥬",
       image: rawFrom?.image,
       unit: "kg",
-      baseQty: cleanBaseQty,
+      baseQty: rawQty,
       pricePerBaseQty: rawPrice,
     };
   }, [rawFrom]);
@@ -159,10 +145,10 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       parseFloat(
         String(
           rawTo?.perKgPrice ??
-          rawTo?.normalPrice ??
-          rawTo?.price ??
-          rawTo?.pricePerBaseQty ??
-          0,
+            rawTo?.normalPrice ??
+            rawTo?.price ??
+            rawTo?.pricePerBaseQty ??
+            0,
         ),
       ) || 0;
 
@@ -173,14 +159,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       image: rawTo?.image,
       unit: "kg",
       baseQty: 1,
-      pricePerBaseQty: priceVal, // this is now the per-kg rate
+      pricePerBaseQty: priceVal, // per-kg rate
     };
   }, [rawTo]);
 
   const rawStepVal =
     rawTo?.changeby != null &&
-      String(rawTo.changeby).trim() !== "" &&
-      parseFloat(String(rawTo.changeby)) > 0
+    String(rawTo.changeby).trim() !== "" &&
+    parseFloat(String(rawTo.changeby)) > 0
       ? parseFloat(String(rawTo.changeby))
       : rawTo?.step != null && parseFloat(String(rawTo.step)) > 0
         ? parseFloat(String(rawTo.step))
@@ -188,8 +174,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const rawMinVal =
     rawTo?.startValue != null &&
-      String(rawTo.startValue).trim() !== "" &&
-      parseFloat(String(rawTo.startValue)) > 0
+    String(rawTo.startValue).trim() !== "" &&
+    parseFloat(String(rawTo.startValue)) > 0
       ? parseFloat(String(rawTo.startValue))
       : rawStepVal;
 
@@ -201,11 +187,11 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     rawMinVal > 10
       ? parseFloat((rawMinVal / 1000).toFixed(3))
       : parseFloat(rawMinVal.toFixed(3));
-  const maxQty = 10;
 
-  // Default quantity comes from the REPLACEMENT product's (toProduct's)
-  // own startValue — i.e. minQty, already derived from rawTo above —
-  // not from the original product being replaced (rawFrom).
+  // NOTE: there is intentionally NO maximum quantity.
+
+  // Default quantity comes from the REPLACEMENT product's own startValue
+  // (minQty), not from the original product being replaced.
   const [quantity, setQuantity] = useState<number>(minQty);
 
   const fromUnitPrice = fromProduct.pricePerBaseQty;
@@ -226,9 +212,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     );
 
   const increase = () =>
-    setQuantity((q: number) =>
-      Math.min(maxQty, parseFloat((q + step).toFixed(3))),
-    );
+    setQuantity((q: number) => parseFloat((q + step).toFixed(3)));
 
   const dispatch = useDispatch();
 
@@ -247,7 +231,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       price: toUnitPrice, // per-kg rate, so downstream qty*price math stays correct
       quantity: quantity,
       minQuantity: minQty,
-      unit: "kg" as const, // internal storage unit stays kg
+      unit: "kg" as const, // unit type is always kg
       step: step,
       productType: rawFrom?.productType || rawTo?.productTypeId,
       productTypeId: rawFrom?.productTypeId || rawTo?.productTypeId,
@@ -270,6 +254,52 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
       targetStepIndex: stepIndex,
     });
   };
+
+  // ---------------------------------------------------------------------
+  // "Please Note" text
+  //
+  //  Pickup  (any payment)       → pay upon pickup   (reduced / increased)
+  //  Delivery + Card             → already paid      (credited / additional)
+  //  Delivery + Cash (or other)  → pay upon delivery (reduced / increased)
+  // ---------------------------------------------------------------------
+  const amountText = (
+    <Text className="font-bold text-black">
+      Rs. {formatPrice(Math.abs(balance))}
+    </Text>
+  );
+
+  const noteContent = isPickup ? (
+    // Pickup (Cash or Card) — customer collects at pickup centre; pay on pickup
+    <>
+      The total amount you need to pay upon pickup will be{" "}
+      <Text className="font-bold text-black">
+        {isCredit ? "reduced" : "increased"}
+      </Text>{" "}
+      by {amountText} at the end of this process.
+    </>
+  ) : isCard ? (
+    // Delivery + Card — order already paid online
+    isCredit ? (
+      <>
+        You have already paid for this order, so the remaining balance of{" "}
+        {amountText} will be credited to your account.
+      </>
+    ) : (
+      <>
+        You have already paid for this order. The additional {amountText} will
+        need to be paid at the end of this process.
+      </>
+    )
+  ) : (
+    // Delivery + Cash (or any other non-card payment)
+    <>
+      The total amount you need to pay upon delivery will be{" "}
+      <Text className="font-bold text-black">
+        {isCredit ? "reduced" : "increased"}
+      </Text>{" "}
+      by {amountText} at the end of this process.
+    </>
+  );
 
   return (
     <View className="flex-1 bg-white">
@@ -296,7 +326,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           <View className="items-center mt-6">
             <ProductRow
               product={fromProduct}
-              subtitle={formatQty(fromProduct.baseQty, fromDisplayUnit)}
+              subtitle={formatQty(fromProduct.baseQty)}
               price={`Rs. ${formatPrice(fromPrice)}`}
             />
 
@@ -306,7 +336,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
             <ProductRow
               product={toProduct}
-              subtitle={formatQty(quantity, toDisplayUnit)}
+              subtitle={formatQty(quantity)}
               price={`Rs. ${formatPrice(toPrice)}`}
             />
           </View>
@@ -316,8 +346,9 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               onPress={decrease}
               disabled={quantity <= minQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#000000]"
-                }`}
+              className={`w-11 h-11 rounded-full items-center justify-center ${
+                quantity <= minQty ? "bg-[#EEEEEE]" : "bg-[#000000]"
+              }`}
             >
               <Ionicons
                 name="remove"
@@ -327,15 +358,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             </TouchableOpacity>
 
             <Text className="text-[16px] font-semibold text-black">
-              {formatQty(quantity, toDisplayUnit)}
+              {formatQty(quantity)}
             </Text>
 
+            {/* No max limit: the + button is always enabled */}
             <TouchableOpacity
               onPress={increase}
-              disabled={quantity >= maxQty}
               activeOpacity={0.7}
-              className={`w-11 h-11 rounded-full items-center justify-center ${quantity >= maxQty ? "bg-[#9CA3AF]" : "bg-black"
-                }`}
+              className="w-11 h-11 rounded-full items-center justify-center bg-black"
             >
               <Ionicons name="add" size={20} color="#fff" />
             </TouchableOpacity>
@@ -365,28 +395,7 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               Please Note :
             </Text>
             <Text className="text-[13px] text-[#6B6B6B] leading-5">
-              {showConditionalNote ? (
-                <>
-                  The total amount you need to pay upon {deliveryWord} will be{" "}
-                  <Text className="font-bold text-black">
-                    {isCredit ? "reduced" : "increased"}
-                  </Text>{" "}
-                  by{" "}
-                  <Text className="font-bold text-black">
-                    Rs. {formatPrice(Math.abs(balance))}
-                  </Text>{" "}
-                  at the end of this process.
-                </>
-              ) : (
-                <>
-                  You have already paid for this order, so the remaining
-                  balance of{" "}
-                  <Text className="font-bold text-black">
-                    Rs. {formatPrice(Math.abs(balance))}
-                  </Text>{" "}
-                  will be credited to your account.
-                </>
-              )}
+              {noteContent}
             </Text>
           </View>
         </View>
@@ -395,6 +404,19 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
           onPress={onReplace}
           activeOpacity={0.85}
           className="mx-6 mt-6 mb-8 h-[54px] bg-black rounded-full justify-center items-center shadow-sm"
+          style={{
+            height: 50,
+            borderRadius: 40,
+
+            // iOS shadow (X 0, Y 2, Blur 4, #000000 @ 20%)
+            shadowColor: "#000000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+
+            // Android shadow
+            elevation: 6,
+          }}
         >
           <Text className="text-white text-[16px] font-bold">Replace</Text>
         </TouchableOpacity>

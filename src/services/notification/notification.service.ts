@@ -13,6 +13,7 @@ export interface ServerNotificationItem {
   sheduleDate?: string;
   amount?: string | number;
   orderStatus?: string;
+  isFinalized?: number | boolean;
   delivaryMethod?: string;
 }
 
