@@ -107,8 +107,10 @@
       [
         "expo-notifications",
         {
-          "icon": "./src/assets/images/public/app-icon-ios.png",
-          "color": "#FFFFFF"
+          "icon": "./src/assets/images/public/polygon-notification-icon.png",
+          "color": "#FF8A00",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       "./plugins/withCustomAndroidPermissions"
