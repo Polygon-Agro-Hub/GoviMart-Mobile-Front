@@ -109,7 +109,15 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
       ? parseFloat(String(product.changeby))
       : kgStartValue;
 
+  const kgMaxQuantity =
+    product?.maxQuantity != null &&
+      String(product.maxQuantity).trim() !== "" &&
+      parseFloat(String(product.maxQuantity)) > 0
+      ? parseFloat(String(product.maxQuantity))
+      : null;
+
   const minQuantity = toUnit(kgStartValue, unit);
+  const maxQuantity = kgMaxQuantity != null ? toUnit(kgMaxQuantity, unit) : null;
   const stepSize = toUnit(kgChangeBy, unit);
 
   const currentKg = toKg(quantity, unit);
@@ -142,11 +150,17 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
       : null;
 
   const increaseQty = () => {
-    setQuantity((prev) =>
-      unit === "kg"
-        ? parseFloat((prev + stepSize).toFixed(3))
-        : Math.round(prev + stepSize)
-    );
+    if (maxQuantity != null && quantity >= maxQuantity) {
+      showCartMessage(`Maximum limit of ${maxQuantity} ${unit} reached`);
+      return;
+    }
+    setQuantity((prev) => {
+      const next =
+        unit === "kg"
+          ? parseFloat((prev + stepSize).toFixed(3))
+          : Math.round(prev + stepSize);
+      return maxQuantity != null ? Math.min(maxQuantity, next) : next;
+    });
   };
 
   const decreaseQty = () => {
@@ -166,7 +180,12 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
     setUnit(value);
     const newQty = toUnit(toKg(quantity, unit), value);
     const min = toUnit(kgStartValue, value);
-    setQuantity(Math.max(min, newQty));
+    const max = kgMaxQuantity != null ? toUnit(kgMaxQuantity, value) : null;
+    let clampedQty = Math.max(min, newQty);
+    if (max != null) {
+      clampedQty = Math.min(max, clampedQty);
+    }
+    setQuantity(clampedQty);
   };
 
   const onAddToCart = () => {
@@ -186,6 +205,8 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         weight: quantity,
         unit: unit,
         minimumWeight: minQuantity,
+        maxWeight: maxQuantity ?? undefined,
+        maxQuantity: kgMaxQuantity ?? undefined,
         step: stepSize,
       }),
     );
@@ -207,13 +228,15 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         id: product!.id,
         name: product!.displayName,
         image: product!.image,
-        price: normalPriceVal,
+        price: effectiveUnitPrice,
         normalPrice: normalPriceVal,
         discountedPrice: discountedPriceVal || undefined,
         comPrice: comPrice || undefined,
         weight: quantity,
         unit: unit,
         minimumWeight: minQuantity,
+        maxWeight: maxQuantity ?? undefined,
+        maxQuantity: kgMaxQuantity ?? undefined,
         step: stepSize,
       }),
     );
@@ -278,11 +301,12 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
         {/* Bottom Card */}
 
         <View
-          className="bg-white flex-1 mt-2 px-6 pt-7 h-screen"
+          className="bg-white flex-1 mt-2 px-6 pt-7"
           style={{
             flex: 1,
             borderTopLeftRadius: 34,
             borderTopRightRadius: 34,
+            paddingBottom: 150,
             shadowColor: "#000",
             shadowOpacity: 0.12,
             shadowRadius: 8,
@@ -451,6 +475,7 @@ const ViewProduct: React.FC<Props> = ({ navigation, route }) => {
 
       <ProductBottomCart
         minimumValue={minQuantity}
+        maximumValue={maxQuantity ?? undefined}
         step={stepSize}
         quantity={quantity}
         unit={unit as any}

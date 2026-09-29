@@ -86,6 +86,14 @@ interface AddTimeSnapshot {
 // "D&AP"    -> Only Sale Price + Discount% badge, no struck-through actual price
 type DisplayType = "AP&SP&D" | "D&AP" | "AP&SP";
 
+const normalizeUnit = (raw?: string | null): "g" | "kg" => {
+  const norm = (raw || "g").toString().trim().toLowerCase();
+  if (norm === "kg" || norm === "kgs" || norm === "kilogram" || norm === "kilograms") {
+    return "kg";
+  }
+  return "g";
+};
+
 const CATEGORY_IMAGES: Record<string, any> = {
   Packages: require("@/assets/images/home/packages.webp"),
   Vegetables: require("@/assets/images/home/veggies.webp"),
@@ -287,8 +295,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       (state as RootState & { cart: CartState }).cart.packages,
   );
   const totalCartItems =
-  cartProducts.length +
-  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
+    cartProducts.length +
+    cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const visibleCategories = isRetail
     ? CATEGORIES
@@ -836,15 +844,21 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleIncrement = useCallback(
     (productId: number) => {
+      const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
+      if (item && item.maxWeight != null && item.weight >= item.maxWeight) {
+        showToast(`Maximum limit of ${item.maxWeight} ${item.unit} reached`);
+        return;
+      }
       isCartSyncingRef.current = true;
       dispatch(increaseProductWeight(productId));
       showToast("Cart Updated");
       if (userToken) {
         const item = cartProducts.find((p: ProductCartItem) => p.id === productId);
         if (item) {
-          const newWeight = item.unit === "kg"
+          const nextW = item.unit === "kg"
             ? parseFloat((item.weight + item.step).toFixed(3))
             : Math.round(item.weight + item.step);
+          const newWeight = item.maxWeight != null ? Math.min(item.maxWeight, nextW) : nextW;
           cartService.syncCartProduct(productId, newWeight, item.unit)
             .catch((err) => console.error("Cart DB sync error:", err))
             .finally(() => {
@@ -910,12 +924,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       isCartSyncingRef.current = true;
 
       const rawStartValue = parseFloat(String(product.startValue ?? "1")) || 1;
-      const dbUnitType = (product.unitType || "g").toLowerCase();
+      const initialUnit: "g" | "kg" = normalizeUnit(product.unitType);
 
-      let initialUnit: "g" | "kg" = (dbUnitType === "kg" && rawStartValue < 1) || dbUnitType === "g" ? "g" : "kg";
-      let initialWeight = initialUnit === "g"
-        ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-        : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+      const initialWeight = initialUnit === "g"
+        ? Math.round(rawStartValue * 1000)
+        : parseFloat(rawStartValue.toFixed(3));
 
       const rawChangeBy =
         product.changeby != null && String(product.changeby).trim() !== "" && parseFloat(String(product.changeby)) > 0
@@ -924,13 +937,24 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const step =
         initialUnit === "g"
-          ? (dbUnitType === "kg" || rawChangeBy <= 10 ? Math.round(rawChangeBy * 1000) : Math.round(rawChangeBy))
-          : (dbUnitType === "kg" || rawChangeBy <= 10 ? parseFloat(rawChangeBy.toFixed(3)) : parseFloat((rawChangeBy / 1000).toFixed(3)));
+          ? Math.round(rawChangeBy * 1000)
+          : parseFloat(rawChangeBy.toFixed(3));
 
-      const minWeight =
-        initialUnit === "g"
-          ? (dbUnitType === "kg" || rawStartValue <= 10 ? Math.round(rawStartValue * 1000) : Math.round(rawStartValue))
-          : (dbUnitType === "kg" || rawStartValue <= 10 ? parseFloat(rawStartValue.toFixed(3)) : parseFloat((rawStartValue / 1000).toFixed(3)));
+      const minWeight = initialWeight;
+
+      const rawMaxQuantity =
+        product.maxQuantity != null &&
+          String(product.maxQuantity).trim() !== "" &&
+          parseFloat(String(product.maxQuantity)) > 0
+          ? parseFloat(String(product.maxQuantity))
+          : null;
+
+      const maxWeight =
+        rawMaxQuantity != null
+          ? initialUnit === "g"
+            ? Math.round(rawMaxQuantity * 1000)
+            : parseFloat(rawMaxQuantity.toFixed(3))
+          : undefined;
 
       const normalPerUnit = parseFloat(String(product.normalPrice)) || 0;
       const discountedPerUnit =
@@ -959,6 +983,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           weight: initialWeight,
           unit: initialUnit,
           minimumWeight: minWeight,
+          maxWeight: maxWeight,
+          maxQuantity: rawMaxQuantity ?? undefined,
           step: step,
         }),
       );
@@ -1281,14 +1307,27 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const rawStartValue = isProduct
                     ? parseFloat(String(product.startValue ?? "1")) || 1
                     : 1;
-                  const rawUnitType = isProduct
-                    ? (product.unitType || "g").toLowerCase()
+                  const normUnit = isProduct
+                    ? normalizeUnit(product.unitType)
                     : "g";
+                  const rawMaxQuantity =
+                    isProduct &&
+                      (product as any).maxQuantity != null &&
+                      String((product as any).maxQuantity).trim() !== "" &&
+                      parseFloat(String((product as any).maxQuantity)) > 0
+                      ? parseFloat(String((product as any).maxQuantity))
+                      : null;
+                  const displayMaxQuantityText =
+                    rawMaxQuantity != null && !isNaN(rawMaxQuantity)
+                      ? normUnit === "g"
+                        ? `${Math.round(rawMaxQuantity * 1000)} g`
+                        : `${rawMaxQuantity} kg`
+                      : null;
 
                   const displayWeightText = isProduct
-                    ? rawStartValue < 1
+                    ? normUnit === "g"
                       ? `${Math.round(rawStartValue * 1000)} g`
-                      : `${rawStartValue} ${rawUnitType}`
+                      : `${rawStartValue} kg`
                     : "";
 
                   const normalPerUnit = isProduct
@@ -1346,14 +1385,30 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       ? cartItem.weight
                       : cartItem.weight / 1000
                     : 1;
+                  const effectiveCartUnitPrice = cartItem
+                    ? (cartItem.discountedPrice != null &&
+                      cartItem.discountedPrice > 0 &&
+                      cartItem.normalPrice != null &&
+                      cartItem.discountedPrice < cartItem.normalPrice
+                      ? cartItem.discountedPrice
+                      : (cartItem.discountedPrice != null &&
+                        cartItem.discountedPrice > 0 &&
+                        cartItem.price != null &&
+                        cartItem.discountedPrice < cartItem.price
+                        ? cartItem.discountedPrice
+                        : cartItem.price))
+                    : (hasDiscount ? discountedPerUnit! : normalPerUnit);
                   const calculatedProductPrice = cartItem
-                    ? cartItem.price * weightMultiplier
+                    ? effectiveCartUnitPrice * weightMultiplier
                     : basePrice;
                   const calculatedPackagePrice = cartPackage
                     ? basePrice * cartPackage.quantity
                     : basePrice;
                   const isMinimum = cartItem
                     ? cartItem.weight <= cartItem.minimumWeight
+                    : false;
+                  const isItemAtMax = cartItem && cartItem.maxWeight != null
+                    ? cartItem.weight >= cartItem.maxWeight
                     : false;
 
                   return (
@@ -1441,17 +1496,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* PRODUCT CARD: Not in cart */}
                         {isProduct && !cartItem && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
                               {displayWeightText}
                             </Text>
 
                             {showStruckNormalPrice && (
-                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
                               Rs. {formatPrice(basePrice)}
                             </Text>
 
@@ -1602,11 +1657,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               {/* Plus Button */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
+                                disabled={isItemAtMax}
                                 onPress={(e) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
+                                  }`}
                               >
                                 <Ionicons
                                   name="add"
@@ -1626,17 +1683,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
                         {isProduct && cartItem && !isExpanded && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
                               {displayWeightText}
                             </Text>
 
                             {showStruckNormalPrice && (
-                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
                               Rs. {formatPrice(basePrice)}
                             </Text>
 

@@ -13,6 +13,7 @@ import { GlobalAlert } from "@/component/common/AlertModal";
 import pushNotificationService from "@/services/notification/pushNotification.service";
 import socketService from "@/services/socket/socket.service";
 import { updateGlobalUnreadCount } from "@/store/notificationStore";
+import { AppUpdateProvider } from "@/features/app-update";
 
 LogBox.ignoreLogs([
   "`expo-notifications` functionality is not fully supported in Expo Go",
@@ -97,7 +98,9 @@ export default function App() {
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <SafeAreaProvider>
-          <AppContent />
+          <AppUpdateProvider>
+            <AppContent />
+          </AppUpdateProvider>
         </SafeAreaProvider>
       </PersistGate>
     </Provider>

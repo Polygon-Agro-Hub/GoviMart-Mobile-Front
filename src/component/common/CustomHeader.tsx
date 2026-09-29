@@ -11,6 +11,7 @@ interface CustomHeaderProps {
   showLogo?: boolean;
   titleColor?: string;
   rightComponent?: React.ReactNode;
+  backgroundColor?: string;
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
@@ -22,11 +23,13 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
   showLogo = false,
   titleColor,
   rightComponent,
+  backgroundColor,
 }) => {
   return (
     <View
       className={`flex-row items-center justify-between px-4 py-4 ${dark ? "bg-black" : "bg-white"
         }`}
+      style={backgroundColor ? { backgroundColor } : undefined}
     >
       {/* Left section for Back Button */}
       <View className="w-12">

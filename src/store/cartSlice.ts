@@ -22,6 +22,8 @@ export interface ProductCartItem {
   weight: number;
   unit: "g" | "kg";
   minimumWeight: number;
+  maxWeight?: number;
+  maxQuantity?: number;
   step: number;
   isUnavailable?: boolean;
 }
@@ -55,6 +57,8 @@ const cartSlice = createSlice({
           discountedPrice: action.payload.discountedPrice ?? state.products[existingIndex].discountedPrice,
           comPrice: action.payload.comPrice ?? state.products[existingIndex].comPrice,
           minimumWeight: action.payload.minimumWeight ?? state.products[existingIndex].minimumWeight,
+          maxWeight: action.payload.maxWeight ?? state.products[existingIndex].maxWeight,
+          maxQuantity: action.payload.maxQuantity ?? state.products[existingIndex].maxQuantity,
           step: action.payload.step ?? state.products[existingIndex].step,
           isUnavailable: false,
         };
@@ -68,9 +72,16 @@ const cartSlice = createSlice({
     increaseProductWeight: (state, action: PayloadAction<number>) => {
       const product = state.products.find((p) => p.id === action.payload);
       if (product) {
-        product.weight = product.unit === "kg"
+        const nextWeight = product.unit === "kg"
           ? parseFloat((product.weight + product.step).toFixed(3))
           : Math.round(product.weight + product.step);
+        if (product.maxWeight != null && product.maxWeight > 0) {
+          if (product.weight < product.maxWeight) {
+            product.weight = Math.min(product.maxWeight, nextWeight);
+          }
+        } else {
+          product.weight = nextWeight;
+        }
       }
     },
     decreaseProductWeight: (state, action: PayloadAction<number>) => {
@@ -94,11 +105,17 @@ const cartSlice = createSlice({
           product.weight = parseFloat((product.weight / 1000).toFixed(3));
           product.minimumWeight = parseFloat((product.minimumWeight / 1000).toFixed(3));
           product.step = parseFloat((product.step / 1000).toFixed(3));
+          if (product.maxWeight != null && product.maxWeight > 0) {
+            product.maxWeight = parseFloat((product.maxWeight / 1000).toFixed(3));
+          }
           product.unit = "kg";
         } else {
           product.weight = Math.round(product.weight * 1000);
           product.minimumWeight = Math.round(product.minimumWeight * 1000);
           product.step = Math.round(product.step * 1000);
+          if (product.maxWeight != null && product.maxWeight > 0) {
+            product.maxWeight = Math.round(product.maxWeight * 1000);
+          }
           product.unit = "g";
         }
       }
