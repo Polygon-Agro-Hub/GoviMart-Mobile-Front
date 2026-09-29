@@ -1460,21 +1460,24 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       ? cartItem.weight
                       : cartItem.weight / 1000
                     : 1;
-                  const effectiveCartUnitPrice = cartItem
-                    ? cartItem.discountedPrice != null &&
-                      cartItem.discountedPrice > 0 &&
-                      cartItem.normalPrice != null &&
-                      cartItem.discountedPrice < cartItem.normalPrice &&
-                      displayType !== "D&AP"
-                      ? cartItem.discountedPrice
-                      : (cartItem.discountedPrice != null &&
-                        cartItem.discountedPrice > 0 &&
-                        cartItem.price != null &&
-                        cartItem.discountedPrice < cartItem.price &&
-                        displayType !== "D&AP"
-                        ? cartItem.discountedPrice
-                        : (cartItem.normalPrice != null ? cartItem.normalPrice : cartItem.price)))
-                    : (hasDiscount && displayType !== "D&AP" ? discountedPerUnit! : normalPerUnit);
+                  // NOTE: Written as if/else instead of nested ternaries to avoid
+                  // Babel JSX parser misinterpreting `<` as a JSX tag opener.
+                  let effectiveCartUnitPrice: number;
+                  if (cartItem) {
+                    const _cd = cartItem.discountedPrice;
+                    const _cn = cartItem.normalPrice;
+                    const _cp = cartItem.price;
+                    const _notDAP = displayType !== "D&AP";
+                    if (_cd != null && _cd > 0 && _cn != null && _cd < _cn && _notDAP) {
+                      effectiveCartUnitPrice = _cd;
+                    } else if (_cd != null && _cd > 0 && _cp != null && _cd < _cp && _notDAP) {
+                      effectiveCartUnitPrice = _cd;
+                    } else {
+                      effectiveCartUnitPrice = _cn != null ? _cn : (_cp ?? 0);
+                    }
+                  } else {
+                    effectiveCartUnitPrice = hasDiscount && displayType !== "D&AP" ? discountedPerUnit! : normalPerUnit;
+                  }
                   const calculatedProductPrice = cartItem
                     ? effectiveCartUnitPrice * weightMultiplier
                     : basePrice;
