@@ -478,7 +478,7 @@ export const buildInvoiceHtml = (
     }
     th {
       background-color: #F8F8F8;
-      border-bottom: 1px solid #D1D5DB;
+      border-bottom: none;
       padding: 5px 8px;
       text-align: left;
       font-weight: bold;
@@ -486,7 +486,7 @@ export const buildInvoiceHtml = (
       font-size: 10.5px;
     }
     td {
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: none;
       padding: 5px 8px;
       font-size: 10px;
       color: #212121;

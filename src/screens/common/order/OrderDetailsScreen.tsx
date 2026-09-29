@@ -78,7 +78,9 @@ const MONTHS = [
 const formatPickupSchedule = (
   raw: any,
 ): { date: string; time: string } | null => {
-  const m = String(raw || "").match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
+  if (!raw) return null;
+  const str = raw instanceof Date ? raw.toISOString() : String(raw);
+  const m = str.match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
   if (!m) return null;
   return {
     date: `${MONTHS[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}, ${m[1]}`,
@@ -100,8 +102,12 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
   // Pickup orders show the scheduled date + fixed pickup time in the header
   const isPickupOrder =
-    (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() ===
-    "PICKUP";
+    (
+      order?.delivaryMethod ||
+      order?.deliveryMethod ||
+      order?.deliveryType ||
+      ""
+    ).toUpperCase() === "PICKUP";
 
   const pickupSchedule = isPickupOrder
     ? formatPickupSchedule(order?.sheduleDate || order?.scheduleDate)
@@ -314,8 +320,12 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
   const getStatusItems = () => {
     const isPickup =
-      (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() ===
-      "PICKUP";
+      (
+        order?.delivaryMethod ||
+        order?.deliveryMethod ||
+        order?.deliveryType ||
+        ""
+      ).toUpperCase() === "PICKUP";
     const status = order?.processStatus || "Pending";
     const updateTime = formatStatusDate(order?.updatedAt || order?.createdAt);
     const orderTime = formatStatusDate(order?.createdAt);
@@ -358,6 +368,15 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           order?.returnNote ||
           order?.returnReason ||
           "Customer did not picked up the order during the day.";
+        const pickupSched =
+          pickupSchedule ||
+          formatPickupSchedule(
+            order?.sheduleDate || order?.scheduleDate || order?.deliveryDate,
+          );
+        const pickupReturnTime = pickupSched
+          ? `${pickupSched.date}, ${pickupSched.time}`
+          : returnTime || updateTime;
+
         return [
           {
             title: "Ordered",
@@ -379,7 +398,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           },
           {
             title: "Returned",
-            date: returnTime || updateTime,
+            date: pickupReturnTime,
             icon: "xmark",
             active: true,
             description: `Reason : "${pickupReturnReason}"`,
@@ -996,7 +1015,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         </View>
 
         {/* DELIVERY / PICKUP INFORMATION */}
-        {order?.delivaryMethod === "PICKUP" && order?.pickupInfo ? (
+        {(isPickupOrder || order?.delivaryMethod === "PICKUP") && order?.pickupInfo ? (
           <View
             style={{
               borderWidth: 1,
@@ -1374,6 +1393,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           const isPickup =
             (
               order?.delivaryMethod ||
+              order?.deliveryMethod ||
               order?.deliveryType ||
               ""
             ).toUpperCase() === "PICKUP";
