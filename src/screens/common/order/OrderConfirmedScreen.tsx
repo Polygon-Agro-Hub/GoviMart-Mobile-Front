@@ -89,12 +89,34 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   const discount = orderContext?.discount || 0;
   const deliveryFee = orderContext?.deliveryCharge || 0;
 
+  const isFreeDeliveryCoupon = Boolean(
+    orderContext?.isFreeDeliveryCoupon ||
+    orderContext?.appliedCoupon?.isFreeDelivery ||
+    orderContext?.checkoutDetails?.couponType?.toLowerCase()?.includes("free") ||
+    orderContext?.checkoutDetails?.couponType?.toLowerCase()?.includes("delivery") ||
+    orderContext?.couponType?.toLowerCase()?.includes("free") ||
+    orderContext?.couponType?.toLowerCase()?.includes("delivery")
+  );
+
+  const couponDiscount =
+    orderContext?.couponDiscount !== undefined && Number(orderContext?.couponDiscount) > 0
+      ? parseFloat(String(orderContext.couponDiscount)) || 0
+      : orderContext?.couponValue !== undefined && Number(orderContext?.couponValue) > 0
+        ? parseFloat(String(orderContext.couponValue)) || 0
+        : orderContext?.checkoutDetails?.couponValue !== undefined && Number(orderContext?.checkoutDetails?.couponValue) > 0
+          ? parseFloat(String(orderContext.checkoutDetails.couponValue)) || 0
+          : orderContext?.appliedCoupon?.discount !== undefined && Number(orderContext?.appliedCoupon?.discount) > 0
+            ? parseFloat(String(orderContext.appliedCoupon.discount)) || 0
+            : route.params?.couponValue !== undefined && Number(route.params?.couponValue) > 0
+              ? parseFloat(String(route.params.couponValue)) || 0
+              : 0;
+
   const total =
     passedTotal !== undefined
       ? passedTotal
       : orderContext?.grandTotal !== undefined
         ? orderContext.grandTotal
-        : Math.max(0, packageTotal + productTotal - discount + deliveryFee);
+        : Math.max(0, packageTotal + productTotal - discount - couponDiscount + (isFreeDeliveryCoupon ? 0 : deliveryFee));
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("en-US", {
@@ -299,7 +321,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       couponDiscount:
         apiInvoice?.couponDiscount !== undefined
           ? apiInvoice.couponDiscount
-          : orderCtx.couponDiscount || 0,
+          : couponDiscount,
       grandTotal:
         apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
           ? apiInvoice.fullTotal
@@ -832,6 +854,26 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             </View>
           )}
 
+          {/* Coupon Discount (only if > 0) */}
+          {couponDiscount > 0 && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: "#60647A" }}>
+                Coupon Discount
+              </Text>
+              <Text
+                style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
+              >
+                - Rs. {formatAmount(couponDiscount)}
+              </Text>
+            </View>
+          )}
+
           {/* Delivery Fee (ONLY if > 0 - never show if 0) */}
           {deliveryFee > 0 && (
             <View
@@ -848,6 +890,26 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 style={{ fontSize: 13, fontWeight: "600", color: "#222222" }}
               >
                 + Rs. {formatAmount(deliveryFee)}
+              </Text>
+            </View>
+          )}
+
+          {/* Free Delivery Coupon note */}
+          {isFreeDeliveryCoupon && deliveryFee === 0 && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: "#60647A" }}>
+                Delivery Fee
+              </Text>
+              <Text
+                style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
+              >
+                FREE (Coupon)
               </Text>
             </View>
           )}

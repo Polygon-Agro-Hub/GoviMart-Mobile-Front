@@ -8,7 +8,8 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.polygonagro.Polygon",
-      "versionCode": 0,
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/public/app-icon-android.png",
@@ -114,7 +115,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "1c8baa2b-5982-43e9-9f80-a01886235093"
+        "projectId": "4ee97b49-2acf-4954-a867-861c015146b4"
       }
     }
   }

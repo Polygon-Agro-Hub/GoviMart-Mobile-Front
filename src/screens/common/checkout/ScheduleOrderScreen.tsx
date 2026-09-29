@@ -406,6 +406,8 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                 {selectedTimeSlot || "Select Time Slot"}
               </Text>
             </View>
+
+            <Ionicons name="chevron-down" size={18} color="#111111" />
           </TouchableOpacity>
 
           {/* ─────────────────────────────────────────────────────────────────

@@ -1069,7 +1069,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                                                     "500",
                                             }}
                                         >
-                                            {pkg.name} {pkg.quantity > 1 ? `(${String(pkg.quantity).padStart(2, "0")})` : ""}
+                                            {pkg.name} {pkg.quantity > 1 ? `(X${pkg.quantity})` : ""}
                                         </Text>
 
                                         <Text

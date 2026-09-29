@@ -976,7 +976,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           id: product.id,
           name: product.displayName,
           image: product.image,
-          price: effectiveUnitPrice,
+          price: normalPerUnit,
           normalPrice: normalPerUnit,
           discountedPrice: discountedPerUnit || undefined,
           comPrice: product.comPrice != null ? parseFloat(String(product.comPrice)) : undefined,

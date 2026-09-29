@@ -79,7 +79,7 @@ export const AppliedCouponCard: React.FC<AppliedCouponCardProps> = ({
           }}
           numberOfLines={1}
         >
-          {`${code} Coupon Applied!`}
+          {code}
         </Text>
         <Text
           style={{
