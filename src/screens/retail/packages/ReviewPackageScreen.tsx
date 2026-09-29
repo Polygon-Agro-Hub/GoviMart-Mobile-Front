@@ -536,9 +536,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               // price = line total for the ordered qty (from orderadditionalitems)
               const price = parseFloat(item.price || item.normalPrice || 0);
               // per-kg marketplace rates, used when the user changes qty/unit
-              const perKgNormal = parseFloat(item.perKgNormalPrice || 0);
+              const perKgNormal = parseFloat(
+                item.perKgNormalPrice || item.normalPrice || 0,
+              );
               const perKgDiscounted = parseFloat(
-                item.perKgDiscountedPrice || 0,
+                item.perKgDiscountedPrice || item.discountedPrice || 0,
               );
               const perKgPrice =
                 perKgDiscounted > 0 ? perKgDiscounted : perKgNormal;
@@ -596,6 +598,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 image: item.productImage,
                 price: price,
                 basePrice: basePrice,
+                perKgPrice: perKgPrice,
                 weightDisplay: `${amount} ${unit}`,
                 unit: unit,
                 amount: amount,
@@ -1523,7 +1526,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const totalSavingsAmount = Math.max(0, -totalDiff);
 
   // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
+  // Cash payment (COD or pickup) vs card/online — used to word the "Please Note" box
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
+  const dMethodLower = (deliveryMethod || "").trim().toLowerCase();
+  const isCashPayment = pMethodLower.includes("cash") || pMethodLower === "cod";
+  const isPickup =
+    dMethodLower.includes("pickup") || pMethodLower.includes("pickup");
+  const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
 
@@ -2671,39 +2680,60 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             </>
           )}
 
-          {/* Please Note Box — wording/color depend on whether the reviewed total
-              went UP (extra payment due) or DOWN (reduced / refundable) vs. what
-              was originally paid for. */}
           {totalDiff > 0 ? (
             <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
               <Text className="text-[14px] font-bold text-black mb-1">
                 Please Note :
               </Text>
-              <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                You have already paid for this order. The additional amount{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(additionalPayAmount)}
-                </Text>{" "}
-                will need to be paid at the end of this process.
-              </Text>
+              {isCashPayment ? (
+                <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                  Your {cashLabel} order total has increased by{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(additionalPayAmount)}
+                  </Text>
+                  . Your new total is{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(confirmGrandTotal)}
+                  </Text>
+                  .
+                </Text>
+              ) : (
+                <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                  You have already paid for this order. The additional amount{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(additionalPayAmount)}
+                  </Text>{" "}
+                  will need to be paid at the end of this process.
+                </Text>
+              )}
             </View>
           ) : totalDiff < 0 ? (
             <View className="bg-[#EDFDF2] border border-[#A6F4C5] rounded-2xl p-4 mx-5 my-4">
               <Text className="text-[14px] font-bold text-black mb-1">
                 Please Note :
               </Text>
-              <Text className="text-[13px] text-[#475467] leading-5">
-                Your {isCashOnDelivery ? "Cash on Delivery" : "order"} total has
-                been reduced by{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(totalSavingsAmount)}
+              {isCashPayment ? (
+                <Text className="text-[13px] text-[#475467] leading-5">
+                  Your {cashLabel} order total has been reduced by{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(totalSavingsAmount)}
+                  </Text>
+                  . Your new total is{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(confirmGrandTotal)}
+                  </Text>
+                  .
                 </Text>
-                . Your new total is{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(finalOrderTotalWithDelivery)}
+              ) : (
+                <Text className="text-[13px] text-[#475467] leading-5">
+                  You have already paid for this order, so the remaining balance
+                  of{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(totalSavingsAmount)}
+                  </Text>{" "}
+                  will be credited to your account.
                 </Text>
-                .
-              </Text>
+              )}
             </View>
           ) : null}
         </ScrollView>

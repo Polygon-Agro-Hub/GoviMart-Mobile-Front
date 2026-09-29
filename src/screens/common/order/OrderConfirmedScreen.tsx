@@ -323,7 +323,21 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
           ? apiInvoice.couponDiscount
           : couponDiscount,
       grandTotal:
-        apiInvoice?.grandTotal !== undefined ? apiInvoice.grandTotal : total,
+        apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
+          ? apiInvoice.fullTotal
+          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+            ? apiInvoice.grandTotal
+            : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
+              ? orderCtx.fullTotal
+              : total,
+      fullTotal:
+        apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
+          ? apiInvoice.fullTotal
+          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+            ? apiInvoice.grandTotal
+            : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
+              ? orderCtx.fullTotal
+              : total,
       billingInfo: apiInvoice?.billingInfo
         ? {
             ...apiInvoice.billingInfo,
@@ -352,33 +366,43 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             flatNo: checkout.flatNumber || checkout.flatNo || "",
             floorNo: checkout.floorNumber || checkout.floorNo || "",
           },
-      pickupInfo:
-        apiInvoice?.pickupInfo ||
-        (orderCtx.pickupCenter
+           pickupInfo: (() => {
+        const apiPickup = apiInvoice?.pickupInfo;
+        const localPickup = orderCtx.pickupCenter
           ? {
-              centerId: String(orderCtx.pickupCenter.id || ""),
+              centerId: String(orderCtx.pickupCenter.id || orderCtx.pickupCenter.centerId || ""),
               centerName:
                 orderCtx.pickupCenter.centerName ||
                 orderCtx.pickupCenter.name ||
-                "Unknown",
+                null,
               contact01:
-                orderCtx.pickupCenter.phone1 ||
                 orderCtx.pickupCenter.contact01 ||
-                "Not Available",
+                orderCtx.pickupCenter.phone1 ||
+                null,
               address: {
                 street: orderCtx.pickupCenter.street || "",
                 city: orderCtx.pickupCenter.city || "",
                 district: orderCtx.pickupCenter.district || "",
                 province: orderCtx.pickupCenter.province || "",
                 country: "Sri Lanka",
-                zipCode: orderCtx.pickupCenter.zipcode || "",
+                zipCode: orderCtx.pickupCenter.zipcode || orderCtx.pickupCenter.zipCode || "",
               },
             }
-          : undefined),
+          : undefined;
+
+        const apiHasName =
+          apiPickup?.centerName && apiPickup.centerName !== "Unknown";
+        if (apiHasName) return apiPickup;
+        return localPickup || apiPickup || undefined;
+      })(),
     };
+    console.log("API pickupInfo:", JSON.stringify(apiInvoice?.pickupInfo));
+
 
     return { invoiceData, logoBase64 };
   };
+
+  
 
   const handleDownloadInvoice = async () => {
     if (isDownloading || isSharing) return;

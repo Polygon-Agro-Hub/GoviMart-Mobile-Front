@@ -25,10 +25,7 @@ type EditAddressNavigationProp = StackNavigationProp<
   "EditAddress"
 >;
 
-type EditAddressRouteProp = RouteProp<
-  RootStackParamList,
-  "EditAddress"
->;
+type EditAddressRouteProp = RouteProp<RootStackParamList, "EditAddress">;
 
 interface EditAddressProps {
   navigation: EditAddressNavigationProp;
@@ -98,9 +95,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const [buildingNo, setBuildingNo] = useState(
     addressParam.buildingNo || addressParam.houseNo || ""
   );
-  const [streetName, setStreetName] = useState(
-    addressParam.streetName || ""
-  );
+  const [streetName, setStreetName] = useState(addressParam.streetName || "");
   const [city, setCity] = useState(addressParam.city || "");
   const [apartmentName, setApartmentName] = useState(
     addressParam.buildingName || ""
@@ -122,6 +117,12 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const [allCities, setAllCities] = useState<CityResult[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // City lock (consistent with AddNewAddress):
+  // If the customer has an order that is not yet Delivered, the city
+  // cannot be changed. The address keeps its existing city value.
+  const [cityLocked, setCityLocked] = useState(false);
+  const [loadingEligibility, setLoadingEligibility] = useState(true);
 
   const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
   const buildingTypes = ["House", "Apartment"];
@@ -169,6 +170,34 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       }
     };
     loadCities();
+  }, []);
+
+  // Check whether the city field must be locked.
+  // Locked when the customer has at least one order that is NOT Delivered.
+  useEffect(() => {
+    const loadDeliveryEligibility = async () => {
+      setLoadingEligibility(true);
+      try {
+        const response = await customerService.getDeliveryEligibility();
+        if (response.data && response.data.status) {
+          const { hasNonDeliveredOrder, hasDeliveredOrder } = response.data;
+
+          // Prefer the explicit flag from the backend. If the backend has not
+          // been updated yet, fall back to the same rule used on the Add screen.
+          const locked =
+            typeof hasNonDeliveredOrder === "boolean"
+              ? hasNonDeliveredOrder
+              : !hasDeliveredOrder;
+
+          setCityLocked(locked);
+        }
+      } catch (err) {
+        console.error("Error loading delivery eligibility in EditAddress:", err);
+      } finally {
+        setLoadingEligibility(false);
+      }
+    };
+    loadDeliveryEligibility();
   }, []);
 
   // Clear any leftover selected coordinates on initial mount and unmount
@@ -276,7 +305,9 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
 
     if (mobileNumber2.trim()) {
       if (cleaned.trim() && cleaned.trim() === mobileNumber2.trim()) {
-        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+        setMobileNumber2Error(
+          "Mobile Number 2 cannot be the same as Mobile Number 1"
+        );
       } else if (validatePhone(mobileNumber2.trim())) {
         setMobileNumber2Error("");
       }
@@ -295,7 +326,9 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
     }
 
     if (mobileNumber2.trim() && mobileNumber1.trim() === mobileNumber2.trim()) {
-      setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+      setMobileNumber2Error(
+        "Mobile Number 2 cannot be the same as Mobile Number 1"
+      );
     }
   };
 
@@ -306,8 +339,13 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
 
     if (!cleaned.trim()) {
       setMobileNumber2Error("");
-    } else if (mobileNumber1.trim() && cleaned.trim() === mobileNumber1.trim()) {
-      setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+    } else if (
+      mobileNumber1.trim() &&
+      cleaned.trim() === mobileNumber1.trim()
+    ) {
+      setMobileNumber2Error(
+        "Mobile Number 2 cannot be the same as Mobile Number 1"
+      );
     } else if (!validatePhone(cleaned)) {
       setMobileNumber2Error(
         "Please enter a valid mobile number (format: 07XXXXXXXX)"
@@ -319,8 +357,13 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
 
   const handleMobile2Blur = () => {
     if (mobileNumber2.trim()) {
-      if (mobileNumber1.trim() && mobileNumber2.trim() === mobileNumber1.trim()) {
-        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+      if (
+        mobileNumber1.trim() &&
+        mobileNumber2.trim() === mobileNumber1.trim()
+      ) {
+        setMobileNumber2Error(
+          "Mobile Number 2 cannot be the same as Mobile Number 1"
+        );
       } else if (!validatePhone(mobileNumber2)) {
         setMobileNumber2Error(
           "Please enter a valid mobile number (format: 07XXXXXXXX)"
@@ -394,6 +437,9 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const isCityKnown = city.trim().length > 0 && !!matchedCity;
   const isCityDeliverable = isCityKnown && !!matchedCity?.isAvailable;
 
+  // Field is not editable while locked, and also while we don't know yet
+  const cityNotEditable = cityLocked || loadingEligibility;
+
   const cityModalData = allCities.map((item) => ({
     label: item.city,
     value: item.city,
@@ -443,8 +489,10 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const renderCityField = () => (
     <View style={{ marginBottom: cityError ? 4 : 12 }}>
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={cityNotEditable ? 1 : 0.8}
+        disabled={cityNotEditable}
         onPress={() => {
+          if (cityNotEditable) return;
           Keyboard.dismiss();
           if (!city.trim()) {
             setCityError(requiredMessage(FIELD_LABELS.city));
@@ -467,7 +515,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: "#F2F2F6",
+            backgroundColor: cityLocked ? "#000000" : "#F2F2F6",
             justifyContent: "center",
             alignItems: "center",
           }}
@@ -476,7 +524,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
             name="mountain-city"
             solid
             size={17}
-            color="#000000"
+            color={cityLocked ? "#FFFFFF" : "#000000"}
           />
         </View>
 
@@ -502,12 +550,14 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
             {city || "Select From Here"}
           </Text>
         </View>
-        <Ionicons
-          name="chevron-down"
-          size={19}
-          color="#111111"
-          style={{ marginRight: 6 }}
-        />
+        {!cityNotEditable && (
+          <Ionicons
+            name="chevron-down"
+            size={19}
+            color="#111111"
+            style={{ marginRight: 6 }}
+          />
+        )}
       </TouchableOpacity>
       {cityError ? (
         <Text
@@ -522,8 +572,9 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         </Text>
       ) : null}
 
-      {city.trim().length > 0 && isCityKnown && (
-        isCityDeliverable ? (
+      {city.trim().length > 0 &&
+        isCityKnown &&
+        (isCityDeliverable ? (
           <View
             style={{
               flexDirection: "row",
@@ -582,11 +633,11 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
                 flexShrink: 1,
               }}
             >
-              Delivery not available in {city} yet, but we're working on it and coming to your area soon!
+              Delivery not available in {city} yet, but we're working on it and
+              coming to your area soon!
             </Text>
           </View>
-        )
-      )}
+        ))}
     </View>
   );
 
@@ -643,14 +694,15 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       );
       hasError = true;
       alertTitle = "Invalid Phone Number";
-      alertMessage =
-        "Please enter a valid mobile number (format: 07XXXXXXXX).";
+      alertMessage = "Please enter a valid mobile number (format: 07XXXXXXXX).";
     }
 
     const p2 = mobileNumber2.trim();
     if (p2) {
       if (p1 && p1 === p2) {
-        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+        setMobileNumber2Error(
+          "Mobile Number 2 cannot be the same as Mobile Number 1"
+        );
         hasError = true;
         alertTitle = "Duplicate Phone Number";
         alertMessage = "Mobile Number 2 cannot be the same as Mobile Number 1.";
@@ -690,7 +742,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         hasError = true;
         alertTitle = "Required";
         alertMessage = "Please select your city.";
-      } else if (!isCityDeliverable) {
+      } else if (!cityLocked && !isCityDeliverable) {
         setCityError("Delivery is not available in " + city + " yet.");
         hasError = true;
         alertTitle = "Not Deliverable";
@@ -735,7 +787,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         hasError = true;
         alertTitle = "Required";
         alertMessage = "Please select your city.";
-      } else if (!isCityDeliverable) {
+      } else if (!cityLocked && !isCityDeliverable) {
         setCityError("Delivery is not available in " + city + " yet.");
         hasError = true;
         alertTitle = "Not Deliverable";
@@ -817,10 +869,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
               floorNo,
             };
 
-      const res = await customerService.updateAddress(
-        addressParam.id,
-        payload
-      );
+      const res = await customerService.updateAddress(addressParam.id, payload);
 
       if (res.data) {
         await AsyncStorage.multiRemove([
@@ -932,12 +981,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
                     alignItems: "center",
                   }}
                 >
-                  <FontAwesome6
-                    name="user"
-                    solid
-                    size={17}
-                    color="#FFFFFF"
-                  />
+                  <FontAwesome6 name="user" solid size={17} color="#FFFFFF" />
                 </View>
 
                 <View
@@ -1072,12 +1116,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
                 alignItems: "center",
               }}
             >
-              <FontAwesome6
-                name="house"
-                solid
-                size={17}
-                color="#000000"
-              />
+              <FontAwesome6 name="house" solid size={17} color="#000000" />
             </View>
 
             <View
@@ -1437,9 +1476,9 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         multiSelect={false}
       />
 
-      {/* CITY SEARCH MODAL (SEARCH ACTIVE) */}
+      {/* CITY SEARCH MODAL (SEARCH ACTIVE) - never opened while city is locked */}
       <GlobalSearchModal
-        visible={cityModalOpen}
+        visible={cityModalOpen && !cityNotEditable}
         onClose={() => setCityModalOpen(false)}
         title="Select Your City"
         data={cityModalData}
