@@ -16,6 +16,8 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -44,6 +46,7 @@ import { TimeRanOutBanner } from "@/component/package/TimeRanOutBanner";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
+import { AlertModal } from "@/component/common/AlertModal";
 import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
@@ -308,6 +311,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [mode, setMode] = useState<ScreenMode>("overview");
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
 
   const [selectedAlaCartCategory, setSelectedAlaCartCategory] =
     useState<string>("Vegetables");
@@ -1114,6 +1119,30 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       setCurrentStepIndex((prev) => prev + 1);
     } else {
       // Confirm order completion & finalize review (BATCH UPDATE ON LAST STEP)
+
+      // Detect payment method early so we can show loading overlay immediately
+      const pMethod = (paymentMethod || "").trim().toLowerCase();
+      const isCard =
+        pMethod.includes("card") ||
+        pMethod.includes("payhere") ||
+        pMethod.includes("online") ||
+        (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
+
+      // Detect Cash on Delivery or Cash on Pickup — skip OrderConfirmed for these
+      const dMethod = (deliveryMethod || "").trim().toLowerCase();
+      const isCashOrder =
+        pMethod.includes("cash") ||
+        pMethod === "cod" ||
+        pMethod.includes("pickup");
+      const isCashOnPickup =
+        dMethod.includes("pickup") || pMethod.includes("pickup");
+      const shouldSkipConfirmScreen = isCashOrder || isCashOnPickup;
+
+      // For cash/pickup orders: show loading overlay immediately
+      if (shouldSkipConfirmScreen) {
+        setIsSubmitting(true);
+      }
+
       try {
         const replacements: Array<{
           orderPackageId: number;
@@ -1254,14 +1283,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           },
         );
 
-        // Detect payment method for backend branching
-        const pMethod = (paymentMethod || "").trim().toLowerCase();
-        const isCard =
-          pMethod.includes("card") ||
-          pMethod.includes("payhere") ||
-          pMethod.includes("online") ||
-          (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
-
         // Net package diff (pure package + alacart items, without delivery fee)
         const netDiff = totalDiff;
         const netRefundSavings =
@@ -1295,11 +1316,22 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           confirmRes.data,
           { isCard, netRefundSavings, finalOrderTotalWithDelivery },
         );
+
+        if (shouldSkipConfirmScreen) {
+          // Hide loading spinner, show AlertModal success message.
+          // Navigation to Home is handled inside AlertModal's onClose callback.
+          setIsSubmitting(false);
+          setShowSuccessOverlay(true);
+          return;
+        }
       } catch (err) {
         console.error("[ReviewPackageScreen] Confirm review API error:", err);
+        setIsSubmitting(false);
+        setShowSuccessOverlay(false);
+        if (shouldSkipConfirmScreen) return;
       }
 
-      // Navigate directly to OrderConfirmed
+      // Navigate directly to OrderConfirmed (card/online payment methods only)
       navigation.navigate("OrderConfirmed", {
         orderId: String(effectiveOrderId),
         invoiceNumber: invoiceNo,
@@ -2886,6 +2918,59 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Loading overlay — shown while API call is in progress (cash orders) */}
+      <Modal visible={isSubmitting} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Confirming your order...
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success alert — shown briefly after API succeeds (cash orders) */}
+      <AlertModal
+        visible={showSuccessOverlay}
+        type="success"
+        title="Order Confirmed!"
+        message="Order reviewed and dispatched successfully!"
+        autoClose={true}
+        duration={2000}
+        onClose={() => {
+          setShowSuccessOverlay(false);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Home" }],
+          });
+        }}
+      />
 
       {/* Confirmation Modal when navigating back */}
       <ConfirmationModal
