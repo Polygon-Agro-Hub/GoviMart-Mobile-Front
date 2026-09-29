@@ -12,7 +12,7 @@ interface CustomHeaderProps {
   titleColor?: string;
   rightComponent?: React.ReactNode;
   backgroundColor?: string;
-  titleLines?: number; // default 1; set 2 for screens that need a 2-line title
+  titleLines?: number; 
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
@@ -37,13 +37,17 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       style={backgroundColor ? { backgroundColor } : undefined}
     >
       {/* Left section for Back Button */}
-      <View className="w-12">
+      <View
+        className="w-14 items-start justify-center"
+        style={{ width: 56, flexShrink: 0 }}
+      >
         {showBackButton && navigation && (
           <TouchableOpacity
             onPress={onBackPress ?? (() => navigation.goBack())}
             className={`w-14 h-14 rounded-full items-center justify-center shadow-sm border ${
               dark ? "bg-[#1F1F1F] border-gray-800" : "bg-white border-gray-200"
             }`}
+            style={{ width: 56, height: 56 }}
             activeOpacity={0.7}
           >
             <Entypo
@@ -56,7 +60,10 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       </View>
 
       {/* Middle section for Title or Logo */}
-      <View className="flex-1 items-center" style={{ flexShrink: 1 }}>
+      <View
+        className="flex-1 items-center justify-center px-2"
+        style={{ flex: 1, flexShrink: 1, minWidth: 0, paddingHorizontal: 8 }}
+      >
         {showLogo ? (
           <Image
             source={require("@/assets/images/public/polygon-logo.png")}
@@ -68,12 +75,15 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
               dark ? "text-white" : "text-[#001D4A]"
             }`}
             style={[
+              {
+                width: "100%",
+                textAlign: "center",
+              },
               titleColor ? { color: titleColor } : null,
               isMultiLine ? { lineHeight: 26 } : null,
             ]}
             numberOfLines={titleLines}
-            // Only shrink-to-fit in single-line mode.
-            // In multi-line mode these props are omitted entirely so iOS wraps normally.
+            ellipsizeMode="tail"
             {...(isMultiLine
               ? {}
               : { adjustsFontSizeToFit: true, minimumFontScale: 0.7 })}
@@ -84,7 +94,10 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
       </View>
 
       {/* Right section (balanced placeholder or custom right component) */}
-      <View className="w-12 items-end justify-center">
+      <View
+        className="w-14 items-end justify-center"
+        style={{ width: 56, flexShrink: 0 }}
+      >
         {rightComponent || null}
       </View>
     </View>
