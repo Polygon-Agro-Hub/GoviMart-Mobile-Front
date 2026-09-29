@@ -31,6 +31,7 @@ import LottieView from "lottie-react-native";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
 import customerService from "@/services/customer/customer.service";
+import socketService from "@/services/socket/socket.service";
 import { RootStackParamList, OrderContext } from "@/types/types";
 
 type NavigationProp = StackNavigationProp<
@@ -126,6 +127,20 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             console.error("Cart sync/availability check error:", error);
         }
     }, [dispatch, token]);
+
+    // ─── REAL-TIME SOCKET SUBSCRIPTION FOR PRODUCT/PACKAGE STATUS ──────────────
+    React.useEffect(() => {
+        socketService.connect();
+        const unsubscribe = socketService.onCatalogUpdate((data) => {
+            console.log("📦 [MyCartScreen] Real-time catalog/status update received via Socket.IO:", data);
+            isCartSyncingRef.current = false;
+            syncAndCheckCart(true);
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [syncAndCheckCart]);
 
     useFocusEffect(
         useCallback(() => {
