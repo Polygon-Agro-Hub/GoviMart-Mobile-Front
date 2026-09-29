@@ -287,8 +287,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       (state as RootState & { cart: CartState }).cart.packages,
   );
   const totalCartItems =
-  cartProducts.length +
-  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
+    cartProducts.length +
+    cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const visibleCategories = isRetail
     ? CATEGORIES
@@ -952,7 +952,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           id: product.id,
           name: product.displayName,
           image: product.image,
-          price: normalPerUnit,
+          price: effectiveUnitPrice,
           normalPrice: normalPerUnit,
           discountedPrice: discountedPerUnit || undefined,
           comPrice: product.comPrice != null ? parseFloat(String(product.comPrice)) : undefined,
@@ -1346,8 +1346,21 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       ? cartItem.weight
                       : cartItem.weight / 1000
                     : 1;
+                  const effectiveCartUnitPrice = cartItem
+                    ? (cartItem.discountedPrice != null &&
+                      cartItem.discountedPrice > 0 &&
+                      cartItem.normalPrice != null &&
+                      cartItem.discountedPrice < cartItem.normalPrice
+                      ? cartItem.discountedPrice
+                      : (cartItem.discountedPrice != null &&
+                        cartItem.discountedPrice > 0 &&
+                        cartItem.price != null &&
+                        cartItem.discountedPrice < cartItem.price
+                        ? cartItem.discountedPrice
+                        : cartItem.price))
+                    : (hasDiscount ? discountedPerUnit! : normalPerUnit);
                   const calculatedProductPrice = cartItem
-                    ? cartItem.price * weightMultiplier
+                    ? effectiveCartUnitPrice * weightMultiplier
                     : basePrice;
                   const calculatedPackagePrice = cartPackage
                     ? basePrice * cartPackage.quantity
@@ -1441,17 +1454,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* PRODUCT CARD: Not in cart */}
                         {isProduct && !cartItem && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
                               {displayWeightText}
                             </Text>
 
                             {showStruckNormalPrice && (
-                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
                               Rs. {formatPrice(basePrice)}
                             </Text>
 
@@ -1626,17 +1639,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                         {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
                         {isProduct && cartItem && !isExpanded && (
                           <>
-                            <Text className="text-gray-400 text-[11px] mt-0.5 text-center">
+                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
                               {displayWeightText}
                             </Text>
 
                             {showStruckNormalPrice && (
-                              <Text className="text-gray-400 text-[11px] line-through text-center mt-0.5">
+                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
                                 Rs. {formatPrice(startNormalPrice)}
                               </Text>
                             )}
 
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
                               Rs. {formatPrice(basePrice)}
                             </Text>
 
