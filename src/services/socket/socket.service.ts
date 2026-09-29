@@ -335,12 +335,16 @@ class SocketService {
 
   private startFallbackPolling() {
     if (this.fallbackPollingTimer) return;
-    // Initial poll
+    // Initial poll on startup
     this.pollNotifications();
-    // Then every 6 seconds for fast, responsive in-app alerts
+    // Safety net: check every 45s ONLY if the real socket is disconnected
     this.fallbackPollingTimer = setInterval(() => {
+      if (this.socket?.connected) {
+        // Real WebSocket is active — skip polling completely
+        return;
+      }
       this.pollNotifications();
-    }, 6000);
+    }, 45000);
   }
 
   private stopFallbackPolling() {
