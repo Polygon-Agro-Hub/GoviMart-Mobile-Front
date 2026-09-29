@@ -74,6 +74,9 @@ const totalCartCount =
             itemName: item.displayName || item.itemName || "",
             quantity: item.quantity,
           }));
+          items.sort((a: { itemName: string }, b: { itemName: string }) =>
+            a.itemName.localeCompare(b.itemName, undefined, { sensitivity: "base" })
+          );
           setPackageItems(items);
         }
       } catch (error) {
