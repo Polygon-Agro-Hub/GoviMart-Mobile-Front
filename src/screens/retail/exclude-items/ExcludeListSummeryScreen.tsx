@@ -60,8 +60,9 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   navigation,
 }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
-  const { customerId, name, title, phoneNumber, cusId, id } =
+  const { customerId, name, title, phoneNumber, cusId, id, fromAccount } =
     route.params || {};
+  const isFromAccount = fromAccount === true;
 
   const [excludeCrops, setExcludeCrops] = useState<ExcludeCrop[]>([]);
   const [preferCrops, setPreferCrops] = useState<PreferCrop[]>([]);
@@ -311,9 +312,9 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate("Profile");
+      navigation.navigate(isFromAccount ? "Profile" : "Home");
     }
-  }, [navigation]);
+  }, [navigation, isFromAccount]);
 
   useFocusEffect(
     useCallback(() => {
@@ -433,7 +434,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                 <TouchableOpacity
                   onPress={() =>
                     navigation.navigate("ExcludeListAdd", {
-                      customerId: Number(customerId),
+                      customerId: Number(customerId || user?.id || 1002),
+                      fromAccount: isFromAccount,
                     })
                   }
                   className="items-center justify-center"
@@ -533,7 +535,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                 <TouchableOpacity
                   onPress={() =>
                     navigation.navigate("ExcludeListAdd", {
-                      customerId: Number(customerId),
+                      customerId: Number(customerId || user?.id || 1002),
+                      fromAccount: isFromAccount,
                     })
                   }
                   className="items-center justify-center"
@@ -622,12 +625,26 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       {/* Bottom CTA */}
       <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
         <TouchableOpacity
-          onPress={handleCompleteOnboarding}
+          onPress={
+            isFromAccount
+              ? () =>
+                  navigation.navigate("ExcludeListAdd", {
+                    customerId: Number(customerId || user?.id || 1002),
+                    name:
+                      `${customerName.firstName} ${customerName.lastName}`.trim() ||
+                      undefined,
+                    title: customerName.title || undefined,
+                    number: customerName.phoneNumber || undefined,
+                    id: id || undefined,
+                    fromAccount: true,
+                  })
+              : handleCompleteOnboarding
+          }
           activeOpacity={0.8}
           className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
         >
           <Text className="text-white text-base font-bold">
-            Add More
+            {isFromAccount ? "Add More" : "Continue"}
           </Text>
         </TouchableOpacity>
       </View>
