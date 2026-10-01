@@ -103,9 +103,9 @@ export type RootStackParamList = {
     flow?: "signup" | "changePhone";
     accountDetails?: UpdateUserDetailsPayload | null;
   } | undefined;
-  ExcludeListAdd: { customerId: number; name?: string; title?: string; number?: string; id?: number } | undefined;
+  ExcludeListAdd: { customerId: number; name?: string; title?: string; number?: string; id?: number; fromAccount?: boolean } | undefined;
   // NOTE: "Summery" spelling is intentional — kept for consistency across the codebase.
-  ExcludeListSummery: { customerId: number; name?: string; title?: string; phoneNumber?: string; cusId?: string; id?: number } | undefined;
+  ExcludeListSummery: { customerId: number; name?: string; title?: string; phoneNumber?: string; cusId?: string; id?: number; fromAccount?: boolean } | undefined;
   Profile: undefined;
   ViewProduct: {
     product: ProductType | undefined;
@@ -266,6 +266,7 @@ export interface SignUpPayload {
   companyName?: string | null;
   companyPhoneCode?: string | null;
   companyPhoneNumber?: string | null;
+  allowRestore?: boolean;
 }
 
 // ─── Customer Payloads ────────────────────────────────────────────────────────

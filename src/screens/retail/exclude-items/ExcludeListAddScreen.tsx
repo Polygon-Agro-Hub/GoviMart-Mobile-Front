@@ -201,10 +201,11 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
     } else {
       navigation.navigate("ExcludeListSummery", {
         customerId: Number(customerId),
+        fromAccount: route.params?.fromAccount,
       });
     }
     return true;
-  }, [navigation, customerId]);
+  }, [navigation, customerId, route.params?.fromAccount]);
 
   const fetchCropsAndPreferences = useCallback(async () => {
     try {
@@ -358,6 +359,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         phoneNumber: currentData.number,
         cusId: currentData.customerId,
         id: Number(currentData.id) || undefined,
+        fromAccount: route.params?.fromAccount,
       });
     } catch (err: any) {
       console.error("Failed to submit excludelist changes:", err);
