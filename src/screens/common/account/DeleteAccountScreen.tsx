@@ -182,8 +182,14 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{
+                flexGrow: 1,
                 paddingHorizontal: 14,
-                paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 140,
+                paddingBottom:
+                  keyboardHeight > 0
+                    ? keyboardHeight + 20
+                    : !hasProcessingOrders || hasNegativeCredit
+                    ? 80
+                    : 24,
               }}
             >
               {/* Delete Icon */}
@@ -226,23 +232,17 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 style={{
                   textAlign: "center",
                   fontSize: 14,
-                  lineHeight: 18,
+                  lineHeight: 20,
                   fontWeight: "400",
                   color: "#494A65",
                   paddingHorizontal: 8,
                   marginBottom: 18,
                 }}
               >
-                This action is permanent and cannot be{"\n"}
-                undone. All your data, orders, and account{"\n"}
-                information{" "}
-                <Text
-                  style={{
-                    color: "#FF3B42",
-                  }}
-                >
-                  will be permanently deleted.
-                </Text>
+                <Text style={{ color: "#FF383C" }}>This action is permanent.</Text>{"\n"}
+                Your account data will be deleted,{"\n"}
+                while certain information may be retained{"\n"}
+                for legal or record-keeping purposes.
               </Text>
 
               {/* What will be deleted */}
@@ -322,6 +322,9 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* Flexible spacer to push bottom components close to bottom */}
+              <View style={{ flex: 1, minHeight: 20 }} />
+
               {hasNegativeCredit ? (
                 <View
                   style={{
@@ -331,7 +334,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     paddingVertical: 12,
                     flexDirection: "row",
                     alignItems: "center",
-                    marginTop: 40,
+                    marginTop: 12,
+                    marginBottom: 8,
                     marginHorizontal: 3,
                   }}
                 >
@@ -363,7 +367,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     paddingVertical: 12,
                     flexDirection: "row",
                     alignItems: "center",
-                    marginTop: 40,
+                    marginTop: 12,
+                    marginBottom: 16,
                     marginHorizontal: 3,
                   }}
                 >
@@ -392,8 +397,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                   <View
                     style={{
                       alignItems: "center",
-                      marginTop: 47,
-                      marginBottom: 22,
+                      marginTop: 12,
+                      marginBottom: 14,
                     }}
                   >
                     <Text
@@ -440,6 +445,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                       alignItems: "center",
                       paddingHorizontal: 7,
                       marginHorizontal: 0,
+                      marginBottom: 8,
                     }}
                   >
                     {/* Lock Icon */}
