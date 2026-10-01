@@ -420,6 +420,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                   title: user?.title || undefined,
                   phoneNumber: user?.phoneNumber || undefined,
                   cusId: user?.cusId || undefined,
+                  fromAccount: true,
                 });
               }}
             />
