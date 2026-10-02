@@ -12,6 +12,7 @@ export interface OrderSummaryProps {
     packageTotal?: number;
     productTotal?: number;
     discount?: number;
+    discountLabel?: string;
     deliveryFee?: number;
     grandTotal?: number;
     buttonText?: string;
@@ -24,6 +25,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     packageTotal = 0,
     productTotal = 0,
     discount = 0,
+    discountLabel = "Received Discount",
     deliveryFee,
     grandTotal,
     buttonText = "Proceed to Checkout",
@@ -174,7 +176,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                                 color: "#000000",
                             }}
                         >
-                            Discount
+                            {discountLabel}
                         </Text>
 
                         <Text
