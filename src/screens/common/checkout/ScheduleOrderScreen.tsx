@@ -649,6 +649,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
           packageTotal={orderContext?.packageTotal || 0}
           productTotal={orderContext?.productTotal || 0}
           discount={orderContext?.discount || 0}
+          discountLabel="Received Discount"
           deliveryFee={isDelivery ? deliveryFee : undefined}
           grandTotal={finalTotal}
           buttonText="Proceed to Payment"
