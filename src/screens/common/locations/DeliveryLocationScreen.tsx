@@ -17,7 +17,6 @@ import CustomHeader from "@/component/common/CustomHeader";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import axios from "axios";
 import { environment } from "@/environment/environment";
-import socketService from "@/services/socket/socket.service";
 
 type DeliveryLocationNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -72,39 +71,6 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
       }
     };
     loadCities();
-
-    // Connect to Socket and listen for real-time city availability updates
-    socketService.connect();
-    const unsubscribe = socketService.onCityAvailabilityUpdated((newCities) => {
-      if (Array.isArray(newCities)) {
-        const mapped: CityResult[] = newCities.map((city: any) => ({
-          id: city.id,
-          city: city.city,
-          district: city.district || "",
-          province: city.province || "",
-          isAvailable: city.isAvailable === 1 || city.isAvailable === true,
-        }));
-        setAllCities(mapped);
-
-        // Instantly update selected city availability status if selected
-        setSelectedCity((prevSelected) => {
-          if (!prevSelected) return null;
-          const match = mapped.find((c) => c.id === prevSelected.id);
-          if (match) {
-            setStatus(match.isAvailable ? "available" : "unavailable");
-            if (match.isAvailable) {
-              setValidationError(null);
-            }
-            return match;
-          }
-          return prevSelected;
-        });
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
   }, []);
 
   const handleConfirm = () => {

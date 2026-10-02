@@ -691,21 +691,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         "📦 [HomeScreen] Real-time catalog update received via Socket.IO:",
         data,
       );
-      fetchBanners();
       handleRefreshItems();
-    });
-
-    const unsubscribeBanner = socketService.onBannerUpdate((data) => {
-      console.log(
-        "🎨 [HomeScreen] Real-time banner update received via Socket.IO:",
-        data,
-      );
-      fetchBanners();
     });
 
     return () => {
       unsubscribeCatalog();
-      unsubscribeBanner();
     };
   }, [selectedCategoryId, buyerType, isRetail, searchQuery]);
 
