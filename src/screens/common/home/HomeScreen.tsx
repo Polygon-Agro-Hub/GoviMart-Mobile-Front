@@ -419,7 +419,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         }
       } else {
         // No token — clear any stale cart items from a previous session
@@ -672,11 +672,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch {}
+              } catch { }
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => {});
+          .catch(() => { });
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -732,7 +732,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
 
         // Also refresh the cart from backend
@@ -752,7 +752,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       }
 
@@ -786,11 +786,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch {}
+                } catch { }
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -967,8 +967,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawChangeBy =
         product.changeby != null &&
-        String(product.changeby).trim() !== "" &&
-        parseFloat(String(product.changeby)) > 0
+          String(product.changeby).trim() !== "" &&
+          parseFloat(String(product.changeby)) > 0
           ? parseFloat(String(product.changeby))
           : rawStartValue;
 
@@ -981,8 +981,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawMaxQuantity =
         product.maxQuantity != null &&
-        String(product.maxQuantity).trim() !== "" &&
-        parseFloat(String(product.maxQuantity)) > 0
+          String(product.maxQuantity).trim() !== "" &&
+          parseFloat(String(product.maxQuantity)) > 0
           ? parseFloat(String(product.maxQuantity))
           : null;
 
@@ -1357,13 +1357,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isPackage = product.type === "package";
                   const cartItem = isProduct
                     ? cartProducts.find(
-                        (p: ProductCartItem) => p.id === product.id,
-                      )
+                      (p: ProductCartItem) => p.id === product.id,
+                    )
                     : null;
                   const cartPackage = isPackage
                     ? cartPackages.find(
-                        (p: PackageCartItem) => p.id === product.id,
-                      )
+                      (p: PackageCartItem) => p.id === product.id,
+                    )
                     : null;
 
                   const isExpanded = product.id === expandedItemId;
@@ -1377,9 +1377,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     : "g";
                   const rawMaxQuantity =
                     isProduct &&
-                    (product as any).maxQuantity != null &&
-                    String((product as any).maxQuantity).trim() !== "" &&
-                    parseFloat(String((product as any).maxQuantity)) > 0
+                      (product as any).maxQuantity != null &&
+                      String((product as any).maxQuantity).trim() !== "" &&
+                      parseFloat(String((product as any).maxQuantity)) > 0
                       ? parseFloat(String((product as any).maxQuantity))
                       : null;
                   const displayMaxQuantityText =
@@ -1504,7 +1504,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     >
                       <View
                         key={product.id!}
-                        className="flex-1 bg-[#F4F3F3] pt-4 pb-4 px-3 items-center mx-2 relative mb-6 min-h-[220px]"
+                        className="flex-1 bg-[#F4F3F3] pt-4 pb-4 px-3 items-center mx-2 relative mb-6 min-h-[215px]"
                         style={{
                           borderTopLeftRadius: 100,
                           borderTopRightRadius: 100,
@@ -1741,9 +1741,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className={`w-6 h-6 rounded-full items-center justify-center ${
-                                  isItemAtMax ? "bg-gray-300" : "bg-black"
-                                }`}
+                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
+                                  }`}
                               >
                                 <Ionicons
                                   name="add"

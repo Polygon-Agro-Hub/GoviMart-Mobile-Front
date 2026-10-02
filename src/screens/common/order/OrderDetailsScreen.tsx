@@ -42,6 +42,7 @@ interface Package {
   price: number;
   image?: string;
   packageImage?: string;
+  packingStatus?: string;
   items: PackageItem[];
 }
 
@@ -118,12 +119,12 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
       typeof amount === "number"
         ? amount
         : parseFloat(
-            String(amount || "")
-              .replace(/Rs\.?/gi, "")
-              .replace(/LKR/gi, "")
-              .replace(/,/g, "")
-              .trim(),
-          ) || 0;
+          String(amount || "")
+            .replace(/Rs\.?/gi, "")
+            .replace(/LKR/gi, "")
+            .replace(/,/g, "")
+            .trim(),
+        ) || 0;
     return num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -187,7 +188,15 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     return `${formattedDate}, 07:00 PM`;
   };
 
+  const isPackageDispatched =
+    packages.length > 0 &&
+    packages.some((pkg) => {
+      const status = (pkg.packingStatus || "").trim();
+      return status.toLowerCase() === "dispatch";
+    });
+
   const openPackageDetails = () => {
+    if (!isPackageDispatched) return;
     setPackageModalVisible(true);
   };
 
@@ -222,11 +231,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 : typeof p.productPrice === "number"
                   ? p.productPrice
                   : parseFloat(
-                      String(p.productPrice || "")
-                        .replace(/Rs\.?/i, "")
-                        .replace(/,/g, "")
-                        .trim(),
-                    ) || 0;
+                    String(p.productPrice || "")
+                      .replace(/Rs\.?/i, "")
+                      .replace(/,/g, "")
+                      .trim(),
+                  ) || 0;
             const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
 
             if (packageMap.has(key)) {
@@ -244,6 +253,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   (p.products && p.products[0]?.image) ||
                   "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
                 packageImage: p.packageImage || p.image,
+                packingStatus: p.packingStatus,
                 items: (p.products || []).map((prod: any) => {
                   const qtyNum =
                     parseFloat(String(prod.qty ?? prod.quantity ?? 0)) || 0;
@@ -485,37 +495,37 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         active: boolean;
         description?: string;
       }> = [
-        {
-          title: "Ordered",
-          date: orderTime || "Just now",
-          icon: "cart-shopping",
-          active: true,
-        },
-        {
-          title: "Processing",
-          date: processingTime,
-          icon: "box-open",
-          active: true,
-        },
-        {
-          title: "Out For Delivery",
-          date: outTime || updateTime,
-          icon: "dolly",
-          active: true,
-        },
-        {
-          title: "Collected",
-          date: collectedTime || updateTime,
-          icon: "truck",
-          active: true,
-        },
-        {
-          title: "On the way",
-          date: onTheWayTime || updateTime,
-          icon: "truck-fast",
-          active: true,
-        },
-      ];
+          {
+            title: "Ordered",
+            date: orderTime || "Just now",
+            icon: "cart-shopping",
+            active: true,
+          },
+          {
+            title: "Processing",
+            date: processingTime,
+            icon: "box-open",
+            active: true,
+          },
+          {
+            title: "Out For Delivery",
+            date: outTime || updateTime,
+            icon: "dolly",
+            active: true,
+          },
+          {
+            title: "Collected",
+            date: collectedTime || updateTime,
+            icon: "truck",
+            active: true,
+          },
+          {
+            title: "On the way",
+            date: onTheWayTime || updateTime,
+            icon: "truck-fast",
+            active: true,
+          },
+        ];
 
       // Add each hold event (and restarted "On the way" step)
       holdHistory.forEach((hld) => {
@@ -1014,99 +1024,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           ))}
         </View>
 
-        {/* DELIVERY / PICKUP INFORMATION */}
-        {(isPickupOrder || order?.delivaryMethod === "PICKUP") && order?.pickupInfo ? (
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#DDE3E8",
-              borderRadius: 20,
-              paddingHorizontal: 13,
-              paddingTop: 13,
-              paddingBottom: 13,
-              marginBottom: 17,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#111",
-                marginBottom: 8,
-              }}
-            >
-              Pickup Store Information
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
-              Store: {order.pickupInfo.centerName}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
-              Contact: {order.pickupInfo.contact01}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
-              Address:{" "}
-              {[
-                order.pickupInfo.address?.street,
-                order.pickupInfo.address?.city,
-                order.pickupInfo.address?.district,
-              ]
-                .filter(Boolean)
-                .join(", ")}
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "500",
-                color: "#222",
-                marginTop: 10,
-              }}
-            >
-              Pickup Person
-            </Text>
-            <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
-              Name: {order.pickupInfo.pickupPerson?.fullName}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
-              Phone: {order.pickupInfo.pickupPerson?.phone1}
-            </Text>
-          </View>
-        ) : order?.delivaryMethod === "DELIVERY" && order?.deliveryInfo ? (
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#DDE3E8",
-              borderRadius: 20,
-              paddingHorizontal: 13,
-              paddingTop: 13,
-              paddingBottom: 13,
-              marginBottom: 17,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#111",
-                marginBottom: 8,
-              }}
-            >
-              Delivery Address
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "500", color: "#222" }}>
-              {order.deliveryInfo.fullName || "--"}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
-              Phone: {order.deliveryInfo.phone || "--"}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#5A5859", marginTop: 2 }}>
-              Address:{" "}
-              {order.deliveryInfo.buildingType === "Apartment"
-                ? `Flat ${order.deliveryInfo.flatNo}, Floor ${order.deliveryInfo.floorNo}, Building ${order.deliveryInfo.buildingNo} (${order.deliveryInfo.buildingName}), ${order.deliveryInfo.street}, ${order.deliveryInfo.city}`
-                : `${order.deliveryInfo.houseNo || ""}, ${order.deliveryInfo.streetName || ""}, ${order.deliveryInfo.city || ""}`}
-            </Text>
-          </View>
-        ) : null}
-
         {/* PACKAGES */}
         {packages.length > 0 && (
           <View
@@ -1140,12 +1057,14 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
               <TouchableOpacity
                 activeOpacity={0.7}
+                disabled={!isPackageDispatched}
                 onPress={() => openPackageDetails()}
               >
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: "600",
+                    color: isPackageDispatched ? "#000000" : "#A0AEC0",
                     textDecorationLine: "underline",
                   }}
                 >
@@ -1375,9 +1294,9 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           const handlingFee = parseFloat(order?.returnHandlingFee || 350);
           const deliveryFeeDeduction = parseFloat(
             order?.curDlvrCharge ||
-              order?.delivaryCharge ||
-              order?.deliveryCharge ||
-              300,
+            order?.delivaryCharge ||
+            order?.deliveryCharge ||
+            300,
           );
           const restoredCredit =
             totalPaidByCustomer > 0
