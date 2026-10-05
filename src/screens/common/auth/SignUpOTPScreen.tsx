@@ -22,6 +22,11 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
+import socketService from "@/services/socket/socket.service";
+import cartService from "@/services/cart/cart.service";
+import { useDispatch } from "react-redux";
+import { loginSuccess } from "@/store/authSlice";
+import { setCartFromBackend } from "@/store/cartSlice";
 
 type SignUpOTPRouteProp = RouteProp<RootStackParamList, "SignUpOTP">;
 type SignUpOTPNavigationProp = StackNavigationProp<
@@ -99,6 +104,7 @@ const clearAttempts = async (key: string) => {
 };
 
 const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
+  const dispatch = useDispatch();
   const scrollViewRef = useRef<ScrollView>(null);
   const phoneCode = route.params?.phoneCode || "+94";
   const phoneNumber = route.params?.phoneNumber || "771122300";
@@ -383,11 +389,102 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           for (const key of attemptsKeys) {
             await clearAttempts(key);
           }
-          Alert.alert(
-            "Registration Successful",
-            "Your Polygon account created successfully.",
-            [{ text: "OK", onPress: () => navigation.navigate("Login") }],
-          );
+
+          const userData = response.data.data;
+          const token = userData?.token;
+
+          if (token && userData) {
+            dispatch(
+              loginSuccess({
+                token: token,
+                userProfile: userData,
+                loginTime: Date.now(),
+              })
+            );
+            await AsyncStorage.setItem("userToken", token);
+            await AsyncStorage.setItem("userProfile", JSON.stringify(userData));
+            await AsyncStorage.setItem("loginTime", String(Date.now()));
+
+            if (userData.id) {
+              socketService.registerUser(userData.id, token);
+            }
+
+            try {
+              const cartRes = await cartService.getUserCart();
+              if (cartRes.data && cartRes.data.status && cartRes.data.data) {
+                const dbProducts = cartRes.data.data.products || [];
+                const dbPackages = cartRes.data.data.packages || [];
+                dispatch(
+                  setCartFromBackend({
+                    products: dbProducts,
+                    packages: dbPackages,
+                    cartUserId: userData.id,
+                  })
+                );
+              }
+            } catch (cartErr) {
+              console.warn("Failed to load user cart on signup:", cartErr);
+            }
+
+            const isWholesale =
+              (userData.buyerType || "").toLowerCase() === "wholesale";
+
+            const targetScreen: keyof RootStackParamList = isWholesale
+              ? "Home"
+              : "ExcludeListAdd";
+            const targetParams = !isWholesale
+              ? {
+                  customerId: userData.id,
+                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+                  title: userData.title,
+                  number: userData.phoneNumber,
+                  cusId: userData.cusId,
+                }
+              : undefined;
+
+            Alert.alert(
+              "Registration Successful",
+              "Your Polygon account created successfully.",
+              [
+                {
+                  text: "OK",
+                  onPress: async () => {
+                    try {
+                      const hasAsked = await AsyncStorage.getItem(
+                        "hasAskedNotificationPermission"
+                      );
+
+                      if (hasAsked !== "true") {
+                        navigation.navigate("NotificationAccess", {
+                          returnScreen: targetScreen,
+                          returnParams: targetParams,
+                          blockBackNavigation: true,
+                        });
+                        return;
+                      }
+                    } catch (err) {
+                      console.warn(
+                        "Error reading notification permission flag:",
+                        err
+                      );
+                    }
+
+                    if (targetParams) {
+                      navigation.navigate(targetScreen as any, targetParams);
+                    } else {
+                      navigation.navigate(targetScreen as any);
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert(
+              "Registration Successful",
+              "Your Polygon account created successfully.",
+              [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+            );
+          }
         } else {
           const is429 = response.data?.isRateLimited;
           const msg = response.data?.message || "Failed to verify the code.";

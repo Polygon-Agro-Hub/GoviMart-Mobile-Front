@@ -5,12 +5,14 @@ interface UserProfile {
   lastName: string;
   email: string;
   phoneNumber: string;
+  phoneCode?: string;
   image: string;
   firstTimeUser: number;
   buyerType: string;
   id?: number;
   title?: string;
   cusId?: string;
+  companyName?: string;
 }
 
 interface RememberedDetails {
