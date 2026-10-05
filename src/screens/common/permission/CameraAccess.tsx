@@ -272,6 +272,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
+                  paddingHorizontal: 16,
                 }}
               >
                 <View className="flex-row items-center justify-center">
@@ -281,7 +282,11 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                     color="#FFFFFF"
                     style={{ marginRight: 8 }}
                   />
-                  <Text className="text-white font-extrabold text-base tracking-wide">
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    className="text-white font-bold text-[15px]"
+                  >
                     {isLoading ? "Requesting..." : "Agree & Continue"}
                   </Text>
                 </View>

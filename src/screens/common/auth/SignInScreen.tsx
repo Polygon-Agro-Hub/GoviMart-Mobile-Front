@@ -145,7 +145,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         dispatch(loginSuccess({ token, userProfile, loginTime }));
         if (userProfile.id) {
           socketService.registerUser(userProfile.id, token);
-          pushNotificationService.registerPushToken().catch(() => {});
+          pushNotificationService.registerPushToken().catch(() => { });
         }
 
         // Fetch this logged-in user's cart from backend
@@ -447,14 +447,14 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           </TouchableOpacity>
 
           {/* Redirect / Register Section */}
-          <View className="items-center mt-4">
+          <View className="flex-row items-center justify-center mt-5 mb-2 flex-wrap">
             <Text className="text-sm text-[#6B6B6B]">
-              Don't have an account?
+              Don't have an account?{" "}
             </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("ChooseAuth")}
-              className="mt-1"
               activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text className="text-sm font-bold text-[#094EE8] underline">
                 Create Account

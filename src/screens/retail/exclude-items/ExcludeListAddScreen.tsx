@@ -58,6 +58,7 @@ interface RouteParams {
   number?: string;
   id?: number;
   cusId?: string;
+  fromAccount?: boolean;
 }
 
 interface ExcludeListAddProps {
@@ -132,8 +133,9 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   route,
   navigation,
 }) => {
-  const { customerId = 1002, name, title, number, id, cusId } =
+  const { customerId = 1002, name, title, number, id, cusId, fromAccount } =
     (route.params as RouteParams) || {};
+  const isFromAccount = fromAccount === true;
 
   const [crops, setCrops] = useState<Crop[]>([]);
   const [filteredCrops, setFilteredCrops] = useState<Crop[]>([]);
@@ -285,7 +287,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       setListLoading(false);
     }
   }, [customerId]);
- 
+
   useEffect(() => {
     fetchCropsAndPreferences();
   }, [fetchCropsAndPreferences]);
@@ -330,27 +332,27 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         const authHeaders = { Authorization: `Bearer ${token}` };
 
         if (addIncludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/add-include-items`, 
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/add-include-items`,
             { items: addIncludeNames }, { headers: authHeaders }
           );
         }
         if (delIncludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-included`, 
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-included`,
             { items: delIncludeNames }, { headers: authHeaders }
           );
         }
         if (addExcludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/exclude-items`, 
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/exclude-items`,
             { items: addExcludeNames }, { headers: authHeaders }
           );
         }
         if (delExcludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`, 
+          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`,
             { items: delExcludeNames }, { headers: authHeaders }
           );
         }
       }
-      
+
       const currentData = getCurrentCustomerData();
       navigation.navigate("ExcludeListSummery", {
         customerId: Number(customerId),
@@ -557,13 +559,20 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
             onPress={handlesubmitexcludelist}
             disabled={loading}
             activeOpacity={0.8}
-            className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
+            className="bg-black rounded-full items-center justify-center h-[50px] w-full max-w-[500px]"
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.15,
+              shadowRadius: 5,
+              elevation: 4,
+            }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text className="text-white text-base font-bold">
-                Verify
+                {isFromAccount ? "Update" : "Save"}
               </Text>
             )}
           </TouchableOpacity>

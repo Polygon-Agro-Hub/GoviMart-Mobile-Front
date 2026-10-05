@@ -106,14 +106,38 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
     navigation.navigate("ReportComplaint");
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDateTime = (dateString?: string | null) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
 
-    return date.toLocaleDateString("en-US", {
+    const time = date
+      .toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .replace(/\s+/g, "");
+
+    const formattedDate = date.toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
     });
+
+    return `${time} on ${formattedDate}`;
+  };
+
+  const formatReplyDate = (dateString?: string | null) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}/${month}/${day}`;
   };
 
   useFocusEffect(
@@ -209,7 +233,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
 
               {/* Sent Date */}
               <Text className="text-[13px] text-[#666666] mb-2.5">
-                Sent : {formatDate(complaint.createdAt)}
+                Sent : At {formatDateTime(complaint.createdAt)}
               </Text>
 
               {/* Bottom Actions */}
@@ -314,7 +338,7 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
             <Text className="text-[15px] leading-5 text-[#111111] mb-[30px]">
               Sincerely,{"\n"}
               Polygon Customer Support Team{"\n"}
-              {formatDate(selectedComplaint?.replyTime!)}
+              {formatReplyDate(selectedComplaint?.replyTime)}
             </Text>
           </ScrollView>
         </View>
