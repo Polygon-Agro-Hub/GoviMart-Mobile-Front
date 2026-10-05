@@ -539,7 +539,21 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                     onFocus={() => setFocusedIndex(index)}
                     onBlur={() => setFocusedIndex(null)}
                     keyboardType="number-pad"
-                    className="text-xl font-bold text-black text-center w-full h-full p-0"
+                    style={{
+                      textAlign: "center",
+                      textAlignVertical: "center",
+                      fontSize: 20,
+                      fontWeight: "bold",
+                      color: "#000000",
+                      paddingTop: 0,
+                      paddingBottom: 0,
+                      paddingVertical: 0,
+                      paddingHorizontal: 0,
+                      margin: 0,
+                      width: "100%",
+                      height: "100%",
+                      ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                    }}
                     maxLength={1}
                     selectTextOnFocus
                   />

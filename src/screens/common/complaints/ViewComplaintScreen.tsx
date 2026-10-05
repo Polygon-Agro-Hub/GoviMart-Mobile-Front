@@ -49,24 +49,26 @@ const STATUS_COLORS: Record<string, string> = {
   Rejected: "#DC2626",
 };
 
-const formatDate = (dateString: string) => {
+const formatDateTime = (dateString?: string | null) => {
+  if (!dateString) return "";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
 
-  return date.toLocaleDateString("en-US", {
+  const time = date
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(/\s+/g, "");
+
+  const formattedDate = date.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-};
 
-const formatTime = (dateString: string) => {
-  const date = new Date(dateString);
-
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return `${time} on ${formattedDate}`;
 };
 
 const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
@@ -190,7 +192,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
             </Text>
 
             <Text className="text-[13px] text-[#5A5859]">
-              Sent : {formatDate(complaint.createdAt)}
+              Sent : {formatDateTime(complaint.createdAt)}
             </Text>
           </View>
 
@@ -276,8 +278,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
               </Text>
 
               <Text className="text-[12.5px] text-[#5A5859] mt-1">
-                At {formatTime(complaint.createdAt)} on{" "}
-                {formatDate(complaint.createdAt)}
+                At {formatDateTime(complaint.createdAt)}
               </Text>
             </View>
           </View>
@@ -304,9 +305,8 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
 
           <View className="flex-row min-h-[64px] mb-0">
             <View
-              className={`w-[35px] h-[35px] rounded-full justify-center items-center z-10 ${
-                isClosed ? "bg-black" : "bg-[#F0F1F4]"
-              }`}
+              className={`w-[35px] h-[35px] rounded-full justify-center items-center z-10 ${isClosed ? "bg-black" : "bg-[#F0F1F4]"
+                }`}
             >
               <Ionicons
                 name="chatbubble-ellipses"
