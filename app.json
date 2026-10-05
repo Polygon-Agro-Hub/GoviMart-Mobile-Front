@@ -58,6 +58,9 @@
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
@@ -121,7 +124,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "a60d1d02-58d9-4da9-9dbe-b2d826714eab"
       }
     }
   }

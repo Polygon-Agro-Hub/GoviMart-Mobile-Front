@@ -15,6 +15,18 @@ export interface ServerNotificationItem {
   orderStatus?: string;
   isFinalized?: number | boolean;
   delivaryMethod?: string;
+  unreadCount?: number;
+}
+
+export interface NotificationTriggerPayload {
+  id?: number;
+  unreadCount?: number;
+  title?: string;
+  message?: string;
+  createdAt?: string;
+  processOrderId?: number;
+  orderId?: number;
+  [key: string]: any;
 }
 
 export interface NotificationResponse {

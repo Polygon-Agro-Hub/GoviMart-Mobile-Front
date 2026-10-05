@@ -305,6 +305,7 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
+                  paddingHorizontal: 16,
                 }}
               >
                 <View className="flex-row items-center justify-center">
@@ -314,7 +315,11 @@ const NotificationAccess: React.FC<NotificationAccessProps> = ({
                     color="#FFFFFF"
                     style={{ marginRight: 8 }}
                   />
-                  <Text className="text-white font-extrabold text-base tracking-wide">
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    className="text-white font-bold text-[15px]"
+                  >
                     {isLoading ? "Enabling..." : "Allow Notifications"}
                   </Text>
                 </View>

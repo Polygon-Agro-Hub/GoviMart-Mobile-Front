@@ -224,19 +224,22 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         // Connect socket
         socketService.connect();
 
-        // Listen for live socket notifications
-        const unsubscribeNotif = socketService.onNewNotification((serverItem) => {
-            const uiItem = mapServerItemToUi(serverItem);
-            if (!isRetail && isPackageReviewTitle(uiItem.title)) {
-                return;
-            }
-            setNotifications((prev) => {
-                // Avoid duplicates
-                if (prev.some((n) => n.id === uiItem.id)) {
-                    return prev;
+        // Listen for live socket notifications (lightweight trigger or full item)
+        const unsubscribeNotif = socketService.onNewNotification((serverItem: any) => {
+            // If full notification fields were provided, optimistically display
+            if (serverItem?.id && serverItem?.title && serverItem?.createdAt) {
+                const uiItem = mapServerItemToUi(serverItem);
+                if (isRetail || !isPackageReviewTitle(uiItem.title)) {
+                    setNotifications((prev) => {
+                        if (prev.some((n) => n.id === uiItem.id)) {
+                            return prev;
+                        }
+                        return [uiItem, ...prev];
+                    });
                 }
-                return [uiItem, ...prev];
-            });
+            }
+            // Once triggered, always fetch latest search/data from DB to update user state cleanly
+            loadNotifications(false);
         });
 
         // Listen for unread count updates

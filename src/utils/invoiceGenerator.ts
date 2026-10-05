@@ -602,7 +602,7 @@ export const buildInvoiceHtml = (
     <div class="company-details">
       <div class="name">Polygon Holdings (Private) Ltd</div>
       <p>No. 42/46, Nawam Mawatha, Colombo 02.</p>
-      <p>Contact No: +94 770 111 999</p>
+      <p>Contact No: 011 431 3433</p>
       <p>Email Address: info@polygon.lk</p>
     </div>
     <div class="logo-container">

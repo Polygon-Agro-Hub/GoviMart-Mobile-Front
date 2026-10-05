@@ -832,7 +832,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
               <View
                 style={{
-                  width: "39%",
+                  width: "32%",
                   marginRight: 8,
                 }}
               >

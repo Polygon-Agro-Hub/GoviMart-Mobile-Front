@@ -855,7 +855,9 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 paddingVertical: 4,
               }}
             >
-              <Text style={{ fontSize: 13, color: "#60647A" }}>Discount</Text>
+              <Text style={{ fontSize: 13, color: "#60647A" }}>
+                Received Discount
+              </Text>
               <Text
                 style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
               >
