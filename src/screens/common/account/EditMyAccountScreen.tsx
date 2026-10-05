@@ -17,9 +17,10 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
-import { updateUserProfileImage } from "@/store/authSlice";
+import { updateUserProfileImage, updateUserProfile } from "@/store/authSlice";
 
 import { RootStackParamList } from "@/types/types";
 import { DropdownField, InputField } from "@/component/common/CustomField";
@@ -194,6 +195,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     companyName: string;
     companyMobileCode: string;
     companyMobile: string;
+    image: string;
   } | null>(null);
 
   const isWholesale =
@@ -211,8 +213,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.title) setTitle(data.title);
             if (data.firstName) setFirstName(data.firstName);
             if (data.lastName) setLastName(data.lastName);
-            if (data.profileImage || data.image) {
-              setProfileImage(data.profileImage || data.image);
+            const fetchedImage = (data.profileImage || data.image || "").trim();
+            if (fetchedImage) {
+              setProfileImage(fetchedImage);
+            } else {
+              setProfileImage(null);
             }
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
@@ -235,6 +240,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               companyName: (data.companyName || "").trim(),
               companyMobileCode: (data.companyPhoneCode || data.phoneCode || "+94").trim(),
               companyMobile: (data.companyPhone || "").trim(),
+              image: fetchedImage,
             });
           }
           console.log("acc details fetchihng success: ", response.data.data);
@@ -343,7 +349,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
 
     if (originalAccountData) {
+      const currentImage = (profileImage || "").trim();
+      const origImage = (originalAccountData.image || "").trim();
+      const isImageChanged = currentImage !== origImage;
+
       const isUnchanged =
+        !isImageChanged &&
         title.trim() === originalAccountData.title &&
         firstName.trim() === originalAccountData.firstName &&
         lastName.trim() === originalAccountData.lastName &&
@@ -368,6 +379,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     try {
       setUpdating(true);
 
+      const finalImage = profileImage ? profileImage.trim() : null;
       const payload: any = {
         title: (title || "Mr").trim(),
         firstName: firstName.trim(),
@@ -375,6 +387,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         phoneCode: mobileCode.trim(),
         phoneNumber: mobileNumber.trim(),
         email: email.trim(),
+        image: finalImage,
       };
 
       if (isWholesale) {
@@ -416,6 +429,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const response = await customerService.updateUserDetails(payload);
 
         if (response.data) {
+          const updatedImageStr = profileImage ? profileImage.trim() : "";
           setOriginalAccountData({
             title: title.trim(),
             firstName: firstName.trim(),
@@ -426,7 +440,43 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             companyName: companyName.trim(),
             companyMobileCode: (companyMobileCode || mobileCode).trim(),
             companyMobile: compnayMobile.trim(),
+            image: updatedImageStr,
           });
+
+          dispatch(updateUserProfileImage({ image: updatedImageStr }));
+          dispatch(
+            updateUserProfile({
+              title: title.trim(),
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              email: email.trim(),
+              phoneNumber: mobileNumber.trim(),
+              phoneCode: mobileCode.trim(),
+              image: updatedImageStr,
+              companyName: isWholesale ? companyName.trim() : undefined,
+            })
+          );
+
+          try {
+            const stored = await AsyncStorage.getItem("userProfile");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              const merged = {
+                ...parsed,
+                title: title.trim(),
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                email: email.trim(),
+                phoneNumber: mobileNumber.trim(),
+                phoneCode: mobileCode.trim(),
+                image: updatedImageStr,
+                companyName: isWholesale ? companyName.trim() : parsed.companyName,
+              };
+              await AsyncStorage.setItem("userProfile", JSON.stringify(merged));
+            }
+          } catch (e) {
+            console.log("Error updating AsyncStorage userProfile:", e);
+          }
 
           Alert.alert(
             "Success",
@@ -467,7 +517,21 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const uploadedUrl = response.data.data.imageUrl;
         setProfileImage(uploadedUrl);
         setProfileImageError(null);
+        setOriginalAccountData((prev) => (prev ? { ...prev, image: uploadedUrl } : null));
         dispatch(updateUserProfileImage({ image: uploadedUrl }));
+        dispatch(updateUserProfile({ image: uploadedUrl }));
+        try {
+          const stored = await AsyncStorage.getItem("userProfile");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            await AsyncStorage.setItem(
+              "userProfile",
+              JSON.stringify({ ...parsed, image: uploadedUrl })
+            );
+          }
+        } catch (e) {
+          console.log("Error updating AsyncStorage userProfile:", e);
+        }
         showAlert("Success", "Profile photo updated successfully.", "success");
       } else {
         const msg = response.data?.message || "Failed to upload image.";

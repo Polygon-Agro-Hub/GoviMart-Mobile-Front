@@ -71,6 +71,16 @@ const formatDateTime = (dateString?: string | null) => {
   return `${time} on ${formattedDate}`;
 };
 
+const formatComplaintText = (text?: string | null): string => {
+  if (!text) return "";
+  return text
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+};
+
 const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
   const complaintId = route.params?.id;
   const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
@@ -211,8 +221,8 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
             <Text className="text-[13px] text-[#676771] mb-[4px]">Description</Text>
 
-            <Text className="text-[14.5px] leading-5 text-black font-medium">
-              {complaint.complain}
+            <Text className="text-[14.5px] leading-[22px] text-black font-medium">
+              {formatComplaintText(complaint.complain)}
             </Text>
           </View>
 
