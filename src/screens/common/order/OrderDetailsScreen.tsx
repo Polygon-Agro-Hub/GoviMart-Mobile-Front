@@ -432,7 +432,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           },
           {
             title: "Cancelled",
-            date: updateTime,
+            date: "",
             icon: "xmark",
             active: true,
           },
@@ -666,7 +666,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         },
         {
           title: "Cancelled",
-          date: updateTime,
+          date: "",
           icon: "xmark",
           active: true,
         },
@@ -1288,6 +1288,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
           // Return calculations
           const status = order?.processStatus || order?.status || "Pending";
+          const isOrderCancelled =
+            status === "Cancelled" ||
+            status.toLowerCase() === "cancelled" ||
+            (order?.processStatus || "").toLowerCase() === "cancelled" ||
+            (order?.status || "").toLowerCase() === "cancelled";
           const isOrderReturned =
             status === "Return" || status === "Return Received";
           const totalPaidByCustomer = isCardOrder ? orderFullTotal : creditPaid;
@@ -1327,7 +1332,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   paddingHorizontal: 13,
                   paddingTop: 13,
                   paddingBottom: 13,
-                  marginBottom: 17,
+                  marginBottom: isOrderCancelled ? 0 : 17,
                 }}
               >
                 <Text
@@ -1446,92 +1451,94 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
               </View>
 
               {/* PAYMENT SUMMARY */}
-              <View
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#DDE3E8",
-                  borderRadius: 20,
-                  paddingHorizontal: 13,
-                  paddingTop: 13,
-                  paddingBottom: 13,
-                }}
-              >
-                <Text
+              {!isOrderCancelled && (
+                <View
                   style={{
-                    fontSize: 14,
-                    fontWeight: "600",
-                    marginBottom: 15,
+                    borderWidth: 1,
+                    borderColor: "#DDE3E8",
+                    borderRadius: 20,
+                    paddingHorizontal: 13,
+                    paddingTop: 13,
+                    paddingBottom: 13,
                   }}
                 >
-                  Payment Summery
-                </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      marginBottom: 15,
+                    }}
+                  >
+                    Payment Summery
+                  </Text>
 
-                {/* Paid By Credit */}
-                {(creditPaid > 0 || isCreditOrder) && (
-                  <SummaryRow
-                    label="Paid By Credit"
-                    value={`Rs. ${formatAmount(creditPaid > 0 ? creditPaid : orderFullTotal)}`}
-                    icon="wallet"
-                    iconColor="#8D5B4C"
-                  />
-                )}
-
-                {/* Paid with Card */}
-                {isCardOrder && cardRemainingAmount > 0 && (
-                  <SummaryRow
-                    label="Paid with Card"
-                    value={`Rs. ${formatAmount(cardRemainingAmount)}`}
-                    icon="credit-card"
-                    iconColor="#0088FF"
-                  />
-                )}
-
-                {/* Cash Row:
-                    If returned: always show "Paid with Cash", "Rs. 0.00", in green (#00B83D).
-                    If not returned: show "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
-                */}
-                {isCashOrder &&
-                  (isOrderReturned || cashRemainingAmount > 0) && (
+                  {/* Paid By Credit */}
+                  {(creditPaid > 0 || isCreditOrder) && (
                     <SummaryRow
-                      label={
-                        isOrderReturned || isPaid
-                          ? "Paid with Cash"
-                          : "Pay with Cash"
-                      }
-                      value={
-                        isOrderReturned
-                          ? "Rs. 0.00"
-                          : `Rs. ${formatAmount(cashRemainingAmount)}`
-                      }
-                      icon="money-bill-wave"
-                      iconColor="#00B83D"
-                      valueColor={
-                        isOrderReturned || isPaid ? "#00B83D" : "#FF9114"
-                      }
+                      label="Paid By Credit"
+                      value={`Rs. ${formatAmount(creditPaid > 0 ? creditPaid : orderFullTotal)}`}
+                      icon="wallet"
+                      iconColor="#8D5B4C"
                     />
                   )}
 
-                {/* Fallback if none of the above matched */}
-                {!isCardOrder &&
-                  !isCashOrder &&
-                  !isCreditOrder &&
-                  creditPaid === 0 && (
+                  {/* Paid with Card */}
+                  {isCardOrder && cardRemainingAmount > 0 && (
                     <SummaryRow
-                      label={`Paid with ${order?.paymentMethod || "Card"}`}
-                      value={`Rs. ${formatAmount(orderFullTotal)}`}
+                      label="Paid with Card"
+                      value={`Rs. ${formatAmount(cardRemainingAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"
                     />
                   )}
 
-                <View style={{ height: 4 }} />
+                  {/* Cash Row:
+                      If returned: always show "Paid with Cash", "Rs. 0.00", in green (#00B83D).
+                      If not returned: show "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
+                  */}
+                  {isCashOrder &&
+                    (isOrderReturned || cashRemainingAmount > 0) && (
+                      <SummaryRow
+                        label={
+                          isOrderReturned || isPaid
+                            ? "Paid with Cash"
+                            : "Pay with Cash"
+                        }
+                        value={
+                          isOrderReturned
+                            ? "Rs. 0.00"
+                            : `Rs. ${formatAmount(cashRemainingAmount)}`
+                        }
+                        icon="money-bill-wave"
+                        iconColor="#00B83D"
+                        valueColor={
+                          isOrderReturned || isPaid ? "#00B83D" : "#FF9114"
+                        }
+                      />
+                    )}
 
-                <SummaryRow
-                  label="Total"
-                  value={`Rs. ${formatAmount(paymentSummaryTotal)}`}
-                  bold
-                />
-              </View>
+                  {/* Fallback if none of the above matched */}
+                  {!isCardOrder &&
+                    !isCashOrder &&
+                    !isCreditOrder &&
+                    creditPaid === 0 && (
+                      <SummaryRow
+                        label={`Paid with ${order?.paymentMethod || "Card"}`}
+                        value={`Rs. ${formatAmount(orderFullTotal)}`}
+                        icon="credit-card"
+                        iconColor="#0088FF"
+                      />
+                    )}
+
+                  <View style={{ height: 4 }} />
+
+                  <SummaryRow
+                    label="Total"
+                    value={`Rs. ${formatAmount(paymentSummaryTotal)}`}
+                    bold
+                  />
+                </View>
+              )}
 
               {/* ORDER SUMMARY DUE TO RETURN */}
               {isOrderReturned && (

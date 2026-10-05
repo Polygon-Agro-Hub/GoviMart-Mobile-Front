@@ -223,6 +223,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 marginTop: 12,
                 textAlign: "center", 
                 maxWidth: "90%", 
+                paddingHorizontal: 4,
               }}
               numberOfLines={2} 
             >

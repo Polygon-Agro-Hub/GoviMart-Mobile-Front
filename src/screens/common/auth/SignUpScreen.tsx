@@ -658,7 +658,16 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               >
                 <View className="flex-row items-center gap-x-2">
                   <FontAwesome6 name="user-large" size={14} color="black" />
-                  <Text className="text-sm text-black">{title || "Title"}</Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: "#000000",
+                      ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                    }}
+                    className="text-[14px] text-black"
+                  >
+                    {title || "Title"}
+                  </Text>
                 </View>
                 <FontAwesome5 name="chevron-down" size={10} color="black" />
               </TouchableOpacity>
@@ -791,12 +800,30 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                           }}
                           style={{ width: 22, height: 16, borderRadius: 2 }}
                         />
-                        <Text className="text-sm text-black">{phoneCode}</Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#000000",
+                            ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                          }}
+                          className="text-[14px] text-black"
+                        >
+                          {phoneCode}
+                        </Text>
                       </>
                     ) : (
                       <>
                         <FontAwesome name="flag" size={14} color="black" />
-                        <Text className="text-sm text-black">Code</Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#000000",
+                            ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                          }}
+                          className="text-[14px] text-black"
+                        >
+                          Code
+                        </Text>
                       </>
                     )}
                   </View>
@@ -1077,14 +1104,30 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                               }}
                               style={{ width: 22, height: 16, borderRadius: 2 }}
                             />
-                            <Text className="text-sm text-black">
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                color: "#000000",
+                                ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                              }}
+                              className="text-[14px] text-black"
+                            >
                               {companyPhoneCode}
                             </Text>
                           </>
                         ) : (
                           <>
                             <FontAwesome name="flag" size={14} color="black" />
-                            <Text className="text-sm text-black">Code</Text>
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                color: "#000000",
+                                ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                              }}
+                              className="text-[14px] text-black"
+                            >
+                              Code
+                            </Text>
                           </>
                         )}
                       </View>
@@ -1398,6 +1441,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         visible={isTitleModalOpen}
         onClose={() => setIsTitleModalOpen(false)}
         title="Select Title"
+        showSearch={false}
         searchPlaceholder="Search title..."
         noResultsText="No results found"
         data={titles.map((t) => ({ label: t, value: t }))}
