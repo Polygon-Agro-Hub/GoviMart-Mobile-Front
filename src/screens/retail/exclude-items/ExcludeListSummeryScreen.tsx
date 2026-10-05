@@ -60,8 +60,9 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   navigation,
 }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
-  const { customerId, name, title, phoneNumber, cusId, id } =
+  const { customerId, name, title, phoneNumber, cusId, id, fromAccount } =
     route.params || {};
+  const isFromAccount = fromAccount === true;
 
   const [excludeCrops, setExcludeCrops] = useState<ExcludeCrop[]>([]);
   const [preferCrops, setPreferCrops] = useState<PreferCrop[]>([]);
@@ -311,9 +312,9 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate("Profile");
+      navigation.navigate(isFromAccount ? "Profile" : "Home");
     }
-  }, [navigation]);
+  }, [navigation, isFromAccount]);
 
   useFocusEffect(
     useCallback(() => {
@@ -433,7 +434,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                 <TouchableOpacity
                   onPress={() =>
                     navigation.navigate("ExcludeListAdd", {
-                      customerId: Number(customerId),
+                      customerId: Number(customerId || user?.id || 1002),
+                      fromAccount: isFromAccount,
                     })
                   }
                   className="items-center justify-center"
@@ -461,16 +463,16 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                 )}
 
                 <View className="flex-row justify-between items-center py-2 border-b border-gray-200">
-                  <View className="flex-row items-center gap-3 flex-1">
+                  <View className="flex-row items-center flex-1">
                     <Checkbox
                       checked={preferCrops.length > 0 && selectedPreferIds.length === preferCrops.length}
                       onPress={toggleSelectAllPrefer}
                     />
-                    <Text className="text-[#9CA3AF] text-xs">
+                    <Text className="flex-1 text-center text-[#9CA3AF] text-xs">
                       Item ({String(preferCrops.length).padStart(2, "0")})
                     </Text>
                   </View>
-                  <Text className="flex-1 text-center text-[#9CA3AF] text-xs">
+                  <Text className="flex-1 text-left text-[#9CA3AF] text-xs">
                     Name
                   </Text>
                   <Text className="flex-1 text-right text-[#9CA3AF] text-xs">
@@ -483,19 +485,21 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                     key={crop.preId}
                     className="flex-row justify-between items-center py-3"
                   >
-                    <View className="flex-row items-center gap-3 flex-1">
+                    <View className="flex-row items-center flex-1">
                       <Checkbox
                         checked={selectedPreferIds.includes(crop.preId)}
                         onPress={() => toggleSelectPrefer(crop.preId)}
                       />
-                      <Image
-                        source={{ uri: crop.image }}
-                        className="w-8 h-8"
-                        resizeMode="contain"
-                      />
+                      <View className="flex-1 items-center justify-center">
+                        <Image
+                          source={{ uri: crop.image }}
+                          className="w-8 h-8"
+                          resizeMode="contain"
+                        />
+                      </View>
                     </View>
                     <Text
-                      className="text-sm text-black flex-1 text-center"
+                      className="text-sm text-black flex-1 text-left"
                       numberOfLines={2}
                     >
                       {crop.displayName}
@@ -503,6 +507,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                     <View className="flex-1 items-end">
                       <TouchableOpacity
                         onPress={() => deletePreferCrop(crop.preId)}
+                        style={{ paddingRight: 4 }}
                       >
                         <MaterialIcons
                           name="delete"
@@ -533,7 +538,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                 <TouchableOpacity
                   onPress={() =>
                     navigation.navigate("ExcludeListAdd", {
-                      customerId: Number(customerId),
+                      customerId: Number(customerId || user?.id || 1002),
+                      fromAccount: isFromAccount,
                     })
                   }
                   className="items-center justify-center"
@@ -561,16 +567,16 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                 )}
 
                 <View className="flex-row justify-between items-center py-2 border-b border-gray-200">
-                  <View className="flex-row items-center gap-3 flex-1">
+                  <View className="flex-row items-center flex-1">
                     <Checkbox
                       checked={excludeCrops.length > 0 && selectedExcludeIds.length === excludeCrops.length}
                       onPress={toggleSelectAllExclude}
                     />
-                    <Text className="text-[#9CA3AF] text-xs">
+                    <Text className="flex-1 text-center text-[#9CA3AF] text-xs">
                       Item ({String(excludeCrops.length).padStart(2, "0")})
                     </Text>
                   </View>
-                  <Text className="flex-1 text-center text-[#9CA3AF] text-xs">
+                  <Text className="flex-1 text-left text-[#9CA3AF] text-xs">
                     Name
                   </Text>
                   <Text className="flex-1 text-right text-[#9CA3AF] text-xs">
@@ -583,19 +589,21 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                     key={crop.excludeId}
                     className="flex-row justify-between items-center py-3"
                   >
-                    <View className="flex-row items-center gap-3 flex-1">
+                    <View className="flex-row items-center flex-1">
                       <Checkbox
                         checked={selectedExcludeIds.includes(crop.excludeId)}
                         onPress={() => toggleSelectExclude(crop.excludeId)}
                       />
-                      <Image
-                        source={{ uri: crop.image }}
-                        className="w-8 h-8"
-                        resizeMode="contain"
-                      />
+                      <View className="flex-1 items-center justify-center">
+                        <Image
+                          source={{ uri: crop.image }}
+                          className="w-8 h-8"
+                          resizeMode="contain"
+                        />
+                      </View>
                     </View>
                     <Text
-                      className="text-sm text-black flex-1 text-center"
+                      className="text-sm text-black flex-1 text-left"
                       numberOfLines={2}
                     >
                       {crop.displayName}
@@ -603,6 +611,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
                     <View className="flex-1 items-end">
                       <TouchableOpacity
                         onPress={() => deleteExcludeCrop(crop.excludeId)}
+                        style={{ paddingRight: 4 }}
                       >
                         <MaterialIcons
                           name="delete"
@@ -622,12 +631,26 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       {/* Bottom CTA */}
       <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
         <TouchableOpacity
-          onPress={handleCompleteOnboarding}
+          onPress={
+            isFromAccount
+              ? () =>
+                navigation.navigate("ExcludeListAdd", {
+                  customerId: Number(customerId || user?.id || 1002),
+                  name:
+                    `${customerName.firstName} ${customerName.lastName}`.trim() ||
+                    undefined,
+                  title: customerName.title || undefined,
+                  number: customerName.phoneNumber || undefined,
+                  id: id || undefined,
+                  fromAccount: true,
+                })
+              : handleCompleteOnboarding
+          }
           activeOpacity={0.8}
           className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
         >
           <Text className="text-white text-base font-bold">
-            Add More
+            {isFromAccount ? "Add More" : "Continue"}
           </Text>
         </TouchableOpacity>
       </View>

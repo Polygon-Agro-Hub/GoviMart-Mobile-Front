@@ -137,12 +137,11 @@ export const InputField = React.memo(({
                                 flex: 1,
                                 height: 24,
                                 paddingVertical: 0,
-                                paddingHorizontal: 0,
+                                paddingHorizontal: 1.7,
                                 fontSize: 14,
                                 color: "#111111",
                                 fontWeight: "500",
                                 textAlignVertical: "center",
-                                includeFontPadding: false,
                             }}
                         />
                     </View>

@@ -4,24 +4,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { environment } from "@/environment/environment";
 import { store } from "@/store";
 import { tokenStorage } from "@/utils/tokenStorage";
-import notificationService, { ServerNotificationItem } from "../notification/notification.service";
+import notificationService, { ServerNotificationItem, NotificationTriggerPayload } from "../notification/notification.service";
 import { updateGlobalUnreadCount, getGlobalUnreadCount } from "@/store/notificationStore";
 
 const LAST_NOTIFIED_ID_KEY = "@govimart_last_notified_notification_id";
 
-type NotificationCallback = (notification: ServerNotificationItem) => void;
-type CityAvailabilityCallback = (cities: any[]) => void;
+type NotificationCallback = (notification: NotificationTriggerPayload | ServerNotificationItem) => void;
 type UnreadCountCallback = (unreadCount: number) => void;
 type CatalogUpdateCallback = (data?: any) => void;
-type BannerUpdateCallback = (data?: any) => void;
 
 class SocketService {
   private socket: Socket | null = null;
   private notificationListeners: Set<NotificationCallback> = new Set();
-  private cityListeners: Set<CityAvailabilityCallback> = new Set();
   private unreadCountListeners: Set<UnreadCountCallback> = new Set();
   private catalogListeners: Set<CatalogUpdateCallback> = new Set();
-  private bannerListeners: Set<BannerUpdateCallback> = new Set();
 
   private isConnecting: boolean = false;
   private currentUserId: number | null = null;
@@ -107,9 +103,11 @@ class SocketService {
         this.hasLoggedConnectionNotice = false;
         console.log(`✅ [SocketService] Connected! Socket ID: ${this.socket?.id}`);
         this.syncUserRegistration();
+        // One-time baseline unread count check on connect (0 polling - Sales Dash pattern)
+        this.checkNewNotifications();
       });
 
-      const handleSocketNotification = (data: ServerNotificationItem) => {
+      const handleSocketNotification = (data: NotificationTriggerPayload | ServerNotificationItem) => {
         console.log("📢 [SocketService] Real-time socket event received:", data?.title || data?.id);
 
         if (data?.id && data.id > this.shownBannerUpToId) {
@@ -118,9 +116,9 @@ class SocketService {
         }
 
         // Update global unread badge immediately for ALL tabs (Sales Dash pattern)
-        if (typeof (data as any)?.unreadCount === "number") {
-          this.lastKnownUnreadCount = (data as any).unreadCount;
-          updateGlobalUnreadCount((data as any).unreadCount);
+        if (typeof data?.unreadCount === "number") {
+          this.lastKnownUnreadCount = data.unreadCount;
+          updateGlobalUnreadCount(data.unreadCount);
         } else if (this.lastKnownUnreadCount >= 0) {
           this.lastKnownUnreadCount += 1;
           updateGlobalUnreadCount(this.lastKnownUnreadCount);
@@ -150,17 +148,6 @@ class SocketService {
         });
       });
 
-      this.socket.on("city_availability_updated", (cities: any[]) => {
-        console.log("🌍 [SocketService] Received city_availability_updated:", cities?.length);
-        this.cityListeners.forEach((listener) => {
-          try {
-            listener(cities);
-          } catch (e) {
-            console.error("[SocketService] City listener error:", e);
-          }
-        });
-      });
-
       const handleCatalogUpdate = (data: any) => {
         console.log("📦 [SocketService] Received catalog/product/package update via socket:", data);
         this.catalogListeners.forEach((listener) => {
@@ -181,53 +168,29 @@ class SocketService {
       this.socket.on("product_status_changed", handleCatalogUpdate);
       this.socket.on("package_status_changed", handleCatalogUpdate);
 
-      const handleBannerUpdate = (data: any) => {
-        console.log("🎨 [SocketService] Received banner update via socket:", data);
-        this.bannerListeners.forEach((listener) => {
-          try {
-            listener(data);
-          } catch (e) {
-            console.error("[SocketService] Banner listener error:", e);
-          }
-        });
-      };
-
-      this.socket.on("banners_updated", handleBannerUpdate);
-      this.socket.on("banner_updated", handleBannerUpdate);
-      this.socket.on("slides_updated", handleBannerUpdate);
-      this.socket.on("banner_position_updated", handleBannerUpdate);
-
       this.socket.on("connect_error", (err) => {
         this.isConnecting = false;
         if (!this.hasLoggedConnectionNotice) {
           this.hasLoggedConnectionNotice = true;
-          console.log("ℹ️ [SocketService] Socket connecting or fallback active:", err.message);
+          console.log("ℹ️ [SocketService] Socket connecting / retrying...", err.message);
         }
-        this.startFallbackPolling();
       });
 
       this.socket.on("disconnect", (reason) => {
         this.isConnecting = false;
         console.log(`🔌 [SocketService] Disconnected: ${reason}`);
-        if (reason !== "io client disconnect") {
-          this.startFallbackPolling();
-        }
       });
-
-      // Always activate background polling as a reliable safety net (Sales Dash pattern)
-      this.startFallbackPolling();
 
     } catch (e) {
       this.isConnecting = false;
       console.error("[SocketService] Failed to initialize socket:", e);
-      this.startFallbackPolling();
     }
   }
 
   /**
    * Dispatch notification to all registered listeners (Push banner, Notification screen)
    */
-  private dispatchNotification(item: ServerNotificationItem) {
+  private dispatchNotification(item: NotificationTriggerPayload | ServerNotificationItem) {
     this.notificationListeners.forEach((listener) => {
       try {
         listener(item);
@@ -334,17 +297,7 @@ class SocketService {
   }
 
   private startFallbackPolling() {
-    if (this.fallbackPollingTimer) return;
-    // Initial poll on startup
-    this.pollNotifications();
-    // Safety net: check every 45s ONLY if the real socket is disconnected
-    this.fallbackPollingTimer = setInterval(() => {
-      if (this.socket?.connected) {
-        // Real WebSocket is active — skip polling completely
-        return;
-      }
-      this.pollNotifications();
-    }, 45000);
+    // Zero-polling architecture (Sales Dash pattern): real-time events delivered directly via backend triggers
   }
 
   private stopFallbackPolling() {
@@ -417,31 +370,11 @@ class SocketService {
     });
   }
 
-  onCityAvailabilityUpdated(callback: CityAvailabilityCallback): () => void {
-    this.cityListeners.add(callback);
-    return () => {
-      this.cityListeners.delete(callback);
-    };
-  }
-
   onCatalogUpdate(callback: CatalogUpdateCallback): () => void {
     this.catalogListeners.add(callback);
     return () => {
       this.catalogListeners.delete(callback);
     };
-  }
-
-  onBannerUpdate(callback: BannerUpdateCallback): () => void {
-    this.bannerListeners.add(callback);
-    return () => {
-      this.bannerListeners.delete(callback);
-    };
-  }
-
-  requestCitiesAvailability() {
-    if (this.socket?.connected) {
-      this.socket.emit("get_cities_availability");
-    }
   }
 
   disconnect() {

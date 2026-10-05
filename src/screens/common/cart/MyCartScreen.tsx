@@ -71,6 +71,10 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         );
     }, [products]);
 
+    const totalPackageQuantity = React.useMemo(() => {
+        return packages.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    }, [packages]);
+
     // Clear debounce timers on unmount
     React.useEffect(() => {
         return () => {
@@ -491,7 +495,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                                             marginTop: 6,
                                         }}
                                     >
-                                        Packages ({packages.length.toString().padStart(2, "0")})
+                                        Packages ({totalPackageQuantity.toString().padStart(2, "0")})
                                     </Text>
 
                                     {packages.map((item) => (

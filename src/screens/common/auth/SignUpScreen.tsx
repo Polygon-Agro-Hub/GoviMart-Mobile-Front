@@ -11,6 +11,8 @@ import {
   Alert,
   Image,
   Keyboard,
+  Modal,
+  Linking,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -127,6 +129,9 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"success" | "error">("error");
 
+  // Help / Support Modal State
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+
   const showAlert = (
     title: string,
     message: string,
@@ -161,6 +166,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [isCompanyPhoneCodeModalOpen, setIsCompanyPhoneCodeModalOpen] =
     useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Deleted Account Link & Restore States
+  const [isNicLinked, setIsNicLinked] = useState(false);
+  const [showDeletedAccountModal, setShowDeletedAccountModal] = useState(false);
+  const [deletedAccountData, setDeletedAccountData] = useState<{
+    nic?: string;
+    pastOrdersCount?: number;
+    memberSince?: string;
+    deletedOn?: string;
+    userId?: number;
+  } | null>(null);
+  const [allowRestore, setAllowRestore] = useState(false);
 
   // Errors state
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -339,10 +356,24 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         companyPhoneNumber: tab === "business" ? companyNumber.trim() : null,
         city: route.params?.nearestCity || null,
         cityId: route.params?.cityId || null,
+        allowRestore: allowRestore ? true : undefined,
       };
 
       setIsLoading(true);
       const response = await authService.signUp(payload);
+
+      if (response.data && response.data.isDeletedAccount) {
+        setIsNicLinked(true);
+        setDeletedAccountData(response.data.data || {
+          nic: nic.trim().toUpperCase(),
+          pastOrdersCount: 0,
+          memberSince: "N/A",
+          deletedOn: "N/A",
+        });
+        setShowDeletedAccountModal(true);
+        setIsLoading(false);
+        return;
+      }
 
       if (response.data && response.data.status) {
         if (response.data.verificationRequired) {
@@ -425,6 +456,20 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     } catch (err: any) {
       console.error("Signup error:", err);
       const data = err.response?.data;
+
+      if (data?.isDeletedAccount) {
+        setIsNicLinked(true);
+        setDeletedAccountData(data.data || {
+          nic: nic.trim().toUpperCase(),
+          pastOrdersCount: 0,
+          memberSince: "N/A",
+          deletedOn: "N/A",
+        });
+        setShowDeletedAccountModal(true);
+        setIsLoading(false);
+        return;
+      }
+
       const msg = data?.message || "An unexpected error occurred.";
       const allErrorsList: string[] = Array.isArray(data?.errors) ? data.errors : [];
       const combined = `${msg} ${allErrorsList.join(" ")}`.toLowerCase();
@@ -613,7 +658,16 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               >
                 <View className="flex-row items-center gap-x-2">
                   <FontAwesome6 name="user-large" size={14} color="black" />
-                  <Text className="text-sm text-black">{title || "Title"}</Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: "#000000",
+                      ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                    }}
+                    className="text-[14px] text-black"
+                  >
+                    {title || "Title"}
+                  </Text>
                 </View>
                 <FontAwesome5 name="chevron-down" size={10} color="black" />
               </TouchableOpacity>
@@ -746,12 +800,30 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                           }}
                           style={{ width: 22, height: 16, borderRadius: 2 }}
                         />
-                        <Text className="text-sm text-black">{phoneCode}</Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#000000",
+                            ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                          }}
+                          className="text-[14px] text-black"
+                        >
+                          {phoneCode}
+                        </Text>
                       </>
                     ) : (
                       <>
                         <FontAwesome name="flag" size={14} color="black" />
-                        <Text className="text-sm text-black">Code</Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#000000",
+                            ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                          }}
+                          className="text-[14px] text-black"
+                        >
+                          Code
+                        </Text>
                       </>
                     )}
                   </View>
@@ -875,11 +947,21 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           {/* NIC Number Input */}
           <View>
             <View
-              style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.nic
-                ? "border-red-500 bg-red-50/10"
-                : "border-black bg-white"
-                }`}
+              style={{
+                height: 50,
+                ...(isNicLinked
+                  ? { backgroundColor: "#FFF5E9", borderColor: "#FF9114" }
+                  : errors.nic
+                  ? {}
+                  : { backgroundColor: "#FFFFFF", borderColor: "#000000" }),
+              }}
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
+                isNicLinked
+                  ? "border-[#FF9114] bg-[#FFF5E9]"
+                  : errors.nic
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-black bg-white"
+              }`}
             >
               <FontAwesome name="id-card" size={16} color="black" />
               <TextInput
@@ -890,6 +972,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 onChangeText={(text) => {
                   const sanitized = sanitizeNIC(text);
                   setNic(sanitized);
+                  if (isNicLinked) {
+                    setIsNicLinked(false);
+                    setAllowRestore(false);
+                  }
                   if (errors.nic) setErrors((prev) => ({ ...prev, nic: "" }));
                 }}
                 maxLength={12}
@@ -906,8 +992,37 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 }}
                 className="flex-1 text-[14px] text-black"
               />
+              {isNicLinked && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "#000000",
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    marginLeft: 6,
+                  }}
+                >
+                  <FontAwesome6
+                    name="circle-exclamation"
+                    size={11}
+                    color="#FFFFFF"
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Linked
+                  </Text>
+                </View>
+              )}
             </View>
-            {errors.nic && (
+            {errors.nic && !isNicLinked && (
               <View className="flex-row items-center gap-x-1 mt-1 ml-3">
                 <MaterialIcons name="error" size={12} color="#E02424" />
                 <Text className="text-red-500 text-xs">{errors.nic}</Text>
@@ -989,14 +1104,30 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                               }}
                               style={{ width: 22, height: 16, borderRadius: 2 }}
                             />
-                            <Text className="text-sm text-black">
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                color: "#000000",
+                                ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                              }}
+                              className="text-[14px] text-black"
+                            >
                               {companyPhoneCode}
                             </Text>
                           </>
                         ) : (
                           <>
                             <FontAwesome name="flag" size={14} color="black" />
-                            <Text className="text-sm text-black">Code</Text>
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                color: "#000000",
+                                ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                              }}
+                              className="text-[14px] text-black"
+                            >
+                              Code
+                            </Text>
                           </>
                         )}
                       </View>
@@ -1310,6 +1441,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         visible={isTitleModalOpen}
         onClose={() => setIsTitleModalOpen(false)}
         title="Select Title"
+        showSearch={false}
         searchPlaceholder="Search title..."
         noResultsText="No results found"
         data={titles.map((t) => ({ label: t, value: t }))}
@@ -1389,6 +1521,405 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         autoClose={false}
         showOkButton={true}
       />
+
+      {/* Deleted Account Restore Bottom Modal */}
+      <Modal
+        visible={showDeletedAccountModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDeletedAccountModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "transparent",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderTopWidth: 1,
+              borderTopColor: "#E2E8F0",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: 0.08,
+              shadowRadius: 6,
+              elevation: 8,
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: Platform.OS === "ios" ? 36 : 24,
+            }}
+          >
+            {/* Top Drag Handle */}
+            <View
+              style={{
+                alignSelf: "center",
+                width: 44,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: "#CBD5E1",
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Header with circular orange icon */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                marginBottom: 6,
+              }}
+            >
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: "#FFF5E9",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 10,
+                  marginTop: 2,
+                }}
+              >
+                <FontAwesome6
+                  name="circle-exclamation"
+                  size={12}
+                  color="#FF9114"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: "#000000",
+                    lineHeight: 20,
+                  }}
+                >
+                  Account Found with Previous Order History
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "400",
+                    color: "#494A65",
+                    lineHeight: 18,
+                    marginTop: 4,
+                  }}
+                >
+                  An existing profile registered under NIC{" "}
+                  {deletedAccountData?.nic || nic} was located. You can restore
+                  this account to keep your order history.
+                </Text>
+              </View>
+            </View>
+
+            {/* 3 Summary Info Cards */}
+            <View
+              style={{
+                backgroundColor: "#F4F7FB",
+                borderRadius: 16,
+                padding: 10,
+                flexDirection: "row",
+                marginVertical: 18,
+                gap: 8,
+              }}
+            >
+              {/* Card 1: Past Orders */}
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: "#000000",
+                  }}
+                >
+                  {deletedAccountData?.pastOrdersCount ?? 0}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "400",
+                    color: "#494A65",
+                    marginTop: 3,
+                  }}
+                >
+                  Past Orders
+                </Text>
+              </View>
+
+              {/* Card 2: Member Since */}
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#000000",
+                  }}
+                >
+                  {deletedAccountData?.memberSince || "N/A"}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "400",
+                    color: "#494A65",
+                    marginTop: 3,
+                  }}
+                >
+                  Member Since
+                </Text>
+              </View>
+
+              {/* Card 3: Deleted On */}
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#000000",
+                  }}
+                >
+                  {deletedAccountData?.deletedOn || "N/A"}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "400",
+                    color: "#494A65",
+                    marginTop: 3,
+                  }}
+                >
+                  Deleted On
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              {/* Go back & Edit NIC */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  setNic("");
+                  setIsNicLinked(false);
+                  setAllowRestore(false);
+                  setShowDeletedAccountModal(false);
+                }}
+                style={{
+                  flex: 1,
+                  height: 48,
+                  borderRadius: 24,
+                  borderWidth: 1,
+                  borderColor: "#DDE2E7",
+                  backgroundColor: "#FFFFFF",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 3,
+                  elevation: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: "#000000",
+                  }}
+                >
+                  Go back & Edit NIC
+                </Text>
+              </TouchableOpacity>
+
+              {/* Continue with Account */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  setAllowRestore(true);
+                  setShowDeletedAccountModal(false);
+                }}
+                style={{
+                  flex: 1,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "#000000",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  Continue with Account
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Footer Support Link */}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: "#494A65",
+                }}
+              >
+                Not your account?{" "}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowDeletedAccountModal(false);
+                  setIsHelpModalOpen(true);
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#0088FF",
+                    textDecorationLine: "underline",
+                    fontWeight: "500",
+                  }}
+                >
+                  Contact Support
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Help / Contact Support Popup Modal */}
+      <Modal
+        visible={isHelpModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsHelpModalOpen(false)}
+      >
+        <View className="flex-1 bg-black/40 justify-center items-center p-6">
+          <View
+            className="p-6 rounded-3xl items-center shadow-lg w-full max-w-sm"
+            style={{
+              backgroundColor: "#FFFFFF",
+            }}
+          >
+            {/* Phone Icon */}
+            <View className="w-12 h-12 rounded-full bg-[#0085FF]/10 items-center justify-center mb-4">
+              <MaterialIcons name="phone" size={24} color="#0085FF" />
+            </View>
+
+            {/* Title & description */}
+            <Text className="font-bold text-lg text-black text-center mb-2">
+              Need Assistance?
+            </Text>
+            <Text className="text-sm text-[#4E4E4E] text-center mb-6 leading-relaxed">
+              Our customer support hotline is available 24/7. Tap below to place a direct call.
+            </Text>
+
+            {/* Action Buttons */}
+            <View className="w-full gap-y-3">
+              {/* Call Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  Linking.openURL("tel:+94114313433");
+                  setIsHelpModalOpen(false);
+                }}
+                activeOpacity={0.8}
+                className="py-3.5 rounded-full items-center justify-center shadow-sm"
+                style={{ backgroundColor: "#0085FF" }}
+              >
+                <Text className="text-white font-bold text-base">
+                  Call (+94) 114313433
+                </Text>
+              </TouchableOpacity>
+
+              {/* Cancel Button */}
+              <TouchableOpacity
+                onPress={() => setIsHelpModalOpen(false)}
+                activeOpacity={0.8}
+                className="py-3.5 rounded-full items-center justify-center"
+                style={{ backgroundColor: "#9599A2" }}
+              >
+                <Text className="font-bold text-base" style={{ color: "#000000" }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
