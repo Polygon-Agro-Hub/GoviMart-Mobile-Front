@@ -9,7 +9,7 @@
     "android": {
       "package": "com.polygonagro.Polygon",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 1,
+      "versionCode": 2,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/public/app-icon-android.png",
@@ -124,7 +124,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "a60d1d02-58d9-4da9-9dbe-b2d826714eab"
+        "projectId": ""
       }
     }
   }
