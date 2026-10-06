@@ -69,6 +69,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [attemptsCount, setAttemptsCount] = useState<number>(1);
+  const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
   // Alert Modal
   const [alertVisible, setAlertVisible] = useState(false);
@@ -172,9 +174,14 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       const attempts = await getRecentAttempts(storageKey);
       const lastAttempt = attempts[attempts.length - 1];
       if (!lastAttempt || Date.now() - lastAttempt > 30000) {
+        let currentCount = 1;
         for (const attKey of attemptsKeys) {
-          await saveAttempt(attKey);
+          const updated = await saveAttempt(attKey);
+          currentCount = updated.length;
         }
+        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
+      } else {
+        setAttemptsCount(Math.min(attempts.length || 1, MAX_OTP_ATTEMPTS));
       }
     };
     checkInitialRateLimit();
@@ -386,6 +393,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           const updated = await saveAttempt(key);
           updatedLength = updated.length;
         }
+        setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
         setReferenceId(response.data.referenceId);
         setResetToken(response.data.resetToken);
 
@@ -400,19 +408,17 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setAlertType("error");
           setAlertTitle("Code Resent");
           setAlertMessage(
-            "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+            "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
           );
           setAlertVisible(true);
         } else {
           setTimeLeft(240);
           setIsExpired(false);
+          const remaining = MAX_OTP_ATTEMPTS - updatedLength;
           setAlertType("success");
           setAlertTitle("Code Resent");
           setAlertMessage(
-            response.data.message ||
-              (method === "email"
-                ? "Verification code has been resent to your email address."
-                : "Verification code has been resent to your mobile number.")
+            `${response.data.message || (method === "email" ? "Verification code has been resent to your email address." : "Verification code has been resent to your mobile number.")}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
           );
           setAlertVisible(true);
         }

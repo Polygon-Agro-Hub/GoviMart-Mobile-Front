@@ -46,24 +46,33 @@ export const getSignUpStorageKeys = (
   phoneCode?: string,
   phoneNumber?: string,
   email?: string,
+  method: "email" | "sms" = "sms",
 ): { lockoutKeys: string[]; attemptsKeys: string[] } => {
   const identifiers: string[] = [];
 
-  if (email && String(email).trim()) {
+  if (method === "email" && email && String(email).trim()) {
     const cleanEmail = String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
-    if (cleanEmail) identifiers.push(cleanEmail);
+    if (cleanEmail) identifiers.push(`email_${cleanEmail}`);
   }
 
-  if (phoneNumber && String(phoneNumber).trim()) {
+  if (method === "sms" && phoneNumber && String(phoneNumber).trim()) {
     const rawDigits = String(phoneNumber).trim().replace(/[^0-9]/g, "");
     const noZero = rawDigits.replace(/^0+/, "");
     const codeDigits = String(phoneCode || "94").replace(/[^0-9]/g, "");
 
     if (noZero) {
-      identifiers.push(`${codeDigits}${noZero}`);
-      identifiers.push(`${codeDigits}${rawDigits}`);
-      identifiers.push(noZero);
-      identifiers.push(rawDigits);
+      identifiers.push(`sms_${codeDigits}${noZero}`);
+      identifiers.push(`sms_${codeDigits}${rawDigits}`);
+      identifiers.push(`sms_${noZero}`);
+      identifiers.push(`sms_${rawDigits}`);
+    }
+  }
+
+  if (identifiers.length === 0) {
+    if (email) {
+      identifiers.push(`email_${String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "")}`);
+    } else if (phoneNumber) {
+      identifiers.push(`sms_${String(phoneNumber).replace(/[^0-9]/g, "")}`);
     }
   }
 
@@ -109,7 +118,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const phoneCode = route.params?.phoneCode || "+94";
   const phoneNumber = route.params?.phoneNumber || "771122300";
   const email = route.params?.email || "";
-  const method = route.params?.method || "sms";
+  const method = (route.params?.method as "email" | "sms") || "sms";
   const [referenceId, setReferenceId] = useState(
     route.params?.referenceId || "",
   );
@@ -124,8 +133,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     phoneCode,
     phoneNumber,
     email,
+    method,
   );
-  const primaryAttemptKey = attemptsKeys[0] || `@otp_attempts_${phoneNumber}`;
+  const primaryAttemptKey = attemptsKeys[0] || (method === "email" ? `@otp_attempts_email_${email}` : `@otp_attempts_sms_${phoneNumber}`);
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -136,6 +146,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [attemptsCount, setAttemptsCount] = useState<number>(1);
+  const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
   // Input Refs
   const ref_1 = useRef<TextInput>(null);
@@ -217,17 +229,21 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }
 
-      // Record initial OTP send timestamp if not recently added
+      // Sync attempts count
       const attempts = await getRecentAttempts(primaryAttemptKey);
-      const lastAttempt = attempts[attempts.length - 1];
-      if (!lastAttempt || Date.now() - lastAttempt > 30000) {
+      if (attempts.length === 0) {
+        let currentCount = 1;
         for (const attKey of attemptsKeys) {
-          await saveAttempt(attKey);
+          const updated = await saveAttempt(attKey);
+          currentCount = updated.length;
         }
+        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
+      } else {
+        setAttemptsCount(Math.min(attempts.length, MAX_OTP_ATTEMPTS));
       }
     };
     checkInitialRateLimit();
-  }, [phoneCode, phoneNumber, email]);
+  }, [phoneCode, phoneNumber, email, method]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -597,6 +613,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const updated = await saveAttempt(key);
             updatedLength = updated.length;
           }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
           setReferenceId(response.data.referenceId);
           setSignupToken(response.data.signupToken);
 
@@ -610,15 +627,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setIsExpired(false);
             Alert.alert(
               "Code Resent",
-              "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
             );
           } else {
             setTimeLeft(240);
             setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              response.data.message ||
-              "A new 5-digit verification code has been sent.",
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
             );
           }
         } else {
@@ -654,6 +671,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const updated = await saveAttempt(key);
             updatedLength = updated.length;
           }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
           setReferenceId(response.data.referenceId);
           setSignupToken(response.data.signupToken);
 
@@ -667,15 +685,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setIsExpired(false);
             Alert.alert(
               "Code Resent",
-              "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
             );
           } else {
             setTimeLeft(240);
             setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              response.data.message ||
-              "A new 5-digit verification code has been sent.",
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
             );
           }
         } else {

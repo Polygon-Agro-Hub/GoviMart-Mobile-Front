@@ -23,6 +23,7 @@ import { RootState } from "@/store";
 import { updateUserProfileImage, updateUserProfile } from "@/store/authSlice";
 
 import { RootStackParamList } from "@/types/types";
+import { getSignUpStorageKeys } from "@/screens/common/auth/SignUpOTPScreen";
 import { DropdownField, InputField } from "@/component/common/CustomField";
 
 const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
@@ -401,6 +402,65 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         mobileCode !== originalMobileCode;
 
       if (phoneChanged) {
+        const method = mobileCode === "+94" ? "sms" : "email";
+        const { lockoutKeys, attemptsKeys } = getSignUpStorageKeys(
+          mobileCode,
+          mobileNumber,
+          email,
+          method,
+        );
+
+        // 1. Check persistent lockout
+        for (const key of lockoutKeys) {
+          try {
+            const storedLockout = await AsyncStorage.getItem(key);
+            if (storedLockout) {
+              const lockoutUntil = parseInt(storedLockout, 10);
+              const remainingMs = lockoutUntil - Date.now();
+              if (remainingMs > 0) {
+                Alert.alert(
+                  "Too Many Attempts",
+                  "Too many verification attempts. Please try again after 15 minutes.",
+                );
+                return;
+              } else {
+                await AsyncStorage.removeItem(key);
+              }
+            }
+          } catch (e) {
+            console.log("Error checking lockout:", e);
+          }
+        }
+
+        // 2. Check recent attempts count
+        const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+        for (const key of attemptsKeys) {
+          try {
+            const raw = await AsyncStorage.getItem(key);
+            if (raw) {
+              const timestamps: number[] = JSON.parse(raw);
+              const now = Date.now();
+              const valid = timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+              if (valid.length >= 5) {
+                const oldest = valid[0];
+                const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+                const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+                const lockoutUntil = Date.now() + remainingSec * 1000;
+                for (const lockKey of lockoutKeys) {
+                  await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+                }
+                Alert.alert(
+                  "Too Many Attempts",
+                  "Too many verification attempts. Please try again after 15 minutes.",
+                );
+                return;
+              }
+            }
+          } catch (e) {
+            console.log("Error checking attempts:", e);
+          }
+        }
+
         const otpResponse = await customerService.sendPhoneChangeOtp({
           phoneCode: mobileCode,
           phoneNumber: mobileNumber,
@@ -409,21 +469,54 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const otpData = otpResponse.data;
 
         if (otpData && otpData.status) {
-          navigation.navigate("SignUpOTP", {
-            phoneCode: mobileCode,
-            phoneNumber: mobileNumber,
-            email: email,
-            method: otpData.method || "sms",
-            referenceId: otpData.referenceId,
-            signupToken: otpData.signupToken,
-            flow: "changePhone",
-            accountDetails: payload,
-          });
-        } else {
+          const now = Date.now();
+          for (const key of attemptsKeys) {
+            try {
+              const raw = await AsyncStorage.getItem(key);
+              const existing = raw ? JSON.parse(raw).filter((ts: number) => now - ts < RATE_LIMIT_WINDOW_MS) : [];
+              const updated = [...existing, now];
+              await AsyncStorage.setItem(key, JSON.stringify(updated));
+            } catch (e) {
+              console.log("Error recording attempt:", e);
+            }
+          }
+
           Alert.alert(
-            "Error",
-            otpData?.message || "Failed to send verification code.",
+            "Verification Code Sent",
+            `A 5-digit verification code has been sent to your ${otpData.method === "email" ? "email address" : "mobile number"}.\n\n(5 OTP resend attempts limit)`,
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  navigation.navigate("SignUpOTP", {
+                    phoneCode: mobileCode,
+                    phoneNumber: mobileNumber,
+                    email: email,
+                    method: otpData.method || "sms",
+                    referenceId: otpData.referenceId,
+                    signupToken: otpData.signupToken,
+                    flow: "changePhone",
+                    accountDetails: payload,
+                  });
+                },
+              },
+            ],
           );
+        } else {
+          const is429 = otpData?.isRateLimited;
+          const msg = otpData?.message || "Failed to send verification code.";
+          if (is429 || msg.toLowerCase().includes("too many")) {
+            const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+            for (const lockKey of lockoutKeys) {
+              await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+            }
+            Alert.alert(
+              "Too Many Attempts",
+              "Too many verification attempts. Please try again after 15 minutes.",
+            );
+          } else {
+            Alert.alert("Error", msg);
+          }
         }
       } else {
         const response = await customerService.updateUserDetails(payload);

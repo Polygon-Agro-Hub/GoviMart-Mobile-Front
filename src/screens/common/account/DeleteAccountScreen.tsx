@@ -41,7 +41,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
   const [hasNegativeCredit, setHasNegativeCredit] = useState(false);
   const [hasProcessingOrders, setHasProcessingOrders] = useState(false);
   const [creditBalance, setCreditBalance] = useState(0);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   useEffect(() => {
     const showEvent =
@@ -49,16 +49,15 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      const height = e?.endCoordinates?.height || 280;
-      setKeyboardHeight(height);
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
     });
 
     return () => {
@@ -185,11 +184,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 flexGrow: 1,
                 paddingHorizontal: 14,
                 paddingBottom:
-                  keyboardHeight > 0
-                    ? keyboardHeight + 20
-                    : !hasProcessingOrders || hasNegativeCredit
-                    ? 80
-                    : 24,
+                  !hasProcessingOrders || hasNegativeCredit ? 80 : 24,
               }}
             >
               {/* Delete Icon */}
@@ -323,7 +318,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               </View>
 
               {/* Flexible spacer to push bottom components close to bottom */}
-              <View style={{ flex: 1, minHeight: 20 }} />
+              <View
+                style={{
+                  flex: isKeyboardVisible ? 0 : 1,
+                  minHeight: isKeyboardVisible ? 10 : 20,
+                }}
+              />
 
               {hasNegativeCredit ? (
                 <View
@@ -472,7 +472,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     <TextInput
                       value={confirmation}
                       onChangeText={(text) => {
-                        setConfirmation(text.toUpperCase());
+                        const cleaned = text.replace(/^\s+/, "").toUpperCase();
+                        setConfirmation(cleaned);
                       }}
                       onFocus={() => {
                         setTimeout(() => {
