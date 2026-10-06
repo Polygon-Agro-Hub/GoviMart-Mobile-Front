@@ -25,6 +25,7 @@ import PackageCartCard from "@/component/my-cart/PackageCartCard";
 import ProductCartCard from "@/component/my-cart/ProductCartCard";
 import OrderSummary from "@/component/my-cart/OrderSummary";
 import CustomHeader from "@/component/common/CustomHeader";
+import InfoNoticeCard from "@/component/common/InfoNoticeCard";
 import AuthPromptModal from "@/component/common/AuthPromptModal";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
 import LottieView from "lottie-react-native";
@@ -570,6 +571,15 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                                     </Text>
                                 </View>
                             )}
+
+                            {/* Price Difference Notice Box */}
+                            <InfoNoticeCard
+                                message="Please note that the total amount on the delivery date may differ from the amount shown on the order date. If there is any price difference, the final amount applicable on the delivery date will be charged later."
+                                containerStyle={{
+                                    marginTop: 6,
+                                    marginBottom: 14,
+                                }}
+                            />
                         </View>
 
                         {/* Order Summary */}
