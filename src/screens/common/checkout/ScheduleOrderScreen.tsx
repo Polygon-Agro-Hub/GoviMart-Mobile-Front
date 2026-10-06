@@ -88,7 +88,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
   const [viewOrdersModalVisible, setViewOrdersModalVisible] = useState(false);
 
   const isDelivery = orderContext?.deliveryMethod === "home";
-  const deliveryFee = isDelivery ? orderContext?.deliveryCharge || 300 : 0;
+  const deliveryFee = isDelivery ? Number(orderContext?.deliveryCharge) || 0 : 0;
   const baseTotal =
     (orderContext?.packageTotal || 0) +
     (orderContext?.productTotal || 0) -
