@@ -12,6 +12,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
+import InfoNoticeCard from "@/component/common/InfoNoticeCard";
 import { SummaryRow } from "@/component/order/SummaryRow";
 import { PackageModal } from "@/component/order/PackageModal";
 import LoadingPage from "@/component/common/LoadingPage";
@@ -1248,6 +1249,14 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             ))}
           </View>
         )}
+
+        {/* PRICE DIFFERENCE NOTICE BOX */}
+        <InfoNoticeCard
+          message="Please note that the total amount on the delivery date may differ from the amount shown on the order date. If there is any price difference, the final amount applicable on the delivery date will be charged later."
+          containerStyle={{
+            marginBottom: 17,
+          }}
+        />
 
         {/* SUMMARY */}
         {(() => {

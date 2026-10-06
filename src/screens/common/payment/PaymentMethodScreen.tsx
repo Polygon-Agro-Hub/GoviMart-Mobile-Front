@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,11 @@ import {
   ScrollView,
   Alert,
   Image,
+  BackHandler,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { RootStackParamList } from "@/types/types";
 import { RootState } from "@/store";
@@ -24,6 +25,7 @@ import { clearCart } from "@/store/cartSlice";
 import CouponModal from "@/component/coupon/CouponModal";
 import AppliedCouponCard from "@/component/coupon/AppliedCouponCard";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
+import BackConfirmationModal from "@/component/common/BackConfirmationModal";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -39,9 +41,102 @@ interface Props {
 
 type PaymentType = "cash" | "card";
 
+let paymentSessionEndTime: number | null = null;
+
 const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const orderContext = route.params?.orderContext;
+  const isNavigatingAwayRef = useRef(false);
+  const [backConfirmVisible, setBackConfirmVisible] = useState(false);
+
+  // ─── 5-MINUTE SESSION TIMER ──────────────────────────────────────────────
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
+    if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
+      paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
+    }
+    return Math.max(0, Math.floor((paymentSessionEndTime - Date.now()) / 1000));
+  });
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleBackPress = () => {
+    setBackConfirmVisible(true);
+  };
+
+  useEffect(() => {
+    if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
+      paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
+    }
+
+    const interval = setInterval(() => {
+      if (!paymentSessionEndTime) return;
+      const diff = Math.max(
+        0,
+        Math.floor((paymentSessionEndTime - Date.now()) / 1000)
+      );
+      setRemainingSeconds(diff);
+
+      if (diff <= 0) {
+        clearInterval(interval);
+        paymentSessionEndTime = null;
+        isNavigatingAwayRef.current = true;
+
+        Alert.alert(
+          "Session Expired",
+          "Your payment session has expired. You are being redirected to your cart.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                navigation.navigate("MyCart");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        handleBackPress();
+        return true;
+      };
+
+      const backSub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack
+      );
+      return () => {
+        backSub.remove();
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (isNavigatingAwayRef.current || !navigation.isFocused()) {
+        return;
+      }
+
+      if (e.data.action.type === "GO_BACK" || e.data.action.type === "POP") {
+        e.preventDefault();
+        handleBackPress();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   // ─── COUPON STATE ─────────────────────────────────────────────────────────
   const [couponModalVisible, setCouponModalVisible] = useState(false);
@@ -186,6 +281,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const deliveryChargeToSave = isFreeDelivery ? 0 : effectiveDeliveryCharge;
 
     if (paymentMethod === "card" && paymentAmount > 0) {
+      isNavigatingAwayRef.current = true;
+      paymentSessionEndTime = null;
       navigation.navigate("PaymentScreen", {
         amount: paymentAmount,
         title: "Payment Summary",
@@ -245,6 +342,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
       const response = await orderService.createOrder(payload);
       if (response.data && response.data.status && response.data.data) {
+        isNavigatingAwayRef.current = true;
+        paymentSessionEndTime = null;
         dispatch(clearCart());
         navigation.navigate("OrderConfirmed", {
           orderId: response.data.data.orderId,
@@ -320,6 +419,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         title="Select Payment Method"
         navigation={navigation}
         showBackButton
+        onBackPress={handleBackPress}
       />
 
       {/* SCROLL CONTENT */}
@@ -332,6 +432,93 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         }}
       >
         <View style={{ flex: 1, paddingBottom: 16 }}>
+          {/* ─── SESSION ACTIVE CARD ──────────────────────────────────────── */}
+          <View
+            style={{
+              marginHorizontal: 15,
+              marginTop: 14,
+              marginBottom: 4,
+              borderRadius: 20,
+              borderWidth: 1.5,
+              borderColor: "#FF9114",
+              backgroundColor: "#FFFFFF",
+              paddingHorizontal: 14,
+              paddingVertical: 14,
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            {/* Left Clock Icon */}
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 22,
+                backgroundColor: "#F0F3F6",
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 12,
+              }}
+            >
+              <FontAwesome6 name="clock" solid size={23} color="#000000" />
+            </View>
+
+            {/* Content & Badge */}
+            <View style={{ flex: 1 }}>
+              {/* Header row with title & timer badge */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: "#000000",
+                  }}
+                >
+                  Session Active
+                </Text>
+
+                <View
+                  style={{
+                    backgroundColor: "#FF9114",
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 3,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 14,
+                      fontWeight: "700",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    {formatTime(remainingSeconds)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Description */}
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  color: "#6B7280",
+                  lineHeight: 18,
+                  marginTop: 4,
+                  fontWeight: "400",
+                }}
+              >
+                This page will close in 5 minutes and you will be redirected to the cart.
+              </Text>
+            </View>
+          </View>
+
           {/* ─── APPLY COUPON CARD ────────────────────────────────────────── */}
           {appliedCoupon ? (
             <AppliedCouponCard
@@ -769,6 +956,24 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onViewCart={() => {
           setUnavailableModalVisible(false);
           navigation.navigate("MyCart");
+        }}
+      />
+
+      {/* ─── GO BACK CONFIRMATION MODAL ─────────────────────────────────── */}
+      <BackConfirmationModal
+        visible={backConfirmVisible}
+        title="Are you sure you want to go back?"
+        message={`Going back will cause you to lose all your\ncheckout and payment details.\nAre you sure you want to go back?`}
+        confirmLabel="Yes, Go Back"
+        cancelLabel="No, Stay on the page"
+        onConfirm={() => {
+          setBackConfirmVisible(false);
+          isNavigatingAwayRef.current = true;
+          paymentSessionEndTime = null;
+          navigation.navigate("MyCart");
+        }}
+        onCancel={() => {
+          setBackConfirmVisible(false);
         }}
       />
     </View>
