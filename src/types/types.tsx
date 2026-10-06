@@ -275,10 +275,14 @@ export interface UpdateUserDetailsPayload {
   title?: string;
   firstName?: string;
   lastName?: string;
+  phoneCode?: string;
+  phoneNumber?: string;
   email?: string;
   companyName?: string;
   companyPhoneCode?: string;
+  companyPhone?: string;
   companyPhoneNumber?: string;
+  image?: string | null;
 }
 
 export interface AddressPayload {

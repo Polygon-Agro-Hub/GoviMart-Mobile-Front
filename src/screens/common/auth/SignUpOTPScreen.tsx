@@ -22,6 +22,11 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
+import socketService from "@/services/socket/socket.service";
+import cartService from "@/services/cart/cart.service";
+import { useDispatch } from "react-redux";
+import { loginSuccess } from "@/store/authSlice";
+import { setCartFromBackend } from "@/store/cartSlice";
 
 type SignUpOTPRouteProp = RouteProp<RootStackParamList, "SignUpOTP">;
 type SignUpOTPNavigationProp = StackNavigationProp<
@@ -41,24 +46,33 @@ export const getSignUpStorageKeys = (
   phoneCode?: string,
   phoneNumber?: string,
   email?: string,
+  method: "email" | "sms" = "sms",
 ): { lockoutKeys: string[]; attemptsKeys: string[] } => {
   const identifiers: string[] = [];
 
-  if (email && String(email).trim()) {
+  if (method === "email" && email && String(email).trim()) {
     const cleanEmail = String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
-    if (cleanEmail) identifiers.push(cleanEmail);
+    if (cleanEmail) identifiers.push(`email_${cleanEmail}`);
   }
 
-  if (phoneNumber && String(phoneNumber).trim()) {
+  if (method === "sms" && phoneNumber && String(phoneNumber).trim()) {
     const rawDigits = String(phoneNumber).trim().replace(/[^0-9]/g, "");
     const noZero = rawDigits.replace(/^0+/, "");
     const codeDigits = String(phoneCode || "94").replace(/[^0-9]/g, "");
 
     if (noZero) {
-      identifiers.push(`${codeDigits}${noZero}`);
-      identifiers.push(`${codeDigits}${rawDigits}`);
-      identifiers.push(noZero);
-      identifiers.push(rawDigits);
+      identifiers.push(`sms_${codeDigits}${noZero}`);
+      identifiers.push(`sms_${codeDigits}${rawDigits}`);
+      identifiers.push(`sms_${noZero}`);
+      identifiers.push(`sms_${rawDigits}`);
+    }
+  }
+
+  if (identifiers.length === 0) {
+    if (email) {
+      identifiers.push(`email_${String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "")}`);
+    } else if (phoneNumber) {
+      identifiers.push(`sms_${String(phoneNumber).replace(/[^0-9]/g, "")}`);
     }
   }
 
@@ -99,11 +113,12 @@ const clearAttempts = async (key: string) => {
 };
 
 const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
+  const dispatch = useDispatch();
   const scrollViewRef = useRef<ScrollView>(null);
   const phoneCode = route.params?.phoneCode || "+94";
   const phoneNumber = route.params?.phoneNumber || "771122300";
   const email = route.params?.email || "";
-  const method = route.params?.method || "sms";
+  const method = (route.params?.method as "email" | "sms") || "sms";
   const [referenceId, setReferenceId] = useState(
     route.params?.referenceId || "",
   );
@@ -118,8 +133,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     phoneCode,
     phoneNumber,
     email,
+    method,
   );
-  const primaryAttemptKey = attemptsKeys[0] || `@otp_attempts_${phoneNumber}`;
+  const primaryAttemptKey = attemptsKeys[0] || (method === "email" ? `@otp_attempts_email_${email}` : `@otp_attempts_sms_${phoneNumber}`);
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -130,6 +146,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [attemptsCount, setAttemptsCount] = useState<number>(1);
+  const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
   // Input Refs
   const ref_1 = useRef<TextInput>(null);
@@ -211,17 +229,21 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }
 
-      // Record initial OTP send timestamp if not recently added
+      // Sync attempts count
       const attempts = await getRecentAttempts(primaryAttemptKey);
-      const lastAttempt = attempts[attempts.length - 1];
-      if (!lastAttempt || Date.now() - lastAttempt > 30000) {
+      if (attempts.length === 0) {
+        let currentCount = 1;
         for (const attKey of attemptsKeys) {
-          await saveAttempt(attKey);
+          const updated = await saveAttempt(attKey);
+          currentCount = updated.length;
         }
+        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
+      } else {
+        setAttemptsCount(Math.min(attempts.length, MAX_OTP_ATTEMPTS));
       }
     };
     checkInitialRateLimit();
-  }, [phoneCode, phoneNumber, email]);
+  }, [phoneCode, phoneNumber, email, method]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -383,11 +405,102 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           for (const key of attemptsKeys) {
             await clearAttempts(key);
           }
-          Alert.alert(
-            "Registration Successful",
-            "Your Polygon account created successfully.",
-            [{ text: "OK", onPress: () => navigation.navigate("Login") }],
-          );
+
+          const userData = response.data.data;
+          const token = userData?.token;
+
+          if (token && userData) {
+            dispatch(
+              loginSuccess({
+                token: token,
+                userProfile: userData,
+                loginTime: Date.now(),
+              })
+            );
+            await AsyncStorage.setItem("userToken", token);
+            await AsyncStorage.setItem("userProfile", JSON.stringify(userData));
+            await AsyncStorage.setItem("loginTime", String(Date.now()));
+
+            if (userData.id) {
+              socketService.registerUser(userData.id, token);
+            }
+
+            try {
+              const cartRes = await cartService.getUserCart();
+              if (cartRes.data && cartRes.data.status && cartRes.data.data) {
+                const dbProducts = cartRes.data.data.products || [];
+                const dbPackages = cartRes.data.data.packages || [];
+                dispatch(
+                  setCartFromBackend({
+                    products: dbProducts,
+                    packages: dbPackages,
+                    cartUserId: userData.id,
+                  })
+                );
+              }
+            } catch (cartErr) {
+              console.warn("Failed to load user cart on signup:", cartErr);
+            }
+
+            const isWholesale =
+              (userData.buyerType || "").toLowerCase() === "wholesale";
+
+            const targetScreen: keyof RootStackParamList = isWholesale
+              ? "Home"
+              : "ExcludeListAdd";
+            const targetParams = !isWholesale
+              ? {
+                  customerId: userData.id,
+                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+                  title: userData.title,
+                  number: userData.phoneNumber,
+                  cusId: userData.cusId,
+                }
+              : undefined;
+
+            Alert.alert(
+              "Registration Successful",
+              "Your Polygon account created successfully.",
+              [
+                {
+                  text: "OK",
+                  onPress: async () => {
+                    try {
+                      const hasAsked = await AsyncStorage.getItem(
+                        "hasAskedNotificationPermission"
+                      );
+
+                      if (hasAsked !== "true") {
+                        navigation.navigate("NotificationAccess", {
+                          returnScreen: targetScreen,
+                          returnParams: targetParams,
+                          blockBackNavigation: true,
+                        });
+                        return;
+                      }
+                    } catch (err) {
+                      console.warn(
+                        "Error reading notification permission flag:",
+                        err
+                      );
+                    }
+
+                    if (targetParams) {
+                      navigation.navigate(targetScreen as any, targetParams);
+                    } else {
+                      navigation.navigate(targetScreen as any);
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert(
+              "Registration Successful",
+              "Your Polygon account created successfully.",
+              [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+            );
+          }
         } else {
           const is429 = response.data?.isRateLimited;
           const msg = response.data?.message || "Failed to verify the code.";
@@ -500,6 +613,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const updated = await saveAttempt(key);
             updatedLength = updated.length;
           }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
           setReferenceId(response.data.referenceId);
           setSignupToken(response.data.signupToken);
 
@@ -513,15 +627,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setIsExpired(false);
             Alert.alert(
               "Code Resent",
-              "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
             );
           } else {
             setTimeLeft(240);
             setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              response.data.message ||
-              "A new 5-digit verification code has been sent.",
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
             );
           }
         } else {
@@ -557,6 +671,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const updated = await saveAttempt(key);
             updatedLength = updated.length;
           }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
           setReferenceId(response.data.referenceId);
           setSignupToken(response.data.signupToken);
 
@@ -570,15 +685,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setIsExpired(false);
             Alert.alert(
               "Code Resent",
-              "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
             );
           } else {
             setTimeLeft(240);
             setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              response.data.message ||
-              "A new 5-digit verification code has been sent.",
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
             );
           }
         } else {
