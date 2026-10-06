@@ -2,7 +2,6 @@ import React from "react";
 import { View, Text, TouchableOpacity, Image } from "react-native";
 import { ProductType } from "@/types/types";
 import { Ionicons } from "@expo/vector-icons";
-import FixedMarqueeText from "../marquee-text/MarqueeText";
 
 // Same price display types coming from the backend
 // (marketplaceitems.displayType) as used on the Home screen:
@@ -90,10 +89,10 @@ export const AlacartProductCard: React.FC<{
     hasDiscount &&
     (displayType === "AP&SP&D" || displayType === "AP&SP" || !displayType);
 
-    const basePrice =
-        hasDiscount && displayType !== "D&AP"
-            ? totalDiscountedPrice
-            : totalNormalPrice;
+  const basePrice =
+    hasDiscount && displayType !== "D&AP"
+      ? totalDiscountedPrice
+      : totalNormalPrice;
 
   // Determine card border color:
   // disabled => red, selected => orange, default => transparent
@@ -114,7 +113,7 @@ export const AlacartProductCard: React.FC<{
       <View
         className="bg-[#F4F3F3] pt-7 pb-6 px-3 items-center mx-2 relative mb-8"
         style={{
-          flex: 1, 
+          flex: 1,
           borderTopLeftRadius: 100,
           borderTopRightRadius: 100,
           borderBottomLeftRadius: 20,
@@ -182,16 +181,14 @@ export const AlacartProductCard: React.FC<{
 
         {/* Product Name */}
         <View style={{ width: "100%", marginTop: 4 }}>
-          <FixedMarqueeText
-            key={product.id}
-            text={product?.displayName!}
-            style={{
-              color: disabled ? "#FF383C" : "#000000",
-              fontWeight: "bold",
-              fontSize: 13,
-              textAlign: "center",
-            }}
-          />
+          <Text
+            numberOfLines={2}
+            ellipsizeMode="tail"
+            className="text-[13px] font-bold text-black text-center mt-2"
+            style={{ minHeight: 34, lineHeight: 17 }}
+          >
+            {product?.displayName!}
+          </Text>
         </View>
 
         {/* Disabled: "No longer available" label OR Weight / Unit */}

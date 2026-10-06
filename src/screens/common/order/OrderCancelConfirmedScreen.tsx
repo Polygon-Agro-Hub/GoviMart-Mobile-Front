@@ -132,6 +132,12 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     [confirmText],
   );
 
+  // Total package count = sum of quantities (e.g. 2 + 1 = 3)
+  const packagesCount = packages.reduce(
+    (sum, p) => sum + (Number(p.qty) || 0),
+    0,
+  );
+
   const packagesTotal = packages.reduce(
     (sum, p) => sum + p.qty * getPackageUnitPrice(p),
     0,
@@ -157,28 +163,43 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const method = (paymentMethod || "").toLowerCase();
 
-  const totalPaidCredit =
-    passedTotalPaidCredit !== undefined ? passedTotalPaidCredit : 0;
+  // Credit can never exceed the order total
+  const totalPaidCredit = Math.min(
+    Number(passedTotalPaidCredit ?? 0),
+    processOrderTotal,
+  );
 
-  const totalPaidCard =
-    passedTotalPaidCard !== undefined
-      ? passedTotalPaidCard
+  // Amount left after credit has been applied
+  const remainingAfterCredit = Math.max(0, processOrderTotal - totalPaidCredit);
+
+  // Fully covered by credit -> no card / cash line at all
+  const isFullyPaidByCredit =
+    processOrderTotal > 0 && remainingAfterCredit === 0;
+
+  const totalPaidCard = isFullyPaidByCredit
+    ? 0
+    : passedTotalPaidCard !== undefined
+      ? Math.min(Number(passedTotalPaidCard), remainingAfterCredit)
       : method === "card"
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
+        ? remainingAfterCredit
         : 0;
 
-  const totalCashDue =
-    passedTotalCashDue !== undefined
-      ? passedTotalCashDue
+  const totalCashDue = isFullyPaidByCredit
+    ? 0
+    : passedTotalCashDue !== undefined
+      ? Math.min(Number(passedTotalCashDue), remainingAfterCredit)
       : method.includes("cash") || method === "cod"
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
+        ? remainingAfterCredit
         : 0;
 
-  // Cash is not paid yet, so only card + credit get refunded as credit
-  const refundCreditAmount =
+  // Cash isn't paid yet, so only card + credit are refunded as credit.
+  // Capped so it can never exceed the order total.
+  const refundCreditAmount = Math.min(
     passedRefundCreditAmount !== undefined
-      ? passedRefundCreditAmount
-      : totalPaidCard + totalPaidCredit;
+      ? Number(passedRefundCreditAmount)
+      : totalPaidCard + totalPaidCredit,
+    processOrderTotal,
+  );
 
   const onCancelOrder = async () => {
     if (!isConfirmed || loading) return;
@@ -215,6 +236,14 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
+  const formatPrice = (value: number | string | null | undefined): string => {
+    const num = Number(value ?? 0);
+    if (!isFinite(num)) return "0.00";
+    const [intPart, decPart] = num.toFixed(2).split(".");
+    return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decPart}`;
   };
 
   return (
@@ -268,7 +297,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
           {/* Packages */}
           {packages.length > 0 && (
             <SectionCard
-              title={`Packages (${String(packages.length).padStart(2, "0")})`}
+              title={`Packages (${String(packagesCount).padStart(2, "0")})`}
             >
               {packages.map((pkg, idx) => {
                 const unitPrice = getPackageUnitPrice(pkg);
@@ -285,11 +314,9 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                           </Text>
                         </Text>
                         <Text className="text-[13px] text-black mt-0.5">
-                          Rs. {unitPrice.toFixed(2)}
+                          Rs. {formatPrice(unitPrice)}
                           {pkg.qty > 1
-                            ? ` x ${pkg.qty} = Rs. ${(
-                                unitPrice * pkg.qty
-                              ).toFixed(2)}`
+                            ? ` x ${pkg.qty} = Rs. ${formatPrice(unitPrice * pkg.qty)}`
                             : ""}
                         </Text>
                       </View>
@@ -322,13 +349,14 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                       </Text>
                       <View className="flex-row items-center mt-0.5">
                         <Text className="text-[13px] font-bold text-black">
-                          Rs. {item.price.toFixed(2)}
+                          Rs. {formatPrice(item.price)}
                         </Text>
-                        {item.originalPrice && (
-                          <Text className="text-[12px] text-[#B0B0B0] line-through ml-2">
-                            Rs. {item.originalPrice.toFixed(2)}
-                          </Text>
-                        )}
+                        {item.originalPrice != null &&
+                          item.originalPrice > item.price + 0.001 && (
+                            <Text className="text-[12px] text-[#B0B0B0] line-through ml-2">
+                              Rs. {formatPrice(item.originalPrice)}
+                            </Text>
+                          )}
                       </View>
                     </View>
                   </View>
@@ -350,7 +378,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                   Total Paid with Card
                 </Text>
                 <Text className="text-[14px] font-semibold text-black">
-                  Rs. {totalPaidCard.toFixed(2)}
+                  Rs. {formatPrice(totalPaidCard)}
                 </Text>
               </View>
             )}
@@ -362,7 +390,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                   Total Paid with Credit
                 </Text>
                 <Text className="text-[14px] font-semibold text-black">
-                  Rs. {totalPaidCredit.toFixed(2)}
+                  Rs. {formatPrice(totalPaidCredit)}
                 </Text>
               </View>
             )}
@@ -374,7 +402,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                   Total Cash Due
                 </Text>
                 <Text className="text-[14px] font-semibold text-[#000000]">
-                  Rs. {totalCashDue.toFixed(2)}
+                  Rs. {formatPrice(totalCashDue)}
                 </Text>
               </View>
             )}
@@ -385,7 +413,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             <View className="flex-row justify-between pt-2">
               <Text className="text-[15px] font-bold text-black">Total</Text>
               <Text className="text-[16px] font-bold text-black">
-                Rs. {processOrderTotal.toFixed(2)}
+                Rs. {formatPrice(processOrderTotal)}
               </Text>
             </View>
           </View>
@@ -402,7 +430,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
               <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
                 After canceling, the full converted amount of{" "}
                 <Text className="font-bold text-[#15803D]">
-                  Rs. {refundCreditAmount.toFixed(2)}
+                  Rs. {formatPrice(refundCreditAmount)}
                 </Text>{" "}
                 will be added to your credit balance. You can use it for your
                 next purchase.
@@ -447,7 +475,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             onPress={onCancelOrder}
             disabled={!isConfirmed || loading}
             activeOpacity={0.85}
-          className={`rounded-full py-4 items-center ${
+            className={`rounded-full py-4 items-center ${
               isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
             style={{

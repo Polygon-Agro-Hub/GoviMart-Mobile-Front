@@ -147,7 +147,14 @@ export type RootStackParamList = {
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
-  ReviewPackage: { orderId?: string | number; invoiceNo?: string; replacedProduct?: any; targetStepIndex?: number; newScheduleDate?: string; } | undefined;
+ ReviewPackage: {
+  orderId?: number | string;
+  invoiceNo?: string;
+  targetStepIndex?: number;
+  replacedProduct?: any;
+  newScheduleDate?: string;
+  refreshKey?: number; // set ONLY by the Notification tab
+};
  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;

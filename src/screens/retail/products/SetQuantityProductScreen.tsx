@@ -6,6 +6,7 @@ import {
   StatusBar,
   Image,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -31,35 +32,69 @@ type ProductInfo = {
 };
 
 /* ---------------------------------------------------------
+   Layout constants for the product rows
+--------------------------------------------------------- */
+
+const ROW_SIDE_PADDING = 32; // space left/right of each row
+const AVATAR_SIZE = 80; // circle size
+const AVATAR_GAP = 16; // gap between circle and text
+const TEXT_MAX_WIDTH = 170; // width of the name/qty/price column
+
+/* ---------------------------------------------------------
    Small presentational helpers
 --------------------------------------------------------- */
 
-const ProductAvatar: React.FC<{ product: ProductInfo }> = ({ product }) =>
-  product.image ? (
-    <Image
-      source={{ uri: product.image }}
-      className="w-16 h-16 rounded-full bg-[#F5F5F5]"
-    />
-  ) : (
-    <View className="w-16 h-16 rounded-full bg-[#F5F5F5] items-center justify-center">
-      <Text style={{ fontSize: 28 }}>{product.icon}</Text>
-    </View>
-  );
+const ProductAvatar: React.FC<{ product: ProductInfo }> = ({ product }) => (
+  <View
+    className="rounded-full bg-[#F5F5F5] items-center justify-center overflow-hidden"
+    style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, flexShrink: 0 }}
+  >
+    {product.image ? (
+      <Image
+        source={{ uri: product.image }}
+        style={{ width: 52, height: 52 }}
+        resizeMode="contain"
+      />
+    ) : (
+      <Text style={{ fontSize: 32 }}>{product.icon}</Text>
+    )}
+  </View>
+);
 
 const ProductRow: React.FC<{
   product: ProductInfo;
   subtitle: string;
   price: string;
-}> = ({ product, subtitle, price }) => (
-  <View className="flex-row items-center justify-center px-8 w-full">
-    <ProductAvatar product={product} />
-    <View className="ml-4 items-start">
-      <Text className="text-[16px] font-bold text-black">{product.name}</Text>
-      <Text className="text-[13px] text-[#8A8A8A] mt-0.5">{subtitle}</Text>
-      <Text className="text-[16px] font-bold text-black mt-0.5">{price}</Text>
+}> = ({ product, subtitle, price }) => {
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Never wider than what fits on screen (keeps 32px margin each side)
+  const textWidth = Math.min(
+    TEXT_MAX_WIDTH,
+    screenWidth - 64 - AVATAR_SIZE - AVATAR_GAP,
+  );
+
+  return (
+    // justify-center puts the image + text block in the middle of the screen
+    <View className="flex-row items-center justify-center w-full">
+      <ProductAvatar product={product} />
+
+      <View style={{ width: textWidth, marginLeft: AVATAR_GAP }}>
+        <Text
+          className="text-[16px] font-bold text-black"
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {product.name}
+        </Text>
+        <Text className="text-[13px] text-[#8A8A8A] mt-0.5">{subtitle}</Text>
+        <Text className="text-[16px] font-bold text-black mt-0.5">
+          {price}
+        </Text>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const SummaryRow: React.FC<{
   label: string;
@@ -69,13 +104,18 @@ const SummaryRow: React.FC<{
 }> = ({ label, value, bold, valueColor }) => (
   <View className="flex-row justify-between items-center py-3">
     <Text
-      className={`text-[14px] ${bold ? "font-bold text-black" : "text-[#6B6B6B]"}`}
+      className={`flex-1 mr-4 text-[14px] ${
+        bold ? "font-bold text-black" : "text-[#6B6B6B]"
+      }`}
+      numberOfLines={2}
     >
       {label}
     </Text>
     <Text
-      className={`text-[14px] ${bold ? "font-bold" : "font-semibold text-black"}`}
-      style={valueColor ? { color: valueColor } : undefined}
+      className={`text-[14px] ${
+        bold ? "font-bold" : "font-semibold text-black"
+      }`}
+      style={[{ flexShrink: 0 }, valueColor ? { color: valueColor } : null]}
     >
       {value}
     </Text>
@@ -205,6 +245,8 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
 
   const balance = useMemo(() => fromPrice - toPrice, [fromPrice, toPrice]);
   const isCredit = balance >= 0;
+  // Treat anything that rounds to Rs. 0.00 as zero (avoids float noise)
+  const isBalanceZero = Number(balance.toFixed(2)) === 0;
 
   const decrease = () =>
     setQuantity((q: number) =>
@@ -255,51 +297,37 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
-  // ---------------------------------------------------------------------
-  // "Please Note" text
-  //
-  //  Pickup  (any payment)       → pay upon pickup   (reduced / increased)
-  //  Delivery + Card             → already paid      (credited / additional)
-  //  Delivery + Cash (or other)  → pay upon delivery (reduced / increased)
-  // ---------------------------------------------------------------------
-  const amountText = (
-    <Text className="font-bold text-black">
-      Rs. {formatPrice(Math.abs(balance))}
-    </Text>
-  );
+const amountText = (
+  <Text className="font-bold text-black">
+    Rs. {formatPrice(Math.abs(balance))}
+  </Text>
+);
 
-  const noteContent = isPickup ? (
-    // Pickup (Cash or Card) — customer collects at pickup centre; pay on pickup
+// 1) Check PAYMENT first.
+//    Card  → already paid, so credited / additional (delivery method doesn't matter)
+//    Cash  → then check DELIVERY: pickup or delivery
+const noteContent = isCard ? (
+  isCredit ? (
     <>
-      The total amount you need to pay upon pickup will be{" "}
-      <Text className="font-bold text-black">
-        {isCredit ? "reduced" : "increased"}
-      </Text>{" "}
-      by {amountText} at the end of this process.
+      You have already paid for this order, so the remaining balance of{" "}
+      {amountText} will be credited to your account.
     </>
-  ) : isCard ? (
-    // Delivery + Card — order already paid online
-    isCredit ? (
-      <>
-        You have already paid for this order, so the remaining balance of{" "}
-        {amountText} will be credited to your account.
-      </>
-    ) : (
-      <>
-        You have already paid for this order. The additional {amountText} will
-        need to be paid at the end of this process.
-      </>
-    )
   ) : (
-    // Delivery + Cash (or any other non-card payment)
     <>
-      The total amount you need to pay upon delivery will be{" "}
-      <Text className="font-bold text-black">
-        {isCredit ? "reduced" : "increased"}
-      </Text>{" "}
-      by {amountText} at the end of this process.
+      You have already paid for this order. The additional {amountText} will
+      need to be paid at the end of this process.
     </>
-  );
+  )
+) : (
+  <>
+    The total amount you need to pay upon {isPickup ? "pickup" : "delivery"}{" "}
+    will be{" "}
+    <Text className="font-bold text-black">
+      {isCredit ? "reduced" : "increased"}
+    </Text>{" "}
+    by {amountText} at the end of this process.
+  </>
+);
 
   return (
     <View className="flex-1 bg-white">
@@ -323,14 +351,14 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
             You are replacing {fromProduct.name} with {toProduct.name}.
           </Text>
 
-          <View className="items-center mt-6">
+          <View className="mt-6">
             <ProductRow
               product={fromProduct}
               subtitle={formatQty(fromProduct.baseQty)}
               price={`Rs. ${formatPrice(fromPrice)}`}
             />
 
-            <View className="my-3">
+            <View className="my-3 items-center">
               <Ionicons name="arrow-down" size={22} color="#000" />
             </View>
 
@@ -386,18 +414,23 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
               label="Balance"
               value={`Rs. ${formatPrice(Math.abs(balance))}`}
               bold
-              valueColor={isCredit ? "#3B82F6" : "#EF4444"}
+              valueColor={
+                isBalanceZero ? "#000000" : isCredit ? "#3B82F6" : "#EF4444"
+              }
             />
           </View>
 
-          <View className="mx-6 mt-6 bg-[#F5F5F5] rounded-2xl p-4">
-            <Text className="text-[14px] font-bold text-black mb-1">
-              Please Note :
-            </Text>
-            <Text className="text-[13px] text-[#6B6B6B] leading-5">
-              {noteContent}
-            </Text>
-          </View>
+          {/* Hidden when the balance is zero */}
+          {!isBalanceZero && (
+            <View className="mx-6 mt-6 bg-[#F5F5F5] rounded-2xl p-4">
+              <Text className="text-[14px] font-bold text-black mb-1">
+                Please Note :
+              </Text>
+              <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                {noteContent}
+              </Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity

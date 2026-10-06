@@ -307,9 +307,10 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             }
 
             navigation.navigate("ReviewPackage", {
-                orderId: item.processOrderId || item.orderId,
-                invoiceNo: item.invNo,
-            });
+    orderId: item.processOrderId || item.orderId,
+    invoiceNo: item.invNo,
+    refreshKey: Date.now(), // forces ReviewPackage to reload fresh data
+});
         } else if (item.processOrderId || item.orderId) {
             navigation.navigate("OrderDetails", {
                 orderId: String(item.processOrderId || item.orderId),
