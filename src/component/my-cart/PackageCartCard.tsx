@@ -199,7 +199,7 @@ const PackageCartCard: React.FC<Props> = ({
                                 fontWeight: "600",
                             }}
                         >
-                            {item.totalItems}
+                            {item.totalItems != null && item.totalItems > 0 ? item.totalItems : 1}
                         </Text>
                     </Text>
 

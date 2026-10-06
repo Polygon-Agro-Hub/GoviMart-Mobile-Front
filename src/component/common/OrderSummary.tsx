@@ -229,7 +229,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                                 color: "#000000",
                             }}
                         >
-                            {deliveryFee > 0 ? `+ Rs. ${formatPrice(deliveryFee)}` : "Free"}
+                            {deliveryFee > 0 ? `+ Rs. ${formatPrice(deliveryFee)}` : "Rs. 0.00"}
                         </Text>
                     </View>
 

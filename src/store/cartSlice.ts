@@ -126,6 +126,9 @@ const cartSlice = createSlice({
       const existingIndex = state.packages.findIndex((p) => p.id === action.payload.id);
       if (existingIndex >= 0) {
         state.packages[existingIndex].quantity += action.payload.quantity;
+        if (action.payload.totalItems) {
+          state.packages[existingIndex].totalItems = action.payload.totalItems;
+        }
         state.packages[existingIndex].isUnavailable = false;
       } else {
         state.packages.push({ ...action.payload, isUnavailable: false });
@@ -133,11 +136,14 @@ const cartSlice = createSlice({
     },
     setPackageQuantity: (
       state,
-      action: PayloadAction<{ id: number; quantity: number }>
+      action: PayloadAction<{ id: number; quantity: number; totalItems?: number }>
     ) => {
       const pkg = state.packages.find((p) => p.id === action.payload.id);
       if (pkg) {
         pkg.quantity = Math.max(1, action.payload.quantity);
+        if (action.payload.totalItems !== undefined) {
+          pkg.totalItems = action.payload.totalItems;
+        }
       }
     },
     increasePackageQuantity: (state, action: PayloadAction<number>) => {
@@ -223,6 +229,7 @@ const cartSlice = createSlice({
             pkg.id !== mergedPackages[i]?.id ||
             pkg.quantity !== mergedPackages[i]?.quantity ||
             pkg.price !== mergedPackages[i]?.price ||
+            pkg.totalItems !== mergedPackages[i]?.totalItems ||
             pkg.isUnavailable !== mergedPackages[i]?.isUnavailable
         );
 
