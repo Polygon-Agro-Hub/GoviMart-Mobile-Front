@@ -185,10 +185,39 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       if (size > MAX_IMAGE_SIZE) {
         hasOversized = true;
       } else {
+        const uri = asset.uri;
+        let fileName = asset.fileName;
+        if (!fileName) {
+          const uriParts = uri.split("/");
+          fileName =
+            uriParts[uriParts.length - 1] || `image_${Date.now()}_${i}.jpg`;
+        }
+
+        const ext = (fileName.split(".").pop() || "").toLowerCase();
+        let mimeType = asset.mimeType;
+
+        if (!mimeType) {
+          if (ext === "heic" || ext === "heif") {
+            mimeType = `image/${ext}`;
+          } else if (ext === "png") {
+            mimeType = "image/png";
+          } else if (ext === "webp") {
+            mimeType = "image/webp";
+          } else {
+            mimeType = "image/jpeg";
+          }
+        } else if (
+          (mimeType === "image/heic" || mimeType === "image/heif") &&
+          !fileName.toLowerCase().endsWith(".heic") &&
+          !fileName.toLowerCase().endsWith(".heif")
+        ) {
+          fileName = `${fileName}.${mimeType.replace("image/", "")}`;
+        }
+
         validPhotos.push({
           uri: asset.uri,
-          name: asset.fileName || `image_${Date.now()}_${i}.jpg`,
-          type: asset.mimeType || "image/jpeg",
+          name: fileName,
+          type: mimeType,
         });
       }
     }
@@ -527,7 +556,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             marginBottom: 12,
           }}
         >
-          Limit : Up to 6 photos (JPG, PNG - Max 5MB each)
+          Limit : Up to 6 photos (JPG, PNG, HEIC - Max 5MB each)
         </Text>
 
         {/* ================================================= */}
