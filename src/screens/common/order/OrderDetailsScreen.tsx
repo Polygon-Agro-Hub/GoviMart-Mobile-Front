@@ -412,7 +412,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             date: pickupReturnTime,
             icon: "xmark",
             active: true,
-            description: `Reason : "${pickupReturnReason}"`,
+            description: `Reason : ${pickupReturnReason}`,
           },
         ];
       }
@@ -535,7 +535,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           date: formatStatusDate(hld.holdTime || null) || updateTime,
           icon: "pause",
           active: true,
-          description: `Reason : "${hld.holdReason || "On Hold"}"`,
+          description: `Reason : ${hld.holdReason || "On Hold"}`,
         });
         if (hld.restartedTime) {
           holdItems.push({
@@ -554,7 +554,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           date: updateTime,
           icon: "pause",
           active: true,
-          description: 'Reason : "On Hold"',
+          description: "Reason : On Hold",
         });
       }
 
@@ -598,7 +598,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           date: returnTimeFormatted || updateTime,
           icon: "xmark",
           active: true,
-          description: `Reason : "${returnReason}"`,
+          description: `Reason : ${returnReason}`,
         });
       }
 
@@ -646,7 +646,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           date: returnTime || updateTime,
           icon: "xmark",
           active: true,
-          description: `Reason : "${returnReasonText}"`,
+          description: `Reason : ${returnReasonText}`,
         },
       ];
     }
@@ -924,105 +924,146 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             Order Status
           </Text>
 
-          {getStatusItems().map((status, index) => (
-            <View
-              key={`${status.title}-${index}`}
-              style={{
-                flexDirection: "row",
-                minHeight: (status as any).description
-                  ? 46
-                  : index === getStatusItems().length - 1
-                    ? 21
-                    : 27,
-              }}
-            >
-              {/* Timeline */}
+          {getStatusItems().map((status, index) => {
+            const desc = (status as any).description;
+            const isReason =
+              typeof desc === "string" && /^Reason\s*:/i.test(desc);
+            const rawBody = isReason
+              ? desc.replace(/^Reason\s*:\s*/i, "")
+              : desc;
+            const cleanReasonBody = isReason
+              ? rawBody.replace(/^[“"'\s]+|[”"'\s]+$/g, "")
+              : desc;
 
+            return (
               <View
+                key={`${status.title}-${index}`}
                 style={{
-                  width: 18,
-                  alignItems: "center",
+                  flexDirection: "row",
+                  minHeight: (status as any).description
+                    ? 46
+                    : index === getStatusItems().length - 1
+                      ? 21
+                      : 27,
+                  marginBottom: index === getStatusItems().length - 1 ? 14 : 6,
                 }}
               >
+                {/* Timeline */}
+
                 <View
                   style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 99,
-                    backgroundColor: status.active ? "#000" : "#E2E5EB",
-                    justifyContent: "center",
+                    width: 18,
                     alignItems: "center",
-                    zIndex: 2,
-                    marginBottom: 20,
                   }}
                 >
-                  <FontAwesome6
-                    name={status.icon as any}
-                    size={8}
-                    color="#FFF"
-                  />
-                </View>
-
-                {index !== getStatusItems().length - 1 && (
                   <View
                     style={{
-                      position: "absolute",
-                      top: 13,
-                      width: 1,
-                      height: 40,
+                      width: 22,
+                      height: 22,
+                      borderRadius: 99,
                       backgroundColor: status.active ? "#000" : "#E2E5EB",
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Status text */}
-
-              <View
-                style={{
-                  flex: 1,
-                  alignSelf: "flex-start",
-                  paddingLeft: 10,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: status.active ? "#111" : "#A5ABB9",
-                      fontWeight: "600",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      zIndex: 2,
                     }}
                   >
-                    {status.title}
-                  </Text>
+                    <FontAwesome6
+                      name={status.icon as any}
+                      size={8}
+                      color="#FFF"
+                    />
+                  </View>
 
-                  {status.date ? (
-                    <Text
+                  {index !== getStatusItems().length - 1 && (
+                    <View
                       style={{
-                        fontSize: 11,
-                        color: "#5A5859",
-                        marginLeft: 5,
+                        position: "absolute",
+                        top: 13,
+                        bottom: -10,
+                        width: 1,
+                        backgroundColor: status.active ? "#000" : "#E2E5EB",
                       }}
-                    >
-                      (At {status.date})
-                    </Text>
-                  ) : null}
+                    />
+                  )}
                 </View>
 
-                {(status as any).description ? (
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: "#5A5859",
-                      marginTop: 3,
-                    }}
-                  >
-                    {(status as any).description}
-                  </Text>
-                ) : null}
+                {/* Status text */}
+
+                <View
+                  style={{
+                    flex: 1,
+                    alignSelf: "flex-start",
+                    paddingLeft: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: status.active ? "#111" : "#A5ABB9",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {status.title}
+                    </Text>
+
+                    {status.date ? (
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: "#5A5859",
+                          marginLeft: 5,
+                        }}
+                      >
+                        (At {status.date})
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {desc ? (
+                    isReason ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "flex-start",
+                          marginTop: 3,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: "#5A5859",
+                          }}
+                        >
+                          Reason : "
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: "#5A5859",
+                            flex: 1,
+                            flexShrink: 1,
+                          }}
+                        >
+                          {cleanReasonBody}"
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: "#5A5859",
+                          marginTop: 3,
+                        }}
+                      >
+                        {desc}
+                      </Text>
+                    )
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* PACKAGES */}
