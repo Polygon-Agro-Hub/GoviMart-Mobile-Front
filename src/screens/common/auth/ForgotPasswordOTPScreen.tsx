@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert,
+  Keyboard,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RouteProp } from "@react-navigation/native";
@@ -17,7 +17,6 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
 import { getForgotPwdStorageKeys } from "./ForgotPasswordInputScreen";
@@ -26,10 +25,7 @@ type NavigationProp = StackNavigationProp<
   RootStackParamList,
   "ForgotPasswordOTP"
 >;
-type ScreenRouteProp = RouteProp<
-  RootStackParamList,
-  "ForgotPasswordOTP"
->;
+type ScreenRouteProp = RouteProp<RootStackParamList, "ForgotPasswordOTP">;
 
 interface Props {
   route: ScreenRouteProp;
@@ -46,29 +42,28 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const [referenceId, setReferenceId] = useState(
     route.params?.referenceId || ""
   );
-  const [resetToken, setResetToken] = useState(
-    route.params?.resetToken || ""
-  );
+  const [resetToken, setResetToken] = useState(route.params?.resetToken || "");
 
   const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
     method,
     undefined,
     undefined,
     undefined,
-    identifier,
+    identifier
   );
   const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-  const storageKey = attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
-  const lockoutKey = lockoutKeys[0] || `@forgot_pwd_lockout_${cleanIdentifier}`;
+  const storageKey =
+    attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(240); // 4:00 countdown for both SMS and Email
+  const [timeLeft, setTimeLeft] = useState(240); // 4:00 countdown
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [attemptsCount, setAttemptsCount] = useState<number>(1);
   const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
@@ -86,6 +81,26 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const ref_5 = useRef<TextInput>(null);
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
+
+  // Track keyboard visibility (used to hide the bottom image)
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () =>
+      setIsKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () =>
+      setIsKeyboardVisible(false)
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const getRecentAttempts = async (key: string): Promise<number[]> => {
     try {
@@ -116,6 +131,15 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     } catch {}
   };
 
+  const showRateLimitAlert = () => {
+    setAlertType("error");
+    setAlertTitle("Too Many Attempts");
+    setAlertMessage(
+      "Too many verification attempts. Please try again after 15 minutes."
+    );
+    setAlertVisible(true);
+  };
+
   // Check rate limit on initial mount
   useEffect(() => {
     const checkInitialRateLimit = async () => {
@@ -131,12 +155,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               setTimeLeft(remainingSec);
               setIsRateLimited(true);
               setIsExpired(false);
-              setAlertType("error");
-              setAlertTitle("Too Many Attempts");
-              setAlertMessage(
-                "Too many verification attempts. Please try again after 15 minutes."
-              );
-              setAlertVisible(true);
+              showRateLimitAlert();
               return;
             } else {
               await AsyncStorage.removeItem(key);
@@ -161,12 +180,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setTimeLeft(remainingSec);
           setIsRateLimited(true);
           setIsExpired(false);
-          setAlertType("error");
-          setAlertTitle("Too Many Attempts");
-          setAlertMessage(
-            "Too many verification attempts. Please try again after 15 minutes."
-          );
-          setAlertVisible(true);
+          showRateLimitAlert();
           return;
         }
       }
@@ -238,6 +252,17 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
+  const applyRateLimitLockout = async () => {
+    const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+    for (const key of lockoutKeys) {
+      await AsyncStorage.setItem(key, String(lockoutUntil));
+    }
+    setTimeLeft(900);
+    setIsRateLimited(true);
+    setIsExpired(false);
+    showRateLimitAlert();
+  };
+
   const handleVerify = async () => {
     const code = otp.join("");
     if (code.length < 5) {
@@ -279,52 +304,32 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       } else {
         const is429 = response.data?.isRateLimited;
         const msg = response.data?.message || "Failed to verify the code.";
-        setAlertType("error");
         if (is429 || msg.toLowerCase().includes("too many")) {
-          const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-          for (const key of lockoutKeys) {
-            await AsyncStorage.setItem(key, String(lockoutUntil));
-          }
-          setTimeLeft(900);
-          setIsRateLimited(true);
-          setIsExpired(false);
-          setAlertTitle("Too Many Attempts");
-          setAlertMessage(
-            "Too many verification attempts. Please try again after 15 minutes."
-          );
+          await applyRateLimitLockout();
         } else {
+          setAlertType("error");
           setAlertTitle("Verification Failed");
           setAlertMessage(msg);
+          setAlertVisible(true);
           setOtp(["", "", "", "", ""]);
           refs[0].current?.focus();
         }
-        setAlertVisible(true);
       }
     } catch (err: any) {
       console.error("Verification error:", err);
       const is429 = err.response?.status === 429;
       const msg =
         err.response?.data?.message || "An unexpected error occurred.";
-      setAlertType("error");
       if (is429 || msg.toLowerCase().includes("too many")) {
-        const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-        for (const key of lockoutKeys) {
-          await AsyncStorage.setItem(key, String(lockoutUntil));
-        }
-        setTimeLeft(900);
-        setIsRateLimited(true);
-        setIsExpired(false);
-        setAlertTitle("Too Many Attempts");
-        setAlertMessage(
-          "Too many verification attempts. Please try again after 15 minutes."
-        );
+        await applyRateLimitLockout();
       } else {
+        setAlertType("error");
         setAlertTitle("Verification Error");
         setAlertMessage(msg);
+        setAlertVisible(true);
         setOtp(["", "", "", "", ""]);
         refs[0].current?.focus();
       }
-      setAlertVisible(true);
     } finally {
       setIsVerifying(false);
     }
@@ -343,12 +348,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             setTimeLeft(remainingSec);
             setIsRateLimited(true);
             setIsExpired(false);
-            setAlertType("error");
-            setAlertTitle("Too Many Attempts");
-            setAlertMessage(
-              "Too many verification attempts. Please try again after 15 minutes."
-            );
-            setAlertVisible(true);
+            showRateLimitAlert();
             return;
           } else {
             await AsyncStorage.removeItem(key);
@@ -370,12 +370,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         setTimeLeft(remainingSec);
         setIsRateLimited(true);
         setIsExpired(false);
-        setAlertType("error");
-        setAlertTitle("Too Many Attempts");
-        setAlertMessage(
-          "Too many verification attempts. Please try again after 15 minutes."
-        );
-        setAlertVisible(true);
+        showRateLimitAlert();
         return;
       }
     }
@@ -408,7 +403,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setAlertType("error");
           setAlertTitle("Code Resent");
           setAlertMessage(
-            "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
+            "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes."
           );
           setAlertVisible(true);
         } else {
@@ -418,7 +413,12 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setAlertType("success");
           setAlertTitle("Code Resent");
           setAlertMessage(
-            `${response.data.message || (method === "email" ? "Verification code has been resent to your email address." : "Verification code has been resent to your mobile number.")}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
+            `${
+              response.data.message ||
+              (method === "email"
+                ? "Verification code has been resent to your email address."
+                : "Verification code has been resent to your mobile number.")
+            }\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
           );
           setAlertVisible(true);
         }
@@ -427,81 +427,61 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         const is429 = response.data?.isRateLimited;
         const msg =
           response.data?.message || "Failed to resend verification code.";
-        setAlertType("error");
         if (is429 || msg.toLowerCase().includes("too many")) {
-          const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-          for (const key of lockoutKeys) {
-            await AsyncStorage.setItem(key, String(lockoutUntil));
-          }
-          setTimeLeft(900);
-          setIsRateLimited(true);
-          setIsExpired(false);
-          setAlertTitle("Too Many Attempts");
-          setAlertMessage(
-            "Too many verification attempts. Please try again after 15 minutes."
-          );
+          await applyRateLimitLockout();
         } else {
+          setAlertType("error");
           setAlertTitle("Resend Failed");
           setAlertMessage(msg);
+          setAlertVisible(true);
         }
-        setAlertVisible(true);
       }
     } catch (err: any) {
       console.error("Resend error:", err);
       const is429 = err.response?.status === 429;
       const msg =
         err.response?.data?.message || "Failed to resend verification code.";
-      setAlertType("error");
       if (is429 || msg.toLowerCase().includes("too many")) {
-        const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-        for (const key of lockoutKeys) {
-          await AsyncStorage.setItem(key, String(lockoutUntil));
-        }
-        setTimeLeft(900);
-        setIsRateLimited(true);
-        setIsExpired(false);
-        setAlertTitle("Too Many Attempts");
-        setAlertMessage(
-          "Too many verification attempts. Please try again after 15 minutes."
-        );
+        await applyRateLimitLockout();
       } else {
+        setAlertType("error");
         setAlertTitle("Resend Error");
         setAlertMessage(msg);
+        setAlertVisible(true);
       }
-      setAlertVisible(true);
     } finally {
       setIsResending(false);
     }
   };
 
   return (
-    <View className="flex-1 bg-white">
+    <KeyboardAvoidingView
+      className="flex-1 bg-white"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={20}
+    >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
-      {/* Custom Header with Logo instead of Title, same as Create Account OTP */}
+      {/* Custom Header with Logo */}
       <CustomHeader
         showLogo={true}
         showBackButton={true}
         navigation={navigation}
       />
 
-      <KeyboardAwareScrollView
-        innerRef={(ref) => (scrollViewRef.current = ref as any)}
+      <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={{
           flexGrow: 1,
-          justifyContent: "space-between",
-          paddingBottom: 20,
+          justifyContent: "center",
+          paddingBottom: isKeyboardVisible ? 20 : 120,
         }}
         className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        enableOnAndroid={true}
-        extraScrollHeight={Platform.OS === "ios" ? 20 : 0}
-        extraHeight={Platform.OS === "ios" ? 40 : 0}
-        keyboardOpeningTime={0}
       >
-        {/* Verification Content */}
-        <View className="w-full py-4">
+        {/* Verification Content Centered Vertically */}
+        <View className="w-full py-8">
           <Text className="text-2xl font-bold text-black text-center mb-4">
             {method === "email"
               ? "Verify your email address"
@@ -513,7 +493,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           </Text>
 
           {/* Phone Number / Email Display with Icon */}
-          <View className="flex-row items-center justify-center gap-x-2 mt-4 mb-6 bg-[#F2F2F6] px-4 py-2 rounded-full self-center">
+          <View className="flex-row items-center justify-center gap-x-2 mt-6 mb-8 bg-[#F2F2F6] px-4 py-2 rounded-full self-center">
             {method === "email" ? (
               <MaterialIcons name="email" size={14} color="#5A5859" />
             ) : (
@@ -525,7 +505,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
 
           {/* 5 OTP Digit Input Boxes */}
-          <View className="flex-row justify-between my-6 px-2">
+          <View className="flex-row justify-between my-8 px-2">
             {otp.map((digit, index) => {
               const isFocused = focusedIndex === index;
               return (
@@ -558,7 +538,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                       margin: 0,
                       width: "100%",
                       height: "100%",
-                      ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+                      ...(Platform.OS === "android"
+                        ? { includeFontPadding: false }
+                        : {}),
                     }}
                     maxLength={1}
                     selectTextOnFocus
@@ -570,7 +552,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
           {/* Rate Limit / Code Expired Banner */}
           {isRateLimited && timeLeft > 0 ? (
-            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-4 border-0">
+            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-6 border-0">
               <FontAwesome5
                 name="info-circle"
                 size={16}
@@ -582,12 +564,13 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                   Too Many Attempts!
                 </Text>
                 <Text className="text-xs text-black leading-relaxed">
-                  Too many verification attempts. Please try again after 15 minutes.
+                  Too many verification attempts. Please try again after 15
+                  minutes.
                 </Text>
               </View>
             </View>
           ) : isExpired ? (
-            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-4 border-0">
+            <View className="bg-[#FFF5E9] p-4 rounded-2xl flex-row items-center gap-x-3 mt-6 border-0">
               <FontAwesome5
                 name="info-circle"
                 size={16}
@@ -607,9 +590,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           ) : null}
 
           {/* Resend Helper / Countdown Details */}
-          <View className="mt-8 w-full">
-            {/* Divider lines next to Didn't receive the code */}
-            <View className="flex-row items-center my-4">
+          <View className="mt-12 w-full">
+            <View className="flex-row items-center my-6">
               <View className="flex-1 h-[1px] bg-gray-200" />
               <Text className="text-sm font-semibold text-[#5A5859] mx-4">
                 Didn’t receive the code ?
@@ -646,22 +628,28 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             )}
           </View>
         </View>
+      </ScrollView>
 
-        {/* Action Buttons */}
-        <View className="px-2 pb-0 pt-4 bg-white">
-          {/* Verify Button (Always shown) */}
-          <TouchableOpacity
-            onPress={handleVerify}
-            disabled={isVerifying || isResending}
-            activeOpacity={0.8}
-            className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-          >
-            <Text className="text-white text-base font-bold">
-              {isVerifying ? "Verifying..." : "Verify"}
-            </Text>
-          </TouchableOpacity>
+      {/* Action Buttons */}
+      <View
+        className="px-6 pt-2 bg-white"
+        style={{ paddingBottom: isKeyboardVisible ? 12 : 0 }}
+      >
+        <TouchableOpacity
+          onPress={handleVerify}
+          disabled={isVerifying || isResending}
+          activeOpacity={0.8}
+          className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+        >
+          <Text className="text-white text-base font-bold">
+            {isVerifying ? "Verifying..." : "Verify"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Bottom image: hidden while the keyboard is open */}
+        {!isKeyboardVisible && (
           <View
-            className="h-14 mt-4"
+            className="h-14 mt-6"
             style={{ marginLeft: -16, marginRight: -16 }}
           >
             <Image
@@ -669,8 +657,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
             />
           </View>
-        </View>
-      </KeyboardAwareScrollView>
+        )}
+      </View>
 
       {/* Alert Modal */}
       <AlertModal
@@ -682,7 +670,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         autoClose={false}
         showOkButton={true}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
