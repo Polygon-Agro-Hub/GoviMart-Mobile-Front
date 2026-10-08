@@ -196,6 +196,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 shadowOpacity: 0.15,
                 shadowRadius: 5,
                 elevation: 3,
+                marginTop:6
               }}
             >
               <Image

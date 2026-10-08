@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
   Platform,
   Image,
   Alert,
@@ -18,7 +17,6 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
@@ -41,6 +39,9 @@ interface SignUpOTPProps {
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_OTP_ATTEMPTS = 5;
+
+// Space (px) to keep between the Verify button and the top of the keyboard.
+const VERIFY_EXTRA_SPACE = 16;
 
 export const getSignUpStorageKeys = (
   phoneCode?: string,
@@ -114,7 +115,6 @@ const clearAttempts = async (key: string) => {
 
 const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const dispatch = useDispatch();
-  const scrollViewRef = useRef<ScrollView>(null);
   const phoneCode = route.params?.phoneCode || "+94";
   const phoneNumber = route.params?.phoneNumber || "771122300";
   const email = route.params?.email || "";
@@ -146,6 +146,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [attemptsCount, setAttemptsCount] = useState<number>(1);
   const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
@@ -158,25 +159,59 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
 
-  // Track keyboard visibility (used to hide the bottom image)
+  // ---------- Keyboard / scroll handling ----------
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const verifyWrapRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardTopRef = useRef(0);
+
+  // Scroll only as much as needed so the Verify button sits just above
+  // the keyboard.
+  const ensureVisible = useCallback(() => {
+    verifyWrapRef.current?.measureInWindow((_x, y, _w, h) => {
+      const limit = keyboardTopRef.current - VERIFY_EXTRA_SPACE;
+      const overflow = y + h - limit;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: scrollYRef.current + overflow,
+          animated: true,
+        });
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const showListener = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardTopRef.current = e.endCoordinates.screenY;
+      setIsKeyboardVisible(true);
+
+      // Measure how much the keyboard REALLY covers the screen. If the OS
+      // already resized the window, the overlap is 0 and no extra padding
+      // is added.
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+
+      // wait for bottom padding to render, then scroll
+      setTimeout(ensureVisible, 300);
+    });
+
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSub = Keyboard.addListener(showEvent, () =>
-      setIsKeyboardVisible(true),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () =>
-      setIsKeyboardVisible(false),
-    );
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
 
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showListener.remove();
+      hideListener.remove();
     };
-  }, []);
+  }, [ensureVisible]);
 
   // Check rate limit on initial mount and record first signup OTP attempt
   useEffect(() => {
@@ -746,11 +781,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1"
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={20}
-    >
+    <View ref={rootRef} collapsable={false} className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       {/* Custom Header with Logo instead of Title */}
@@ -761,18 +792,25 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       />
 
       <ScrollView
-        ref={scrollViewRef}
+        ref={scrollRef}
+        className="flex-1 bg-white"
         contentContainerStyle={{
           flexGrow: 1,
-          justifyContent: "center",
-          paddingBottom: isKeyboardVisible ? 20 : 120,
+          justifyContent: "space-between",
+          // Manually lift content above the keyboard (works on iOS and
+          // Android, including edge-to-edge production builds).
+          paddingBottom: keyboardHeight,
         }}
-        className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
-        {/* Verification Content Centered Vertically */}
-        <View className="w-full py-8">
+        {/* Verification Content */}
+        <View className="w-full px-4 py-8 justify-center">
           <Text className="text-2xl font-bold text-black text-center mb-4">
             {method === "email"
               ? "Verify your email address"
@@ -916,39 +954,38 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             )}
           </View>
         </View>
-      </ScrollView>
 
-      {/* Action Buttons */}
-      <View
-        className="px-6 pt-2 bg-white"
-        style={{ paddingBottom: isKeyboardVisible ? 12 : 0 }}
-      >
-        {/* Verify Button (Always shown) */}
-        <TouchableOpacity
-          onPress={handleVerify}
-          disabled={isVerifying || isResending}
-          activeOpacity={0.8}
-          className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-        >
-          <Text className="text-white text-base font-bold">
-            {isVerifying ? "Verifying..." : "Verify"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Bottom image: hidden while the keyboard is open */}
-        {!isKeyboardVisible && (
+        {/* Action Buttons (inside the ScrollView so it scrolls above the keyboard) */}
+        <View className="bg-white">
           <View
-            className="h-14 mt-6"
-            style={{ marginLeft: -16, marginRight: -16 }}
+            ref={verifyWrapRef}
+            collapsable={false}
+            className="px-6 pt-2 pb-3"
           >
-            <Image
-              source={require("@/assets/images/auth/bottom-line.webp")}
-              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-            />
+            <TouchableOpacity
+              onPress={handleVerify}
+              disabled={isVerifying || isResending}
+              activeOpacity={0.8}
+              className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+            >
+              <Text className="text-white text-base font-bold">
+                {isVerifying ? "Verifying..." : "Verify"}
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+
+          {/* Bottom image: hidden while the keyboard is open */}
+          {!isKeyboardVisible && (
+            <View className="h-14 mt-3 w-full">
+              <Image
+                source={require("@/assets/images/auth/bottom-line.webp")}
+                style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+              />
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 

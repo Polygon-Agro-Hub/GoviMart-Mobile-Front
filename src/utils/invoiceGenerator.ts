@@ -317,7 +317,6 @@ export const buildInvoiceHtml = (
     invoice,
     finalGrandTotal
   );
-  
 
   // Pickup centre details (safe even when pickupInfo is null/undefined)
   const pickup = invoice.pickupInfo || null;
@@ -344,6 +343,10 @@ export const buildInvoiceHtml = (
     })
     .toUpperCase();
 
+  // Inline SVG info icon: renders identically on Android and iOS (WKWebView),
+  // no dependency on flex / border-radius / font rendering.
+  const infoIconSvg = `<svg class="info-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="#1a1a1a"/><circle cx="6" cy="3.4" r="0.95" fill="#ffffff"/><rect x="5.2" y="5" width="1.6" height="4.3" rx="0.6" fill="#ffffff"/></svg>`;
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -361,6 +364,8 @@ export const buildInvoiceHtml = (
       margin: 0;
       padding: 0;
       font-family: Arial, Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     body {
       background-color: #ffffff;
@@ -533,25 +538,21 @@ export const buildInvoiceHtml = (
     }
     .delivery-note {
       font-size: 9.5px;
+      line-height: 12px;
       color: #4B5563;
       margin-top: 4px;
       margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
     }
-    .info-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+    .delivery-note .info-icon {
+      display: inline-block;
       width: 12px;
       height: 12px;
-      background-color: #1a1a1a;
-      color: #ffffff;
-      border-radius: 50%;
-      font-size: 8px;
-      font-style: normal;
-      font-weight: bold;
+      vertical-align: middle;
+      margin-right: 4px;
+      margin-top: -2px;
+    }
+    .delivery-note .note-text {
+      vertical-align: middle;
     }
     .remarks-section {
       margin-top: 12px;
@@ -875,10 +876,7 @@ export const buildInvoiceHtml = (
   ${
     showDeliveryNote
       ? `
-  <div class="delivery-note">
-    <span class="info-badge">i</span>
-    <span>The delivery charges might be different on the day of delivery. Your Grand Total might be changed then.</span>
-  </div>
+  <div class="delivery-note">${infoIconSvg}<span class="note-text">The delivery charges might be different on the day of delivery. Your Grand Total might be changed then.</span></div>
   `
       : ""
   }

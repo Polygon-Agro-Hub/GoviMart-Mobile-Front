@@ -76,7 +76,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       if (!paymentSessionEndTime) return;
       const diff = Math.max(
         0,
-        Math.floor((paymentSessionEndTime - Date.now()) / 1000)
+        Math.floor((paymentSessionEndTime - Date.now()) / 1000),
       );
       setRemainingSeconds(diff);
 
@@ -85,19 +85,18 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         paymentSessionEndTime = null;
         isNavigatingAwayRef.current = true;
 
-        Alert.alert(
-          "Session Expired",
-          "Your payment session has expired. You are being redirected to your cart.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                navigation.navigate("MyCart");
-              },
-            },
-          ],
-          { cancelable: false }
-        );
+        setCouponModalVisible(false);
+        setUnavailableModalVisible(false);
+        setBackConfirmVisible(false);
+
+        setTimeout(() => {
+          Alert.alert(
+            "Session Expired",
+            "Your payment session has expired. You are being redirected to your cart.",
+            [{ text: "OK", onPress: () => navigation.navigate("MyCart") }],
+            { cancelable: false },
+          );
+        }, 400);
       }
     }, 1000);
 
@@ -115,12 +114,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
       const backSub = BackHandler.addEventListener(
         "hardwareBackPress",
-        onHardwareBack
+        onHardwareBack,
       );
       return () => {
         backSub.remove();
       };
-    }, [])
+    }, []),
   );
 
   useEffect(() => {
@@ -514,7 +513,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                   fontWeight: "400",
                 }}
               >
-                This page will close in 5 minutes and you will be redirected to the cart.
+                This page will close in 5 minutes and you will be redirected to
+                the cart.
               </Text>
             </View>
           </View>

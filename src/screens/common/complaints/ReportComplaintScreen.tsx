@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Image,
   ActivityIndicator,
   useWindowDimensions,
   BackHandler,
   Linking,
+  Keyboard,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -50,6 +50,9 @@ interface ComplaintCategory {
 
 const MAX_IMAGES = 6;
 
+// Space (px) to keep between the Description box and the top of the keyboard.
+const DESC_EXTRA_SPACE = 24;
+
 const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const { width: windowWidth } = useWindowDimensions();
   const CONTAINER_PADDING = 16;
@@ -73,12 +76,75 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const [imageError, setImageError] = useState<string | null>(null);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  // ---------- Keyboard / scroll handling ----------
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const descWrapRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardTopRef = useRef(0);
+  const keyboardOpenRef = useRef(false);
+
+  // Scroll only as much as needed so the Description box sits just above
+  // the keyboard.
+  const ensureVisible = useCallback(() => {
+    descWrapRef.current?.measureInWindow((_x, y, _w, h) => {
+      const limit = keyboardTopRef.current - DESC_EXTRA_SPACE;
+      const overflow = y + h - limit;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: scrollYRef.current + overflow,
+          animated: true,
+        });
+      }
+    });
+  }, []);
+
+  const handleDescFocus = () => {
+    // if keyboard is already open, adjust now
+    if (keyboardOpenRef.current) {
+      setTimeout(ensureVisible, 150);
+    }
+  };
+
+  useEffect(() => {
+    const showListener = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardOpenRef.current = true;
+      keyboardTopRef.current = e.endCoordinates.screenY;
+
+      // Measure how much the keyboard REALLY covers the screen. If the OS
+      // already resized the window, the overlap is 0 and no extra padding
+      // is added.
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+
+      // wait for bottom padding to render, then scroll
+      setTimeout(ensureVisible, 300);
+    });
+
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      keyboardOpenRef.current = false;
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [ensureVisible]);
 
   const showAlert = (
     title: string,
@@ -250,6 +316,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
   const handleSubmit = async () => {
     if (submitting) return;
+    Keyboard.dismiss();
 
     if (!selectedCategoryId) {
       Alert.alert("Required", "Please select a complaint category.");
@@ -353,9 +420,10 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   }
 
   return (
-    <KeyboardAvoidingView
+    <View
+      ref={rootRef}
+      collapsable={false}
       style={{ flex: 1, backgroundColor: "#FFFFFF" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <CustomHeader
         title="Report a Complaint"
@@ -366,12 +434,20 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 12,
-          paddingBottom: Platform.OS === "ios" ? 30 : 20,
+          // Manually lift content above the keyboard (works on iOS and
+          // Android, including edge-to-edge production builds).
+          paddingBottom: (Platform.OS === "ios" ? 30 : 20) + keyboardHeight,
         }}
       >
         {/* ================================================= */}
@@ -501,37 +577,40 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           1. Description
         </Text>
 
-        <View
-          style={{
-            height: 204,
-
-            borderWidth: 1,
-            borderColor: "#D9DEE4",
-
-            borderRadius: 17,
-
-            paddingHorizontal: 21,
-            paddingTop: 13,
-
-            marginBottom: 19,
-          }}
-        >
-          <TextInput
-            value={complain}
-            onChangeText={setComplain}
-            multiline
-            textAlignVertical="top"
-            placeholder="Please describe your issue in detail.."
-            placeholderTextColor="#A0A0A0"
+        <View ref={descWrapRef} collapsable={false}>
+          <View
             style={{
-              flex: 1,
-              padding: 0,
-              fontSize: 14.5,
-              lineHeight: 20,
-              color: "#111111",
-              fontWeight: "500",
+              height: 204,
+
+              borderWidth: 1,
+              borderColor: "#D9DEE4",
+
+              borderRadius: 17,
+
+              paddingHorizontal: 21,
+              paddingTop: 13,
+
+              marginBottom: 19,
             }}
-          />
+          >
+            <TextInput
+              value={complain}
+              onChangeText={setComplain}
+              onFocus={handleDescFocus}
+              multiline
+              textAlignVertical="top"
+              placeholder="Please describe your issue in detail.."
+              placeholderTextColor="#A0A0A0"
+              style={{
+                flex: 1,
+                padding: 0,
+                fontSize: 14.5,
+                lineHeight: 20,
+                color: "#111111",
+                fontWeight: "500",
+              }}
+            />
+          </View>
         </View>
 
         {/* ================================================= */}
@@ -723,7 +802,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         type={alertType}
         onClose={() => setAlertVisible(false)}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

@@ -108,22 +108,25 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={onCancel}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: cancelButtonBgColor || "#EAEFF5",
-                  width: "100%",
-                  alignSelf: "stretch",
-                  minHeight: 50,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.12,
-                  shadowRadius: 6,
-                  elevation: 3,
-                }}
-                className="w-full py-3.5 px-4 rounded-full items-center justify-center"
-              >
+            <TouchableOpacity
+  onPress={onCancel}
+  activeOpacity={0.85}
+  style={{
+    backgroundColor: cancelButtonBgColor || "#EAEFF5",
+    width: "100%",
+    alignSelf: "stretch",
+    minHeight: 50,
+    borderWidth: 1.5,
+    borderColor: "#D1D9E6",
+    // Keep a soft shadow, but make iOS visible too
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  }}
+  className="w-full py-3.5 px-4 rounded-full items-center justify-center"
+>
                 <Text
                   style={{
                     color: cancelButtonTextColor,

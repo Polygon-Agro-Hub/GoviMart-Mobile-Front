@@ -1207,249 +1207,255 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  const goToNextStep = async () => {
-    if (currentStepIndex < steps.length - 1) {
-      setCurrentStepIndex((prev) => prev + 1);
-    } else {
-      // Confirm order completion & finalize review (BATCH UPDATE ON LAST STEP)
+const goToNextStep = async () => {
+  // Prevent double taps while the request is running
+  if (isSubmitting) return;
 
-      // Detect payment method early so we can show loading overlay immediately
-      const pMethod = (paymentMethod || "").trim().toLowerCase();
-      const isCard =
-        pMethod.includes("card") ||
-        pMethod.includes("payhere") ||
-        pMethod.includes("online") ||
-        (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
+  // Not the last step yet: just move forward
+  if (currentStepIndex < steps.length - 1) {
+    setCurrentStepIndex((prev) => prev + 1);
+    return;
+  }
 
-      // Detect Cash on Delivery or Cash on Pickup — skip OrderConfirmed for these
-      const dMethod = (deliveryMethod || "").trim().toLowerCase();
-      const isCashOrder =
-        pMethod.includes("cash") ||
-        pMethod === "cod" ||
-        pMethod.includes("pickup");
-      const isCashOnPickup =
-        dMethod.includes("pickup") || pMethod.includes("pickup");
-      const shouldSkipConfirmScreen = isCashOrder || isCashOnPickup;
+  // ───────────────────────────────────────────────────────────
+  // Last step: confirm order completion & finalize review
+  // ───────────────────────────────────────────────────────────
 
-      // Capture everything we need AFTER the Redux state is cleared
-      const confirmedInvoiceNo = invoiceNo;
-      const confirmedTotal = finalOrderTotalWithDelivery;
+  // Detect payment method
+  const pMethod = (paymentMethod || "").trim().toLowerCase();
+  const isCard =
+    pMethod.includes("card") ||
+    pMethod.includes("payhere") ||
+    pMethod.includes("online") ||
+    (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
 
-      // For cash/pickup orders: show loading overlay immediately
-      if (shouldSkipConfirmScreen) {
-        setIsSubmitting(true);
-      }
+  // Detect Cash on Delivery or Cash on Pickup, which skip OrderConfirmed
+  const dMethod = (deliveryMethod || "").trim().toLowerCase();
+  const isCashOrder =
+    pMethod.includes("cash") ||
+    pMethod === "cod" ||
+    pMethod.includes("pickup");
+  const isCashOnPickup =
+    dMethod.includes("pickup") || pMethod.includes("pickup");
+  const shouldSkipConfirmScreen = isCashOrder || isCashOnPickup;
 
-      try {
-        const replacements: Array<{
-          orderPackageId: number;
-          replceId?: number;
-          newProductId: number;
-          productType?: string | number;
-          newQty: number;
-          newPrice: number;
-        }> = [];
+  // Capture everything we need AFTER the Redux state is cleared
+  const confirmedInvoiceNo = invoiceNo;
+  const confirmedTotal = finalOrderTotalWithDelivery;
 
-        Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
-          const orderPkgId = orderPackageDbIds[pkgKey];
-          if (orderPkgId) {
-            const templateProds = productTemplatesState[pkgKey] || [];
-            prods.forEach((p) => {
-              const templateProd = templateProds.find(
-                (t) =>
-                  (t.productId && p.productId && t.productId === p.productId) ||
-                  String(t.itemId || t.id) === String(p.itemId || p.id),
-              );
-              const baselineQty =
-                templateProd?.quantity ??
-                p.minQuantity ??
-                p.originalProduct?.quantity;
-              const isQtyChanged =
-                baselineQty !== undefined
-                  ? Number(p.quantity) !== Number(baselineQty)
-                  : false;
+  // Show "Processing..." on the button for EVERY payment type
+  setIsSubmitting(true);
 
-              if (p.isReplaced || isQtyChanged) {
-                const replceId =
-                  p.originalProduct?.itemId ||
-                  p.itemId ||
-                  (p.originalProduct?.id
-                    ? parseInt(p.originalProduct.id)
-                    : undefined) ||
-                  p.productId ||
-                  parseInt(p.id) ||
-                  undefined;
-                const newProdId = p.productId || parseInt(p.id) || 0;
-                replacements.push({
-                  orderPackageId: orderPkgId,
-                  replceId: replceId,
-                  newProductId: newProdId,
-                  productType: p.productTypeId || p.productType || p.category,
-                  newQty: p.quantity || 1,
-                  newPrice: Number(
-                    ((p.price || 0) * (p.quantity || 1)).toFixed(2),
-                  ),
-                });
-              }
+  try {
+    const replacements: Array<{
+      orderPackageId: number;
+      replceId?: number;
+      newProductId: number;
+      productType?: string | number;
+      newQty: number;
+      newPrice: number;
+    }> = [];
+
+    Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
+      const orderPkgId = orderPackageDbIds[pkgKey];
+      if (orderPkgId) {
+        const templateProds = productTemplatesState[pkgKey] || [];
+        prods.forEach((p) => {
+          const templateProd = templateProds.find(
+            (t) =>
+              (t.productId && p.productId && t.productId === p.productId) ||
+              String(t.itemId || t.id) === String(p.itemId || p.id),
+          );
+          const baselineQty =
+            templateProd?.quantity ??
+            p.minQuantity ??
+            p.originalProduct?.quantity;
+          const isQtyChanged =
+            baselineQty !== undefined
+              ? Number(p.quantity) !== Number(baselineQty)
+              : false;
+
+          if (p.isReplaced || isQtyChanged) {
+            const replceId =
+              p.originalProduct?.itemId ||
+              p.itemId ||
+              (p.originalProduct?.id
+                ? parseInt(p.originalProduct.id)
+                : undefined) ||
+              p.productId ||
+              parseInt(p.id) ||
+              undefined;
+            const newProdId = p.productId || parseInt(p.id) || 0;
+            replacements.push({
+              orderPackageId: orderPkgId,
+              replceId: replceId,
+              newProductId: newProdId,
+              productType: p.productTypeId || p.productType || p.category,
+              newQty: p.quantity || 1,
+              newPrice: Number(
+                ((p.price || 0) * (p.quantity || 1)).toFixed(2),
+              ),
             });
           }
         });
-
-        // Ala carte items ADDED in this review session (new rows / merge by productId)
-        const additionalItemsPayload = Object.values(alacartSelection)
-          .filter((item) => item.isAddedNow)
-          .map((item) => ({
-            productId:
-              typeof item.productId === "number"
-                ? item.productId
-                : parseInt(
-                    String(item.productId || item.id).replace(/[^0-9]/g, ""),
-                  ) || 0,
-            qty: item.amount,
-            unit: item.unit,
-            normalPrice: item.basePrice,
-            price: item.price,
-          }));
-
-        // Ala carte items ALREADY SAVED in the order whose qty or unit the
-        // customer changed. Sent with their orderadditionalitems.id so the
-        // backend UPDATEs that exact row (qty, unit, normalPrice, price, discount).
-        const updatedAdditionalItemsPayload = Object.values(alacartSelection)
-          .filter((item) => {
-            if (item.isAddedNow || !item.additionalItemId) return false;
-            if (isItemUnavailable(item)) return false;
-            const orig = originalAlacartMap[item.additionalItemId];
-            if (!orig) return false;
-            return (
-              Number(orig.amount) !== Number(item.amount) ||
-              orig.unit !== item.unit
-            );
-          })
-          .map((item) => ({
-            id: item.additionalItemId as number, // orderadditionalitems.id
-            productId:
-              typeof item.productId === "number"
-                ? item.productId
-                : parseInt(
-                    String(item.productId || item.id).replace(/[^0-9]/g, ""),
-                  ) || 0,
-            qty: item.amount,
-            unit: item.unit,
-            // fallback only: backend recalculates from marketplace per-kg rates
-            price: Number((item.price * item.quantity).toFixed(2)),
-          }));
-
-        // Build packages payload for initial insert into orderpackageitems (Todo packages)
-        const packagesPayload = Object.entries(packageProducts).map(
-          ([pkgKey, prods]) => ({
-            orderPackageId: orderPackageDbIds[pkgKey],
-            packageId: pkgKey,
-            items: (prods as any[]).map((p) => {
-              const pType =
-                p.productTypeId != null && !isNaN(Number(p.productTypeId))
-                  ? Number(p.productTypeId)
-                  : p.productType != null && !isNaN(Number(p.productType))
-                    ? Number(p.productType)
-                    : null;
-              const prodId =
-                p.productId ||
-                (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
-              return {
-                productType: pType,
-                productId: prodId,
-                qty: Number(p.quantity) || 1,
-                price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
-              };
-            }),
-          }),
-        );
-
-        console.log(
-          "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
-          {
-            orderId: effectiveOrderId,
-            processOrderId: processOrderId || undefined,
-            lockNow: true,
-            additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
-            newScheduleDate:
-              (route.params as any)?.newScheduleDate || undefined,
-            replacements,
-            additionalItems: additionalItemsPayload,
-            updatedAdditionalItems: updatedAdditionalItemsPayload,
-            packagesCount: packagesPayload.length,
-          },
-        );
-
-        // Net package diff (pure package + alacart items, without delivery fee)
-        const netDiff = totalDiff;
-        const netRefundSavings =
-          (isCard || isPaid) && netDiff < 0
-            ? Number(Math.abs(netDiff).toFixed(2))
-            : 0;
-
-        const confirmRes = await orderService.confirmPackageReview({
-          orderId: actualOrderId || effectiveOrderId,
-          processOrderId: processOrderId || undefined,
-          lockNow: true,
-          additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
-          newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
-          paymentMethod: paymentMethod || undefined,
-          newTotal: finalOrderTotalWithDelivery,
-          creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
-          replacements,
-          additionalItems: additionalItemsPayload,
-          updatedAdditionalItems:
-            updatedAdditionalItemsPayload.length > 0
-              ? updatedAdditionalItemsPayload
-              : undefined,
-          deletedAdditionalItemIds:
-            deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
-              ? deletedAdditionalItemIds
-              : undefined,
-          packages: packagesPayload,
-        });
-        console.log(
-          "[ReviewPackageScreen] confirmPackageReview response:",
-          confirmRes.data,
-          { isCard, netRefundSavings, finalOrderTotalWithDelivery },
-        );
-
-        // The order is saved. Wipe the review state so the NEXT order
-        // (even one with the same package) never sees these edits.
-        loadedOrderIdRef.current = null;
-        requestIdRef.current += 1; // invalidate any in-flight fetch
-        dispatch(clearReviewData());
-        setUnavailablePackageIds({});
-        setAlacartNormalPriceMap({});
-        setDisabledAlacartProductIds(new Set());
-        setOriginalAlacartTotal(0);
-        setOriginalAlacartMap({});
-        setCurrentStepIndex(0);
-        setMode("overview");
-
-        if (shouldSkipConfirmScreen) {
-          // Hide loading spinner, show AlertModal success message.
-          // Navigation to Home is handled inside AlertModal's onClose callback.
-          setIsSubmitting(false);
-          setShowSuccessOverlay(true);
-          return;
-        }
-      } catch (err) {
-        console.error("[ReviewPackageScreen] Confirm review API error:", err);
-        setIsSubmitting(false);
-        setShowSuccessOverlay(false);
-        if (shouldSkipConfirmScreen) return;
       }
+    });
 
-      // Navigate directly to OrderConfirmed (card/online payment methods only).
-      // Uses values captured BEFORE the Redux state was cleared.
-      navigation.navigate("OrderConfirmed", {
-        orderId: String(effectiveOrderId),
-        invoiceNumber: confirmedInvoiceNo,
-        total: confirmedTotal,
-      });
+    // Ala carte items ADDED in this review session (new rows / merge by productId)
+    const additionalItemsPayload = Object.values(alacartSelection)
+      .filter((item) => item.isAddedNow)
+      .map((item) => ({
+        productId:
+          typeof item.productId === "number"
+            ? item.productId
+            : parseInt(
+                String(item.productId || item.id).replace(/[^0-9]/g, ""),
+              ) || 0,
+        qty: item.amount,
+        unit: item.unit,
+        normalPrice: item.basePrice,
+        price: item.price,
+      }));
+
+    // Ala carte items ALREADY SAVED whose qty or unit the customer changed.
+    // Sent with their orderadditionalitems.id so the backend UPDATEs that row.
+    const updatedAdditionalItemsPayload = Object.values(alacartSelection)
+      .filter((item) => {
+        if (item.isAddedNow || !item.additionalItemId) return false;
+        if (isItemUnavailable(item)) return false;
+        const orig = originalAlacartMap[item.additionalItemId];
+        if (!orig) return false;
+        return (
+          Number(orig.amount) !== Number(item.amount) ||
+          orig.unit !== item.unit
+        );
+      })
+      .map((item) => ({
+        id: item.additionalItemId as number, // orderadditionalitems.id
+        productId:
+          typeof item.productId === "number"
+            ? item.productId
+            : parseInt(
+                String(item.productId || item.id).replace(/[^0-9]/g, ""),
+              ) || 0,
+        qty: item.amount,
+        unit: item.unit,
+        // fallback only: backend recalculates from marketplace per-kg rates
+        price: Number((item.price * item.quantity).toFixed(2)),
+      }));
+
+    // Packages payload for initial insert into orderpackageitems (Todo packages)
+    const packagesPayload = Object.entries(packageProducts).map(
+      ([pkgKey, prods]) => ({
+        orderPackageId: orderPackageDbIds[pkgKey],
+        packageId: pkgKey,
+        items: (prods as any[]).map((p) => {
+          const pType =
+            p.productTypeId != null && !isNaN(Number(p.productTypeId))
+              ? Number(p.productTypeId)
+              : p.productType != null && !isNaN(Number(p.productType))
+                ? Number(p.productType)
+                : null;
+          const prodId =
+            p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+          return {
+            productType: pType,
+            productId: prodId,
+            qty: Number(p.quantity) || 1,
+            price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+          };
+        }),
+      }),
+    );
+
+    console.log(
+      "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
+      {
+        orderId: effectiveOrderId,
+        processOrderId: processOrderId || undefined,
+        lockNow: true,
+        additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+        newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+        replacements,
+        additionalItems: additionalItemsPayload,
+        updatedAdditionalItems: updatedAdditionalItemsPayload,
+        packagesCount: packagesPayload.length,
+      },
+    );
+
+    // Net package diff (pure package + alacart items, without delivery fee)
+    const netDiff = totalDiff;
+    const netRefundSavings =
+      (isCard || isPaid) && netDiff < 0
+        ? Number(Math.abs(netDiff).toFixed(2))
+        : 0;
+
+    const confirmRes = await orderService.confirmPackageReview({
+      orderId: actualOrderId || effectiveOrderId,
+      processOrderId: processOrderId || undefined,
+      lockNow: true,
+      additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+      newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+      paymentMethod: paymentMethod || undefined,
+      newTotal: finalOrderTotalWithDelivery,
+      creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
+      replacements,
+      additionalItems: additionalItemsPayload,
+      updatedAdditionalItems:
+        updatedAdditionalItemsPayload.length > 0
+          ? updatedAdditionalItemsPayload
+          : undefined,
+      deletedAdditionalItemIds:
+        deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+          ? deletedAdditionalItemIds
+          : undefined,
+      packages: packagesPayload,
+    });
+    console.log(
+      "[ReviewPackageScreen] confirmPackageReview response:",
+      confirmRes.data,
+      { isCard, netRefundSavings, finalOrderTotalWithDelivery },
+    );
+
+    // The order is saved. Wipe the review state so the NEXT order
+    // (even one with the same package) never sees these edits.
+    loadedOrderIdRef.current = null;
+    requestIdRef.current += 1; // invalidate any in-flight fetch
+    dispatch(clearReviewData());
+    setUnavailablePackageIds({});
+    setAlacartNormalPriceMap({});
+    setDisabledAlacartProductIds(new Set());
+    setOriginalAlacartTotal(0);
+    setOriginalAlacartMap({});
+    setCurrentStepIndex(0);
+    setMode("overview");
+
+    // Stop the button spinner
+    setIsSubmitting(false);
+
+    if (shouldSkipConfirmScreen) {
+      // Cash / pickup: show the success AlertModal.
+      // Navigation to Home is handled in AlertModal's onClose.
+      setShowSuccessOverlay(true);
+      return;
     }
-  };
+  } catch (err) {
+    console.error("[ReviewPackageScreen] Confirm review API error:", err);
+    setIsSubmitting(false);
+    setShowSuccessOverlay(false);
+    // Stay on the confirm step so the user can retry
+    Alert.alert("Error", "Could not confirm your order. Please try again.");
+    return;
+  }
+
+  // Card / online orders: go to OrderConfirmed using the values
+  // captured BEFORE the Redux state was cleared.
+  navigation.navigate("OrderConfirmed", {
+    orderId: String(effectiveOrderId),
+    invoiceNumber: confirmedInvoiceNo,
+    total: confirmedTotal,
+  });
+};
 
   const onChangeProduct = (packageId: string, product: ReviewProduct) => {
     navigation.navigate("ReplaceProduct", {
@@ -3078,27 +3084,39 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             marginBottom={20}
           />
 
-          <TouchableOpacity
-            onPress={isConfirmDisabled ? undefined : goToNextStep}
-            disabled={isConfirmDisabled}
-            activeOpacity={0.85}
-            style={{
-              height: 54,
-              backgroundColor: isConfirmDisabled ? "#7F919C" : "#000000",
-              borderRadius: 30,
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOpacity: isConfirmDisabled ? 0 : 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: isConfirmDisabled ? 0 : 5,
-            }}
-          >
-            <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              Confirm Order Details
-            </Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+  onPress={isConfirmDisabled || isSubmitting ? undefined : goToNextStep}
+  disabled={isConfirmDisabled || isSubmitting}
+  activeOpacity={isSubmitting ? 1 : 0.85}
+  style={{
+    height: 54,
+    backgroundColor: isConfirmDisabled ? "#7F919C" : "#000000",
+    opacity: isSubmitting ? 0.85 : 1,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    shadowColor: "#000",
+    shadowOpacity: isConfirmDisabled ? 0 : 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: isConfirmDisabled ? 0 : 5,
+  }}
+>
+  {isSubmitting ? (
+    <>
+      <ActivityIndicator color="#FFFFFF" />
+      <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+        Processing...
+      </Text>
+    </>
+  ) : (
+    <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+      Confirm Order Details
+    </Text>
+  )}
+</TouchableOpacity>
         </View>
       )}
 

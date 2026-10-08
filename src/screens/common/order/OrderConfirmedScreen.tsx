@@ -92,22 +92,31 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   const isFreeDeliveryCoupon = Boolean(
     orderContext?.isFreeDeliveryCoupon ||
     orderContext?.appliedCoupon?.isFreeDelivery ||
-    orderContext?.checkoutDetails?.couponType?.toLowerCase()?.includes("free") ||
-    orderContext?.checkoutDetails?.couponType?.toLowerCase()?.includes("delivery") ||
+    orderContext?.checkoutDetails?.couponType
+      ?.toLowerCase()
+      ?.includes("free") ||
+    orderContext?.checkoutDetails?.couponType
+      ?.toLowerCase()
+      ?.includes("delivery") ||
     orderContext?.couponType?.toLowerCase()?.includes("free") ||
-    orderContext?.couponType?.toLowerCase()?.includes("delivery")
+    orderContext?.couponType?.toLowerCase()?.includes("delivery"),
   );
 
   const couponDiscount =
-    orderContext?.couponDiscount !== undefined && Number(orderContext?.couponDiscount) > 0
+    orderContext?.couponDiscount !== undefined &&
+    Number(orderContext?.couponDiscount) > 0
       ? parseFloat(String(orderContext.couponDiscount)) || 0
-      : orderContext?.couponValue !== undefined && Number(orderContext?.couponValue) > 0
+      : orderContext?.couponValue !== undefined &&
+          Number(orderContext?.couponValue) > 0
         ? parseFloat(String(orderContext.couponValue)) || 0
-        : orderContext?.checkoutDetails?.couponValue !== undefined && Number(orderContext?.checkoutDetails?.couponValue) > 0
+        : orderContext?.checkoutDetails?.couponValue !== undefined &&
+            Number(orderContext?.checkoutDetails?.couponValue) > 0
           ? parseFloat(String(orderContext.checkoutDetails.couponValue)) || 0
-          : orderContext?.appliedCoupon?.discount !== undefined && Number(orderContext?.appliedCoupon?.discount) > 0
+          : orderContext?.appliedCoupon?.discount !== undefined &&
+              Number(orderContext?.appliedCoupon?.discount) > 0
             ? parseFloat(String(orderContext.appliedCoupon.discount)) || 0
-            : route.params?.couponValue !== undefined && Number(route.params?.couponValue) > 0
+            : route.params?.couponValue !== undefined &&
+                Number(route.params?.couponValue) > 0
               ? parseFloat(String(route.params.couponValue)) || 0
               : 0;
 
@@ -116,7 +125,14 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       ? passedTotal
       : orderContext?.grandTotal !== undefined
         ? orderContext.grandTotal
-        : Math.max(0, packageTotal + productTotal - discount - couponDiscount + (isFreeDeliveryCoupon ? 0 : deliveryFee));
+        : Math.max(
+            0,
+            packageTotal +
+              productTotal -
+              discount -
+              couponDiscount +
+              (isFreeDeliveryCoupon ? 0 : deliveryFee),
+          );
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("en-US", {
@@ -325,7 +341,8 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       grandTotal:
         apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
           ? apiInvoice.fullTotal
-          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+          : apiInvoice?.grandTotal !== undefined &&
+              apiInvoice?.grandTotal !== null
             ? apiInvoice.grandTotal
             : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
               ? orderCtx.fullTotal
@@ -333,7 +350,8 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       fullTotal:
         apiInvoice?.fullTotal !== undefined && apiInvoice?.fullTotal !== null
           ? apiInvoice.fullTotal
-          : apiInvoice?.grandTotal !== undefined && apiInvoice?.grandTotal !== null
+          : apiInvoice?.grandTotal !== undefined &&
+              apiInvoice?.grandTotal !== null
             ? apiInvoice.grandTotal
             : orderCtx?.fullTotal !== undefined && orderCtx?.fullTotal !== null
               ? orderCtx.fullTotal
@@ -366,11 +384,15 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             flatNo: checkout.flatNumber || checkout.flatNo || "",
             floorNo: checkout.floorNumber || checkout.floorNo || "",
           },
-           pickupInfo: (() => {
+      pickupInfo: (() => {
         const apiPickup = apiInvoice?.pickupInfo;
         const localPickup = orderCtx.pickupCenter
           ? {
-              centerId: String(orderCtx.pickupCenter.id || orderCtx.pickupCenter.centerId || ""),
+              centerId: String(
+                orderCtx.pickupCenter.id ||
+                  orderCtx.pickupCenter.centerId ||
+                  "",
+              ),
               centerName:
                 orderCtx.pickupCenter.centerName ||
                 orderCtx.pickupCenter.name ||
@@ -385,7 +407,10 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 district: orderCtx.pickupCenter.district || "",
                 province: orderCtx.pickupCenter.province || "",
                 country: "Sri Lanka",
-                zipCode: orderCtx.pickupCenter.zipcode || orderCtx.pickupCenter.zipCode || "",
+                zipCode:
+                  orderCtx.pickupCenter.zipcode ||
+                  orderCtx.pickupCenter.zipCode ||
+                  "",
               },
             }
           : undefined;
@@ -398,11 +423,8 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
     };
     console.log("API pickupInfo:", JSON.stringify(apiInvoice?.pickupInfo));
 
-
     return { invoiceData, logoBase64 };
   };
-
-  
 
   const handleDownloadInvoice = async () => {
     if (isDownloading || isSharing) return;
@@ -412,19 +434,20 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
       const { invoiceData, logoBase64 } = await resolveInvoiceData();
       const htmlContent = buildInvoiceHtml(invoiceData, logoBase64);
 
-      const { base64: pdfBase64 } = await Print.printToFileAsync({
-        html: htmlContent,
-        width: 595,
-        base64: true,
-      });
-
       const cleanInvoiceNumber = invoiceData.invoiceNumber.replace(
         /[^a-zA-Z0-9_-]/g,
         "_",
       );
       const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
 
+      // ─── ANDROID: let the user pick a folder (SAF) ───────────────────────
       if (Platform.OS === "android") {
+        const { base64: pdfBase64 } = await Print.printToFileAsync({
+          html: htmlContent,
+          width: 595,
+          base64: true,
+        });
+
         const permissions =
           await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
 
@@ -447,15 +470,34 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         });
 
         Alert.alert("Success", "Invoice downloaded successfully.");
-      } else {
-        const filePath = `${FileSystem.documentDirectory}${targetFileName}`;
-
-        await FileSystem.writeAsStringAsync(filePath, pdfBase64!, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        Alert.alert("Success", "Invoice saved successfully.");
+        return;
       }
+
+      // ─── iOS: open the share sheet -> "Save to Files" lets user pick a folder
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert(
+          "Unavailable",
+          "Saving files is not available on this device.",
+        );
+        return;
+      }
+
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        width: 595,
+      });
+
+      // Give the PDF a proper name (Print's cache file has a random name)
+      const namedUri = `${FileSystem.cacheDirectory}${targetFileName}`;
+      await FileSystem.deleteAsync(namedUri, { idempotent: true });
+      await FileSystem.copyAsync({ from: uri, to: namedUri });
+
+      await Sharing.shareAsync(namedUri, {
+        mimeType: "application/pdf",
+        UTI: "com.adobe.pdf",
+        dialogTitle: targetFileName,
+      });
     } catch (error) {
       console.error("Invoice generation error:", error);
       Alert.alert("Error", "Failed to generate invoice. Please try again.");
@@ -464,24 +506,46 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  // ─── SHARE INVOICE (FIXED) ────────────────────────────────────────────────
-  // History of this bug:
-  // 1) Original code generated the PDF, then tried FileSystem.copyAsync() on
-  //    the Print module's cache uri to rename it. Android blocks that copy
-  //    ("isn't readable"), and the old catch block generated a SECOND
-  //    throwaway PDF and shared that instead — also unreadable.
-  // 2) Next attempt asked printToFileAsync for base64: true so the file could
-  //    be written ourselves (like the download flow does). But base64:true
-  //    forces expo-print to hold the whole PDF in memory as a base64 string
-  //    (on top of the invoice HTML + embedded logo image), and on many
-  //    Android devices that encode/write step itself fails natively:
-  //    "An error occured while writing the PDF data".
-  //
-  // Fix: share doesn't need base64 at all (only the SAF-based download flow
-  // does). Just get the plain `uri` from printToFileAsync and hand it
-  // straight to Sharing.shareAsync — no base64 encoding, no copyAsync, no
-  // rename, no second PDF. This is the standard, reliable expo-print +
-  // expo-sharing pattern.
+  // Creates a PDF whose file NAME is exactly `fileName` (expo-print's own file
+  // has a random name, and dialogTitle does not rename it).
+  const createNamedPdf = async (
+    htmlContent: string,
+    fileName: string,
+  ): Promise<string> => {
+    const namedUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+    // Preferred: print to a plain uri, then copy it to a correctly named file
+    try {
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        width: 595,
+      });
+      await FileSystem.deleteAsync(namedUri, { idempotent: true });
+      await FileSystem.copyAsync({ from: uri, to: namedUri });
+      return namedUri;
+    } catch (copyError) {
+      console.warn(
+        "Copy rename failed, falling back to base64 write:",
+        copyError,
+      );
+    }
+
+    // Fallback (e.g. Expo Go sandbox): write the PDF ourselves under the right name
+    const { base64: pdfBase64 } = await Print.printToFileAsync({
+      html: htmlContent,
+      width: 595,
+      base64: true,
+    });
+    if (!pdfBase64) throw new Error("Failed to generate invoice PDF.");
+
+    const fallbackUri = `${FileSystem.documentDirectory}${fileName}`;
+    await FileSystem.deleteAsync(fallbackUri, { idempotent: true });
+    await FileSystem.writeAsStringAsync(fallbackUri, pdfBase64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return fallbackUri;
+  };
+
   const handleShareInvoice = async () => {
     if (isDownloading || isSharing) return;
 
@@ -503,58 +567,14 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         /[^a-zA-Z0-9_-]/g,
         "_",
       );
+      const targetFileName = `Invoice_${cleanInvoiceNumber}.pdf`;
 
-      // Attempt 1: share the Print module's own cache uri directly. This is
-      // the standard, lowest-overhead path and is what a dev/production
-      // build should use successfully.
-      try {
-        const { uri } = await Print.printToFileAsync({
-          html: htmlContent,
-          width: 595,
-        });
+      const namedUri = await createNamedPdf(htmlContent, targetFileName);
 
-        await Sharing.shareAsync(uri, {
-          mimeType: "application/pdf",
-          UTI: "com.adobe.pdf",
-          dialogTitle: `Invoice_${cleanInvoiceNumber}.pdf`,
-        });
-        return;
-      } catch (primaryError) {
-        console.warn(
-          "Primary share path failed, retrying via documentDirectory:",
-          primaryError,
-        );
-      }
-
-      // Attempt 2 (fallback, mainly needed under Expo Go's stricter file
-      // provider sandbox): regenerate as base64 and write it into
-      // documentDirectory ourselves — a location Expo Go's provider does
-      // expose — then share that copy instead.
-      const { base64: pdfBase64 } = await Print.printToFileAsync({
-        html: htmlContent,
-        width: 595,
-        base64: true,
-      });
-
-      if (!pdfBase64) {
-        throw new Error("Failed to generate invoice PDF.");
-      }
-
-      const fallbackUri = `${FileSystem.documentDirectory}Invoice_${cleanInvoiceNumber}.pdf`;
-
-      const existing = await FileSystem.getInfoAsync(fallbackUri);
-      if (existing.exists) {
-        await FileSystem.deleteAsync(fallbackUri, { idempotent: true });
-      }
-
-      await FileSystem.writeAsStringAsync(fallbackUri, pdfBase64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      await Sharing.shareAsync(fallbackUri, {
+      await Sharing.shareAsync(namedUri, {
         mimeType: "application/pdf",
         UTI: "com.adobe.pdf",
-        dialogTitle: `Invoice_${cleanInvoiceNumber}.pdf`,
+        dialogTitle: targetFileName,
       });
     } catch (error: any) {
       console.error("Invoice sharing error:", error);

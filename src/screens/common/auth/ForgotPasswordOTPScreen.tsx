@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
   Platform,
   Image,
   Keyboard,
@@ -35,8 +34,10 @@ interface Props {
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
+// Space (px) to keep between the Verify button and the top of the keyboard.
+const VERIFY_EXTRA_SPACE = 16;
+
 const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
-  const scrollViewRef = useRef<ScrollView>(null);
   const method = route.params?.method || "email";
   const identifier = route.params?.identifier || "";
   const [referenceId, setReferenceId] = useState(
@@ -44,16 +45,27 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   );
   const [resetToken, setResetToken] = useState(route.params?.resetToken || "");
 
-  const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
+  const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
+  const storedKeys = getForgotPwdStorageKeys(
     method,
     undefined,
     undefined,
     undefined,
     identifier
   );
-  const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-  const storageKey =
-    attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
+
+  // Always guarantee non-empty key lists so counting/lockout works for
+  // BOTH email and SMS, even if the helper returns nothing for one method.
+  const lockoutKeys: string[] =
+    storedKeys?.lockoutKeys && storedKeys.lockoutKeys.length > 0
+      ? storedKeys.lockoutKeys
+      : [`@forgot_pwd_lockout_${cleanIdentifier}`];
+  const attemptsKeys: string[] =
+    storedKeys?.attemptsKeys && storedKeys.attemptsKeys.length > 0
+      ? storedKeys.attemptsKeys
+      : [`@forgot_pwd_otp_attempts_${cleanIdentifier}`];
+  const storageKey = attemptsKeys[0];
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -64,6 +76,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [attemptsCount, setAttemptsCount] = useState<number>(1);
   const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
@@ -82,25 +95,59 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
 
-  // Track keyboard visibility (used to hide the bottom image)
+  // ---------- Keyboard / scroll handling ----------
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const verifyWrapRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardTopRef = useRef(0);
+
+  // Scroll only as much as needed so the Verify button sits just above
+  // the keyboard.
+  const ensureVisible = useCallback(() => {
+    verifyWrapRef.current?.measureInWindow((_x, y, _w, h) => {
+      const limit = keyboardTopRef.current - VERIFY_EXTRA_SPACE;
+      const overflow = y + h - limit;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: scrollYRef.current + overflow,
+          animated: true,
+        });
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const showListener = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardTopRef.current = e.endCoordinates.screenY;
+      setIsKeyboardVisible(true);
+
+      // Measure how much the keyboard REALLY covers the screen. If the OS
+      // already resized the window, the overlap is 0 and no extra padding
+      // is added.
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+
+      // wait for bottom padding to render, then scroll
+      setTimeout(ensureVisible, 300);
+    });
+
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSub = Keyboard.addListener(showEvent, () =>
-      setIsKeyboardVisible(true)
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () =>
-      setIsKeyboardVisible(false)
-    );
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
 
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showListener.remove();
+      hideListener.remove();
     };
-  }, []);
+  }, [ensureVisible]);
 
   const getRecentAttempts = async (key: string): Promise<number[]> => {
     try {
@@ -155,6 +202,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               setTimeLeft(remainingSec);
               setIsRateLimited(true);
               setIsExpired(false);
+              setAttemptsCount(MAX_OTP_ATTEMPTS);
               showRateLimitAlert();
               return;
             } else {
@@ -180,6 +228,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setTimeLeft(remainingSec);
           setIsRateLimited(true);
           setIsExpired(false);
+          setAttemptsCount(MAX_OTP_ATTEMPTS);
           showRateLimitAlert();
           return;
         }
@@ -191,7 +240,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         let currentCount = 1;
         for (const attKey of attemptsKeys) {
           const updated = await saveAttempt(attKey);
-          currentCount = updated.length;
+          currentCount = Math.max(currentCount, updated.length);
         }
         setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
       } else {
@@ -199,7 +248,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       }
     };
     checkInitialRateLimit();
-  }, [identifier]);
+  }, [identifier, method]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -260,6 +309,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     setTimeLeft(900);
     setIsRateLimited(true);
     setIsExpired(false);
+    setAttemptsCount(MAX_OTP_ATTEMPTS);
     showRateLimitAlert();
   };
 
@@ -370,6 +420,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         setTimeLeft(remainingSec);
         setIsRateLimited(true);
         setIsExpired(false);
+        setAttemptsCount(MAX_OTP_ATTEMPTS);
         showRateLimitAlert();
         return;
       }
@@ -386,7 +437,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         let updatedLength = 0;
         for (const key of attemptsKeys) {
           const updated = await saveAttempt(key);
-          updatedLength = updated.length;
+          updatedLength = Math.max(updatedLength, updated.length);
         }
         setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
         setReferenceId(response.data.referenceId);
@@ -403,7 +454,11 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setAlertType("error");
           setAlertTitle("Code Resent");
           setAlertMessage(
-            "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes."
+            `${
+              method === "email"
+                ? "A new 5-digit verification code has been sent to your email address."
+                : "A new 5-digit verification code has been sent to your mobile number."
+            } You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.`
           );
           setAlertVisible(true);
         } else {
@@ -418,7 +473,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               (method === "email"
                 ? "Verification code has been resent to your email address."
                 : "Verification code has been resent to your mobile number.")
-            }\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
+            }\n\n(${MAX_OTP_ATTEMPTS} OTP resend attempts limit · ${remaining} remaining)`
           );
           setAlertVisible(true);
         }
@@ -455,11 +510,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-white"
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={20}
-    >
+    <View ref={rootRef} collapsable={false} className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       {/* Custom Header with Logo */}
@@ -470,18 +521,25 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       />
 
       <ScrollView
-        ref={scrollViewRef}
+        ref={scrollRef}
+        className="flex-1 bg-white"
         contentContainerStyle={{
           flexGrow: 1,
-          justifyContent: "center",
-          paddingBottom: isKeyboardVisible ? 20 : 120,
+          justifyContent: "space-between",
+          // Manually lift content above the keyboard (works on iOS and
+          // Android, including edge-to-edge production builds).
+          paddingBottom: keyboardHeight,
         }}
-        className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
-        {/* Verification Content Centered Vertically */}
-        <View className="w-full py-8">
+        {/* Verification Content */}
+        <View className="w-full px-4 py-8 justify-center">
           <Text className="text-2xl font-bold text-black text-center mb-4">
             {method === "email"
               ? "Verify your email address"
@@ -626,39 +684,44 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                 </Text>
               </TouchableOpacity>
             )}
+
+            {/* OTP request limit (shown for both email and SMS) */}
+            <Text className="text-xs text-[#5A5859] text-center mt-3">
+              {`${MAX_OTP_ATTEMPTS} OTP resend attempts limit · ${remainingAttempts} remaining`}
+            </Text>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Action Buttons */}
-      <View
-        className="px-6 pt-2 bg-white"
-        style={{ paddingBottom: isKeyboardVisible ? 12 : 0 }}
-      >
-        <TouchableOpacity
-          onPress={handleVerify}
-          disabled={isVerifying || isResending}
-          activeOpacity={0.8}
-          className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-        >
-          <Text className="text-white text-base font-bold">
-            {isVerifying ? "Verifying..." : "Verify"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Bottom image: hidden while the keyboard is open */}
-        {!isKeyboardVisible && (
+        {/* Action Buttons (inside the ScrollView so it scrolls above the keyboard) */}
+        <View className="bg-white">
           <View
-            className="h-14 mt-6"
-            style={{ marginLeft: -16, marginRight: -16 }}
+            ref={verifyWrapRef}
+            collapsable={false}
+            className="px-6 pt-2 pb-3"
           >
-            <Image
-              source={require("@/assets/images/auth/bottom-line.webp")}
-              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-            />
+            <TouchableOpacity
+              onPress={handleVerify}
+              disabled={isVerifying || isResending}
+              activeOpacity={0.8}
+              className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+            >
+              <Text className="text-white text-base font-bold">
+                {isVerifying ? "Verifying..." : "Verify"}
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
+
+          {/* Bottom image: hidden while the keyboard is open */}
+          {!isKeyboardVisible && (
+            <View className="h-14 mt-3 w-full">
+              <Image
+                source={require("@/assets/images/auth/bottom-line.webp")}
+                style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+              />
+            </View>
+          )}
+        </View>
+      </ScrollView>
 
       {/* Alert Modal */}
       <AlertModal
@@ -670,7 +733,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         autoClose={false}
         showOkButton={true}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
