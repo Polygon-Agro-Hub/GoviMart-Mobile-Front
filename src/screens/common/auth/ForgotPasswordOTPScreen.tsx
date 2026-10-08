@@ -18,7 +18,6 @@ import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
-import { getForgotPwdStorageKeys } from "./ForgotPasswordInputScreen";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -33,6 +32,8 @@ interface Props {
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_OTP_ATTEMPTS = 5;
+const OTP_TIMER_SECONDS = 240; // 4 minutes
+const LOCKOUT_SECONDS = RATE_LIMIT_WINDOW_MS / 1000; // 900
 
 // Space (px) to keep between the Verify button and the top of the keyboard.
 const VERIFY_EXTRA_SPACE = 16;
@@ -47,30 +48,17 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 
-  const storedKeys = getForgotPwdStorageKeys(
-    method,
-    undefined,
-    undefined,
-    undefined,
-    identifier
-  );
-
-  // Always guarantee non-empty key lists so counting/lockout works for
-  // BOTH email and SMS, even if the helper returns nothing for one method.
-  const lockoutKeys: string[] =
-    storedKeys?.lockoutKeys && storedKeys.lockoutKeys.length > 0
-      ? storedKeys.lockoutKeys
-      : [`@forgot_pwd_lockout_${cleanIdentifier}`];
-  const attemptsKeys: string[] =
-    storedKeys?.attemptsKeys && storedKeys.attemptsKeys.length > 0
-      ? storedKeys.attemptsKeys
-      : [`@forgot_pwd_otp_attempts_${cleanIdentifier}`];
+  // Same keys for BOTH email and SMS so counting/lockout is consistent.
+  // NOTE: if ForgotPasswordInputScreen also records attempts, it must use
+  // these exact same keys.
+  const lockoutKeys: string[] = [`@forgot_pwd_lockout_${cleanIdentifier}`];
+  const attemptsKeys: string[] = [`@forgot_pwd_otp_attempts_${cleanIdentifier}`];
   const storageKey = attemptsKeys[0];
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(240); // 4:00 countdown
+  const [timeLeft, setTimeLeft] = useState(OTP_TIMER_SECONDS);
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -94,6 +82,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const ref_5 = useRef<TextInput>(null);
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
+
+  // Synchronous lock to block double-tap on Resend (state updates too late)
+  const resendLockRef = useRef(false);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -220,7 +211,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         if (attempts.length >= MAX_OTP_ATTEMPTS) {
           const oldest = attempts[0];
           const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 1);
           const lockoutUntil = Date.now() + remainingSec * 1000;
           for (const lockKey of lockoutKeys) {
             await AsyncStorage.setItem(lockKey, String(lockoutUntil));
@@ -234,6 +225,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         }
       }
 
+      // 3. Count the initial OTP send as an attempt (once per 30s window)
       const attempts = await getRecentAttempts(storageKey);
       const lastAttempt = attempts[attempts.length - 1];
       if (!lastAttempt || Date.now() - lastAttempt > 30000) {
@@ -306,7 +298,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     for (const key of lockoutKeys) {
       await AsyncStorage.setItem(key, String(lockoutUntil));
     }
-    setTimeLeft(900);
+    setTimeLeft(LOCKOUT_SECONDS);
     setIsRateLimited(true);
     setIsExpired(false);
     setAttemptsCount(MAX_OTP_ATTEMPTS);
@@ -386,126 +378,136 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const handleResend = async () => {
-    // 1. Check persistent lockout
-    for (const key of lockoutKeys) {
-      try {
-        const storedLockout = await AsyncStorage.getItem(key);
-        if (storedLockout) {
-          const lockoutUntil = parseInt(storedLockout, 10);
-          const remainingMs = lockoutUntil - Date.now();
-          if (remainingMs > 0) {
-            const remainingSec = Math.ceil(remainingMs / 1000);
-            setTimeLeft(remainingSec);
-            setIsRateLimited(true);
-            setIsExpired(false);
-            showRateLimitAlert();
-            return;
-          } else {
-            await AsyncStorage.removeItem(key);
-          }
-        }
-      } catch (e) {}
-    }
+    // Block double taps (ref updates synchronously, state does not)
+    if (resendLockRef.current) return;
+    resendLockRef.current = true;
 
-    for (const key of attemptsKeys) {
-      const attempts = await getRecentAttempts(key);
-      if (attempts.length >= MAX_OTP_ATTEMPTS) {
-        const oldest = attempts[0];
-        const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-        const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
-        const lockoutUntil = Date.now() + remainingSec * 1000;
-        for (const lockKey of lockoutKeys) {
-          await AsyncStorage.setItem(lockKey, String(lockoutUntil));
-        }
-        setTimeLeft(remainingSec);
-        setIsRateLimited(true);
-        setIsExpired(false);
-        setAttemptsCount(MAX_OTP_ATTEMPTS);
-        showRateLimitAlert();
-        return;
-      }
-    }
-
-    setOtp(["", "", "", "", ""]);
-    setIsResending(true);
     try {
-      const response = await authService.resendForgotPasswordOtp({
-        resetToken,
-      });
-
-      if (response.data && response.data.status) {
-        let updatedLength = 0;
-        for (const key of attemptsKeys) {
-          const updated = await saveAttempt(key);
-          updatedLength = Math.max(updatedLength, updated.length);
-        }
-        setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
-        setReferenceId(response.data.referenceId);
-        setResetToken(response.data.resetToken);
-
-        if (updatedLength >= MAX_OTP_ATTEMPTS) {
-          const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
-          for (const key of lockoutKeys) {
-            await AsyncStorage.setItem(key, String(lockoutUntil));
+      // 1. Check persistent lockout
+      for (const key of lockoutKeys) {
+        try {
+          const storedLockout = await AsyncStorage.getItem(key);
+          if (storedLockout) {
+            const lockoutUntil = parseInt(storedLockout, 10);
+            const remainingMs = lockoutUntil - Date.now();
+            if (remainingMs > 0) {
+              const remainingSec = Math.ceil(remainingMs / 1000);
+              setTimeLeft(remainingSec);
+              setIsRateLimited(true);
+              setIsExpired(false);
+              setAttemptsCount(MAX_OTP_ATTEMPTS);
+              showRateLimitAlert();
+              return;
+            } else {
+              await AsyncStorage.removeItem(key);
+            }
           }
-          setTimeLeft(900);
+        } catch (e) {}
+      }
+
+      // 2. Check attempts count BEFORE sending
+      for (const key of attemptsKeys) {
+        const attempts = await getRecentAttempts(key);
+        if (attempts.length >= MAX_OTP_ATTEMPTS) {
+          const oldest = attempts[0];
+          const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 1);
+          const lockoutUntil = Date.now() + remainingSec * 1000;
+          for (const lockKey of lockoutKeys) {
+            await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+          }
+          setTimeLeft(remainingSec);
           setIsRateLimited(true);
           setIsExpired(false);
-          setAlertType("error");
-          setAlertTitle("Code Resent");
-          setAlertMessage(
-            `${
-              method === "email"
-                ? "A new 5-digit verification code has been sent to your email address."
-                : "A new 5-digit verification code has been sent to your mobile number."
-            } You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.`
-          );
-          setAlertVisible(true);
-        } else {
-          setTimeLeft(240);
-          setIsExpired(false);
-          const remaining = MAX_OTP_ATTEMPTS - updatedLength;
-          setAlertType("success");
-          setAlertTitle("Code Resent");
-          setAlertMessage(
-            `${
-              response.data.message ||
-              (method === "email"
-                ? "Verification code has been resent to your email address."
-                : "Verification code has been resent to your mobile number.")
-            }\n\n(${MAX_OTP_ATTEMPTS} OTP resend attempts limit · ${remaining} remaining)`
-          );
-          setAlertVisible(true);
+          setAttemptsCount(MAX_OTP_ATTEMPTS);
+          showRateLimitAlert();
+          return;
         }
-        refs[0].current?.focus();
-      } else {
-        const is429 = response.data?.isRateLimited;
+      }
+
+      setOtp(["", "", "", "", ""]);
+      setIsResending(true);
+      try {
+        const response = await authService.resendForgotPasswordOtp({
+          resetToken,
+        });
+
+        if (response.data && response.data.status) {
+          let updatedLength = 0;
+          for (const key of attemptsKeys) {
+            const updated = await saveAttempt(key);
+            updatedLength = Math.max(updatedLength, updated.length);
+          }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
+          setReferenceId(response.data.referenceId);
+          setResetToken(response.data.resetToken);
+
+          if (updatedLength >= MAX_OTP_ATTEMPTS) {
+            const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+            for (const key of lockoutKeys) {
+              await AsyncStorage.setItem(key, String(lockoutUntil));
+            }
+            setTimeLeft(LOCKOUT_SECONDS);
+            setIsRateLimited(true);
+            setIsExpired(false);
+            setAlertType("error");
+            setAlertTitle("Code Resent");
+            setAlertMessage(
+              `${
+                method === "email"
+                  ? "A new 5-digit verification code has been sent to your email address."
+                  : "A new 5-digit verification code has been sent to your mobile number."
+              } You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.`
+            );
+            setAlertVisible(true);
+          } else {
+            setTimeLeft(OTP_TIMER_SECONDS);
+            setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
+            setAlertType("success");
+            setAlertTitle("Code Resent");
+            setAlertMessage(
+              `${
+                response.data.message ||
+                (method === "email"
+                  ? "Verification code has been resent to your email address."
+                  : "Verification code has been resent to your mobile number.")
+              }`
+            );
+            setAlertVisible(true);
+          }
+          refs[0].current?.focus();
+        } else {
+          const is429 = response.data?.isRateLimited;
+          const msg =
+            response.data?.message || "Failed to resend verification code.";
+          if (is429 || msg.toLowerCase().includes("too many")) {
+            await applyRateLimitLockout();
+          } else {
+            setAlertType("error");
+            setAlertTitle("Resend Failed");
+            setAlertMessage(msg);
+            setAlertVisible(true);
+          }
+        }
+      } catch (err: any) {
+        console.error("Resend error:", err);
+        const is429 = err.response?.status === 429;
         const msg =
-          response.data?.message || "Failed to resend verification code.";
+          err.response?.data?.message || "Failed to resend verification code.";
         if (is429 || msg.toLowerCase().includes("too many")) {
           await applyRateLimitLockout();
         } else {
           setAlertType("error");
-          setAlertTitle("Resend Failed");
+          setAlertTitle("Resend Error");
           setAlertMessage(msg);
           setAlertVisible(true);
         }
-      }
-    } catch (err: any) {
-      console.error("Resend error:", err);
-      const is429 = err.response?.status === 429;
-      const msg =
-        err.response?.data?.message || "Failed to resend verification code.";
-      if (is429 || msg.toLowerCase().includes("too many")) {
-        await applyRateLimitLockout();
-      } else {
-        setAlertType("error");
-        setAlertTitle("Resend Error");
-        setAlertMessage(msg);
-        setAlertVisible(true);
+      } finally {
+        setIsResending(false);
       }
     } finally {
-      setIsResending(false);
+      resendLockRef.current = false;
     }
   };
 
@@ -526,8 +528,6 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
-          // Manually lift content above the keyboard (works on iOS and
-          // Android, including edge-to-edge production builds).
           paddingBottom: keyboardHeight,
         }}
         showsVerticalScrollIndicator={false}
@@ -685,10 +685,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               </TouchableOpacity>
             )}
 
-            {/* OTP request limit (shown for both email and SMS) */}
-            <Text className="text-xs text-[#5A5859] text-center mt-3">
-              {`${MAX_OTP_ATTEMPTS} OTP resend attempts limit · ${remainingAttempts} remaining`}
-            </Text>
+         
           </View>
         </View>
 
