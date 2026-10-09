@@ -6,14 +6,21 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
-import { FontAwesome6, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  FontAwesome6,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootStackParamList } from "@/types/types";
 import { RootState } from "@/store";
-import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
 import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
@@ -30,7 +37,9 @@ interface Props {
 }
 
 const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
-  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
+  const userProfile = useSelector(
+    (state: RootState) => state.auth?.userProfile,
+  );
   const userId = userProfile?.id || "current";
   const defaultHolder =
     userProfile?.firstName && userProfile?.lastName
@@ -40,7 +49,8 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-  const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
+  const [checkoutSession, setCheckoutSession] =
+    useState<UnifiedCheckoutSession | null>(null);
   const [initiatingGateway, setInitiatingGateway] = useState(false);
 
   // Load saved card from local storage
@@ -59,22 +69,29 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadSavedCard();
-    }, [loadSavedCard])
+    }, [loadSavedCard]),
   );
 
   // Handle Add New Card -> Opens Payments.lk Hosted Sheet (Option 2)
   const handleAddNewCard = async () => {
     try {
       setInitiatingGateway(true);
-      const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+      const adapter = PaymentGatewayFactory.getGateway(
+        "payments_lk",
+      ) as PaymentsLkAdapter;
       const session = await adapter.initiateCardSaveSession();
       setCheckoutSession(session);
       setCheckoutModalVisible(true);
     } catch (err: any) {
-      console.error("[SavedCards] Error launching Payments.lk card setup:", err);
+      console.error(
+        "[SavedCards] Error launching Payments.lk card setup:",
+        err,
+      );
       Alert.alert(
         "Card Setup Error",
-        err?.response?.data?.message || err?.message || "Could not launch Payments.lk checkout sheet. Please try again."
+        err?.response?.data?.message ||
+          err?.message ||
+          "Could not launch Payments.lk checkout sheet. Please try again.",
       );
     } finally {
       setInitiatingGateway(false);
@@ -92,11 +109,15 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
 
       let syncResult: any = null;
       if (checkoutSession?.sessionId) {
-        const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
-        syncResult = await adapter.syncCheckout(checkoutSession.sessionId).catch((err) => {
-          console.warn("[SavedCardsScreen] syncCheckout error:", err);
-          return null;
-        });
+        const adapter = PaymentGatewayFactory.getGateway(
+          "payments_lk",
+        ) as PaymentsLkAdapter;
+        syncResult = await adapter
+          .syncCheckout(checkoutSession.sessionId)
+          .catch((err) => {
+            console.warn("[SavedCardsScreen] syncCheckout error:", err);
+            return null;
+          });
       }
 
       // Primary source: DB (populated by card.saved webhook)
@@ -112,18 +133,18 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
       if (loaded) {
         Alert.alert(
           "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!"
+          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
         );
       } else if (syncResult?.card) {
         setSavedCard(syncResult.card);
         Alert.alert(
           "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!"
+          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
         );
       } else {
         Alert.alert(
           "Card Setup Notice",
-          "Verification payment was received, but Payments.lk did not vault the card. Please ensure 'Keep my card on file' is checked on the payment page."
+          "Verification payment was received, but Payments.lk did not vault the card. Please ensure 'Keep my card on file' is checked on the payment page.",
         );
       }
     } catch (e) {
@@ -133,12 +154,11 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-
   const handleCheckoutCancel = (orderId: string) => {
     setCheckoutModalVisible(false);
     Alert.alert(
       "Card Setup Cancelled",
-      "No card was linked. You can link a payment card at any time."
+      "No card was linked. You can link a payment card at any time.",
     );
   };
 
@@ -165,12 +185,12 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
             }
           },
         },
-      ]
+      ],
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
+    <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
       {/* ─── HEADER ──────────────────────────────────────────────────────── */}
       <CustomHeader
         title="Saved Cards"
@@ -180,7 +200,9 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
       />
 
       {loading ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
           <ActivityIndicator size="large" color="#FF7A00" />
         </View>
       ) : (
@@ -219,39 +241,25 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                       width: 80,
                       height: 80,
                       borderRadius: 40,
-                      backgroundColor: "#FEE2D5",
+                      backgroundColor: "#FFF5F2",
                       justifyContent: "center",
                       alignItems: "center",
                     }}
                   >
                     <View
                       style={{
-                        width: 52,
-                        height: 38,
+                        width: 48,
+                        height: 48,
                         borderRadius: 8,
                         backgroundColor: "#1F2937",
                         justifyContent: "center",
                         alignItems: "center",
                       }}
                     >
-                      <View
-                        style={{
-                          width: 40,
-                          height: 5,
-                          backgroundColor: "#374151",
-                          borderRadius: 2,
-                          marginBottom: 4,
-                        }}
-                      />
-                      <View
-                        style={{
-                          width: 14,
-                          height: 4,
-                          backgroundColor: "#D97706",
-                          borderRadius: 1,
-                          alignSelf: "flex-start",
-                          marginLeft: 6,
-                        }}
+                      <Image
+                        source={require("@/assets/images/payment/card.webp")}
+                        className="w-10 h-10"
+                        resizeMode="cover"
                       />
                     </View>
                   </View>
@@ -260,8 +268,8 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                   <View
                     style={{
                       position: "absolute",
-                      bottom: 0,
-                      right: 0,
+                      bottom: 6,
+                      right: 6,
                       width: 24,
                       height: 24,
                       borderRadius: 12,
@@ -293,15 +301,15 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                 <Text
                   style={{
                     fontSize: 14,
-                    color: "#6B7280",
+                    color: "#494A65",
                     textAlign: "center",
                     lineHeight: 20,
                     marginBottom: 20,
                     paddingHorizontal: 8,
                   }}
                 >
-                  You don't have any saved payment cards. Add a credit or debit card
-                  for faster and seamless checkout.
+                  You don't have any saved payment cards. Add a credit or debit
+                  card for faster and seamless checkout.
                 </Text>
 
                 {/* Info Note Pill */}
@@ -309,7 +317,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: "#FFF7ED",
+                    backgroundColor: "#F2F2F6",
                     paddingVertical: 8,
                     paddingHorizontal: 14,
                     borderRadius: 20,
@@ -319,14 +327,14 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                   <Ionicons
                     name="information-circle"
                     size={16}
-                    color="#F97316"
+                    color="#FF9114"
                     style={{ marginRight: 6 }}
                   />
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "500",
-                      color: "#C2410C",
+                      color: "#494A65",
                     }}
                   >
                     Note: You can save 1 active card at a time
@@ -339,8 +347,8 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                   disabled={initiatingGateway}
                   onPress={handleAddNewCard}
                   style={{
-                    width: "100%",
-                    backgroundColor: "#FF7A00",
+                    width: "80%",
+                    backgroundColor: "#FF9114",
                     paddingVertical: 15,
                     borderRadius: 30,
                     justifyContent: "center",
@@ -365,12 +373,11 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                           fontWeight: "700",
                         }}
                       >
-                        Connecting to Payments.lk...
+                        Connecting ...
                       </Text>
                     </>
                   ) : (
                     <>
-                      <Ionicons name="card-outline" size={20} color="#FFFFFF" />
                       <Text
                         style={{
                           color: "#FFFFFF",
@@ -378,70 +385,32 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                           fontWeight: "700",
                         }}
                       >
-                        + Add New Card via Payments.lk
+                        + Add New Card
                       </Text>
                     </>
                   )}
                 </TouchableOpacity>
 
                 {/* Visa & Mastercard Logos */}
+                {/* Visa & Mastercard Logos */}
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 12,
+                    gap: 16,
                   }}
                 >
-                  <View
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 4,
-                      backgroundColor: "#F3F4F6",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "900",
-                        fontStyle: "italic",
-                        color: "#1A1F71",
-                      }}
-                    >
-                      VISA
-                    </Text>
-                  </View>
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 4,
-                      backgroundColor: "#F3F4F6",
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: "#EB001B",
-                        marginRight: -4,
-                      }}
-                    />
-                    <View
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: "#F79E1B",
-                        opacity: 0.85,
-                      }}
-                    />
-                  </View>
+                  <Image
+                    source={require("@/assets/images/payment/visa.webp")}
+                    style={{ width: 44, height: 18 }}
+                    resizeMode="contain"
+                  />
+                  <Image
+                    source={require("@/assets/images/payment/master.webp")}
+                    style={{ width: 32, height: 20 }}
+                    resizeMode="contain"
+                  />
                 </View>
               </View>
 
@@ -460,8 +429,8 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                     flex: 1,
                     backgroundColor: "#FFFFFF",
                     borderRadius: 16,
-                    borderWidth: 1.5,
-                    borderColor: "#FED7AA",
+                    borderWidth: 1,
+                    borderColor: "#FF9114",
                     paddingVertical: 14,
                     paddingHorizontal: 12,
                     flexDirection: "row",
@@ -494,7 +463,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                     <Text
                       style={{
                         fontSize: 11,
-                        color: "#9CA3AF",
+                        color: "#494A65",
                       }}
                     >
                       100% Safe
@@ -508,8 +477,8 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                     flex: 1,
                     backgroundColor: "#FFFFFF",
                     borderRadius: 16,
-                    borderWidth: 1.5,
-                    borderColor: "#FED7AA",
+                    borderWidth: 1,
+                    borderColor: "#FF9114",
                     paddingVertical: 14,
                     paddingHorizontal: 12,
                     flexDirection: "row",
@@ -542,7 +511,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                     <Text
                       style={{
                         fontSize: 11,
-                        color: "#9CA3AF",
+                        color: "#494A65",
                       }}
                     >
                       Checkout
@@ -646,7 +615,9 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
 
                   {/* Brand scheme logo badge on card */}
                   {savedCard.scheme === "mastercard" ? (
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
                       <View
                         style={{
                           width: 20,
@@ -845,7 +816,9 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                         color: "#111827",
                       }}
                     >
-                      {savedCard.scheme === "mastercard" ? "Mastercard" : "Visa"}{" "}
+                      {savedCard.scheme === "mastercard"
+                        ? "Mastercard"
+                        : "Visa"}{" "}
                       ending in {savedCard.last4}
                     </Text>
                     <Text

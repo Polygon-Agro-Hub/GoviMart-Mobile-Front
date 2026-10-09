@@ -989,7 +989,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           />
 
           {/* ─── SAVED CARD / CARD SELECTION SMALL SECTION ───────────── */}
-          {paymentMethod === "card" && (
+          {/* {paymentMethod === "card" && (
             <View
               style={{
                 marginHorizontal: 15,
@@ -1021,7 +1021,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
               {savedCard ? (
                 <>
-                  {/* Option 1: Saved Card */}
+             
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={() => setSelectedCardOption("saved_card")}
@@ -1065,7 +1065,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                         )}
                       </View>
 
-                      {/* Card Scheme Badge */}
+              
                       <View
                         style={{
                           paddingHorizontal: 7,
@@ -1108,7 +1108,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                       </View>
                     </View>
 
-                    {/* 1-Click Badge */}
+                 
                     <View
                       style={{
                         backgroundColor: "#DCFCE7",
@@ -1129,7 +1129,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                     </View>
                   </TouchableOpacity>
 
-                  {/* Option 2: Pay with Another Card */}
+           
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={() => setSelectedCardOption("new_card")}
@@ -1209,7 +1209,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               )}
             </View>
-          )}
+          )} */}
 
           {/* CASH UNAVAILABLE BANNER */}
           {isCashDisabled && (
