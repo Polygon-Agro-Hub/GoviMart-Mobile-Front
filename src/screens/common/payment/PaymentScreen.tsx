@@ -2,15 +2,11 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
-  Modal,
-  TextInput,
   Platform,
+  ScrollView,
 } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -22,7 +18,12 @@ import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 import { AlertModal } from "@/component/common/AlertModal";
-// Note: PayHere adapter and modal files are preserved in the codebase and can be relinked if needed.
+import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
+import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
+import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
+import apiClient from "@/services/config-service/axio-config";
+import { ENDPOINTS } from "@/services/config-service/endpoints";
+import { getAuthHeader } from "@/services/config-service/auth-header";
 
 type PaymentScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -44,13 +45,17 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const [subTotal, setSubTotal] = useState<number>(initialAmount);
   const [loading, setLoading] = useState<boolean>(!initialAmount);
+  const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
 
-  // ─── CARD PAYMENT STATE ───────────────────────────────────────────────────
-  const [cardNumber, setCardNumber] = useState("");
-  const [nameOnCard, setNameOnCard] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [cardError, setCardError] = useState("");
+  // ─── CHECKOUT MODAL STATE ─────────────────────────────────────────────────
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [checkoutSession, setCheckoutSession] =
+    useState<UnifiedCheckoutSession | null>(null);
+  const [pendingOrderResult, setPendingOrderResult] = useState<{
+    orderId: any;
+    invoiceNumber: any;
+    total: any;
+  } | null>(null);
 
   // ─── ALERT MODAL STATE ────────────────────────────────────────────────────
   const [alertVisible, setAlertVisible] = useState(false);
@@ -73,6 +78,25 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
   const [unavailableModalVisible, setUnavailableModalVisible] = useState(false);
 
+  // Fetch active gateway configuration from backend
+  useEffect(() => {
+    const fetchActiveGateway = async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await apiClient.get(ENDPOINTS.PAYMENT.ACTIVE_GATEWAY, {
+          headers,
+        });
+        if (res.data?.status && res.data?.data?.activeGateway) {
+          setActiveGateway(res.data.data.activeGateway);
+        }
+      } catch (err) {
+        // Fallback to default payments_lk
+        setActiveGateway("payments_lk");
+      }
+    };
+    fetchActiveGateway();
+  }, []);
+
   useEffect(() => {
     if (!initialAmount) {
       const fetchBalance = async () => {
@@ -93,7 +117,6 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [initialAmount]);
 
-  // Full total to pay equals the balance / order amount (no processing fee)
   const fullTotal = subTotal;
 
   const formatAmount = (amt: number) => {
@@ -103,113 +126,25 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
-  // ─── CARD INPUT FORMATTING ────────────────────────────────────────────────
-  const handleCardNumberChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, "").slice(0, 16);
-    const formatted = cleaned.replace(/(.{4})/g, "$1 ").trim();
-    setCardNumber(formatted);
-    if (cardError) setCardError("");
-  };
-
-  const handleExpiryChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, "").slice(0, 4);
-    if (cleaned.length >= 3) {
-      setExpiry(`${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}`);
-    } else {
-      setExpiry(cleaned);
-    }
-    if (cardError) setCardError("");
-  };
-
-  const handleNameChange = (text: string) => {
-    const lettersOnly = text.replace(/[^a-zA-Z\s]/g, "");
-    setNameOnCard(lettersOnly);
-    if (cardError) setCardError("");
-  };
-
-  const handleCvvChange = (text: string) => {
-    const digitsOnly = text.replace(/\D/g, "").slice(0, 3);
-    setCvv(digitsOnly);
-    if (cardError) setCardError("");
-  };
-
-  // ─── CARD VALIDATION ──────────────────────────────────────────────────────
-  const validateCardDetails = (): boolean => {
-    const rawDigits = cardNumber.replace(/\s/g, "");
-    if (!rawDigits) {
-      setCardError("Card number is required.");
-      return false;
-    }
-    if (rawDigits.length !== 16) {
-      setCardError("Card number must be 16 digits.");
-      return false;
-    }
-    if (!nameOnCard.trim()) {
-      setCardError("Name on card is required.");
-      return false;
-    }
-    if (!expiry.trim()) {
-      setCardError("Expiration date is required.");
-      return false;
-    }
-    const expiryMatch = /^(\d{2})\/(\d{2})$/.exec(expiry);
-    if (!expiryMatch) {
-      setCardError("Use MM/YY format for expiration date.");
-      return false;
-    }
-    const month = Number(expiryMatch[1]);
-    const year = Number(expiryMatch[2]);
-    if (month < 1 || month > 12) {
-      setCardError("Enter a valid expiration month (01-12).");
-      return false;
-    }
-    const now = new Date();
-    const currentYear = now.getFullYear() % 100;
-    const currentMonth = now.getMonth() + 1;
-    if (year < currentYear || (year === currentYear && month < currentMonth)) {
-      setCardError("This card has expired.");
-      return false;
-    }
-    if (!cvv.trim()) {
-      setCardError("CVV is required.");
-      return false;
-    }
-    if (cvv.length !== 3) {
-      setCardError("CVV must be exactly 3 digits.");
-      return false;
-    }
-
-    setCardError("");
-    return true;
-  };
-
-  // ─── PROCESS CARD PAYMENT ─────────────────────────────────────────────────
+  // ─── EXECUTE PAYMENT INITIATION ───────────────────────────────────────────
   const handleExecutePayment = async () => {
-    if (!validateCardDetails()) {
-      return;
-    }
-
     try {
       setSubmitting(true);
-      setCardError("");
+
+      const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
 
       if (isClearBalanceFlow) {
-        const response = await customerService.updateCreditBalance(subTotal);
+        // Clear negative balance flow
+        const session = await adapter.initiatePayment({
+          amount: subTotal,
+          paymentType: "clear_balance",
+          itemsDescription: "Clear Negative Credit Balance",
+        });
 
-        if (response.data && response.data.status) {
-          showAlert(
-            "Payment Successful",
-            "Your negative credit balance has been cleared successfully. You can now continue placing orders without restrictions!",
-            "success"
-          );
-        } else {
-          const msg =
-            response.data?.message || "Failed to clear credit balance.";
-          setCardError(msg);
-          showAlert("Payment Failed", msg, "error");
-        }
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
       } else {
-        // Direct card flow for order placement
+        // Order flow: create pending order first, then launch payment session
         const payload = {
           cartId: orderContext?.cartId || 0,
           paymentMethod: "card",
@@ -227,19 +162,27 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         };
 
         const response = await orderService.createOrder(payload);
+
         if (response.data && response.data.status && response.data.data) {
-          dispatch(clearCart());
-          navigation.navigate("OrderConfirmed", {
-            orderId: response.data.data.orderId,
-            invoiceNumber: response.data.data.invoiceNumber,
-            total: response.data.data.total,
-            couponValue: orderContext?.couponValue,
-            orderContext,
+          const orderData = response.data.data;
+          setPendingOrderResult(orderData);
+
+          const session = await adapter.initiatePayment({
+            orderId: String(orderData.orderId || orderData.invoiceNumber),
+            amount: fullTotal,
+            paymentType: "order",
+            itemsDescription: `Order #${
+              orderData.invoiceNumber || orderData.orderId
+            }`,
           });
+
+          setCheckoutSession(session);
+          setCheckoutModalVisible(true);
         } else {
-          setCardError(
+          showAlert(
+            "Order Creation Failed",
             response.data?.message ||
-              "Failed to create order. Please try again.",
+              "Could not initialize order for payment. Please try again."
           );
         }
       }
@@ -254,12 +197,42 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             ? errorData.details.join("; ")
             : null) ||
           err?.message ||
-          "Payment failed. Please check your card details and try again.";
-        setCardError(errorMsg);
+          "Payment initiation failed. Please try again.";
+        showAlert("Payment Error", errorMsg);
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ─── CHECKOUT MODAL HANDLERS ─────────────────────────────────────────────
+  const handlePaymentSuccess = async (orderId: string) => {
+    setCheckoutModalVisible(false);
+
+    if (isClearBalanceFlow) {
+      showAlert(
+        "Payment Successful",
+        "Your negative credit balance has been cleared successfully! You can now continue placing orders without restrictions.",
+        "success"
+      );
+    } else {
+      dispatch(clearCart());
+      navigation.navigate("OrderConfirmed", {
+        orderId: pendingOrderResult?.orderId || orderId,
+        invoiceNumber: pendingOrderResult?.invoiceNumber || "",
+        total: pendingOrderResult?.total || fullTotal,
+        couponValue: orderContext?.couponValue,
+        orderContext,
+      });
+    }
+  };
+
+  const handlePaymentCancel = (orderId: string) => {
+    setCheckoutModalVisible(false);
+    showAlert(
+      "Payment Cancelled",
+      "The payment was not completed. You can try again whenever you are ready."
+    );
   };
 
   const handleAlertClose = () => {
@@ -268,6 +241,9 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       navigation.goBack();
     }
   };
+
+  const gatewayDisplayName =
+    activeGateway === "payhere" ? "PayHere" : "Payments.lk";
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -289,63 +265,45 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <KeyboardAwareScrollView
+          <ScrollView
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            enableOnAndroid={true}
-            enableAutomaticScroll={true}
-            extraScrollHeight={Platform.OS === "ios" ? 120 : 140}
-            extraHeight={Platform.OS === "ios" ? 120 : 140}
-            keyboardOpeningTime={0}
-            enableResetScrollToCoords={false}
-            contentContainerStyle={{
-              paddingTop: 10,
-              paddingBottom: Platform.OS === "ios" ? 34 : 20,
-              flexGrow: 1,
-              justifyContent: "space-between",
-            }}
+            contentContainerStyle={{ paddingBottom: 24 }}
           >
-            <View style={{ flex: 1 }}>
-              {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
-            <View style={{ alignItems: "center", marginVertical: 10 }}>
-              <Image
-                source={require("@/assets/images/payment/payment-summery.webp")}
-                style={{
-                  width: 140,
-                  height: 140,
-                  resizeMode: "contain",
-                }}
-              />
-            </View>
-
-            {/* ─── PAYMENT SUMMARY CARD ─────────────────────────────────────── */}
+            {/* ─── PAYMENT SUMMARY CARD ────────────────────────────────────── */}
             <View
               style={{
-                backgroundColor: "#F9FAFB",
-                borderWidth: 1,
-                borderColor: "#E5E7EB",
-                borderRadius: 20,
-                paddingHorizontal: 18,
-                paddingVertical: 16,
                 marginHorizontal: 16,
+                marginTop: 16,
+                backgroundColor: "#F8FAFC",
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                padding: 18,
               }}
             >
-              {/* TOTAL NEGATIVE CREDIT BALANCE / ORDER TOTAL */}
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  color: "#0F172A",
+                  marginBottom: 14,
+                }}
+              >
+                Payment Summary
+              </Text>
+
               <View
                 style={{
                   flexDirection: "row",
                   justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 12,
+                  marginBottom: 10,
                 }}
               >
                 <Text
                   style={{
-                    fontSize: 13,
-                    color: "#4B5563",
+                    fontSize: 13.5,
+                    color: "#64748B",
                     fontWeight: "500",
-                    flex: 1,
-                    paddingRight: 8,
                   }}
                 >
                   {isClearBalanceFlow
@@ -367,8 +325,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               <View
                 style={{
                   height: 1,
-                  backgroundColor: "#E5E7EB",
-                  marginBottom: 12,
+                  backgroundColor: "#E2E8F0",
+                  marginVertical: 10,
                 }}
               />
 
@@ -391,9 +349,9 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: "800",
-                    color: "#000000",
+                    color: "#FF8A00",
                   }}
                 >
                   Rs. {formatAmount(fullTotal)}
@@ -401,33 +359,34 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* ─── CARD DETAILS SECTION ───────────────────────────────────── */}
+            {/* ─── GATEWAY DETAILS CARD ───────────────────────────────────── */}
             <View
               style={{
                 marginHorizontal: 16,
-                marginTop: 18,
+                marginTop: 16,
                 backgroundColor: "#FFFFFF",
                 borderRadius: 20,
                 borderWidth: 1,
                 borderColor: "#E2E8F0",
-                padding: 16,
+                padding: 18,
                 shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 3,
-                elevation: 1,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.04,
+                shadowRadius: 4,
+                elevation: 2,
               }}
             >
-              {/* Card Section Header */}
               <View
                 style={{
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: 14,
+                  marginBottom: 12,
                 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <Ionicons name="card" size={20} color="#FF8A00" />
                   <Text
                     style={{
@@ -436,215 +395,83 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       color: "#0F172A",
                     }}
                   >
-                    Card Details
+                    Payment Method
                   </Text>
                 </View>
 
-                {/* Card Type Badges */}
-                <View style={{ flexDirection: "row", gap: 6 }}>
-                  <View
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    backgroundColor: "#EFF6FF",
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
+                  }}
+                >
+                  <Text
                     style={{
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      backgroundColor: "#1E293B",
-                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: "#1D4ED8",
                     }}
                   >
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontSize: 10,
-                        fontWeight: "700",
-                      }}
-                    >
-                      VISA
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      backgroundColor: "#DC2626",
-                      borderRadius: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontSize: 10,
-                        fontWeight: "700",
-                      }}
-                    >
-                      MC
-                    </Text>
-                  </View>
+                    {gatewayDisplayName}
+                  </Text>
                 </View>
               </View>
 
-              {/* Card Number Input */}
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: "600",
-                  color: "#334155",
-                  marginBottom: 6,
-                }}
-              >
-                Card Number
-              </Text>
+              {/* Supported Payment Badges */}
               <View
                 style={{
                   flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#CBD5E1",
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  height: 48,
-                  marginBottom: 12,
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 14,
                 }}
               >
-                <TextInput
-                  value={cardNumber}
-                  onChangeText={handleCardNumberChange}
-                  placeholder="0000 0000 0000 0000"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
-                  returnKeyType="next"
-                  maxLength={19}
-                  style={{
-                    flex: 1,
-                    fontSize: 14.5,
-                    color: "#0F172A",
-                    fontWeight: "500",
-                  }}
-                />
-                <Ionicons name="card-outline" size={18} color="#94A3B8" />
+                {["VISA", "Mastercard", "LankaQR", "Amex"].map((brand) => (
+                  <View
+                    key={brand}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 4,
+                      backgroundColor: "#F1F5F9",
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: "#E2E8F0",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: "#334155",
+                      }}
+                    >
+                      {brand}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
-              {/* Name on Card Input */}
               <Text
                 style={{
                   fontSize: 12.5,
-                  fontWeight: "600",
-                  color: "#334155",
-                  marginBottom: 6,
+                  color: "#64748B",
+                  lineHeight: 18,
                 }}
               >
-                Name on Card
+                You will be redirected to the official 3D Secure hosted payment
+                page powered by{" "}
+                <Text style={{ fontWeight: "600", color: "#334155" }}>
+                  {gatewayDisplayName}
+                </Text>
+                . Card numbers are never stored on your device.
               </Text>
-              <TextInput
-                value={nameOnCard}
-                onChangeText={handleNameChange}
-                placeholder="JOHN DOE"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="characters"
-                returnKeyType="next"
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#CBD5E1",
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  height: 48,
-                  fontSize: 14.5,
-                  color: "#0F172A",
-                  fontWeight: "500",
-                  marginBottom: 12,
-                }}
-              />
-
-              {/* Expiry Date & CVV */}
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: "600",
-                      color: "#334155",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Expiry Date
-                  </Text>
-                  <TextInput
-                    value={expiry}
-                    onChangeText={handleExpiryChange}
-                    placeholder="MM/YY"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    returnKeyType="next"
-                    maxLength={5}
-                    style={{
-                      backgroundColor: "#F8FAFC",
-                      borderWidth: 1,
-                      borderColor: "#CBD5E1",
-                      borderRadius: 12,
-                      paddingHorizontal: 14,
-                      height: 48,
-                      fontSize: 14.5,
-                      color: "#0F172A",
-                      fontWeight: "500",
-                    }}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: "600",
-                      color: "#334155",
-                      marginBottom: 6,
-                    }}
-                  >
-                    CVV
-                  </Text>
-                  <TextInput
-                    value={cvv}
-                    onChangeText={handleCvvChange}
-                    placeholder="123"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    returnKeyType="done"
-                    maxLength={3}
-                    secureTextEntry={true}
-                    style={{
-                      backgroundColor: "#F8FAFC",
-                      borderWidth: 1,
-                      borderColor: "#CBD5E1",
-                      borderRadius: 12,
-                      paddingHorizontal: 14,
-                      height: 48,
-                      fontSize: 14.5,
-                      color: "#0F172A",
-                      fontWeight: "500",
-                    }}
-                  />
-                </View>
-              </View>
-
-              {/* Error Message */}
-              {Boolean(cardError) && (
-                <View
-                  style={{
-                    backgroundColor: "#FEF2F2",
-                    borderRadius: 8,
-                    padding: 10,
-                    marginTop: 12,
-                    borderWidth: 1,
-                    borderColor: "#FECACA",
-                  }}
-                >
-                  <Text style={{ color: "#DC2626", fontSize: 12.5 }}>
-                    {cardError}
-                  </Text>
-                </View>
-              )}
             </View>
 
-            {/* ─── SECURE PAYMENT BANNER ───────────────────────────────────── */}
+            {/* ─── SECURITY BANNER ────────────────────────────────────────── */}
             <View
               style={{
                 backgroundColor: "#EDFFF2",
@@ -652,47 +479,49 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 marginHorizontal: 16,
-                marginTop: 14,
+                marginTop: 16,
                 flexDirection: "row",
                 alignItems: "center",
               }}
             >
               <View
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
                   backgroundColor: "#C6F6D5",
                   justifyContent: "center",
                   alignItems: "center",
                   marginRight: 10,
                 }}
               >
-                <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
+                <Ionicons name="shield-checkmark" size={17} color="#16A34A" />
               </View>
 
               <Text
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 12,
                   color: "#2D5A3C",
                   fontWeight: "500",
                   flex: 1,
-                  lineHeight: 15,
+                  lineHeight: 16,
                 }}
               >
-                Your payment is 100% secure and processed through verified
-                encryption standards.
+                Verified PCI-DSS compliant 256-bit encryption. Safe, fast, and
+                secure.
               </Text>
             </View>
-          </View>
+          </ScrollView>
 
           {/* ─── BOTTOM SUBMIT BUTTON ─────────────────────────────────────── */}
           <View
             style={{
               paddingHorizontal: 16,
-              paddingTop: 24,
+              paddingTop: 16,
               paddingBottom: Platform.OS === "ios" ? 30 : 16,
               backgroundColor: "#FFFFFF",
+              borderTopWidth: 1,
+              borderColor: "#F1F5F9",
             }}
           >
             <TouchableOpacity
@@ -726,16 +555,29 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       fontWeight: "700",
                     }}
                   >
-                    Pay Rs. {formatAmount(fullTotal)} Now
+                    Pay Rs. {formatAmount(fullTotal)} with {gatewayDisplayName}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
-        </KeyboardAwareScrollView>
-      </View>
-    )}
+        </View>
+      )}
 
+      {/* ─── PAYMENT CHECKOUT MODAL (Payments.lk / PayHere) ──────────────── */}
+      {checkoutSession && (
+        <PaymentCheckoutModal
+          visible={checkoutModalVisible}
+          gatewayName={checkoutSession.gateway}
+          checkoutUrl={checkoutSession.checkoutUrl}
+          postBody={checkoutSession.postBody}
+          orderId={String(checkoutSession.orderId)}
+          amount={checkoutSession.amount}
+          onSuccess={handlePaymentSuccess}
+          onCancel={handlePaymentCancel}
+          onClose={() => setCheckoutModalVisible(false)}
+        />
+      )}
 
       {/* ─── ALERT MODAL ──────────────────────────────────────────────────── */}
       <AlertModal
@@ -746,7 +588,11 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         onClose={handleAlertClose}
         autoClose={false}
         showOkButton={true}
-        okButtonText={alertType === "success" && isClearBalanceFlow ? "Back to Profile" : "OK"}
+        okButtonText={
+          alertType === "success" && isClearBalanceFlow
+            ? "Back to Profile"
+            : "OK"
+        }
       />
 
       {/* ─── UNAVAILABLE ITEMS MODAL ─────────────────────────────────────── */}

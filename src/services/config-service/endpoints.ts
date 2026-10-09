@@ -75,6 +75,9 @@ export const ENDPOINTS = {
   },
 
   PAYMENT: {
+    INITIATE: "api/payment/initiate",
+    ACTIVE_GATEWAY: "api/payment/active-gateway",
+    PAYMENTS_LK_INITIATE: "api/payment/payments-lk/initiate",
     PAYHERE_INITIATE: "api/payment/payhere/initiate",
   },
 
