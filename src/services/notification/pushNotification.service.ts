@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Platform, AppState } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
@@ -32,6 +32,7 @@ class PushNotificationService {
   private registeredTokens = new Set<string>();
   private isRegisteringToken = false;
   private lastUserId: string | number | null = null;
+  private recentlyDisplayedNotifKeys = new Map<string, number>();
 
   /**
    * Initialize System Notifications, Android Channels, and tap response listener.
@@ -154,6 +155,8 @@ class PushNotificationService {
         return;
       }
 
+      let tokenRegistered = false;
+
       // 1. Native Device Push Token (FCM on Android, APNs on iOS)
       try {
         const devTokenObj = await Notifications.getDevicePushTokenAsync();
@@ -167,29 +170,32 @@ class PushNotificationService {
             devTokenObj.data,
             devTokenObj.type || (Platform.OS === "android" ? "fcm" : "apns")
           );
+          tokenRegistered = true;
         }
       } catch (devErr: any) {
         console.warn("⚠️ [PushNotificationService] Native device token not available:", devErr?.message);
       }
 
-      // 2. Expo Push Token (secondary fallback)
-      try {
-        const projectId =
-          Constants?.expoConfig?.extra?.eas?.projectId ??
-          Constants?.easConfig?.projectId ??
-          "1c8baa2b-5982-43e9-9f80-a01886235093";
-        const expoTokenObj = await Notifications.getExpoPushTokenAsync(
-          projectId ? { projectId } : undefined
-        );
-        if (expoTokenObj?.data) {
-          console.log(
-            "📱 [PushNotificationService] Obtained Expo push token:",
-            expoTokenObj.data.slice(0, 25) + "..."
+      // 2. Expo Push Token (secondary fallback ONLY if native device token failed)
+      if (!tokenRegistered) {
+        try {
+          const projectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ??
+            Constants?.easConfig?.projectId ??
+            "1c8baa2b-5982-43e9-9f80-a01886235093";
+          const expoTokenObj = await Notifications.getExpoPushTokenAsync(
+            projectId ? { projectId } : undefined
           );
-          await this.sendTokenToBackend(authToken, expoTokenObj.data, "expo");
+          if (expoTokenObj?.data) {
+            console.log(
+              "📱 [PushNotificationService] Obtained Expo push token (fallback):",
+              expoTokenObj.data.slice(0, 25) + "..."
+            );
+            await this.sendTokenToBackend(authToken, expoTokenObj.data, "expo");
+          }
+        } catch (expoErr: any) {
+          console.log("ℹ️ [PushNotificationService] Expo push token not obtained:", expoErr?.message);
         }
-      } catch (expoErr: any) {
-        console.log("ℹ️ [PushNotificationService] Expo push token not obtained:", expoErr?.message);
       }
     } catch (err: any) {
       console.warn("❌ [PushNotificationService] registerPushToken error:", err?.message);
@@ -238,6 +244,31 @@ class PushNotificationService {
    */
   async displayLocalNotification(item: ServerNotificationItem | any) {
     if (!item || !item.title) return;
+
+    // 1. If app is in background or inactive, the OS remote push (FCM/Expo)
+    // already creates and shows the notification in the system tray.
+    // Displaying a local notification here would cause a duplicate!
+    if (AppState.currentState !== "active") {
+      console.log("ℹ️ [PushNotificationService] App in background/inactive, skipping local notification to avoid duplicate.");
+      return;
+    }
+
+    // 2. Deduplicate: suppress identical notifications within a 10-second window
+    const notifKey = `${item.id || ""}_${item.orderId || item.processOrderId || ""}_${item.title || ""}_${item.message || ""}`;
+    const now = Date.now();
+    const lastTime = this.recentlyDisplayedNotifKeys.get(notifKey);
+    if (lastTime && now - lastTime < 10000) {
+      console.log("ℹ️ [PushNotificationService] Suppressing duplicate local notification within 10s window:", notifKey);
+      return;
+    }
+    this.recentlyDisplayedNotifKeys.set(notifKey, now);
+
+    // Keep map small
+    if (this.recentlyDisplayedNotifKeys.size > 50) {
+      for (const [k, t] of this.recentlyDisplayedNotifKeys.entries()) {
+        if (now - t > 30000) this.recentlyDisplayedNotifKeys.delete(k);
+      }
+    }
 
     try {
       if (Platform.OS === "android") {
