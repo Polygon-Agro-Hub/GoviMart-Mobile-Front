@@ -18,6 +18,7 @@ import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
+import { getForgotPwdStorageKeys } from "./ForgotPasswordInputScreen";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -30,10 +31,11 @@ interface Props {
   navigation: NavigationProp;
 }
 
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout duration
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_TIMER_SECONDS = 240; // 4 minutes
-const LOCKOUT_SECONDS = RATE_LIMIT_WINDOW_MS / 1000; // 900
+const LOCKOUT_SECONDS = LOCKOUT_DURATION_MS / 1000; // 900 seconds (15 minutes)
 
 // Space (px) to keep between the Verify button and the top of the keyboard.
 const VERIFY_EXTRA_SPACE = 16;
@@ -41,6 +43,9 @@ const VERIFY_EXTRA_SPACE = 16;
 const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const method = route.params?.method || "email";
   const identifier = route.params?.identifier || "";
+  const emailParam = route.params?.email;
+  const phoneCodeParam = route.params?.phoneCode;
+  const phoneNumberParam = route.params?.phoneNumber;
   const [referenceId, setReferenceId] = useState(
     route.params?.referenceId || ""
   );
@@ -48,12 +53,14 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const cleanIdentifier = identifier.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 
-  // Same keys for BOTH email and SMS so counting/lockout is consistent.
-  // NOTE: if ForgotPasswordInputScreen also records attempts, it must use
-  // these exact same keys.
-  const lockoutKeys: string[] = [`@forgot_pwd_lockout_${cleanIdentifier}`];
-  const attemptsKeys: string[] = [`@forgot_pwd_otp_attempts_${cleanIdentifier}`];
-  const storageKey = attemptsKeys[0];
+  const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
+    method,
+    emailParam,
+    phoneCodeParam,
+    phoneNumberParam,
+    identifier
+  );
+  const storageKey = attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -198,6 +205,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               return;
             } else {
               await AsyncStorage.removeItem(key);
+              for (const attKey of attemptsKeys) {
+                await AsyncStorage.removeItem(attKey);
+              }
             }
           }
         } catch (e) {
@@ -209,18 +219,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       for (const key of attemptsKeys) {
         const attempts = await getRecentAttempts(key);
         if (attempts.length >= MAX_OTP_ATTEMPTS) {
-          const oldest = attempts[0];
-          const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 1);
-          const lockoutUntil = Date.now() + remainingSec * 1000;
-          for (const lockKey of lockoutKeys) {
-            await AsyncStorage.setItem(lockKey, String(lockoutUntil));
-          }
-          setTimeLeft(remainingSec);
-          setIsRateLimited(true);
-          setIsExpired(false);
-          setAttemptsCount(MAX_OTP_ATTEMPTS);
-          showRateLimitAlert();
+          await applyRateLimitLockout();
           return;
         }
       }
@@ -247,6 +246,15 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     if (timeLeft <= 0) {
       if (isRateLimited) {
         setIsRateLimited(false);
+        (async () => {
+          for (const key of attemptsKeys) {
+            await clearAttempts(key);
+          }
+          for (const key of lockoutKeys) {
+            await AsyncStorage.removeItem(key);
+          }
+          setAttemptsCount(0);
+        })();
       }
       setIsExpired(true);
       return;
@@ -294,7 +302,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const applyRateLimitLockout = async () => {
-    const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+    const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
     for (const key of lockoutKeys) {
       await AsyncStorage.setItem(key, String(lockoutUntil));
     }
@@ -400,6 +408,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               return;
             } else {
               await AsyncStorage.removeItem(key);
+              for (const attKey of attemptsKeys) {
+                await AsyncStorage.removeItem(attKey);
+              }
             }
           }
         } catch (e) {}
@@ -409,18 +420,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       for (const key of attemptsKeys) {
         const attempts = await getRecentAttempts(key);
         if (attempts.length >= MAX_OTP_ATTEMPTS) {
-          const oldest = attempts[0];
-          const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-          const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 1);
-          const lockoutUntil = Date.now() + remainingSec * 1000;
-          for (const lockKey of lockoutKeys) {
-            await AsyncStorage.setItem(lockKey, String(lockoutUntil));
-          }
-          setTimeLeft(remainingSec);
-          setIsRateLimited(true);
-          setIsExpired(false);
-          setAttemptsCount(MAX_OTP_ATTEMPTS);
-          showRateLimitAlert();
+          await applyRateLimitLockout();
           return;
         }
       }
@@ -443,7 +443,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setResetToken(response.data.resetToken);
 
           if (updatedLength >= MAX_OTP_ATTEMPTS) {
-            const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+            const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
             for (const key of lockoutKeys) {
               await AsyncStorage.setItem(key, String(lockoutUntil));
             }
@@ -463,7 +463,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           } else {
             setTimeLeft(OTP_TIMER_SECONDS);
             setIsExpired(false);
-            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
+            const remaining = Math.max(0, MAX_OTP_ATTEMPTS - updatedLength);
             setAlertType("success");
             setAlertTitle("Code Resent");
             setAlertMessage(
@@ -472,7 +472,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                 (method === "email"
                   ? "Verification code has been resent to your email address."
                   : "Verification code has been resent to your mobile number.")
-              }`
+              }\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
             );
             setAlertVisible(true);
           }
@@ -685,7 +685,11 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               </TouchableOpacity>
             )}
 
-         
+            {!isRateLimited && remainingAttempts > 0 && (
+              <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
+                ({remainingAttempts} {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
+              </Text>
+            )}
           </View>
         </View>
 
