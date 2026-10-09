@@ -2,6 +2,7 @@
   "expo": {
     "name": "Polygon",
     "slug": "Polygon",
+    "scheme": "polygon",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/public/app-icon-android.png",

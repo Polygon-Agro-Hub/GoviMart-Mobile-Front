@@ -26,6 +26,11 @@ import CouponModal from "@/component/coupon/CouponModal";
 import AppliedCouponCard from "@/component/coupon/AppliedCouponCard";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 import BackConfirmationModal from "@/component/common/BackConfirmationModal";
+import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
+import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
+import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
+import { PaymentsLkAdapter } from "@/services/payment/payments-lk.adapter";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -45,9 +50,43 @@ let paymentSessionEndTime: number | null = null;
 
 const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const dispatch = useDispatch();
+  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
   const orderContext = route.params?.orderContext;
   const isNavigatingAwayRef = useRef(false);
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
+
+  // ─── SAVED CARD & GATEWAY STATE ─────────────────────────────────────────
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [selectedCardOption, setSelectedCardOption] = useState<"saved_card" | "new_card">("saved_card");
+  const [saveCardForFuture, setSaveCardForFuture] = useState(true);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
+  const [pendingOrderData, setPendingOrderData] = useState<any>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const loadCard = async () => {
+        try {
+          const card = await cardStorageService.getSavedCard(userProfile?.id);
+          if (isMounted) {
+            setSavedCard(card);
+            if (card) {
+              setSelectedCardOption("saved_card");
+            } else {
+              setSelectedCardOption("new_card");
+            }
+          }
+        } catch (e) {
+          console.log("Error loading saved card in PaymentMethodScreen:", e);
+        }
+      };
+      loadCard();
+      return () => {
+        isMounted = false;
+      };
+    }, [userProfile?.id])
+  );
 
   // ─── 5-MINUTE SESSION TIMER ──────────────────────────────────────────────
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
@@ -241,7 +280,35 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
   const paymentAmount = useCredit ? remainingAfterCredit : totalAmount;
 
-  // CONFIRM
+  const handleCheckoutSuccess = async (orderId: string) => {
+    setCheckoutModalVisible(false);
+    try {
+      if (checkoutSession?.sessionId) {
+        const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+        await adapter.syncCheckout(checkoutSession.sessionId).catch(() => null);
+      }
+    } catch (_) {}
+
+    isNavigatingAwayRef.current = true;
+    paymentSessionEndTime = null;
+    dispatch(clearCart());
+    navigation.navigate("OrderConfirmed", {
+      orderId: pendingOrderData?.orderId || orderId,
+      invoiceNumber: pendingOrderData?.invoiceNumber || "",
+      total: pendingOrderData?.total || paymentAmount,
+      couponValue: appliedCoupon?.discount || 0,
+      orderContext,
+    });
+  };
+
+  const handleCheckoutCancel = (orderId: string) => {
+    setCheckoutModalVisible(false);
+    Alert.alert(
+      "Payment Cancelled",
+      "The card payment was not completed. You can try again whenever you are ready."
+    );
+  };
+
   const handleConfirm = async () => {
     // Proactively check availability of items in cart
     const productIds: number[] = (cartProducts || []).map((p: any) => p.id);
@@ -280,35 +347,127 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const deliveryChargeToSave = isFreeDelivery ? 0 : effectiveDeliveryCharge;
 
     if (paymentMethod === "card" && paymentAmount > 0) {
-      isNavigatingAwayRef.current = true;
-      paymentSessionEndTime = null;
-      navigation.navigate("PaymentScreen", {
-        amount: paymentAmount,
-        title: "Payment Summary",
-        orderContext: {
-          ...(orderContext as any),
+      try {
+        setSubmitting(true);
+        const payload = {
+          cartId: orderContext?.cartId || 0,
+          paymentMethod: "card",
           grandTotal: totalAmount,
+          discountAmount: itemDiscount,
           deliveryCharge: deliveryChargeToSave,
-          discount: itemDiscount,
           creditPaid: creditUsed,
           moneyPaid: paymentAmount,
-          paymentMethod: "card",
-          appliedCoupon,
-          isCoupon: Boolean(appliedCoupon),
-          couponValue: couponVal,
-          couponDiscount: couponVal,
-          couponType: appliedCoupon?.type || null,
-          couponCode: appliedCoupon?.code || null,
-          isFreeDeliveryCoupon: isFreeDelivery,
+          isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
           checkoutDetails: {
-            ...(orderContext?.checkoutDetails || {}),
+            ...(orderContext?.checkoutDetails || {
+              deliveryMethod: orderContext?.deliveryMethod || "home",
+            }),
             isCoupon: Boolean(appliedCoupon),
             couponValue: couponVal,
             couponType: appliedCoupon?.type || null,
             couponCode: appliedCoupon?.code || null,
           },
-        },
-      });
+        };
+
+        const response = await orderService.createOrder(payload);
+        if (!response.data || !response.data.status || !response.data.data) {
+          throw new Error(response.data?.message || "Failed to create order");
+        }
+
+        const orderData = response.data.data;
+        const currentOrderId = String(orderData.orderId || orderData.invoiceNumber);
+        const currentInvoice = String(orderData.invoiceNumber || currentOrderId);
+        setPendingOrderData(orderData);
+
+        const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+
+        // Option 1: 1-Click Pay with Saved Card
+        if (selectedCardOption === "saved_card" && savedCard) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: paymentAmount,
+              orderId: currentOrderId,
+              itemsDescription: `GoviMart Order #${currentInvoice}`,
+              paymentType: "order",
+            });
+
+            if (chargeRes.success) {
+              isNavigatingAwayRef.current = true;
+              paymentSessionEndTime = null;
+              dispatch(clearCart());
+              navigation.navigate("OrderConfirmed", {
+                orderId: orderData.orderId,
+                invoiceNumber: orderData.invoiceNumber,
+                total: orderData.total || totalAmount,
+                couponValue: couponVal,
+                orderContext,
+              });
+              return;
+            }
+          } catch (chargeErr: any) {
+            console.warn("[PaymentMethodScreen] 1-Click charge failed:", chargeErr);
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+
+            if (isInvalid) {
+              setSavedCard(null);
+              setSelectedCardOption("new_card");
+              Alert.alert(
+                "Card Not Valid",
+                "Your saved card is expired or no longer available. Please enter card details to complete payment.",
+                [
+                  {
+                    text: "Continue to Pay",
+                    onPress: async () => {
+                      try {
+                        const fallbackSession = await adapter.initiatePayment({
+                          orderId: currentOrderId,
+                          amount: paymentAmount,
+                          paymentType: "order",
+                          itemsDescription: `GoviMart Order #${currentInvoice}`,
+                          saveCard: true,
+                        });
+                        setCheckoutSession(fallbackSession);
+                        setCheckoutModalVisible(true);
+                      } catch (launchErr: any) {
+                        Alert.alert("Error", launchErr?.message || "Failed to launch payment sheet.");
+                      }
+                    },
+                  },
+                ]
+              );
+              return;
+            }
+            throw chargeErr;
+          }
+        }
+
+        // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
+        const session = await adapter.initiatePayment({
+          orderId: currentOrderId,
+          amount: paymentAmount,
+          paymentType: "order",
+          itemsDescription: `GoviMart Order #${currentInvoice}`,
+          saveCard: true,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+      } catch (err: any) {
+        console.error("[PaymentMethod] Card payment error:", err);
+        Alert.alert(
+          "Payment Failed",
+          err?.response?.data?.message ||
+            err?.message ||
+            "Could not process card payment. Please try again or pay with cash."
+        );
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -829,6 +988,229 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             onPress={() => setPaymentMethod("card")}
           />
 
+          {/* ─── SAVED CARD / CARD SELECTION SMALL SECTION ───────────── */}
+          {paymentMethod === "card" && (
+            <View
+              style={{
+                marginHorizontal: 15,
+                marginTop: 10,
+                backgroundColor: "#FFFFFF",
+                borderRadius: 18,
+                borderWidth: 1.5,
+                borderColor: "#E5E7EB",
+                padding: 14,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.04,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: "#64748B",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                  marginBottom: 10,
+                }}
+              >
+                Card Payment Selection
+              </Text>
+
+              {savedCard ? (
+                <>
+                  {/* Option 1: Saved Card */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedCardOption("saved_card")}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor:
+                        selectedCardOption === "saved_card" ? "#F0FDF4" : "#F8FAFC",
+                      borderWidth: 1.5,
+                      borderColor:
+                        selectedCardOption === "saved_card" ? "#16A34A" : "#E2E8F0",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                      <View
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          borderWidth: 2,
+                          borderColor:
+                            selectedCardOption === "saved_card" ? "#16A34A" : "#94A3B8",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        {selectedCardOption === "saved_card" && (
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: "#16A34A",
+                            }}
+                          />
+                        )}
+                      </View>
+
+                      {/* Card Scheme Badge */}
+                      <View
+                        style={{
+                          paddingHorizontal: 7,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          backgroundColor:
+                            savedCard.scheme === "mastercard" ? "#FEF3C7" : "#EFF6FF",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "800",
+                            color:
+                              savedCard.scheme === "mastercard" ? "#D97706" : "#1D4ED8",
+                          }}
+                        >
+                          {savedCard.scheme === "mastercard" ? "Mastercard" : "VISA"}
+                        </Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 13.5,
+                            fontWeight: "700",
+                            color: "#0F172A",
+                          }}
+                        >
+                          •••• {savedCard.last4}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: "#64748B",
+                          }}
+                        >
+                          Expires {savedCard.expiryMonth}/{savedCard.expiryYear}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* 1-Click Badge */}
+                    <View
+                      style={{
+                        backgroundColor: "#DCFCE7",
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 10,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: "#15803D",
+                        }}
+                      >
+                        1-Click Pay
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Option 2: Pay with Another Card */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedCardOption("new_card")}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor:
+                        selectedCardOption === "new_card" ? "#EFF6FF" : "#F8FAFC",
+                      borderWidth: 1.5,
+                      borderColor:
+                        selectedCardOption === "new_card" ? "#2563EB" : "#E2E8F0",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          borderWidth: 2,
+                          borderColor:
+                            selectedCardOption === "new_card" ? "#2563EB" : "#94A3B8",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        {selectedCardOption === "new_card" && (
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: "#2563EB",
+                            }}
+                          />
+                        )}
+                      </View>
+
+                      <FontAwesome6 name="credit-card" size={14} color="#64748B" />
+
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "600",
+                          color: "#1E293B",
+                        }}
+                      >
+                        Pay with Another Card (Payments.lk)
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Ionicons name="lock-closed" size={18} color="#0788FF" />
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 12.5,
+                      color: "#475569",
+                      lineHeight: 17,
+                    }}
+                  >
+                    Card will be charged securely via Payments.lk hosted sheet. You can choose to save your card for 1-click payments.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* CASH UNAVAILABLE BANNER */}
           {isCashDisabled && (
             <View
@@ -975,6 +1357,18 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onCancel={() => {
           setBackConfirmVisible(false);
         }}
+      />
+
+      {/* ─── PAYMENTS.LK HOSTED CHECKOUT MODAL ───────────────────────── */}
+      <PaymentCheckoutModal
+        visible={checkoutModalVisible}
+        checkoutUrl={checkoutSession?.checkoutUrl || ""}
+        orderId={checkoutSession?.orderId || ""}
+        amount={paymentAmount}
+        customerAddress={checkoutSession?.customerAddress}
+        onSuccess={handleCheckoutSuccess}
+        onCancel={handleCheckoutCancel}
+        onClose={() => setCheckoutModalVisible(false)}
       />
     </View>
   );

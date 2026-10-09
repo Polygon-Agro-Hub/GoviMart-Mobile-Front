@@ -1,28 +1,31 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
-  Modal,
-  TextInput,
   Platform,
+  ScrollView,
 } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome6, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
-import { useDispatch } from "react-redux";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
 import { RootStackParamList } from "@/types/types";
+import { RootState } from "@/store";
 import CustomHeader from "@/component/common/CustomHeader";
 import customerService from "@/services/customer/customer.service";
 import orderService from "@/services/order/order.service";
 import { clearCart } from "@/store/cartSlice";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 import { AlertModal } from "@/component/common/AlertModal";
-// Note: PayHere adapter and modal files are preserved in the codebase and can be relinked if needed.
+import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
+import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
+import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
+import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import apiClient from "@/services/config-service/axio-config";
+import { ENDPOINTS } from "@/services/config-service/endpoints";
+import { getAuthHeader } from "@/services/config-service/auth-header";
 
 type PaymentScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -37,6 +40,7 @@ interface Props {
 }
 
 const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
+  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
   const initialAmount = route.params?.amount || 0;
   const headerTitle = route.params?.title || "Payment Summary";
   const orderContext = route.params?.orderContext;
@@ -44,13 +48,24 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const [subTotal, setSubTotal] = useState<number>(initialAmount);
   const [loading, setLoading] = useState<boolean>(!initialAmount);
+  const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
 
-  // ─── CARD PAYMENT STATE ───────────────────────────────────────────────────
-  const [cardNumber, setCardNumber] = useState("");
-  const [nameOnCard, setNameOnCard] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [cardError, setCardError] = useState("");
+  // ─── SAVED CARD & OPTION STATE ────────────────────────────────────────────
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [selectedPaymentOption, setSelectedPaymentOption] = useState<
+    "saved_card" | "new_card"
+  >("saved_card");
+  const [saveCardForFuture, setSaveCardForFuture] = useState(true);
+
+  // ─── CHECKOUT MODAL STATE ─────────────────────────────────────────────────
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [checkoutSession, setCheckoutSession] =
+    useState<UnifiedCheckoutSession | null>(null);
+  const [pendingOrderResult, setPendingOrderResult] = useState<{
+    orderId: any;
+    invoiceNumber: any;
+    total: any;
+  } | null>(null);
 
   // ─── ALERT MODAL STATE ────────────────────────────────────────────────────
   const [alertVisible, setAlertVisible] = useState(false);
@@ -73,6 +88,51 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
   const [unavailableModalVisible, setUnavailableModalVisible] = useState(false);
 
+  // Fetch active gateway configuration from backend
+  useEffect(() => {
+    const fetchActiveGateway = async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await apiClient.get(ENDPOINTS.PAYMENT.ACTIVE_GATEWAY, {
+          headers,
+        });
+        if (res.data?.status && res.data?.data?.activeGateway) {
+          setActiveGateway(res.data.data.activeGateway);
+        }
+      } catch (err) {
+        // Fallback to default payments_lk
+        setActiveGateway("payments_lk");
+      }
+    };
+    fetchActiveGateway();
+  }, []);
+
+  // Load saved card from database for this authenticated user
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const loadCard = async () => {
+        try {
+          const card = await cardStorageService.getSavedCard(userProfile?.id);
+          if (isMounted) {
+            setSavedCard(card);
+            if (card) {
+              setSelectedPaymentOption("saved_card");
+            } else {
+              setSelectedPaymentOption("new_card");
+            }
+          }
+        } catch (e) {
+          console.log("Error loading saved card in PaymentScreen:", e);
+        }
+      };
+      loadCard();
+      return () => {
+        isMounted = false;
+      };
+    }, [userProfile?.id])
+  );
+
   useEffect(() => {
     if (!initialAmount) {
       const fetchBalance = async () => {
@@ -93,7 +153,6 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [initialAmount]);
 
-  // Full total to pay equals the balance / order amount (no processing fee)
   const fullTotal = subTotal;
 
   const formatAmount = (amt: number) => {
@@ -103,113 +162,99 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
-  // ─── CARD INPUT FORMATTING ────────────────────────────────────────────────
-  const handleCardNumberChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, "").slice(0, 16);
-    const formatted = cleaned.replace(/(.{4})/g, "$1 ").trim();
-    setCardNumber(formatted);
-    if (cardError) setCardError("");
-  };
-
-  const handleExpiryChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, "").slice(0, 4);
-    if (cleaned.length >= 3) {
-      setExpiry(`${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}`);
-    } else {
-      setExpiry(cleaned);
-    }
-    if (cardError) setCardError("");
-  };
-
-  const handleNameChange = (text: string) => {
-    const lettersOnly = text.replace(/[^a-zA-Z\s]/g, "");
-    setNameOnCard(lettersOnly);
-    if (cardError) setCardError("");
-  };
-
-  const handleCvvChange = (text: string) => {
-    const digitsOnly = text.replace(/\D/g, "").slice(0, 3);
-    setCvv(digitsOnly);
-    if (cardError) setCardError("");
-  };
-
-  // ─── CARD VALIDATION ──────────────────────────────────────────────────────
-  const validateCardDetails = (): boolean => {
-    const rawDigits = cardNumber.replace(/\s/g, "");
-    if (!rawDigits) {
-      setCardError("Card number is required.");
-      return false;
-    }
-    if (rawDigits.length !== 16) {
-      setCardError("Card number must be 16 digits.");
-      return false;
-    }
-    if (!nameOnCard.trim()) {
-      setCardError("Name on card is required.");
-      return false;
-    }
-    if (!expiry.trim()) {
-      setCardError("Expiration date is required.");
-      return false;
-    }
-    const expiryMatch = /^(\d{2})\/(\d{2})$/.exec(expiry);
-    if (!expiryMatch) {
-      setCardError("Use MM/YY format for expiration date.");
-      return false;
-    }
-    const month = Number(expiryMatch[1]);
-    const year = Number(expiryMatch[2]);
-    if (month < 1 || month > 12) {
-      setCardError("Enter a valid expiration month (01-12).");
-      return false;
-    }
-    const now = new Date();
-    const currentYear = now.getFullYear() % 100;
-    const currentMonth = now.getMonth() + 1;
-    if (year < currentYear || (year === currentYear && month < currentMonth)) {
-      setCardError("This card has expired.");
-      return false;
-    }
-    if (!cvv.trim()) {
-      setCardError("CVV is required.");
-      return false;
-    }
-    if (cvv.length !== 3) {
-      setCardError("CVV must be exactly 3 digits.");
-      return false;
-    }
-
-    setCardError("");
-    return true;
-  };
-
-  // ─── PROCESS CARD PAYMENT ─────────────────────────────────────────────────
+  // ─── EXECUTE PAYMENT INITIATION ───────────────────────────────────────────
   const handleExecutePayment = async () => {
-    if (!validateCardDetails()) {
-      return;
-    }
-
     try {
       setSubmitting(true);
-      setCardError("");
+
+      const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+      // Fast 1-Click Pay with Saved Card
+      if (
+        selectedPaymentOption === "saved_card" &&
+        savedCard &&
+        adapter.chargeSavedCard
+      ) {
+        let currentOrderId = "";
+        let currentInvoice = "";
+
+        if (!isClearBalanceFlow) {
+          const orderPayload = {
+            cartId: orderContext?.cartId || 0,
+            paymentMethod: "card",
+            grandTotal: orderContext?.grandTotal || fullTotal,
+            discountAmount: orderContext?.discount || 0,
+            deliveryCharge: orderContext?.deliveryCharge || 0,
+            creditPaid: orderContext?.creditPaid || 0,
+            moneyPaid: orderContext?.moneyPaid || fullTotal,
+            isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+            checkoutDetails: {
+              ...(orderContext?.checkoutDetails || {
+                deliveryMethod: orderContext?.deliveryMethod || "home",
+              }),
+            },
+          };
+          const orderResponse = await orderService.createOrder(orderPayload);
+          if (orderResponse.data && orderResponse.data.status && orderResponse.data.data) {
+            const orderData = orderResponse.data.data;
+            setPendingOrderResult(orderData);
+            currentOrderId = String(orderData.orderId || orderData.invoiceNumber);
+            currentInvoice = String(orderData.invoiceNumber || currentOrderId);
+          } else {
+            throw new Error(orderResponse.data?.message || "Failed to create order");
+          }
+        }
+
+        try {
+          const chargeRes = await adapter.chargeSavedCard({
+            cardId: savedCard.id,
+            amount: fullTotal,
+            paymentType: isClearBalanceFlow ? "clear_balance" : "order",
+            orderId: isClearBalanceFlow ? undefined : currentOrderId,
+            itemsDescription: isClearBalanceFlow
+              ? "Clear Negative Credit Balance"
+              : `Order #${currentInvoice || currentOrderId}`,
+          });
+
+          if (chargeRes.success) {
+            await handlePaymentSuccess(currentOrderId || chargeRes.orderId || "COMPLETED");
+            return;
+          }
+        } catch (chargeErr: any) {
+          console.warn("[PaymentScreen] 1-Click charge failed:", chargeErr);
+          const isInvalid =
+            chargeErr?.response?.data?.cardInvalid ||
+            chargeErr?.message?.includes("invalid") ||
+            chargeErr?.message?.includes("expired") ||
+            chargeErr?.message?.includes("No such object");
+
+          if (isInvalid) {
+            setSavedCard(null);
+            setSelectedPaymentOption("new_card");
+            showAlert(
+              "Saved Card Expired",
+              "Your saved card is invalid or expired. Opening payment sheet to complete your payment and save a new card."
+            );
+            // Will fall through to launch hosted sheet below!
+          } else {
+            throw chargeErr;
+          }
+        }
+      }
 
       if (isClearBalanceFlow) {
-        const response = await customerService.updateCreditBalance(subTotal);
+        // Clear negative balance flow with hosted checkout
+        const session = await adapter.initiatePayment({
+          amount: subTotal,
+          paymentType: "clear_balance",
+          itemsDescription: "Clear Negative Credit Balance",
+          saveCard: saveCardForFuture,
+        });
 
-        if (response.data && response.data.status) {
-          showAlert(
-            "Payment Successful",
-            "Your negative credit balance has been cleared successfully. You can now continue placing orders without restrictions!",
-            "success"
-          );
-        } else {
-          const msg =
-            response.data?.message || "Failed to clear credit balance.";
-          setCardError(msg);
-          showAlert("Payment Failed", msg, "error");
-        }
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
       } else {
-        // Direct card flow for order placement
+        // Order flow: create pending order first, then launch payment session
         const payload = {
           cartId: orderContext?.cartId || 0,
           paymentMethod: "card",
@@ -227,19 +272,27 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         };
 
         const response = await orderService.createOrder(payload);
+
         if (response.data && response.data.status && response.data.data) {
-          dispatch(clearCart());
-          navigation.navigate("OrderConfirmed", {
-            orderId: response.data.data.orderId,
-            invoiceNumber: response.data.data.invoiceNumber,
-            total: response.data.data.total,
-            couponValue: orderContext?.couponValue,
-            orderContext,
+          const orderData = response.data.data;
+          setPendingOrderResult(orderData);
+
+          const session = await adapter.initiatePayment({
+            orderId: String(orderData.orderId || orderData.invoiceNumber),
+            amount: fullTotal,
+            paymentType: "order",
+            itemsDescription: `Order #${
+              orderData.invoiceNumber || orderData.orderId
+            }`,
           });
+
+          setCheckoutSession(session);
+          setCheckoutModalVisible(true);
         } else {
-          setCardError(
+          showAlert(
+            "Order Creation Failed",
             response.data?.message ||
-              "Failed to create order. Please try again.",
+              "Could not initialize order for payment. Please try again."
           );
         }
       }
@@ -254,12 +307,74 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             ? errorData.details.join("; ")
             : null) ||
           err?.message ||
-          "Payment failed. Please check your card details and try again.";
-        setCardError(errorMsg);
+          "Payment initiation failed. Please try again.";
+        showAlert("Payment Error", errorMsg);
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ─── CHECKOUT MODAL HANDLERS ─────────────────────────────────────────────
+  const handlePaymentSuccess = async (orderId: string) => {
+    setCheckoutModalVisible(false);
+
+    if (isClearBalanceFlow) {
+      try {
+        setLoading(true);
+
+        // 1. If we have a Payments.lk checkout session, sync it with backend (backend updates DB balance)
+        let synced = false;
+        if (checkoutSession?.sessionId) {
+          const paymentsLkAdapter = PaymentGatewayFactory.getGateway("payments_lk") as any;
+          if (paymentsLkAdapter?.syncCheckout) {
+            try {
+              await paymentsLkAdapter.syncCheckout(checkoutSession.sessionId);
+              synced = true;
+            } catch (err: any) {
+              console.log("[PaymentScreen] syncCheckout error:", err);
+            }
+          }
+        }
+
+        // 2. Fallback only if no gateway session was synced
+        if (!synced) {
+          await customerService.updateCreditBalance(subTotal);
+        }
+
+        showAlert(
+          "Payment Successful",
+          `Your negative credit balance of Rs. ${formatAmount(subTotal)} has been cleared successfully! You can now continue placing orders without restrictions.`,
+          "success"
+        );
+      } catch (err: any) {
+        console.error("[PaymentScreen] Error clearing balance in DB:", err);
+        showAlert(
+          "Payment Successful",
+          "Your payment was received and your balance has been updated.",
+          "success"
+        );
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      dispatch(clearCart());
+      navigation.navigate("OrderConfirmed", {
+        orderId: pendingOrderResult?.orderId || orderId,
+        invoiceNumber: pendingOrderResult?.invoiceNumber || "",
+        total: pendingOrderResult?.total || fullTotal,
+        couponValue: orderContext?.couponValue,
+        orderContext,
+      });
+    }
+  };
+
+  const handlePaymentCancel = (orderId: string) => {
+    setCheckoutModalVisible(false);
+    showAlert(
+      "Payment Cancelled",
+      "The payment was not completed. You can try again whenever you are ready."
+    );
   };
 
   const handleAlertClose = () => {
@@ -268,6 +383,9 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       navigation.goBack();
     }
   };
+
+  const gatewayDisplayName =
+    activeGateway === "payhere" ? "PayHere" : "Payments.lk";
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -289,63 +407,45 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <KeyboardAwareScrollView
+          <ScrollView
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            enableOnAndroid={true}
-            enableAutomaticScroll={true}
-            extraScrollHeight={Platform.OS === "ios" ? 120 : 140}
-            extraHeight={Platform.OS === "ios" ? 120 : 140}
-            keyboardOpeningTime={0}
-            enableResetScrollToCoords={false}
-            contentContainerStyle={{
-              paddingTop: 10,
-              paddingBottom: Platform.OS === "ios" ? 34 : 20,
-              flexGrow: 1,
-              justifyContent: "space-between",
-            }}
+            contentContainerStyle={{ paddingBottom: 24 }}
           >
-            <View style={{ flex: 1 }}>
-              {/* ─── 3D PAYMENT SUMMARY ILLUSTRATION ──────────────────────────── */}
-            <View style={{ alignItems: "center", marginVertical: 10 }}>
-              <Image
-                source={require("@/assets/images/payment/payment-summery.webp")}
-                style={{
-                  width: 140,
-                  height: 140,
-                  resizeMode: "contain",
-                }}
-              />
-            </View>
-
-            {/* ─── PAYMENT SUMMARY CARD ─────────────────────────────────────── */}
+            {/* ─── PAYMENT SUMMARY CARD ────────────────────────────────────── */}
             <View
               style={{
-                backgroundColor: "#F9FAFB",
-                borderWidth: 1,
-                borderColor: "#E5E7EB",
-                borderRadius: 20,
-                paddingHorizontal: 18,
-                paddingVertical: 16,
                 marginHorizontal: 16,
+                marginTop: 16,
+                backgroundColor: "#F8FAFC",
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                padding: 18,
               }}
             >
-              {/* TOTAL NEGATIVE CREDIT BALANCE / ORDER TOTAL */}
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  color: "#0F172A",
+                  marginBottom: 14,
+                }}
+              >
+                Payment Summary
+              </Text>
+
               <View
                 style={{
                   flexDirection: "row",
                   justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 12,
+                  marginBottom: 10,
                 }}
               >
                 <Text
                   style={{
-                    fontSize: 13,
-                    color: "#4B5563",
+                    fontSize: 13.5,
+                    color: "#64748B",
                     fontWeight: "500",
-                    flex: 1,
-                    paddingRight: 8,
                   }}
                 >
                   {isClearBalanceFlow
@@ -367,8 +467,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               <View
                 style={{
                   height: 1,
-                  backgroundColor: "#E5E7EB",
-                  marginBottom: 12,
+                  backgroundColor: "#E2E8F0",
+                  marginVertical: 10,
                 }}
               />
 
@@ -391,9 +491,9 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: "800",
-                    color: "#000000",
+                    color: "#FF8A00",
                   }}
                 >
                   Rs. {formatAmount(fullTotal)}
@@ -401,250 +501,345 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* ─── CARD DETAILS SECTION ───────────────────────────────────── */}
-            <View
-              style={{
-                marginHorizontal: 16,
-                marginTop: 18,
-                backgroundColor: "#FFFFFF",
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                padding: 16,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 3,
-                elevation: 1,
-              }}
-            >
-              {/* Card Section Header */}
-              <View
+            {/* ─── PAYMENT OPTIONS SECTION ───────────────────────────────────── */}
+            <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+              <Text
                 style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 14,
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: "#0F172A",
+                  marginBottom: 10,
                 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="card" size={20} color="#FF8A00" />
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "700",
-                      color: "#0F172A",
-                    }}
-                  >
-                    Card Details
-                  </Text>
-                </View>
+                Select Payment Option
+              </Text>
 
-                {/* Card Type Badges */}
-                <View style={{ flexDirection: "row", gap: 6 }}>
+              {/* Option 1: Saved Card (if available) */}
+              {savedCard && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedPaymentOption("saved_card")}
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 18,
+                    borderWidth: 2,
+                    borderColor:
+                      selectedPaymentOption === "saved_card"
+                        ? "#FF7A00"
+                        : "#E2E8F0",
+                    padding: 16,
+                    marginBottom: 12,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                >
                   <View
                     style={{
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      backgroundColor: "#1E293B",
-                      borderRadius: 4,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      {/* Radio button */}
+                      <View
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          borderWidth: 2,
+                          borderColor:
+                            selectedPaymentOption === "saved_card"
+                              ? "#FF7A00"
+                              : "#94A3B8",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        {selectedPaymentOption === "saved_card" && (
+                          <View
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: 5,
+                              backgroundColor: "#FF7A00",
+                            }}
+                          />
+                        )}
+                      </View>
+
+                      {/* Card Brand Badge */}
+                      <View
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          backgroundColor:
+                            savedCard.scheme === "mastercard"
+                              ? "#FEF3C7"
+                              : "#EFF6FF",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "800",
+                            color:
+                              savedCard.scheme === "mastercard"
+                                ? "#D97706"
+                                : "#1D4ED8",
+                          }}
+                        >
+                          {savedCard.scheme === "mastercard"
+                            ? "Mastercard"
+                            : "VISA"}
+                        </Text>
+                      </View>
+
+                      <View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "700",
+                            color: "#0F172A",
+                          }}
+                        >
+                          •••• {savedCard.last4}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: "#64748B",
+                          }}
+                        >
+                          Expires {savedCard.expiryMonth}/{savedCard.expiryYear}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* 1-Click Fast badge */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#ECFDF5",
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 12,
+                        gap: 3,
+                      }}
+                    >
+                      <Ionicons name="flash" size={12} color="#059669" />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: "#059669",
+                        }}
+                      >
+                        Fast 1-Click
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Option 2: Pay with Hosted Checkout (or new card) */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setSelectedPaymentOption("new_card")}
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 18,
+                  borderWidth: 2,
+                  borderColor:
+                    selectedPaymentOption === "new_card"
+                      ? "#FF7A00"
+                      : "#E2E8F0",
+                  padding: 16,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    {/* Radio button */}
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor:
+                          selectedPaymentOption === "new_card"
+                            ? "#FF7A00"
+                            : "#94A3B8",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      {selectedPaymentOption === "new_card" && (
+                        <View
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 5,
+                            backgroundColor: "#FF7A00",
+                          }}
+                        />
+                      )}
+                    </View>
+
+                    <Text
+                      style={{
+                        fontSize: 14.5,
+                        fontWeight: "700",
+                        color: "#0F172A",
+                      }}
+                    >
+                      {savedCard
+                        ? "Pay with Another Card"
+                        : "Online Card Payment"}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      backgroundColor: "#EFF6FF",
+                      borderRadius: 6,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#FFFFFF",
-                        fontSize: 10,
-                        fontWeight: "700",
+                        fontSize: 11,
+                        fontWeight: "600",
+                        color: "#1D4ED8",
+                      }}
+                    >
+                      {gatewayDisplayName}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Subtext and brand badges */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingLeft: 32,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#64748B",
+                    }}
+                  >
+                    Visa, Mastercard
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "900",
+                        fontStyle: "italic",
+                        color: "#1A1F71",
                       }}
                     >
                       VISA
                     </Text>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: "#EB001B",
+                          marginRight: -3,
+                        }}
+                      />
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: "#F79E1B",
+                        }}
+                      />
+                    </View>
                   </View>
-                  <View
+                </View>
+
+                {/* Save card checkbox for new card */}
+                {selectedPaymentOption === "new_card" && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setSaveCardForFuture(!saveCardForFuture)}
                     style={{
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                      backgroundColor: "#DC2626",
-                      borderRadius: 4,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginTop: 12,
+                      paddingTop: 10,
+                      borderTopWidth: 1,
+                      borderColor: "#F1F5F9",
+                      paddingLeft: 32,
                     }}
                   >
+                    <Ionicons
+                      name={
+                        saveCardForFuture
+                          ? "checkbox"
+                          : "square-outline"
+                      }
+                      size={20}
+                      color={saveCardForFuture ? "#FF7A00" : "#94A3B8"}
+                      style={{ marginRight: 8 }}
+                    />
                     <Text
                       style={{
-                        color: "#FFFFFF",
-                        fontSize: 10,
-                        fontWeight: "700",
+                        fontSize: 12.5,
+                        fontWeight: "600",
+                        color: "#334155",
                       }}
                     >
-                      MC
+                      Save card securely for 1-click checkout
                     </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Card Number Input */}
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: "600",
-                  color: "#334155",
-                  marginBottom: 6,
-                }}
-              >
-                Card Number
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#CBD5E1",
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  height: 48,
-                  marginBottom: 12,
-                }}
-              >
-                <TextInput
-                  value={cardNumber}
-                  onChangeText={handleCardNumberChange}
-                  placeholder="0000 0000 0000 0000"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
-                  returnKeyType="next"
-                  maxLength={19}
-                  style={{
-                    flex: 1,
-                    fontSize: 14.5,
-                    color: "#0F172A",
-                    fontWeight: "500",
-                  }}
-                />
-                <Ionicons name="card-outline" size={18} color="#94A3B8" />
-              </View>
-
-              {/* Name on Card Input */}
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: "600",
-                  color: "#334155",
-                  marginBottom: 6,
-                }}
-              >
-                Name on Card
-              </Text>
-              <TextInput
-                value={nameOnCard}
-                onChangeText={handleNameChange}
-                placeholder="JOHN DOE"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="characters"
-                returnKeyType="next"
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#CBD5E1",
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  height: 48,
-                  fontSize: 14.5,
-                  color: "#0F172A",
-                  fontWeight: "500",
-                  marginBottom: 12,
-                }}
-              />
-
-              {/* Expiry Date & CVV */}
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: "600",
-                      color: "#334155",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Expiry Date
-                  </Text>
-                  <TextInput
-                    value={expiry}
-                    onChangeText={handleExpiryChange}
-                    placeholder="MM/YY"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    returnKeyType="next"
-                    maxLength={5}
-                    style={{
-                      backgroundColor: "#F8FAFC",
-                      borderWidth: 1,
-                      borderColor: "#CBD5E1",
-                      borderRadius: 12,
-                      paddingHorizontal: 14,
-                      height: 48,
-                      fontSize: 14.5,
-                      color: "#0F172A",
-                      fontWeight: "500",
-                    }}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: "600",
-                      color: "#334155",
-                      marginBottom: 6,
-                    }}
-                  >
-                    CVV
-                  </Text>
-                  <TextInput
-                    value={cvv}
-                    onChangeText={handleCvvChange}
-                    placeholder="123"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    returnKeyType="done"
-                    maxLength={3}
-                    secureTextEntry={true}
-                    style={{
-                      backgroundColor: "#F8FAFC",
-                      borderWidth: 1,
-                      borderColor: "#CBD5E1",
-                      borderRadius: 12,
-                      paddingHorizontal: 14,
-                      height: 48,
-                      fontSize: 14.5,
-                      color: "#0F172A",
-                      fontWeight: "500",
-                    }}
-                  />
-                </View>
-              </View>
-
-              {/* Error Message */}
-              {Boolean(cardError) && (
-                <View
-                  style={{
-                    backgroundColor: "#FEF2F2",
-                    borderRadius: 8,
-                    padding: 10,
-                    marginTop: 12,
-                    borderWidth: 1,
-                    borderColor: "#FECACA",
-                  }}
-                >
-                  <Text style={{ color: "#DC2626", fontSize: 12.5 }}>
-                    {cardError}
-                  </Text>
-                </View>
-              )}
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
             </View>
 
-            {/* ─── SECURE PAYMENT BANNER ───────────────────────────────────── */}
+            {/* ─── SECURITY BANNER ────────────────────────────────────────── */}
             <View
               style={{
                 backgroundColor: "#EDFFF2",
@@ -652,47 +847,49 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 marginHorizontal: 16,
-                marginTop: 14,
+                marginTop: 16,
                 flexDirection: "row",
                 alignItems: "center",
               }}
             >
               <View
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
                   backgroundColor: "#C6F6D5",
                   justifyContent: "center",
                   alignItems: "center",
                   marginRight: 10,
                 }}
               >
-                <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
+                <Ionicons name="shield-checkmark" size={17} color="#16A34A" />
               </View>
 
               <Text
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 12,
                   color: "#2D5A3C",
                   fontWeight: "500",
                   flex: 1,
-                  lineHeight: 15,
+                  lineHeight: 16,
                 }}
               >
-                Your payment is 100% secure and processed through verified
-                encryption standards.
+                Verified PCI-DSS compliant 256-bit encryption. Safe, fast, and
+                secure.
               </Text>
             </View>
-          </View>
+          </ScrollView>
 
           {/* ─── BOTTOM SUBMIT BUTTON ─────────────────────────────────────── */}
           <View
             style={{
               paddingHorizontal: 16,
-              paddingTop: 24,
+              paddingTop: 16,
               paddingBottom: Platform.OS === "ios" ? 30 : 16,
               backgroundColor: "#FFFFFF",
+              borderTopWidth: 1,
+              borderColor: "#F1F5F9",
             }}
           >
             <TouchableOpacity
@@ -718,7 +915,15 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
-                  <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+                  <Ionicons
+                    name={
+                      selectedPaymentOption === "saved_card"
+                        ? "flash"
+                        : "lock-closed"
+                    }
+                    size={18}
+                    color="#FFFFFF"
+                  />
                   <Text
                     style={{
                       color: "#FFFFFF",
@@ -726,16 +931,32 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       fontWeight: "700",
                     }}
                   >
-                    Pay Rs. {formatAmount(fullTotal)} Now
+                    {selectedPaymentOption === "saved_card"
+                      ? `1-Click Pay Rs. ${formatAmount(fullTotal)} with Saved Card`
+                      : `Pay Rs. ${formatAmount(fullTotal)} with ${gatewayDisplayName}`}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
-        </KeyboardAwareScrollView>
-      </View>
-    )}
+        </View>
+      )}
 
+      {/* ─── PAYMENT CHECKOUT MODAL (Payments.lk / PayHere) ──────────────── */}
+      {checkoutSession && (
+        <PaymentCheckoutModal
+          visible={checkoutModalVisible}
+          gatewayName={checkoutSession.gateway}
+          checkoutUrl={checkoutSession.checkoutUrl}
+          postBody={checkoutSession.postBody}
+          orderId={String(checkoutSession.orderId)}
+          amount={checkoutSession.amount}
+          customerAddress={checkoutSession.customerAddress}
+          onSuccess={handlePaymentSuccess}
+          onCancel={handlePaymentCancel}
+          onClose={() => setCheckoutModalVisible(false)}
+        />
+      )}
 
       {/* ─── ALERT MODAL ──────────────────────────────────────────────────── */}
       <AlertModal
@@ -746,7 +967,11 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         onClose={handleAlertClose}
         autoClose={false}
         showOkButton={true}
-        okButtonText={alertType === "success" && isClearBalanceFlow ? "Back to Profile" : "OK"}
+        okButtonText={
+          alertType === "success" && isClearBalanceFlow
+            ? "Back to Profile"
+            : "OK"
+        }
       />
 
       {/* ─── UNAVAILABLE ITEMS MODAL ─────────────────────────────────────── */}
