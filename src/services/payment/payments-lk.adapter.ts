@@ -32,6 +32,8 @@ export class PaymentsLkAdapter implements IPaymentGatewayAdapter {
         itemsDescription: request.itemsDescription,
         paymentType: request.paymentType,
         gatewayName: "payments_lk",
+        saveCard: Boolean(request.saveCard),
+        cardId: request.cardId,
         customFields: request.customFields,
       },
       { headers }
@@ -47,6 +49,7 @@ export class PaymentsLkAdapter implements IPaymentGatewayAdapter {
         amount: data.amount || request.amount,
         currency: "LKR",
         paymentType: request.paymentType,
+        customerAddress: data.customerAddress,
         rawData: data,
       };
     }
@@ -54,6 +57,96 @@ export class PaymentsLkAdapter implements IPaymentGatewayAdapter {
     throw new Error(
       response.data?.message || "Failed to initiate Payments.lk payment session"
     );
+  }
+
+  /**
+   * Directly charges a saved card on file (1-click payment).
+   */
+  async chargeSavedCard(params: {
+    cardId: string;
+    amount: number;
+    paymentType: "order" | "clear_balance";
+    orderId?: string;
+    itemsDescription?: string;
+  }): Promise<PaymentResponseData> {
+    const headers = await getAuthHeader();
+    const response = await apiClient.post(
+      ENDPOINTS.PAYMENT.CHARGE_SAVED_CARD,
+      {
+        cardId: params.cardId,
+        amount: params.amount,
+        paymentType: params.paymentType,
+        orderId: params.orderId,
+        itemsDescription: params.itemsDescription,
+        gatewayName: "payments_lk",
+      },
+      { headers }
+    );
+
+    if (response.data && response.data.status) {
+      return {
+        success: true,
+        orderId: params.orderId || response.data?.data?.orderId || "",
+        paymentId: response.data?.data?.paymentId,
+        status: "success",
+        message: response.data?.message || "Payment processed successfully",
+        rawData: response.data?.data,
+      };
+    }
+
+    throw new Error(
+      response.data?.message || "Failed to charge saved card"
+    );
+  }
+
+  /**
+   * Initiates a Payments.lk hosted session specifically to link/save a card securely.
+   */
+  async initiateCardSaveSession(): Promise<UnifiedCheckoutSession> {
+    const headers = await getAuthHeader();
+    const response = await apiClient.post(
+      ENDPOINTS.PAYMENT.INITIATE,
+      {
+        amount: 10,
+        paymentType: "save_card",
+        saveCard: true,
+        gatewayName: "payments_lk",
+        itemsDescription: "Save Card Security Setup - Payments.lk",
+      },
+      { headers }
+    );
+
+    if (response.data && response.data.status && response.data.data) {
+      const data = response.data.data;
+      return {
+        gateway: this.gatewayName,
+        checkoutUrl: data.checkoutUrl,
+        sessionId: data.sessionId,
+        orderId: data.orderId || "",
+        amount: data.amount || 10,
+        currency: "LKR",
+        paymentType: "save_card",
+        customerAddress: data.customerAddress,
+        rawData: data,
+      };
+    }
+
+    throw new Error(
+      response.data?.message || "Failed to initiate Payments.lk card setup session"
+    );
+  }
+
+  /**
+   * Directly syncs a checkout session with backend/Payments.lk
+   */
+  async syncCheckout(checkoutId: string): Promise<any> {
+    const headers = await getAuthHeader();
+    const response = await apiClient.post(
+      ENDPOINTS.PAYMENT.SYNC_CHECKOUT,
+      { checkoutId },
+      { headers }
+    );
+    return response.data?.data;
   }
 
   /**

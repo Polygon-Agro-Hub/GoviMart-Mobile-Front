@@ -126,6 +126,8 @@ export type RootStackParamList = {
   ViewComplaint: { id: number } | undefined;
   MyAccount: undefined;
   DeleteAccount: undefined;
+  SavedCards: undefined;
+  SaveCardInfo: undefined;
   Notification: undefined;
   CheckoutScreen: { orderContext: OrderContext };
   ScheduleOrder: { orderContext: OrderContext };

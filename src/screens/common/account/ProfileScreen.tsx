@@ -438,6 +438,16 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             }}
           />
 
+          {/* Saved Cards */}
+
+          <ProfileMenuItem
+            icon="credit-card"
+            title="Saved Cards"
+            onPress={() => {
+              navigation.navigate("SavedCards");
+            }}
+          />
+
           {/* Complaint */}
 
           <ProfileMenuItem

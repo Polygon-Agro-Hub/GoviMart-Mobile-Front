@@ -33,6 +33,8 @@ import Home from "@/screens/common/home/HomeScreen";
 import Profile from "@/screens/common/account/ProfileScreen";
 import MyAccount from "@/screens/common/account/EditMyAccountScreen";
 import DeleteAccount from "@/screens/common/account/DeleteAccountScreen";
+import SavedCards from "@/screens/common/account/SavedCardsScreen";
+import SaveCardInfo from "@/screens/common/account/SaveCardInfoScreen";
 import ViewProduct from "@/screens/common/products/ViewProductScreen";
 import MyCart from "@/screens/common/cart/MyCartScreen";
 import CheckoutScreen from "@/screens/common/checkout/CheckoutScreen";
@@ -192,6 +194,8 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "Profile", component: Profile, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "MyAccount", component: MyAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "DeleteAccount", component: DeleteAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "SavedCards", component: SavedCards, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "SaveCardInfo", component: SaveCardInfo, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewProduct", component: ViewProduct, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "MyCart", component: MyCart, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },

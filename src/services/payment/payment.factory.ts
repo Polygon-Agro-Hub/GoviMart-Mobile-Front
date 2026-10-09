@@ -35,4 +35,10 @@ export class PaymentGatewayFactory {
 
     return this.adapters.get(key)!;
   }
+
+  public static getGateway(
+    gateway: SupportedPaymentGateway = "payments_lk"
+  ): IPaymentGatewayAdapter {
+    return this.getAdapter(gateway);
+  }
 }

@@ -20,8 +20,10 @@ export interface PaymentRequestData {
   amount: number;
   currency?: string;
   itemsDescription?: string;
-  paymentType: "order" | "clear_balance";
+  paymentType: "order" | "clear_balance" | "save_card";
   gatewayName?: string;
+  saveCard?: boolean;
+  cardId?: string;
   customer?: PaymentCustomer;
   customFields?: Record<string, any>;
 }
@@ -42,7 +44,12 @@ export interface UnifiedCheckoutSession {
   orderId: string;
   amount: number;
   currency: string;
-  paymentType: "order" | "clear_balance";
+  paymentType: "order" | "clear_balance" | "save_card";
+  customerAddress?: {
+    street?: string;
+    city?: string;
+    postcode?: string;
+  };
   postBody?: string;
   rawConfig?: any;
   rawData?: any;
@@ -60,8 +67,20 @@ export interface IPaymentGatewayAdapter {
   initiatePayment(request: PaymentRequestData): Promise<UnifiedCheckoutSession>;
 
   /**
+   * Charges a saved card directly without hosted checkout redirect.
+   */
+  chargeSavedCard?(params: {
+    cardId: string;
+    amount: number;
+    paymentType: "order" | "clear_balance";
+    orderId?: string;
+    itemsDescription?: string;
+  }): Promise<PaymentResponseData>;
+
+  /**
    * Converts a gateway-specific redirect or callback payload
    * into standard PaymentResponseData.
    */
   handlePaymentResult(rawResult: any): PaymentResponseData;
 }
+
