@@ -61,7 +61,7 @@ const formatPlacedAt = (raw: any): { date: string; time: string } => {
 };
 
 const formatAmount = (amount: number | string) => {
-  const num =
+  const n =
     typeof amount === "number"
       ? amount
       : parseFloat(
@@ -71,7 +71,7 @@ const formatAmount = (amount: number | string) => {
             .replace(/,/g, "")
             .trim(),
         ) || 0;
-  return num.toLocaleString("en-US", {
+  return n.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -176,9 +176,7 @@ const ScheduleTile: React.FC<{
 );
 
 const Divider: React.FC<{ my?: number }> = ({ my = 8 }) => (
-  <View
-    style={{ height: 1, backgroundColor: "#E1E7EE", marginVertical: my }}
-  />
+  <View style={{ height: 1, backgroundColor: "#E1E7EE", marginVertical: my }} />
 );
 
 // ─── SCREEN ──────────────────────────────────────────────────────────────────
@@ -187,13 +185,17 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const [order, setOrder] = useState<any>(null);
   const [packagesTotal, setPackagesTotal] = useState(0);
+  // Ala carte total at today's NORMAL marketplace price (gross)
   const [itemsTotal, setItemsTotal] = useState(0);
+  // Discount = today's normal price - today's discounted price (ala carte)
+  const [itemsDiscount, setItemsDiscount] = useState(0);
+  const [hasLiveItemPrices, setHasLiveItemPrices] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<"confirm" | "cancel" | null>(
     null,
   );
-  // Stores the recalculated total (today's marketplace prices) for confirmPackageReview.
-  // Using a ref so handleConfirm (defined before derived values) can access the latest value.
+  // Stores the recalculated total (today's marketplace prices) for the confirm call.
+  // A ref so handleConfirm (defined before derived values) reads the latest value.
   const newTotalRef = React.useRef<number | null>(null);
 
   const [rawPackagesData, setRawPackagesData] = useState<any[]>([]);
@@ -226,7 +228,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             const price =
               typeof p.priceNum === "number"
                 ? p.priceNum
-                : num(String(p.productPrice).replace(/Rs\\.?|,/gi, ""));
+                : num(String(p.productPrice).replace(/Rs\.?|,/gi, ""));
             const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
             const ex = seen.get(key);
             if (ex) ex.qty += qty;
@@ -238,30 +240,40 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         }
 
         if (itemsRes.data?.status) {
-          setRawItemsData(itemsRes.data.data || []);
-          // Use today's marketplace price (marketNormalPrice / marketDiscountedPrice)
-          // so the confirmation screen reflects the live price from marketplaceitems.
-          const todayItemsTotal = (itemsRes.data.data as any[]).reduce(
-            (acc, it) => {
-              const qty = parseFloat(it.qty) || 1;
-              const unit = String(it.unit || "kg").toLowerCase();
-              const qtyInKg = unit === "g" ? qty / 1000 : qty;
+          const items = (itemsRes.data.data || []) as any[];
+          setRawItemsData(items);
 
-              const mktNormal = parseFloat(it.marketNormalPrice) || 0;
-              const mktDiscounted = parseFloat(it.marketDiscountedPrice) || 0;
-              // Use discounted if available, else normal
-              const perKg =
-                mktDiscounted > 0 ? mktDiscounted : mktNormal > 0 ? mktNormal : 0;
+          // Today's marketplace prices (marketplaceitems), NOT the stored order price.
+          // gross = normal price, net = discounted price (or normal if no discount)
+          let gross = 0;
+          let net = 0;
+          let live = false;
 
-              if (perKg > 0) {
-                return acc + perKg * qtyInKg;
-              }
+          items.forEach((it) => {
+            const qty = parseFloat(it.qty) || 1;
+            const unit = String(it.unit || "kg").toLowerCase();
+            const qtyInKg = unit === "g" ? qty / 1000 : qty;
+
+            const mktNormal = parseFloat(it.marketNormalPrice) || 0;
+            const mktDisc = parseFloat(it.marketDiscountedPrice) || 0;
+            const perKgNet = mktDisc > 0 ? mktDisc : mktNormal;
+
+            if (perKgNet > 0) {
+              live = true;
+              const perKgGross = mktNormal > 0 ? mktNormal : perKgNet;
+              gross += perKgGross * qtyInKg;
+              net += perKgNet * qtyInKg;
+            } else {
               // Fallback: stored price in orderadditionalitems
-              return acc + num(it.price);
-            },
-            0,
-          );
-          setItemsTotal(todayItemsTotal);
+              const stored = num(it.price);
+              gross += stored;
+              net += stored;
+            }
+          });
+
+          setItemsTotal(gross);
+          setItemsDiscount(Math.max(0, gross - net));
+          setHasLiveItemPrices(live);
         }
       } catch (err) {
         console.error("Error fetching order confirmation:", err);
@@ -294,7 +306,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const handleCancel = () => {
     const effectiveOrderId = orderId ? String(orderId) : "";
-    const processOrderId = order?.processOrderId || order?.proOrderId || order?.id || orderId;
+    const processOrderId =
+      order?.processOrderId || order?.proOrderId || order?.id || orderId;
 
     const pkgs = rawPackagesData.map((p: any) => ({
       id: String(p.id || p.packageId || p.displayName || "pkg"),
@@ -305,7 +318,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       unitPrice:
         typeof p.priceNum === "number"
           ? p.priceNum
-          : num(String(p.productPrice || 0).replace(/Rs\\.?|,/gi, "")),
+          : num(String(p.productPrice || 0).replace(/Rs\.?|,/gi, "")),
       serviceFee: parseFloat(p.serviceFee) || 0,
       packingFee: parseFloat(p.packingFee) || 0,
     }));
@@ -355,8 +368,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         : initialPaidAmount
       : 0;
     const totalPaidCredit = creditPaidVal || 0;
-    const processOrderTotal =
-      num(order?.fullTotal) > 0 ? num(order?.fullTotal) : orderFullTotal;
+    // Recalculated total from today's prices (same value shown on this screen)
+    const processOrderTotal = orderFullTotal;
     const totalCashDue =
       isCashMethod && !isPaidVal
         ? Math.max(0, processOrderTotal - totalPaidCredit)
@@ -406,21 +419,17 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   }
 
   // ─── derived values ────────────────────────────────────────────────────────
-  // Backend SQL aliases (from getRetailOrderByIdDao):
-  //   p.invNo AS invoiceNo, p.fullTotal, p.deliveryCharge, p.curDlvrCharge,
-  //   p.isCoupon, p.couponType, p.couponValue, p.discount, p.total,
-  //   p.creditPaid, p.paymentMethod, p.isPaid, p.sheduleDate
-  const invoiceNo = order?.invoiceNo || order?.invNo || order?.invoiceNumber || "N/A";
+  const invoiceNo =
+    order?.invoiceNo || order?.invNo || order?.invoiceNumber || "N/A";
   const placed = formatPlacedAt(order?.createdAt);
 
   const isPickup =
-    (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() === "PICKUP";
+    (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() ===
+    "PICKUP";
 
-  // processorders.sheduleDate is the confirmed schedule date
   const scheduleDate = formatLongDate(order?.sheduleDate);
   const scheduleTime = isPickup ? "09:30 PM" : order?.sheduleTime || "N/A";
 
-  // isCoupon is MySQL tinyint (0 or 1)
   const isCouponApplied = Number(order?.isCoupon) === 1;
 
   const isFreeDeliveryCoupon = Boolean(
@@ -430,56 +439,45 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         String(order.couponType).toLowerCase().includes("delivery")),
   );
 
-  // All financial columns come from processorders table
-  const productDiscount = num(order?.discount);
-  const couponDiscount = isCouponApplied && !isFreeDeliveryCoupon ? num(order?.couponValue) : 0;
+  // Discount is recalculated from today's marketplace prices.
+  // Falls back to the stored discount only when no live prices exist.
+  const productDiscount = hasLiveItemPrices
+    ? itemsDiscount
+    : num(order?.discount);
+  const couponDiscount =
+    isCouponApplied && !isFreeDeliveryCoupon ? num(order?.couponValue) : 0;
 
-  // curDlvrCharge = current delivery charge (may differ from original deliveryCharge)
   const deliveryFee = num(
     order?.curDlvrCharge != null && order?.curDlvrCharge !== ""
       ? order.curDlvrCharge
       : order?.deliveryCharge,
   );
 
-  // fullTotal is the definitive order total from processorders
-  const rawFullTotal = order?.fullTotal ?? order?.total;
-  const orderFullTotal =
-    num(rawFullTotal) > 0
-      ? num(rawFullTotal)
-      : Math.max(
-          0,
-          packagesTotal +
-            itemsTotal -
-            productDiscount -
-            couponDiscount +
-            (!isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0),
-        );
+  // Total is recalculated from live data. DB fullTotal is only a fallback.
+  const hasLiveData = packagesTotal > 0 || itemsTotal > 0;
+  const calculatedTotal = Math.max(
+    0,
+    packagesTotal +
+      itemsTotal -
+      productDiscount -
+      couponDiscount +
+      (!isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0),
+  );
+  const orderFullTotal = hasLiveData
+    ? calculatedTotal
+    : num(order?.fullTotal ?? order?.total);
 
   const creditPaid = num(order?.creditPaid);
   const paymentMethod = (order?.paymentMethod || "").toLowerCase();
   const isCardOrder = paymentMethod === "card" || paymentMethod === "payhere";
   const isCashOrder = paymentMethod === "cash";
-  const isPaid = Number(order?.isPaid) === 1;
   const remaining = Math.max(0, orderFullTotal - creditPaid);
 
   const cardBrand: string = order?.cardBrand || order?.cardType || "Master";
   const cardLast4: string = order?.cardLast4 || order?.cardNumber || "3501";
 
-  // ── newTotal: the recalculated full total based on today's marketplace prices.
-  // This is passed to confirmPackageReview so the backend can update
-  // processorders.amount, moneyPaid, orders.fullTotal, total, discount.
-  // For card orders where isPaid=1 this triggers a real financial update.
-  // We only override when we have meaningful live data (packages or items loaded).
-  const computedNewTotal = Math.max(
-    0,
-    packagesTotal +
-      itemsTotal -
-      couponDiscount +
-      (!isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0),
-  );
-  const hasLiveData = packagesTotal > 0 || itemsTotal > 0;
-  // Keep the ref in sync so handleConfirm (defined earlier) always reads the latest value.
-  newTotalRef.current = hasLiveData ? computedNewTotal : null;
+  // Keep the ref in sync so handleConfirm always sends the same total shown on screen.
+  newTotalRef.current = hasLiveData ? orderFullTotal : null;
 
   const busy = submitting !== null;
 
@@ -511,9 +509,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         >
           Here is the updated total for your order{" "}
           <Text style={{ fontWeight: "700", color: "#111" }}>[{invoiceNo}]</Text>
-          {placed.date
-            ? ` placed at ${placed.time} on ${placed.date}.`
-            : "."}
+          {placed.date ? ` placed at ${placed.time} on ${placed.date}.` : "."}
         </Text>
 
         {/* NOTICE */}
@@ -571,7 +567,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             activeOpacity={0.7}
             onPress={() => {
               if (orderId) {
-                navigation.navigate("ConfirmOrderDetailsScreen", { orderId: String(orderId) });
+                navigation.navigate("ConfirmOrderDetailsScreen", {
+                  orderId: String(orderId),
+                });
               }
             }}
           >
@@ -695,7 +693,12 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               style={{ marginRight: 8 }}
             />
             <Text
-              style={{ flex: 1, fontSize: 11, color: "#1F7A3A", lineHeight: 16 }}
+              style={{
+                flex: 1,
+                fontSize: 11,
+                color: "#1F7A3A",
+                lineHeight: 16,
+              }}
             >
               Once you accepted this order you can pay upon{" "}
               {isPickup ? "pickup" : "delivery"}.

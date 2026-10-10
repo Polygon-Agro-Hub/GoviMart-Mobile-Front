@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   Alert,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
@@ -24,11 +23,14 @@ type ConfirmOrderDetailsScreenNavigationProp = StackNavigationProp<
   "ConfirmOrderDetailsScreen"
 >;
 
-type ConfirmOrderDetailsScreenRouteProp = RouteProp<RootStackParamList, "ConfirmOrderDetailsScreen">;
+type ConfirmOrderDetailsScreenRouteProp = RouteProp<
+  RootStackParamList,
+  "ConfirmOrderDetailsScreen"
+>;
 
 interface Props {
   navigation: ConfirmOrderDetailsScreenNavigationProp;
-  route: ConfirmOrderDetailsScreenRouteProp
+  route: ConfirmOrderDetailsScreenRouteProp;
 }
 
 interface PackageItem {
@@ -57,7 +59,7 @@ interface CartItem {
   oldPrice?: number;
   /** Today's effective price for this ala carte item (from marketplaceitems) */
   todayPrice?: number;
-  /** Today's normal (undiscounted) price per line (from marketplaceitems) */
+  /** Today's normal (undiscounted) price for this line (from marketplaceitems) */
   todayNormalPrice?: number;
 }
 
@@ -108,48 +110,93 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     null,
   );
 
+  // ─── SHARED TOTALS (same formula as OrderConfirmation screen) ──────────────
+  // Everything is calculated from today's marketplace prices.
+  // The stored order.fullTotal / order.discount are only fallbacks.
+  const computeTotals = () => {
+    const isPickup =
+      (
+        order?.delivaryMethod ||
+        order?.deliveryMethod ||
+        order?.deliveryType ||
+        ""
+      ).toUpperCase() === "PICKUP";
+
+    const isFreeDeliveryCoupon = Boolean(
+      order?.isCoupon &&
+        order?.couponType &&
+        (String(order.couponType).toLowerCase().includes("free") ||
+          String(order.couponType).toLowerCase().includes("delivery")),
+    );
+
+    const packagesTotal = packages.reduce(
+      (a, p) => a + p.price * p.quantity,
+      0,
+    );
+
+    // gross = today's normal price, net = today's effective (discounted) price
+    const itemsGross = cartItems.reduce(
+      (a, i) => a + (i.todayNormalPrice ?? i.todayPrice ?? i.price),
+      0,
+    );
+    const itemsNet = cartItems.reduce(
+      (a, i) => a + (i.todayPrice ?? i.price),
+      0,
+    );
+    const hasLivePrices = cartItems.some((i) => i.todayPrice != null);
+
+    // Discount recalculated from today's prices (fallback: stored discount)
+    const productDiscount = hasLivePrices
+      ? Math.max(0, itemsGross - itemsNet)
+      : parseFloat(order?.discount || 0) || 0;
+
+    const couponDiscount =
+      order?.isCoupon && !isFreeDeliveryCoupon
+        ? parseFloat(order?.couponValue || 0) || 0
+        : 0;
+
+    const deliveryFee =
+      isPickup || isFreeDeliveryCoupon
+        ? 0
+        : parseFloat(
+            order?.curDlvrCharge ||
+              order?.delivaryCharge ||
+              order?.deliveryCharge ||
+              0,
+          ) || 0;
+
+    const hasData = packages.length > 0 || cartItems.length > 0;
+    const total = hasData
+      ? Math.max(
+          0,
+          packagesTotal +
+            itemsGross -
+            productDiscount -
+            couponDiscount +
+            deliveryFee,
+        )
+      : parseFloat(order?.fulltotal || order?.fullTotal || 0) || 0;
+
+    return {
+      isPickup,
+      isFreeDeliveryCoupon,
+      packagesTotal,
+      itemsGross,
+      productDiscount,
+      couponDiscount,
+      deliveryFee,
+      total,
+      hasData,
+    };
+  };
+
   const handleConfirm = async () => {
     if (!orderId) return;
     try {
       setSubmitting("confirm");
-      const packagesTotal = packages.reduce(
-        (acc, p) => acc + p.price * p.quantity,
-        0,
-      );
-      const todayItemsTotal = cartItems.reduce(
-        (acc, item) => acc + (item.todayPrice ?? item.price),
-        0,
-      );
-      const isFreeDeliveryCoupon = Boolean(
-        order?.isCoupon &&
-          ((order?.couponType &&
-            String(order.couponType).toLowerCase().includes("free")) ||
-            (order?.couponType &&
-              String(order.couponType).toLowerCase().includes("delivery"))),
-      );
-      const couponDiscount =
-        Boolean(order?.isCoupon) && !isFreeDeliveryCoupon
-          ? parseFloat(order?.couponValue || 0)
-          : 0;
-      const isPickup =
-        (
-          order?.delivaryMethod ||
-          order?.deliveryMethod ||
-          order?.deliveryType ||
-          ""
-        ).toUpperCase() === "PICKUP";
-      const deliveryFee =
-        isPickup || isFreeDeliveryCoupon
-          ? 0
-          : parseFloat(order?.delivaryCharge || order?.deliveryCharge || 0);
 
-      const liveTotal =
-        packages.length > 0 || cartItems.length > 0
-          ? Math.max(
-              0,
-              packagesTotal + todayItemsTotal - couponDiscount + deliveryFee,
-            )
-          : null;
+      const t = computeTotals();
+      const liveTotal = t.hasData ? t.total : null;
 
       await orderService.confirmOrderWithLivePrices({
         orderId,
@@ -171,7 +218,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleCancel = () => {
     const effectiveOrderId = orderId ? String(orderId) : "";
-    const processOrderId = order?.processOrderId || order?.proOrderId || order?.id || orderId;
+    const processOrderId =
+      order?.processOrderId || order?.proOrderId || order?.id || orderId;
 
     const pkgs = packages.map((p) => ({
       id: String(p.id || p.name),
@@ -189,7 +237,14 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       image: it.image,
       weight: it.quantity,
       price: it.todayPrice ?? it.price,
-      originalPrice: it.todayPrice != null && Math.abs(it.todayPrice - it.price) > 0.01 ? it.price : it.oldPrice,
+      originalPrice:
+        it.todayPrice != null &&
+        it.todayNormalPrice != null &&
+        it.todayNormalPrice - it.todayPrice > 0.01
+          ? it.todayNormalPrice
+          : it.todayPrice == null
+            ? it.oldPrice
+            : undefined,
     }));
 
     const pMethod = (order?.paymentMethod || "").trim().toLowerCase();
@@ -204,9 +259,11 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       (isPaidVal && !pMethod.includes("cash") && !pMethod.includes("cod"));
     const isCashMethod = pMethod.includes("cash") || pMethod.includes("cod");
 
-    const orderFullTotal = parseFloat(order?.fullTotal || order?.amount || 0);
+    const orderFullTotal = computeTotals().total;
     const initialPaidAmount =
-      parseFloat(order?.amount || 0) > 0 ? parseFloat(order?.amount) : orderFullTotal;
+      parseFloat(order?.amount || 0) > 0
+        ? parseFloat(order?.amount)
+        : orderFullTotal;
     const moneyPaid = parseFloat(order?.moneyPaid || 0);
     const creditPaidVal = parseFloat(order?.creditPaid || 0);
 
@@ -232,7 +289,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       refundCreditAmount = totalPaidCredit > 0 ? totalPaidCredit : 0;
     }
 
-    navigation.navigate("OrderCancelConfirmation", {
+    navigation.navigate("OrderConfirmedOrderCancelScreen", {
       orderId: effectiveOrderId,
       processOrderId: processOrderId ? String(processOrderId) : undefined,
       packages: pkgs,
@@ -261,26 +318,24 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     : null;
 
   const formatAmount = (amount: number | string) => {
-    const num =
+    const n =
       typeof amount === "number"
         ? amount
         : parseFloat(
-          String(amount || "")
-            .replace(/Rs\.?/gi, "")
-            .replace(/LKR/gi, "")
-            .replace(/,/g, "")
-            .trim(),
-        ) || 0;
-    return num.toLocaleString("en-US", {
+            String(amount || "")
+              .replace(/Rs\.?/gi, "")
+              .replace(/LKR/gi, "")
+              .replace(/,/g, "")
+              .trim(),
+          ) || 0;
+    return n.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
   };
 
   // Parses a price-ish value (number, "Rs. 1,200.00", null) into a plain
-  // number, or null if there's nothing there. Used so we can compare an
-  // item's original vs. discounted amount before deciding to show the
-  // struck-through "old price".
+  // number, or null if there's nothing there.
   const parsePriceValue = (value: unknown): number | null => {
     if (value == null || value === "") return null;
     if (typeof value === "number") return value;
@@ -361,7 +416,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         ]);
 
         if (orderRes.data && orderRes.data.status) {
-          // console.log("Fetched Order:", orderRes.data.order);
           setOrder(orderRes.data.order);
         }
 
@@ -377,11 +431,11 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                 : typeof p.productPrice === "number"
                   ? p.productPrice
                   : parseFloat(
-                    String(p.productPrice || "")
-                      .replace(/Rs\.?/i, "")
-                      .replace(/,/g, "")
-                      .trim(),
-                  ) || 0;
+                      String(p.productPrice || "")
+                        .replace(/Rs\.?/i, "")
+                        .replace(/,/g, "")
+                        .trim(),
+                    ) || 0;
             const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
 
             if (packageMap.has(key)) {
@@ -423,14 +477,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             (item: any, idx: number) => {
               const priceNum = parsePriceValue(item.price) ?? 0;
 
-              // The "original" (pre-discount) price for this line item.
-              // Backend naming isn't confirmed for this endpoint yet, so
-              // we try the field names used for products elsewhere in
-              // the app (normalPrice/comPrice) plus a couple of likely
-              // order-line variants, in priority order. If none of these
-              // match what the API actually returns, console.log(item)
-              // here once to see the real field name and add it to this
-              // list.
+              // The "original" (pre-discount) price stored on the order line.
               const originalPriceNum =
                 parsePriceValue(item.normalPrice) ??
                 parsePriceValue(item.originalPrice) ??
@@ -456,12 +503,10 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                 mktDiscounted != null && mktDiscounted > 0
                   ? mktDiscounted * qtyInKg
                   : mktNormal != null && mktNormal > 0
-                  ? mktNormal * qtyInKg
-                  : null;
+                    ? mktNormal * qtyInKg
+                    : null;
               const todayNormalRaw =
-                mktNormal != null && mktNormal > 0
-                  ? mktNormal * qtyInKg
-                  : null;
+                mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
 
               return {
                 id: idx + 1,
@@ -488,6 +533,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     fetchAllOrderDetails();
   }, [orderId]);
+
   const NORMAL_STAGES = [
     "Ordered",
     "Processing",
@@ -638,7 +684,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     // --- DELIVERY FLOW ---
 
-    // If order had any hold history or is on hold, construct a dynamic timeline with all stages including Hold, restarted On the way, and Returned/Delivered
+    // If order had any hold history or is on hold, construct a dynamic timeline
     const holdHistory: Array<{
       holdTime?: string | Date | null;
       restartedTime?: string | Date | null;
@@ -664,37 +710,37 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         active: boolean;
         description?: string;
       }> = [
-          {
-            title: "Ordered",
-            date: orderTime || "Just now",
-            icon: "cart-shopping",
-            active: true,
-          },
-          {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
-          {
-            title: "Out For Delivery",
-            date: outTime || updateTime,
-            icon: "dolly",
-            active: true,
-          },
-          {
-            title: "Collected",
-            date: collectedTime || updateTime,
-            icon: "truck",
-            active: true,
-          },
-          {
-            title: "On the way",
-            date: onTheWayTime || updateTime,
-            icon: "truck-fast",
-            active: true,
-          },
-        ];
+        {
+          title: "Ordered",
+          date: orderTime || "Just now",
+          icon: "cart-shopping",
+          active: true,
+        },
+        {
+          title: "Processing",
+          date: processingTime,
+          icon: "box-open",
+          active: true,
+        },
+        {
+          title: "Out For Delivery",
+          date: outTime || updateTime,
+          icon: "dolly",
+          active: true,
+        },
+        {
+          title: "Collected",
+          date: collectedTime || updateTime,
+          icon: "truck",
+          active: true,
+        },
+        {
+          title: "On the way",
+          date: onTheWayTime || updateTime,
+          icon: "truck-fast",
+          active: true,
+        },
+      ];
 
       // Add each hold event (and restarted "On the way" step)
       holdHistory.forEach((hld) => {
@@ -738,7 +784,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         !isHoldNow &&
         (status === "On the way" || order?.drvStatus === "On the way")
       ) {
-        // If currently On the way and the last item in holdItems is not "On the way"
         const lastItem = holdItems[holdItems.length - 1];
         if (!lastItem || lastItem.title !== "On the way") {
           holdItems.push({
@@ -748,7 +793,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             active: true,
           });
         }
-        // Also show inactive Delivered stage if it's currently on the way
         holdItems.push({
           title: "Delivered",
           date: "",
@@ -916,6 +960,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     );
   }
 
+  const totals = computeTotals();
+
   return (
     <View
       style={{
@@ -1039,7 +1085,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               }}
             />
 
-            {/* Total */}
+            {/* Total (recalculated from today's prices) */}
             <View
               style={{
                 flex: 1,
@@ -1064,11 +1110,12 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                 }}
                 numberOfLines={1}
               >
-                Rs. {formatAmount(order?.fulltotal || order?.fullTotal || 0)}
+                Rs. {formatAmount(totals.total)}
               </Text>
             </View>
           </View>
         </View>
+
         {/* ORDER STATUS */}
         <View
           style={{
@@ -1431,7 +1478,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                       marginTop: 1,
                     }}
                   >
-                    {/* Show today's live price if available, else fall back to stored price */}
+                    {/* Today's live price if available, else stored price */}
                     <Text
                       style={{
                         fontSize: 13,
@@ -1441,9 +1488,11 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                       Rs. {formatAmount(item.todayPrice ?? item.price)}
                     </Text>
 
-                    {/* Strike-through the original stored price when today's price differs */}
+                    {/* Strike-through today's NORMAL price for this quantity
+                        (per-kg normal price x qty in kg) when a discount applies */}
                     {item.todayPrice != null &&
-                      Math.abs(item.todayPrice - item.price) > 0.01 && (
+                      item.todayNormalPrice != null &&
+                      item.todayNormalPrice - item.todayPrice > 0.01 && (
                         <Text
                           style={{
                             fontSize: 11,
@@ -1452,11 +1501,11 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                             marginLeft: 4,
                           }}
                         >
-                          Rs. {formatAmount(item.price)}
+                          Rs. {formatAmount(item.todayNormalPrice)}
                         </Text>
                       )}
 
-                    {/* Original discount strike-through (when no today's-price override) */}
+                    {/* Original discount strike-through (when no live price) */}
                     {item.todayPrice == null && item.oldPrice && (
                       <Text
                         style={{
@@ -1486,21 +1535,13 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* SUMMARY */}
         {(() => {
-          const isFreeDeliveryCoupon = Boolean(
-            order?.isCoupon &&
-            ((order?.couponType &&
-              String(order.couponType).toLowerCase().includes("free")) ||
-              (order?.couponType &&
-                String(order.couponType).toLowerCase().includes("delivery"))),
-          );
-          const productDiscount = parseFloat(order?.discount || 0);
-          const couponDiscount =
-            Boolean(order?.isCoupon) && !isFreeDeliveryCoupon
-              ? parseFloat(order?.couponValue || 0)
-              : 0;
-          const orderFullTotal = parseFloat(
-            order?.fulltotal || order?.fullTotal || 0,
-          );
+          const t = totals;
+          const isFreeDeliveryCoupon = t.isFreeDeliveryCoupon;
+          const productDiscount = t.productDiscount;
+          const couponDiscount = t.couponDiscount;
+          const orderFullTotal = t.total;
+          const isPickup = t.isPickup;
+
           const creditPaid = parseFloat(order?.creditPaid || 0);
           const moneyPaid = parseFloat(order?.moneyPaid || 0);
           const paymentMethodLower = (order?.paymentMethod || "").toLowerCase();
@@ -1512,10 +1553,10 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             (creditPaid > 0 && moneyPaid === 0 && !isCashOrder && !isCardOrder);
           const isPaid = Number(order?.isPaid) === 1;
 
-          // Remaining cash amount: fullTotal - creditPaid (as specified by user, since processorders.amount is 0 until paid)
+          // Remaining cash amount: total - creditPaid
           const cashRemainingAmount = Math.max(0, orderFullTotal - creditPaid);
 
-          // Remaining card amount: moneyPaid if > 0, else fullTotal - creditPaid
+          // Remaining card amount: moneyPaid if > 0, else total - creditPaid
           const cardRemainingAmount =
             moneyPaid > 0
               ? moneyPaid
@@ -1534,9 +1575,9 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           const handlingFee = parseFloat(order?.returnHandlingFee || 350);
           const deliveryFeeDeduction = parseFloat(
             order?.curDlvrCharge ||
-            order?.delivaryCharge ||
-            order?.deliveryCharge ||
-            300,
+              order?.delivaryCharge ||
+              order?.deliveryCharge ||
+              300,
           );
           const restoredCredit =
             totalPaidByCustomer > 0
@@ -1548,14 +1589,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               ? orderFullTotal
               : creditPaid
             : orderFullTotal;
-
-          const isPickup =
-            (
-              order?.delivaryMethod ||
-              order?.deliveryMethod ||
-              order?.deliveryType ||
-              ""
-            ).toUpperCase() === "PICKUP";
 
           return (
             <>
@@ -1584,7 +1617,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <>
                     <SummaryRow
                       label="Packages"
-                      value={`Rs. ${formatAmount(packages.reduce((acc, p) => acc + p.price * p.quantity, 0))}`}
+                      value={`Rs. ${formatAmount(t.packagesTotal)}`}
                     />
                     <View
                       style={{
@@ -1600,7 +1633,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <>
                     <SummaryRow
                       label="Ala Carte Items"
-                      value={`Rs. ${formatAmount(cartItems.reduce((acc, item) => acc + (item.todayPrice ?? item.price), 0))}`}
+                      value={`Rs. ${formatAmount(t.itemsGross)}`}
                     />
                     <View
                       style={{
@@ -1651,7 +1684,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                       value={
                         isFreeDeliveryCoupon
                           ? "+ Rs. 0.00"
-                          : `+ Rs. ${formatAmount(parseFloat(order?.delivaryCharge || order?.deliveryCharge) || 0)}`
+                          : `+ Rs. ${formatAmount(t.deliveryFee)}`
                       }
                     />
 
@@ -1728,8 +1761,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   )}
 
                   {/* Cash Row:
-                      If returned: always show "Paid with Cash", "Rs. 0.00", in green (#00B83D).
-                      If not returned: show "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
+                      If returned: always show "Paid with Cash", "Rs. 0.00", in green.
+                      If not returned: "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
                   */}
                   {isCashOrder &&
                     (isOrderReturned || cashRemainingAmount > 0) && (
@@ -1860,32 +1893,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 </View>
               )}
-
-              {/* ACTION BUTTONS */}
-              {(() => {
-                const status = order?.processStatus || order?.status || "Pending";
-                const isOrderCancelled =
-                  status === "Cancelled" || status.toLowerCase() === "cancelled";
-                const isOrderCompleted =
-                  status === "Delivered" ||
-                  status === "Picked up" ||
-                  status === "Completed";
-                const isOrderReturned =
-                  status === "Return" || status === "Return Received";
-                const canConfirmOrCancel =
-                  !isOrderCancelled && !isOrderCompleted && !isOrderReturned;
-                const busy = submitting !== null;
-
-                if (!canConfirmOrCancel) return null;
-
-                return (
-                  <View style={{ marginTop: 15, marginBottom: 10 }}>
-                  
-
-                   
-                  </View>
-                );
-              })()}
 
               <View style={{ height: 25 }} />
             </>
