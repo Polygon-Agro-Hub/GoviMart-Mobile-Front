@@ -54,6 +54,7 @@ import OrderHistory from "@/screens/common/order/OrderHistoryScreen";
 import OrderDetails from "@/screens/common/order/OrderDetailsScreen";
 import ConfirmOrderDetailsScreen from "@/screens/common/order/ConfirmOrderDetailsScreen";
 import OrderCancelConfirmation from "@/screens/common/order/OrderCancelConfirmedScreen";
+import OrderConfirmedOrderCancelScreen from "@/screens/common/order/OrderConfirmedOrderCancelScreen"
 import ReportComplaint from "@/screens/common/complaints/ReportComplaintScreen";
 import ComplaintHistory from "@/screens/common/complaints/ComplaintHistoryScreen";
 import ViewComplaint from "@/screens/common/complaints/ViewComplaintScreen";
@@ -217,6 +218,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "OrderDetails", component: OrderDetails, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ConfirmOrderDetailsScreen", component: ConfirmOrderDetailsScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderCancelConfirmation", component: OrderCancelConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderConfirmedOrderCancelScreen", component: OrderConfirmedOrderCancelScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ReportComplaint", component: ReportComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },

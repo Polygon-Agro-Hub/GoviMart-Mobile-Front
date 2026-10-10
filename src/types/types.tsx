@@ -163,6 +163,35 @@ export type RootStackParamList = {
   refreshKey?: number; // set ONLY by the Notification tab
 };
  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
+
+  OrderConfirmedOrderCancelScreen: {
+    orderId?: string | number;
+    processOrderId?: string | number;
+    packages?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      qty: number;
+      unitPrice: number;
+    }>;
+    alaCarteItems?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      weight: string;
+      price: number;
+      originalPrice?: number;
+    }>;
+    totalPaid?: number;
+    totalPaidCard?: number;
+    totalPaidCredit?: number;
+    totalCashDue?: number;
+    processOrderTotal?: number;
+    paymentMethod?: string;
+    refundCreditAmount?: number;
+  } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;
     processOrderId?: string | number;
