@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Modal,
   View,
@@ -46,6 +46,13 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   onClose,
 }) => {
   const [loading, setLoading] = useState(true);
+  const isHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (visible) {
+      isHandledRef.current = false;
+    }
+  }, [visible]);
 
   const displayGateway =
     gatewayName.toLowerCase() === "payhere" ? "PayHere" : "Payments.lk";
@@ -60,8 +67,11 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
           text: "Yes, Cancel",
           style: "destructive",
           onPress: () => {
-            onCancel(orderId);
-            onClose();
+            if (!isHandledRef.current) {
+              isHandledRef.current = true;
+              onCancel(orderId);
+              onClose();
+            }
           },
         },
       ]
@@ -69,39 +79,52 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   };
 
   const handleUrlIntercept = (url: string): boolean => {
-    if (!url) return true;
+    if (!url || isHandledRef.current) return true;
     console.log(`[${displayGateway} WebView] Processing URL:`, url);
     const lowerUrl = url.toLowerCase();
 
-    // Check for success callbacks (order completion or card saved)
-    if (
-      lowerUrl.includes("polygon://payments-lk/return") ||
-      lowerUrl.includes("/payments-lk/return") ||
-      lowerUrl.includes("/payment/return") ||
-      lowerUrl.includes("polygon://payment/return") ||
-      lowerUrl.includes("status=success") ||
-      lowerUrl.includes("status=succeeded") ||
-      lowerUrl.includes("return_url")
-    ) {
-      if (lowerUrl.includes("status=cancel") || lowerUrl.includes("status=cancelled")) {
-        onCancel(orderId);
-        onClose();
-        return false;
-      }
-      onSuccess(orderId);
+    // 1. Check for cancel / failure callbacks first
+    const isCancelled =
+      lowerUrl.includes("/payment/cancel") ||
+      lowerUrl.includes("polygon://payment/cancel") ||
+      lowerUrl.includes("polygon://payments-lk/cancel") ||
+      lowerUrl.includes("/payments-lk/cancel") ||
+      lowerUrl.includes("status=cancel") ||
+      lowerUrl.includes("status=cancelled") ||
+      lowerUrl.includes("status=fail") ||
+      lowerUrl.includes("status=failed") ||
+      lowerUrl.includes("status=declined") ||
+      lowerUrl.includes("status=error");
+
+    if (isCancelled) {
+      isHandledRef.current = true;
+      onCancel(orderId);
       onClose();
       return false;
     }
 
-    // Check for cancel/failure callbacks
-    if (
-      lowerUrl.includes("/payment/cancel") ||
-      lowerUrl.includes("polygon://payment/cancel") ||
-      lowerUrl.includes("status=cancel") ||
-      lowerUrl.includes("status=cancelled") ||
-      lowerUrl.includes("cancel_url")
-    ) {
-      onCancel(orderId);
+    // 2. Check for explicit success callbacks
+    // Only return true success when the redirect is specifically to a return/success route
+    // AND has a success status or is the designated return scheme/path without error
+    const isPaymentsLkSuccess =
+      (lowerUrl.includes("polygon://payments-lk/return") ||
+        lowerUrl.includes("/payments-lk/return")) &&
+      (lowerUrl.includes("status=success") || lowerUrl.includes("status=succeeded"));
+
+    const isPayHereSuccess =
+      (lowerUrl.includes("polygon://payment/return") ||
+        lowerUrl.includes("/payment/return")) &&
+      (lowerUrl.includes("status=success") ||
+        lowerUrl.includes("order_id") ||
+        lowerUrl.includes("payment_id"));
+
+    const isDeepLinkSuccess =
+      lowerUrl.startsWith("polygon://") &&
+      (lowerUrl.includes("status=success") || lowerUrl.includes("status=succeeded"));
+
+    if (isPaymentsLkSuccess || isPayHereSuccess || isDeepLinkSuccess) {
+      isHandledRef.current = true;
+      onSuccess(orderId);
       onClose();
       return false;
     }

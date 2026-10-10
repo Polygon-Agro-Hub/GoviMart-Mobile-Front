@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -66,6 +66,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     invoiceNumber: any;
     total: any;
   } | null>(null);
+  const [pendingOrderPayload, setPendingOrderPayload] = useState<any>(null);
+  const pendingOrderPayloadRef = useRef<any>(null);
 
   // ─── ALERT MODAL STATE ────────────────────────────────────────────────────
   const [alertVisible, setAlertVisible] = useState(false);
@@ -175,50 +177,54 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         savedCard &&
         adapter.chargeSavedCard
       ) {
-        let currentOrderId = "";
-        let currentInvoice = "";
-
-        if (!isClearBalanceFlow) {
-          const orderPayload = {
-            cartId: orderContext?.cartId || 0,
-            paymentMethod: "card",
-            grandTotal: orderContext?.grandTotal || fullTotal,
-            discountAmount: orderContext?.discount || 0,
-            deliveryCharge: orderContext?.deliveryCharge || 0,
-            creditPaid: orderContext?.creditPaid || 0,
-            moneyPaid: orderContext?.moneyPaid || fullTotal,
-            isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
-            checkoutDetails: {
-              ...(orderContext?.checkoutDetails || {
-                deliveryMethod: orderContext?.deliveryMethod || "home",
-              }),
-            },
-          };
-          const orderResponse = await orderService.createOrder(orderPayload);
-          if (orderResponse.data && orderResponse.data.status && orderResponse.data.data) {
-            const orderData = orderResponse.data.data;
-            setPendingOrderResult(orderData);
-            currentOrderId = String(orderData.orderId || orderData.invoiceNumber);
-            currentInvoice = String(orderData.invoiceNumber || currentOrderId);
-          } else {
-            throw new Error(orderResponse.data?.message || "Failed to create order");
-          }
-        }
+        const orderPayload = {
+          cartId: orderContext?.cartId || 0,
+          paymentMethod: "card",
+          grandTotal: orderContext?.grandTotal || fullTotal,
+          discountAmount: orderContext?.discount || 0,
+          deliveryCharge: orderContext?.deliveryCharge || 0,
+          creditPaid: orderContext?.creditPaid || 0,
+          moneyPaid: orderContext?.moneyPaid || fullTotal,
+          isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+          checkoutDetails: {
+            ...(orderContext?.checkoutDetails || {
+              deliveryMethod: orderContext?.deliveryMethod || "home",
+            }),
+          },
+        };
 
         try {
           const chargeRes = await adapter.chargeSavedCard({
             cardId: savedCard.id,
             amount: fullTotal,
             paymentType: isClearBalanceFlow ? "clear_balance" : "order",
-            orderId: isClearBalanceFlow ? undefined : currentOrderId,
             itemsDescription: isClearBalanceFlow
               ? "Clear Negative Credit Balance"
-              : `Order #${currentInvoice || currentOrderId}`,
+              : "GoviMart Order Payment",
           });
 
           if (chargeRes.success) {
-            await handlePaymentSuccess(currentOrderId || chargeRes.orderId || "COMPLETED");
-            return;
+            if (isClearBalanceFlow) {
+              await handlePaymentSuccess(chargeRes.orderId || "COMPLETED");
+              return;
+            }
+
+            // Order flow: Payment succeeded! NOW create the order!
+            const orderResponse = await orderService.createOrder(orderPayload);
+            if (orderResponse.data && orderResponse.data.status && orderResponse.data.data) {
+              const orderData = orderResponse.data.data;
+              dispatch(clearCart());
+              navigation.navigate("OrderConfirmed", {
+                orderId: orderData.orderId,
+                invoiceNumber: orderData.invoiceNumber,
+                total: orderData.total || fullTotal,
+                couponValue: orderContext?.couponValue,
+                orderContext,
+              });
+              return;
+            } else {
+              throw new Error(orderResponse.data?.message || "Failed to finalize order");
+            }
           }
         } catch (chargeErr: any) {
           console.warn("[PaymentScreen] 1-Click charge failed:", chargeErr);
@@ -254,7 +260,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         setCheckoutSession(session);
         setCheckoutModalVisible(true);
       } else {
-        // Order flow: create pending order first, then launch payment session
+        // Order flow: do NOT create order before payment! Store payload and launch session
         const payload = {
           cartId: orderContext?.cartId || 0,
           paymentMethod: "card",
@@ -271,30 +277,18 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           },
         };
 
-        const response = await orderService.createOrder(payload);
+        pendingOrderPayloadRef.current = payload;
+        setPendingOrderPayload(payload);
 
-        if (response.data && response.data.status && response.data.data) {
-          const orderData = response.data.data;
-          setPendingOrderResult(orderData);
+        const session = await adapter.initiatePayment({
+          amount: fullTotal,
+          paymentType: "order",
+          itemsDescription: "GoviMart Order Payment",
+          saveCard: saveCardForFuture,
+        });
 
-          const session = await adapter.initiatePayment({
-            orderId: String(orderData.orderId || orderData.invoiceNumber),
-            amount: fullTotal,
-            paymentType: "order",
-            itemsDescription: `Order #${
-              orderData.invoiceNumber || orderData.orderId
-            }`,
-          });
-
-          setCheckoutSession(session);
-          setCheckoutModalVisible(true);
-        } else {
-          showAlert(
-            "Order Creation Failed",
-            response.data?.message ||
-              "Could not initialize order for payment. Please try again."
-          );
-        }
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
       }
     } catch (err: any) {
       const errorData = err?.response?.data;
@@ -358,19 +352,47 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         setLoading(false);
       }
     } else {
-      dispatch(clearCart());
-      navigation.navigate("OrderConfirmed", {
-        orderId: pendingOrderResult?.orderId || orderId,
-        invoiceNumber: pendingOrderResult?.invoiceNumber || "",
-        total: pendingOrderResult?.total || fullTotal,
-        couponValue: orderContext?.couponValue,
-        orderContext,
-      });
+      try {
+        setLoading(true);
+        const payloadToUse = pendingOrderPayloadRef.current || pendingOrderPayload;
+        if (!payloadToUse) {
+          throw new Error("Order details missing. Please contact customer support.");
+        }
+
+        const response = await orderService.createOrder(payloadToUse);
+        if (!response.data || !response.data.status || !response.data.data) {
+          throw new Error(response.data?.message || "Failed to finalize order");
+        }
+
+        const orderData = response.data.data;
+        dispatch(clearCart());
+        navigation.navigate("OrderConfirmed", {
+          orderId: orderData.orderId,
+          invoiceNumber: orderData.invoiceNumber,
+          total: orderData.total || fullTotal,
+          couponValue: orderContext?.couponValue,
+          orderContext,
+        });
+      } catch (orderErr: any) {
+        console.error("[PaymentScreen] Order finalization error:", orderErr);
+        showAlert(
+          "Order Issue",
+          orderErr?.response?.data?.message ||
+            orderErr?.message ||
+            "Payment received, but there was an issue finalizing your order."
+        );
+      } finally {
+        setLoading(false);
+        pendingOrderPayloadRef.current = null;
+        setPendingOrderPayload(null);
+      }
     }
   };
 
   const handlePaymentCancel = (orderId: string) => {
     setCheckoutModalVisible(false);
+    pendingOrderPayloadRef.current = null;
+    setPendingOrderPayload(null);
     showAlert(
       "Payment Cancelled",
       "The payment was not completed. You can try again whenever you are ready."

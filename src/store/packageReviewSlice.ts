@@ -43,6 +43,7 @@ export interface PackageReviewState {
   actualOrderId: number | string | null;
   invoiceNo: string;
   scheduleDateStr: string;
+  rawScheduleDate?: string | null;
   initialPaidAmount: number;
   moneyPaid: number;
   creditPaid: number;
@@ -71,6 +72,7 @@ const initialState: PackageReviewState = {
   actualOrderId: null,
   invoiceNo: "INV-2660000",
   scheduleDateStr: "14th August",
+  rawScheduleDate: null,
   initialPaidAmount: 0,
   moneyPaid: 0,
   creditPaid: 0,
@@ -124,6 +126,7 @@ export const packageReviewSlice = createSlice({
         actualOrderId?: number | string;
         invoiceNo?: string;
         scheduleDateStr?: string;
+        rawScheduleDate?: string | null;
         initialPaidAmount?: number;
         moneyPaid?: number;
         creditPaid?: number;
@@ -156,6 +159,9 @@ export const packageReviewSlice = createSlice({
       if (payload.invoiceNo) state.invoiceNo = payload.invoiceNo;
       if (payload.scheduleDateStr)
         state.scheduleDateStr = payload.scheduleDateStr;
+      if (payload.rawScheduleDate !== undefined) {
+        state.rawScheduleDate = payload.rawScheduleDate;
+      }
       if (typeof payload.initialPaidAmount === "number") {
         state.initialPaidAmount = payload.initialPaidAmount;
       }

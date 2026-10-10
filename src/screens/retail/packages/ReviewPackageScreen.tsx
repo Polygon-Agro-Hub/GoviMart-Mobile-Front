@@ -27,6 +27,7 @@ import { RootState } from "@/store";
 import {
   initReviewData,
   setLoadingReview,
+  setPackingSlots,
   replacePackageProduct,
   resetPackageProduct,
   updateProductQuantity as updateProductQuantityAction,
@@ -310,6 +311,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     deletedAdditionalItemIds,
     invoiceNo: reduxInvoiceNo,
     scheduleDateStr,
+    rawScheduleDate,
     initialPaidAmount,
     moneyPaid,
     creditPaid,
@@ -550,6 +552,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           let resolvedProcessOrderAmount = 0;
           let resolvedDeliveryCharge = 0;
           let resolvedDateStr = "14th August";
+          let resolvedRawDate: string | null = null;
 
           if (orderInfo) {
             resolvedProcessOrderId =
@@ -579,10 +582,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             resolvedIsPaid =
               parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
             if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
-              const d = new Date(
-                orderInfo.sheduleDate || orderInfo.processScheduleDate,
-              );
+              const rawDateVal =
+                orderInfo.sheduleDate || orderInfo.processScheduleDate;
+              const d = new Date(rawDateVal);
               if (!isNaN(d.getTime())) {
+                resolvedRawDate = d.toISOString().split("T")[0];
                 resolvedDateStr = d.toLocaleDateString("en-US", {
                   day: "numeric",
                   month: "long",
@@ -860,6 +864,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               actualOrderId: orderInfo?.actualOrderId,
               invoiceNo: resolvedInvNo,
               scheduleDateStr: resolvedDateStr,
+              rawScheduleDate: resolvedRawDate,
               initialPaidAmount: resolvedPaidAmount,
               moneyPaid: resolvedMoneyPaid,
               creditPaid: resolvedCreditPaid,
@@ -919,6 +924,45 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     await fetchReviewData(true);
     setIsRefreshing(false);
   }, [fetchReviewData]);
+
+  // Poll packing slots remaining count every 1 minute while screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(async () => {
+        try {
+          const orderIdParam = processOrderId || effectiveOrderId;
+          const res = await orderService.getPackingLimit(
+            rawScheduleDate || undefined,
+            orderIdParam,
+          );
+          if (res.data?.status && res.data?.data) {
+            const slotData = res.data.data;
+            const slots =
+              slotData.remaining !== undefined
+                ? slotData.remaining
+                : slotData.availableSlots;
+            dispatch(
+              setPackingSlots({
+                availableSlots: slots,
+                targetLimit: slotData.targetLimit,
+                isLimitReached: slotData.isLimitReached || slots <= 0,
+                unreadReminderDays: slotData.unreadReminderDays,
+              }),
+            );
+          }
+        } catch (err) {
+          console.warn(
+            "[ReviewPackageScreen] Polling packing limit error:",
+            err,
+          );
+        }
+      }, 60000);
+
+      return () => {
+        clearInterval(interval);
+      };
+    }, [dispatch, rawScheduleDate, processOrderId, effectiveOrderId]),
+  );
 
   // Handle navigation returns with step or replaced item
   useEffect(() => {
@@ -1210,6 +1254,58 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 const goToNextStep = async () => {
   // Prevent double taps while the request is running
   if (isSubmitting) return;
+
+  // Validate packing slot remaining count: if 0, show error
+  try {
+    const orderIdParam = processOrderId || effectiveOrderId;
+    const res = await orderService.getPackingLimit(
+      rawScheduleDate || undefined,
+      orderIdParam,
+    );
+    if (res.data?.status && res.data?.data) {
+      const slotData = res.data.data;
+      const currentRemaining =
+        slotData.remaining !== undefined
+          ? slotData.remaining
+          : slotData.availableSlots;
+      dispatch(
+        setPackingSlots({
+          availableSlots: currentRemaining,
+          targetLimit: slotData.targetLimit,
+          isLimitReached: slotData.isLimitReached || currentRemaining <= 0,
+          unreadReminderDays: slotData.unreadReminderDays,
+        }),
+      );
+      if (currentRemaining <= 0) {
+        Alert.alert(
+          "Packing Limit Reached",
+          "Sorry, we are not accepting any more orders for this schedule date.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+    } else if (availableSlots <= 0) {
+      Alert.alert(
+        "Packing Limit Reached",
+        "Sorry, we are not accepting any more orders for this schedule date.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+  } catch (valErr) {
+    console.warn(
+      "[ReviewPackageScreen] Packing limit validation error:",
+      valErr,
+    );
+    if (availableSlots <= 0) {
+      Alert.alert(
+        "Packing Limit Reached",
+        "Sorry, we are not accepting any more orders for this schedule date.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+  }
 
   // Not the last step yet: just move forward
   if (currentStepIndex < steps.length - 1) {
@@ -1926,7 +2022,7 @@ const goToNextStep = async () => {
 
               <View className="mt-5">
                 <HurryBanner
-                  ordersLeft={availableSlots > 0 ? availableSlots : 30}
+                  ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
                   date={scheduleDateStr}
                   showCancelLink={true}
                   onCancelOrder={onCancelOrder}
@@ -2069,7 +2165,7 @@ const goToNextStep = async () => {
               <View>
                 <View className="bg-white pt-1 pb-3">
                   <HurryBanner
-                    ordersLeft={availableSlots > 0 ? availableSlots : 30}
+                    ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
                     date={scheduleDateStr}
                     showCancelLink
                     onCancelOrder={onCancelOrder}
@@ -2264,7 +2360,7 @@ const goToNextStep = async () => {
         >
           <View className="bg-white pt-1 pb-3">
             <HurryBanner
-              ordersLeft={availableSlots > 0 ? availableSlots : 30}
+              ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
               date={scheduleDateStr}
               showCancelLink
               onCancelOrder={onCancelOrder}
@@ -2432,7 +2528,7 @@ const goToNextStep = async () => {
         >
           <View className="bg-white pt-1 pb-3">
             <HurryBanner
-              ordersLeft={availableSlots > 0 ? availableSlots : 30}
+              ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
               date={scheduleDateStr}
               showCancelLink
               onCancelOrder={onCancelOrder}

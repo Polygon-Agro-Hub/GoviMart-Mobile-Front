@@ -62,6 +62,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
   const [pendingOrderData, setPendingOrderData] = useState<any>(null);
+  const [pendingOrderPayload, setPendingOrderPayload] = useState<any>(null);
+  const pendingOrderPayloadRef = useRef<any>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -282,27 +284,53 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
   const handleCheckoutSuccess = async (orderId: string) => {
     setCheckoutModalVisible(false);
+    setSubmitting(true);
     try {
       if (checkoutSession?.sessionId) {
         const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
         await adapter.syncCheckout(checkoutSession.sessionId).catch(() => null);
       }
-    } catch (_) {}
 
-    isNavigatingAwayRef.current = true;
-    paymentSessionEndTime = null;
-    dispatch(clearCart());
-    navigation.navigate("OrderConfirmed", {
-      orderId: pendingOrderData?.orderId || orderId,
-      invoiceNumber: pendingOrderData?.invoiceNumber || "",
-      total: pendingOrderData?.total || paymentAmount,
-      couponValue: appliedCoupon?.discount || 0,
-      orderContext,
-    });
+      const payloadToUse = pendingOrderPayloadRef.current || pendingOrderPayload;
+      if (!payloadToUse) {
+        throw new Error("Order details missing. Please contact customer support.");
+      }
+
+      const response = await orderService.createOrder(payloadToUse);
+      if (!response.data || !response.data.status || !response.data.data) {
+        throw new Error(response.data?.message || "Failed to finalize order");
+      }
+
+      const orderData = response.data.data;
+      isNavigatingAwayRef.current = true;
+      paymentSessionEndTime = null;
+      dispatch(clearCart());
+      navigation.navigate("OrderConfirmed", {
+        orderId: orderData.orderId,
+        invoiceNumber: orderData.invoiceNumber,
+        total: orderData.total || paymentAmount,
+        couponValue: appliedCoupon?.discount || 0,
+        orderContext,
+      });
+    } catch (err: any) {
+      console.error("[PaymentMethod] Order finalization error after payment:", err);
+      Alert.alert(
+        "Order Processing Issue",
+        err?.response?.data?.message ||
+          err?.message ||
+          "Payment was received, but there was an issue finalizing your order. Please contact customer support."
+      );
+    } finally {
+      setSubmitting(false);
+      pendingOrderPayloadRef.current = null;
+      setPendingOrderPayload(null);
+    }
   };
 
   const handleCheckoutCancel = (orderId: string) => {
     setCheckoutModalVisible(false);
+    pendingOrderPayloadRef.current = null;
+    setPendingOrderPayload(null);
     Alert.alert(
       "Payment Cancelled",
       "The card payment was not completed. You can try again whenever you are ready."
@@ -369,16 +397,6 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           },
         };
 
-        const response = await orderService.createOrder(payload);
-        if (!response.data || !response.data.status || !response.data.data) {
-          throw new Error(response.data?.message || "Failed to create order");
-        }
-
-        const orderData = response.data.data;
-        const currentOrderId = String(orderData.orderId || orderData.invoiceNumber);
-        const currentInvoice = String(orderData.invoiceNumber || currentOrderId);
-        setPendingOrderData(orderData);
-
         const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
 
         // Option 1: 1-Click Pay with Saved Card
@@ -387,12 +405,17 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             const chargeRes = await adapter.chargeSavedCard({
               cardId: savedCard.id,
               amount: paymentAmount,
-              orderId: currentOrderId,
-              itemsDescription: `GoviMart Order #${currentInvoice}`,
+              itemsDescription: "GoviMart Order Payment",
               paymentType: "order",
             });
 
             if (chargeRes.success) {
+              const response = await orderService.createOrder(payload);
+              if (!response.data || !response.data.status || !response.data.data) {
+                throw new Error(response.data?.message || "Failed to finalize order");
+              }
+              const orderData = response.data.data;
+
               isNavigatingAwayRef.current = true;
               paymentSessionEndTime = null;
               dispatch(clearCart());
@@ -424,11 +447,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                     text: "Continue to Pay",
                     onPress: async () => {
                       try {
+                        pendingOrderPayloadRef.current = payload;
+                        setPendingOrderPayload(payload);
                         const fallbackSession = await adapter.initiatePayment({
-                          orderId: currentOrderId,
                           amount: paymentAmount,
                           paymentType: "order",
-                          itemsDescription: `GoviMart Order #${currentInvoice}`,
+                          itemsDescription: "GoviMart Order Payment",
                           saveCard: true,
                         });
                         setCheckoutSession(fallbackSession);
@@ -447,11 +471,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         }
 
         // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
+        // Store order payload in ref/state — order will ONLY be created upon payment success!
+        pendingOrderPayloadRef.current = payload;
+        setPendingOrderPayload(payload);
+
         const session = await adapter.initiatePayment({
-          orderId: currentOrderId,
           amount: paymentAmount,
           paymentType: "order",
-          itemsDescription: `GoviMart Order #${currentInvoice}`,
+          itemsDescription: "GoviMart Order Payment",
           saveCard: true,
         });
 
