@@ -134,6 +134,14 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       if (!dateStr) return null;
       if (dateStr instanceof Date) return dateStr;
       const str = String(dateStr).trim();
+      // If it's an ISO timestamp with time/timezone (e.g. 2026-10-29T18:30:00.000Z),
+      // new Date(str) accurately resolves to local calendar date (Oct 30 in UTC+5:30)
+      if (str.includes("T") || str.includes("Z")) {
+        const parsed = new Date(str);
+        if (!isNaN(parsed.getTime())) {
+          return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+        }
+      }
       if (str.includes("-")) {
         const parts = str.split("T")[0].split("-");
         const y = parseInt(parts[0], 10);
@@ -197,6 +205,8 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       return n + (s[(v - 20) % 10] || s[v] || s[0]);
     };
 
+    const expiryDayOrdinal = getOrdinal(expiryDay);
+
     const startMonth = MONTH_SHORT[minAvailDate.getMonth()];
     const startDay = minAvailDate.getDate();
     const startDayOrdinal = getOrdinal(startDay);
@@ -214,6 +224,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     return {
       gapDays,
       expiryDay,
+      expiryDayOrdinal,
       cutoffDate,
       minAvailDate,
       rangeTextLong,
@@ -534,7 +545,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     <Text style={{ fontWeight: "700" }}>Note : </Text>
                     A {seasonalInfo.gapDays}-day gap is required. Packages
-                    expiring on the {seasonalInfo.expiryDay}th can be ordered
+                    expiring on the {seasonalInfo.expiryDayOrdinal} can be ordered
                     between the {seasonalInfo.rangeTextLong}.
                   </Text>
 
@@ -1103,7 +1114,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     <Text style={{ fontWeight: "700" }}>Note : </Text>
                     A {seasonalInfo.gapDays}-day gap is required. Packages
-                    expiring on the {seasonalInfo.expiryDay}th can be ordered
+                    expiring on the {seasonalInfo.expiryDayOrdinal} can be ordered
                     between the {seasonalInfo.rangeTextLong}.
                   </Text>
 

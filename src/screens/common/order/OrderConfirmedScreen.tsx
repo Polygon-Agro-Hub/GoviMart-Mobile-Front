@@ -605,7 +605,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
           paddingBottom: 28,
         }}
       >
-        {/* ─── ORDER CONFIRMED TITLE ──────────────────────────────────── */}
+        {/* ─── ORDER PLACED TITLE ──────────────────────────────────── */}
         <Text
           style={{
             textAlign: "center",
@@ -614,7 +614,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             color: "#111111",
           }}
         >
-          Order Confirmed!
+          Order Placed!
         </Text>
 
         {/* ─── CONFIRMED STAR BADGE (Previous original design) ────────── */}
@@ -640,7 +640,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
               marginLeft: 4,
             }}
           >
-            Confirmed
+            Placed
           </Text>
         </View>
 

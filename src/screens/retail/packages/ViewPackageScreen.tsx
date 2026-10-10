@@ -34,13 +34,19 @@ const getDeliveryCutoffDate = (endDateStr?: string | null): string | null => {
     let month: number;
     let day: number;
 
-    if (typeof endDateStr === "string" && endDateStr.includes("-")) {
-      const parts = endDateStr.split("T")[0].split("-");
+    const str = String(endDateStr).trim();
+    if (str.includes("T") || str.includes("Z")) {
+      const d = new Date(str);
+      year = d.getFullYear();
+      month = d.getMonth();
+      day = d.getDate();
+    } else if (str.includes("-")) {
+      const parts = str.split("T")[0].split("-");
       year = parseInt(parts[0], 10);
       month = parseInt(parts[1], 10) - 1;
       day = parseInt(parts[2], 10);
     } else {
-      const d = new Date(endDateStr);
+      const d = new Date(str);
       year = d.getFullYear();
       month = d.getMonth();
       day = d.getDate();

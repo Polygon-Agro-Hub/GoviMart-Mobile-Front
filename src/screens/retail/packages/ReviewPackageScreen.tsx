@@ -3256,7 +3256,7 @@ const goToNextStep = async () => {
       <AlertModal
         visible={showSuccessOverlay}
         type="success"
-        title="Order Confirmed!"
+        title="Order Placed!"
         message="Order reviewed and dispatched successfully!"
         autoClose={true}
         duration={2000}
