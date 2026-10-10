@@ -394,6 +394,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             couponValue: couponVal,
             couponType: appliedCoupon?.type || null,
             couponCode: appliedCoupon?.code || null,
+            normalDeliveryCharge: initialDeliveryCharge,
           },
         };
 
@@ -522,6 +523,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           couponValue: couponVal,
           couponType: appliedCoupon?.type || null,
           couponCode: appliedCoupon?.code || null,
+          normalDeliveryCharge: initialDeliveryCharge,
         },
       };
 
