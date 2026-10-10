@@ -48,12 +48,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import HomeHeader from "@/component/home/HomeHeader";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
+import ReadyToConfirmBanner, {
+  ReadyToConfirmOrderData,
+} from "@/component/home/ReadyToConfirmBanner";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import CartToast from "@/component/common/CartToast";
 import ViewCartPopup from "@/component/common/ViewCartPopup";
 import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
 import socketService from "@/services/socket/socket.service";
+import orderService from "@/services/order/order.service";
+import notificationService from "@/services/notification/notification.service";
 
 export type { ProductType, PackageType } from "@/types/types";
 
@@ -353,6 +358,159 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       maximumFractionDigits: 2,
     });
 
+  const [readyOrder, setReadyOrder] = useState<ReadyToConfirmOrderData | null>(
+    null,
+  );
+
+  const formatRelativeTime = (dateStr?: string): string => {
+    if (!dateStr) return "Just now";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "Just now";
+
+    const diffMs = Date.now() - date.getTime();
+    if (diffMs < 0) return "Just now";
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 10) return "Just now";
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDays = Math.floor(diffHr / 24);
+    return `${diffDays}d ago`;
+  };
+
+  const isProcessingDateToday = (
+    scheduleDateStr?: string,
+    createdAtStr?: string,
+  ): boolean => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (scheduleDateStr) {
+      const sDate = new Date(scheduleDateStr);
+      if (!isNaN(sDate.getTime())) {
+        const schedDay = new Date(
+          sDate.getFullYear(),
+          sDate.getMonth(),
+          sDate.getDate(),
+        );
+        // Processing date is 2 days before schedule delivery date
+        const procDay = new Date(schedDay);
+        procDay.setDate(procDay.getDate() - 2);
+
+        if (
+          today.getTime() === procDay.getTime() ||
+          (today >= procDay && today < schedDay)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    if (createdAtStr) {
+      const cDate = new Date(createdAtStr);
+      if (!isNaN(cDate.getTime())) {
+        const createdDay = new Date(
+          cDate.getFullYear(),
+          cDate.getMonth(),
+          cDate.getDate(),
+        );
+        if (createdDay.getTime() === today.getTime()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  const fetchReadyToConfirmOrder = useCallback(async () => {
+    if (!userTokenRef.current) {
+      setReadyOrder(null);
+      return;
+    }
+
+    try {
+      // 1. Check notifications first
+      const notifRes = await notificationService.getNotifications(20, 0);
+      if (
+        notifRes.data?.status &&
+        Array.isArray(notifRes.data?.notifications)
+      ) {
+        const notifs = notifRes.data.notifications;
+        const confirmNotif = notifs.find((n) => {
+          const title = (n.title || "").toLowerCase();
+          const isConfirm = title.includes("confirm your order");
+          const isNotCancelled = n.orderStatus?.toLowerCase() !== "cancelled";
+          const isNotFinalized = Number(n.isFinalized) !== 1;
+          return isConfirm && isNotCancelled && isNotFinalized;
+        });
+
+        if (confirmNotif) {
+          const targetId = confirmNotif.processOrderId || confirmNotif.orderId;
+          if (targetId) {
+            setReadyOrder({
+              orderId: targetId,
+              invoiceNo: confirmNotif.invNo || String(targetId),
+              timeAgo: formatRelativeTime(confirmNotif.createdAt),
+              createdAt: confirmNotif.createdAt,
+            });
+            return;
+          }
+        }
+      }
+
+      // 2. Check user's order history
+      const historyRes = await orderService.getOrderHistory();
+      if (
+        historyRes.data?.status &&
+        Array.isArray(historyRes.data?.orderHistory)
+      ) {
+        const history = historyRes.data.orderHistory;
+        const pendingOrder = history.find((ord: any) => {
+          const status = (ord.processStatus || ord.status || "").toLowerCase();
+          if (
+            status === "cancelled" ||
+            status === "delivered" ||
+            status === "picked up" ||
+            status === "return" ||
+            status.includes("return")
+          ) {
+            return false;
+          }
+          if (Number(ord.isFinalized) === 1) {
+            return false;
+          }
+
+          const schedDate = ord.scheduleDate || ord.sheduleDate;
+          const createdDate = ord.createdAt;
+          return isProcessingDateToday(schedDate, createdDate);
+        });
+
+        if (pendingOrder) {
+          const targetId = pendingOrder.orderId || pendingOrder.id;
+          if (targetId) {
+            setReadyOrder({
+              orderId: targetId,
+              invoiceNo:
+                pendingOrder.invoiceNo ||
+                pendingOrder.invNo ||
+                String(targetId),
+              timeAgo: formatRelativeTime(pendingOrder.createdAt),
+              createdAt: pendingOrder.createdAt,
+            });
+            return;
+          }
+        }
+      }
+
+      setReadyOrder(null);
+    } catch (err) {
+      console.warn("[HomeScreen] fetchReadyToConfirmOrder error:", err);
+    }
+  }, []);
+
   const backPressedOnce = useRef(false);
 
   useFocusEffect(
@@ -399,6 +557,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       if (userTokenRef.current) {
         syncUserProfile();
+        fetchReadyToConfirmOrder();
 
         // Sync this user's cart from backend only if not actively modifying locally
         if (!isCartSyncingRef.current) {
@@ -693,15 +852,23 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       handleRefreshItems();
     });
 
+    const unsubscribeNotif = socketService.onNewNotification(() => {
+      fetchReadyToConfirmOrder();
+    });
+
     return () => {
       unsubscribeCatalog();
+      unsubscribeNotif?.();
     };
-  }, [selectedCategoryId, buyerType, isRetail, searchQuery]);
+  }, [selectedCategoryId, buyerType, isRetail, searchQuery, fetchReadyToConfirmOrder]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const promises: Promise<any>[] = [fetchBanners()];
+      const promises: Promise<any>[] = [
+        fetchBanners(),
+        fetchReadyToConfirmOrder(),
+      ];
 
       if (userToken) {
         promises.push(
@@ -829,6 +996,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const handleMyCartNavigation = useCallback(() => {
     navigation.navigate("MyCart");
   }, [navigation]);
+
+  const handleOpenOrderConfirmation = useCallback(
+    (orderId: string | number) => {
+      if (!orderId) return;
+      navigation.navigate("OrderConfirmation", {
+        orderId: String(orderId),
+      });
+    },
+    [navigation],
+  );
 
   const handleToggleUnit = useCallback(
     (productId: number, unit: "g" | "kg") => {
@@ -1202,6 +1379,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       >
         {/* Top Header */}
         <HomeHeader onPressProfile={handleProfileNavigation} />
+
+        {/* Ready To Confirm Order Banner */}
+        {readyOrder && (
+          <ReadyToConfirmBanner
+            order={readyOrder}
+            onPress={() => handleOpenOrderConfirmation(readyOrder.orderId)}
+          />
+        )}
 
         {/* Dynamic Image Slides (Banners) */}
         {loadingBanners ? (
