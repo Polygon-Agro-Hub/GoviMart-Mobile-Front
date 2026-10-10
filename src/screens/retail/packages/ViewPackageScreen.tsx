@@ -105,12 +105,8 @@ const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
 
   const existingPackage = cartPackages.find((p) => p.id === packageId);
 
-  const [packageType, setPackageType] = useState<string | null>(
-    initialPackageType || null,
-  );
-  const [endDate, setEndDate] = useState<string | null>(
-    initialEndDate || null,
-  );
+  const [packageType, setPackageType] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
 
   const [packageItems, setPackageItems] = useState<
     { itemName: string; quantity: number }[]

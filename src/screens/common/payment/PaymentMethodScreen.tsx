@@ -108,6 +108,43 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     setBackConfirmVisible(true);
   };
 
+  const isEarliestDeliveryDate = (): boolean => {
+    const deliveryDateRaw =
+      orderContext?.checkoutDetails?.deliveryDate ||
+      orderContext?.checkoutDetails?.calculatedOrders?.[0]?.date;
+    if (!deliveryDateRaw) return false;
+
+    let scheduledDate: Date | null = null;
+    const str = String(deliveryDateRaw).trim().replace(/\//g, "-");
+    if (str.includes("-")) {
+      const parts = str.split("T")[0].split("-");
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+          scheduledDate = new Date(y, m, d);
+        }
+      }
+    }
+    if (!scheduledDate) {
+      const parsed = new Date(str);
+      if (!isNaN(parsed.getTime())) {
+        scheduledDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+      }
+    }
+    if (!scheduledDate) return false;
+    scheduledDate.setHours(0, 0, 0, 0);
+
+    const now = new Date();
+    const isAfter6PM = now.getHours() >= 18;
+    const extraDays = isAfter6PM ? 3 : 2;
+    const earliestDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + extraDays);
+    earliestDate.setHours(0, 0, 0, 0);
+
+    return scheduledDate.getTime() <= earliestDate.getTime();
+  };
+
   useEffect(() => {
     if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
       paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
@@ -375,128 +412,215 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const deliveryChargeToSave = isFreeDelivery ? 0 : effectiveDeliveryCharge;
 
     if (paymentMethod === "card" && paymentAmount > 0) {
-      try {
-        setSubmitting(true);
-        const payload = {
-          cartId: orderContext?.cartId || 0,
-          paymentMethod: "card",
-          grandTotal: totalAmount,
-          discountAmount: itemDiscount,
-          deliveryCharge: deliveryChargeToSave,
-          creditPaid: creditUsed,
-          moneyPaid: paymentAmount,
-          isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
-          checkoutDetails: {
-            ...(orderContext?.checkoutDetails || {
-              deliveryMethod: orderContext?.deliveryMethod || "home",
-            }),
-            isCoupon: Boolean(appliedCoupon),
-            couponValue: couponVal,
-            couponType: appliedCoupon?.type || null,
-            couponCode: appliedCoupon?.code || null,
-            normalDeliveryCharge: initialDeliveryCharge,
-          },
-        };
+      const isEarliest = isEarliestDeliveryDate();
 
-        const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+      if (isEarliest) {
+        // Earliest possible date: User pays NOW via payment gateway
+        try {
+          setSubmitting(true);
+          const payload = {
+            cartId: orderContext?.cartId || 0,
+            paymentMethod: "card",
+            grandTotal: totalAmount,
+            discountAmount: itemDiscount,
+            deliveryCharge: deliveryChargeToSave,
+            creditPaid: creditUsed,
+            moneyPaid: paymentAmount,
+            isPaid: 1,
+            amount: totalAmount,
+            isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+            checkoutDetails: {
+              ...(orderContext?.checkoutDetails || {
+                deliveryMethod: orderContext?.deliveryMethod || "home",
+              }),
+              isCoupon: Boolean(appliedCoupon),
+              couponValue: couponVal,
+              couponType: appliedCoupon?.type || null,
+              couponCode: appliedCoupon?.code || null,
+              normalDeliveryCharge: initialDeliveryCharge,
+            },
+          };
 
-        // Option 1: 1-Click Pay with Saved Card
-        if (selectedCardOption === "saved_card" && savedCard) {
-          try {
-            const chargeRes = await adapter.chargeSavedCard({
-              cardId: savedCard.id,
-              amount: paymentAmount,
-              itemsDescription: "GoviMart Order Payment",
-              paymentType: "order",
-            });
+          const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
 
-            if (chargeRes.success) {
-              const response = await orderService.createOrder(payload);
-              if (!response.data || !response.data.status || !response.data.data) {
-                throw new Error(response.data?.message || "Failed to finalize order");
-              }
-              const orderData = response.data.data;
-
-              isNavigatingAwayRef.current = true;
-              paymentSessionEndTime = null;
-              dispatch(clearCart());
-              navigation.navigate("OrderConfirmed", {
-                orderId: orderData.orderId,
-                invoiceNumber: orderData.invoiceNumber,
-                total: orderData.total || totalAmount,
-                couponValue: couponVal,
-                orderContext,
+          // Option 1: 1-Click Pay with Saved Card
+          if (selectedCardOption === "saved_card" && savedCard) {
+            try {
+              const chargeRes = await adapter.chargeSavedCard({
+                cardId: savedCard.id,
+                amount: paymentAmount,
+                itemsDescription: "GoviMart Order Payment",
+                paymentType: "order",
               });
-              return;
-            }
-          } catch (chargeErr: any) {
-            console.warn("[PaymentMethodScreen] 1-Click charge failed:", chargeErr);
-            const isInvalid =
-              chargeErr?.response?.data?.cardInvalid ||
-              chargeErr?.message?.includes("invalid") ||
-              chargeErr?.message?.includes("expired") ||
-              chargeErr?.message?.includes("No such object");
 
-            if (isInvalid) {
-              setSavedCard(null);
-              setSelectedCardOption("new_card");
-              Alert.alert(
-                "Card Not Valid",
-                "Your saved card is expired or no longer available. Please enter card details to complete payment.",
-                [
-                  {
-                    text: "Continue to Pay",
-                    onPress: async () => {
-                      try {
-                        pendingOrderPayloadRef.current = payload;
-                        setPendingOrderPayload(payload);
-                        const fallbackSession = await adapter.initiatePayment({
-                          amount: paymentAmount,
-                          paymentType: "order",
-                          itemsDescription: "GoviMart Order Payment",
-                          saveCard: true,
-                        });
-                        setCheckoutSession(fallbackSession);
-                        setCheckoutModalVisible(true);
-                      } catch (launchErr: any) {
-                        Alert.alert("Error", launchErr?.message || "Failed to launch payment sheet.");
-                      }
+              if (chargeRes.success) {
+                const response = await orderService.createOrder(payload);
+                if (!response.data || !response.data.status || !response.data.data) {
+                  throw new Error(response.data?.message || "Failed to finalize order");
+                }
+                const orderData = response.data.data;
+
+                isNavigatingAwayRef.current = true;
+                paymentSessionEndTime = null;
+                dispatch(clearCart());
+                navigation.navigate("OrderConfirmed", {
+                  orderId: orderData.orderId,
+                  invoiceNumber: orderData.invoiceNumber,
+                  total: orderData.total || totalAmount,
+                  couponValue: couponVal,
+                  orderContext,
+                });
+                return;
+              }
+            } catch (chargeErr: any) {
+              console.warn("[PaymentMethodScreen] 1-Click charge failed:", chargeErr);
+              const isInvalid =
+                chargeErr?.response?.data?.cardInvalid ||
+                chargeErr?.message?.includes("invalid") ||
+                chargeErr?.message?.includes("expired") ||
+                chargeErr?.message?.includes("No such object");
+
+              if (isInvalid) {
+                setSavedCard(null);
+                setSelectedCardOption("new_card");
+                Alert.alert(
+                  "Card Not Valid",
+                  "Your saved card is expired or no longer available. Please enter card details to complete payment.",
+                  [
+                    {
+                      text: "Continue to Pay",
+                      onPress: async () => {
+                        try {
+                          pendingOrderPayloadRef.current = payload;
+                          setPendingOrderPayload(payload);
+                          const fallbackSession = await adapter.initiatePayment({
+                            amount: paymentAmount,
+                            paymentType: "order",
+                            itemsDescription: "GoviMart Order Payment",
+                            saveCard: true,
+                          });
+                          setCheckoutSession(fallbackSession);
+                          setCheckoutModalVisible(true);
+                        } catch (launchErr: any) {
+                          Alert.alert("Error", launchErr?.message || "Failed to launch payment sheet.");
+                        }
+                      },
                     },
-                  },
-                ]
-              );
-              return;
+                  ]
+                );
+                return;
+              }
+              throw chargeErr;
             }
-            throw chargeErr;
           }
+
+          // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
+          // Store order payload in ref/state — order will ONLY be created upon payment success!
+          pendingOrderPayloadRef.current = payload;
+          setPendingOrderPayload(payload);
+
+          const session = await adapter.initiatePayment({
+            amount: paymentAmount,
+            paymentType: "order",
+            itemsDescription: "GoviMart Order Payment",
+            saveCard: true,
+          });
+
+          setCheckoutSession(session);
+          setCheckoutModalVisible(true);
+        } catch (err: any) {
+          console.error("[PaymentMethod] Card payment error:", err);
+          Alert.alert(
+            "Payment Failed",
+            err?.response?.data?.message ||
+              err?.message ||
+              "Could not process card payment. Please try again or pay with cash."
+          );
+        } finally {
+          setSubmitting(false);
         }
+        return;
+      } else {
+        // NOT earliest possible date: Do NOT navigate to payment gateway. Confirm order directly with isPaid = 0, amount = 0.0, moneyPaid = 0.0
+        try {
+          setSubmitting(true);
+          const payload = {
+            cartId: orderContext?.cartId || 0,
+            paymentMethod: "card",
+            grandTotal: totalAmount,
+            discountAmount: itemDiscount,
+            deliveryCharge: deliveryChargeToSave,
+            creditPaid: creditUsed,
+            moneyPaid: 0,
+            isPaid: 0,
+            amount: 0,
+            isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+            checkoutDetails: {
+              ...(orderContext?.checkoutDetails || {
+                deliveryMethod: orderContext?.deliveryMethod || "home",
+              }),
+              isCoupon: Boolean(appliedCoupon),
+              couponValue: couponVal,
+              couponType: appliedCoupon?.type || null,
+              couponCode: appliedCoupon?.code || null,
+              normalDeliveryCharge: initialDeliveryCharge,
+            },
+          };
 
-        // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
-        // Store order payload in ref/state — order will ONLY be created upon payment success!
-        pendingOrderPayloadRef.current = payload;
-        setPendingOrderPayload(payload);
-
-        const session = await adapter.initiatePayment({
-          amount: paymentAmount,
-          paymentType: "order",
-          itemsDescription: "GoviMart Order Payment",
-          saveCard: true,
-        });
-
-        setCheckoutSession(session);
-        setCheckoutModalVisible(true);
-      } catch (err: any) {
-        console.error("[PaymentMethod] Card payment error:", err);
-        Alert.alert(
-          "Payment Failed",
-          err?.response?.data?.message ||
-            err?.message ||
-            "Could not process card payment. Please try again or pay with cash."
-        );
-      } finally {
-        setSubmitting(false);
+          const response = await orderService.createOrder(payload);
+          if (response.data && response.data.status && response.data.data) {
+            const orderData = response.data.data;
+            isNavigatingAwayRef.current = true;
+            paymentSessionEndTime = null;
+            dispatch(clearCart());
+            navigation.navigate("OrderConfirmed", {
+              orderId: orderData.orderId,
+              invoiceNumber: orderData.invoiceNumber,
+              total: orderData.total || totalAmount,
+              couponValue: couponVal,
+              orderContext: {
+                ...(orderContext as any),
+                grandTotal: totalAmount,
+                deliveryCharge: deliveryChargeToSave,
+                discount: itemDiscount,
+                creditPaid: creditUsed,
+                moneyPaid: 0,
+                appliedCoupon,
+                isCoupon: Boolean(appliedCoupon),
+                couponValue: couponVal,
+                couponDiscount: couponVal,
+                couponType: appliedCoupon?.type || null,
+                couponCode: appliedCoupon?.code || null,
+                isFreeDeliveryCoupon: isFreeDelivery,
+                checkoutDetails: {
+                  ...(orderContext?.checkoutDetails || {
+                    deliveryMethod: orderContext?.deliveryMethod || "home",
+                  }),
+                  isCoupon: Boolean(appliedCoupon),
+                  couponValue: couponVal,
+                  couponType: appliedCoupon?.type || null,
+                  couponCode: appliedCoupon?.code || null,
+                  normalDeliveryCharge: initialDeliveryCharge,
+                },
+              },
+            });
+            return;
+          } else {
+            throw new Error(response.data?.message || "Failed to finalize order");
+          }
+        } catch (err: any) {
+          console.error("[PaymentMethod] Future card order error:", err);
+          Alert.alert(
+            "Order Failed",
+            err?.response?.data?.message ||
+              err?.message ||
+              "Could not place your order. Please try again."
+          );
+        } finally {
+          setSubmitting(false);
+        }
+        return;
       }
-      return;
     }
 
     try {
