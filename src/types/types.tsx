@@ -44,6 +44,7 @@ export interface OrderContext {
   packageTotal: number;
   productTotal: number;
   discount: number;
+  packages?: any[];
   deliveryCharge?: number;
   isFinalizeImdt?: number;
   deliveryMethod?: "home" | "pickup";
@@ -115,6 +116,8 @@ export type RootStackParamList = {
     packageName: string;
     image: string;
     price: number;
+    packageType?: string;
+    endDate?: string;
   };
   MyCart: undefined;
   PackageConfirmation: { orderContext?: OrderContext } | undefined;
@@ -198,6 +201,8 @@ export interface PackageType {
   subTotal: string;
   image: string;
   totalItems?: number;
+  packageType?: string;
+  endDate?: string;
 }
 
 export interface ProductType {

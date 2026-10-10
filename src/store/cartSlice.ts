@@ -9,6 +9,8 @@ export interface PackageCartItem {
   quantity: number;
   totalItems: number;
   isUnavailable?: boolean;
+  packageType?: string | null;
+  endDate?: string | null;
 }
 
 export interface ProductCartItem {

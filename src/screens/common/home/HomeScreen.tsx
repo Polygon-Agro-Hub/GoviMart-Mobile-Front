@@ -1076,6 +1076,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           price,
           quantity: 1,
           totalItems: pkg.totalItems || 0,
+          packageType: pkg.packageType || null,
+          endDate: pkg.endDate || null,
         }),
       );
 
@@ -1518,6 +1520,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             packageName: product.displayName,
                             image: product.image,
                             price: parseFloat(product.subTotal),
+                            packageType: product.packageType,
+                            endDate: product.endDate,
                           });
                         } else {
                           navigation.navigate("ViewProduct", {

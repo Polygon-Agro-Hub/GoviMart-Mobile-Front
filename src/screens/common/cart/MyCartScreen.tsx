@@ -147,6 +147,27 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         };
     }, [syncAndCheckCart]);
 
+    const handleBackPress = useCallback(() => {
+        navigation.navigate("Home");
+    }, [navigation]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onHardwareBack = () => {
+                handleBackPress();
+                return true;
+            };
+
+            const backSub = require("react-native").BackHandler.addEventListener(
+                "hardwareBackPress",
+                onHardwareBack
+            );
+            return () => {
+                backSub.remove();
+            };
+        }, [handleBackPress])
+    );
+
     useFocusEffect(
         useCallback(() => {
             syncAndCheckCart();
@@ -414,6 +435,14 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             packageTotal,
             productTotal,
             discount: totalDiscount,
+            packages: packages.map((p) => ({
+                id: p.id,
+                name: p.name,
+                packageType: p.packageType,
+                endDate: p.endDate,
+                quantity: p.quantity,
+                price: p.price,
+            })),
         };
 
         if (packages.length > 0) {
@@ -436,6 +465,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 titleColor="black"
                 showBackButton={true}
                 navigation={navigation}
+                onBackPress={handleBackPress}
             />
 
             <ScrollView

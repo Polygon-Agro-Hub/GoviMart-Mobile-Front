@@ -27,19 +27,84 @@ import AuthPromptModal from "@/component/common/AuthPromptModal";
 import productService from "@/services/product/product.service";
 import cartService from "@/services/cart/cart.service";
 
+const getDeliveryCutoffDate = (endDateStr?: string | null): string | null => {
+  if (!endDateStr) return null;
+  try {
+    let year: number;
+    let month: number;
+    let day: number;
+
+    if (typeof endDateStr === "string" && endDateStr.includes("-")) {
+      const parts = endDateStr.split("T")[0].split("-");
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+    } else {
+      const d = new Date(endDateStr);
+      year = d.getFullYear();
+      month = d.getMonth();
+      day = d.getDate();
+    }
+
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+
+    // Delivery cutoff is [Expire Date] - 2 days
+    const cutoffDate = new Date(year, month, day);
+    cutoffDate.setDate(cutoffDate.getDate() - 2);
+
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    const displayDay = cutoffDate.getDate();
+    const displayMonth = monthNames[cutoffDate.getMonth()];
+    const displayYear = cutoffDate.getFullYear();
+
+    return `${displayDay} ${displayMonth} ${displayYear}`;
+  } catch (err) {
+    console.error("Error calculating delivery cutoff date:", err);
+    return null;
+  }
+};
+
 type Props = StackScreenProps<RootStackParamList, "ViewPackage">;
 
 const ViewPackage: React.FC<Props> = ({ navigation, route }) => {
-  const { packageId, packageName, image, price } = route.params;
+  const {
+    packageId,
+    packageName,
+    image,
+    price,
+    packageType: initialPackageType,
+    endDate: initialEndDate,
+  } = route.params;
   const dispatch = useDispatch();
   const token = useSelector((state: RootState) => state.auth.token);
   const cartProducts = useSelector((state: RootState) => state.cart.products);
   const cartPackages = useSelector((state: RootState) => state.cart.packages);
-const totalCartCount =
-  cartProducts.length +
-  cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
+  const totalCartCount =
+    cartProducts.length +
+    cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
 
   const existingPackage = cartPackages.find((p) => p.id === packageId);
+
+  const [packageType, setPackageType] = useState<string | null>(
+    initialPackageType || null,
+  );
+  const [endDate, setEndDate] = useState<string | null>(
+    initialEndDate || null,
+  );
 
   const [packageItems, setPackageItems] = useState<
     { itemName: string; quantity: number }[]
@@ -78,6 +143,28 @@ const totalCartCount =
             a.itemName.localeCompare(b.itemName, undefined, { sensitivity: "base" })
           );
           setPackageItems(items);
+
+          const returnedType =
+            response.data.packageType || response.data.packageInfo?.packageType;
+          const returnedEndDate =
+            response.data.endDate || response.data.packageInfo?.endDate;
+          if (returnedType) setPackageType(returnedType);
+          if (returnedEndDate) setEndDate(returnedEndDate);
+
+          if (existingPackage && (returnedType || returnedEndDate)) {
+            dispatch(
+              addPackage({
+                id: packageId,
+                name: packageName,
+                image: image,
+                price: price,
+                quantity: existingPackage.quantity,
+                totalItems: totalItems || existingPackage.totalItems || 1,
+                packageType: returnedType || existingPackage.packageType || null,
+                endDate: returnedEndDate || existingPackage.endDate || null,
+              })
+            );
+          }
         }
       } catch (error) {
         console.error("failed to fetch package details: ", error);
@@ -93,6 +180,11 @@ const totalCartCount =
     (total, item) => total + item.quantity,
     0,
   );
+
+  const isOneTimePackage =
+    (packageType || "").trim().toLowerCase() === "one time";
+  const deliveryCutoffDate = getDeliveryCutoffDate(endDate);
+  const showSeasonalSection = isOneTimePackage && !!deliveryCutoffDate;
 
   const increaseQty = () => {
     setQuantity((prev) => prev + 1);
@@ -115,6 +207,8 @@ const totalCartCount =
         price: price,
         quantity: quantity,
         totalItems: totalItems,
+        packageType: packageType || null,
+        endDate: endDate || null,
       }),
     );
     if (token) {
@@ -259,6 +353,54 @@ const totalCartCount =
             }}
           />
 
+          {/* Seasonal Package Section (Only for One Time packages) */}
+          {showSeasonalSection && (
+            <View
+              style={{
+                backgroundColor: "#E3FFEA",
+                borderRadius: 18,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
+                <Ionicons
+                  name="time"
+                  size={20}
+                  color="#000000"
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: "#000000",
+                  }}
+                >
+                  Seasonal Package
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#000000",
+                  lineHeight: 19,
+                }}
+              >
+                This package will no longer be available{"\n"}
+                for delivery after this date : {deliveryCutoffDate}.{"\n"}
+                We appreciate your understanding and support.
+              </Text>
+            </View>
+          )}
+
           {/* Section Title */}
           <Text
             style={{
@@ -266,7 +408,7 @@ const totalCartCount =
               fontWeight: "700",
               color: "#111827",
               marginBottom: 10,
-              paddingHorizontal: 15,
+              paddingHorizontal: 0,
             }}
           >
             All ({totalItems} Items)
@@ -281,7 +423,7 @@ const totalCartCount =
                 justifyContent: "space-between",
                 alignItems: "center",
                 paddingVertical: 14,
-                paddingHorizontal: 15,
+                paddingHorizontal: 0,
                 borderBottomWidth: index === packageItems.length - 1 ? 0 : 1,
                 borderBottomColor: "#E5E7EB",
               }}
