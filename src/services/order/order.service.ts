@@ -143,6 +143,15 @@ class OrderService {
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
     }
 
+    async confirmOrderWithLivePrices(payload: {
+        orderId?: number | string;
+        processOrderId?: number | string;
+        newTotal?: number;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CONFIRM_ORDER, payload, { headers });
+    }
+
     async cancelOrder(payload: {
         orderId?: number | string;
         processOrderId?: number | string;

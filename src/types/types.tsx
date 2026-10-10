@@ -151,7 +151,9 @@ export type RootStackParamList = {
   ChoosePickupCentre: { orderContext?: OrderContext } | undefined;
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
+  ConfirmOrderDetailsScreen:{ orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
+  OrderConfirmation: { orderId: string } | undefined;
  ReviewPackage: {
   orderId?: number | string;
   invoiceNo?: string;

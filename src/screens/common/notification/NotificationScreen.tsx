@@ -52,7 +52,24 @@ interface NotificationProps {
     navigation: NotificationNavigationProp;
 }
 
-const getNotificationGroup = (dateStr?: string): "Today" | "Yesterday" | "Earlier" => {
+// ─── TITLE MATCHERS ──────────────────────────────────────────────────────────
+const isPackageReviewTitle = (title?: string) => {
+    const t = (title || "").toLowerCase();
+    return (
+        t.includes("package finalization review") ||
+        t.includes("review package") ||
+        t.includes("package review")
+    );
+};
+
+// Matches "Please Confirm Your Order" and "Please Confirm Your Order!"
+const isOrderConfirmTitle = (title?: string) =>
+    (title || "").toLowerCase().includes("confirm your order");
+
+// ─── DATE HELPERS ────────────────────────────────────────────────────────────
+const getNotificationGroup = (
+    dateStr?: string,
+): "Today" | "Yesterday" | "Earlier" => {
     if (!dateStr) return "Today";
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return "Today";
@@ -62,15 +79,15 @@ const getNotificationGroup = (dateStr?: string): "Today" | "Yesterday" | "Earlie
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const targetDate = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+    );
 
-    if (targetDate.getTime() === today.getTime()) {
-        return "Today";
-    } else if (targetDate.getTime() === yesterday.getTime()) {
-        return "Yesterday";
-    } else {
-        return "Earlier";
-    }
+    if (targetDate.getTime() === today.getTime()) return "Today";
+    if (targetDate.getTime() === yesterday.getTime()) return "Yesterday";
+    return "Earlier";
 };
 
 const formatNotificationTime = (dateStr?: string, group?: string): string => {
@@ -95,12 +112,20 @@ const formatNotificationTime = (dateStr?: string, group?: string): string => {
     return timeStr;
 };
 
-const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => {
+// ─── SERVER -> UI MAPPER ─────────────────────────────────────────────────────
+const mapServerItemToUi = (
+    item: ServerNotificationItem,
+): UiNotificationItem => {
     const group = getNotificationGroup(item.createdAt);
     const time = formatNotificationTime(item.createdAt, group);
     const isReadBool = Number(item.isRead) === 1 || Boolean(item.isRead);
-    const isFinalizedBool = Number(item.isFinalized) === 1 || item.isFinalized === true;
-    const actionRequired = isActionRequiredNotification(item.title);
+    const isFinalizedBool =
+        Number(item.isFinalized) === 1 || item.isFinalized === true;
+
+    // "Please Confirm Your Order" always shows the Action Required badge
+    const actionRequired =
+        isActionRequiredNotification(item.title) ||
+        isOrderConfirmTitle(item.title);
 
     let messageText = item.message || "";
     const returnReason = (item as any).returnReason;
@@ -108,12 +133,15 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     const effectiveReason =
         returnReason && returnReason.toLowerCase() === "other" && returnNote
             ? returnNote
-            : returnNote || (returnReason && returnReason.toLowerCase() !== "other" ? returnReason : "");
+            : returnNote ||
+              (returnReason && returnReason.toLowerCase() !== "other"
+                  ? returnReason
+                  : "");
 
     if (effectiveReason) {
         messageText = messageText.replace(
             /Reason\s*:\s*[“"'\`\u201C\u201D\u2018\u2019]?Other[”"'\`\u201C\u201D\u2018\u2019]?/gi,
-            `Reason : “${effectiveReason}”`
+            `Reason : “${effectiveReason}”`,
         );
     }
 
@@ -124,7 +152,7 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
             const trimmedPrefix = prefix.trimEnd();
             const hasPunctuation = /[.!?]$/.test(trimmedPrefix);
             return trimmedPrefix + (hasPunctuation ? "" : ".") + "\n" + reasonTag;
-        }
+        },
     );
 
     return {
@@ -144,15 +172,7 @@ const mapServerItemToUi = (item: ServerNotificationItem): UiNotificationItem => 
     };
 };
 
-const isPackageReviewTitle = (title?: string) => {
-    const t = (title || "").toLowerCase();
-    return (
-        t.includes("package finalization review") ||
-        t.includes("review package") ||
-        t.includes("package review")
-    );
-};
-
+// ─── SCREEN ──────────────────────────────────────────────────────────────────
 const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     const buyerType = useSelector(
         (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
@@ -189,34 +209,39 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
             const subscription = BackHandler.addEventListener(
                 "hardwareBackPress",
-                onBackPress
+                onBackPress,
             );
 
             return () => subscription.remove();
-        }, [showMenu, navigation])
+        }, [showMenu, navigation]),
     );
 
     // Fetch notifications from API
-    const loadNotifications = useCallback(async (showLoadingSpinner = true) => {
-        if (showLoadingSpinner) setIsLoading(true);
-        try {
-            const res = await notificationService.getNotifications(50, 0);
-            if (res.data?.status && Array.isArray(res.data?.notifications)) {
-                let uiItems = res.data.notifications.map(mapServerItemToUi);
-                if (!isRetail) {
-                    uiItems = uiItems.filter((n) => !isPackageReviewTitle(n.title));
+    const loadNotifications = useCallback(
+        async (showLoadingSpinner = true) => {
+            if (showLoadingSpinner) setIsLoading(true);
+            try {
+                const res = await notificationService.getNotifications(50, 0);
+                if (res.data?.status && Array.isArray(res.data?.notifications)) {
+                    let uiItems = res.data.notifications.map(mapServerItemToUi);
+                    if (!isRetail) {
+                        uiItems = uiItems.filter(
+                            (n) => !isPackageReviewTitle(n.title),
+                        );
+                    }
+                    setNotifications(uiItems);
+                    // Keep global store in sync for badge on all tabs
+                    updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
                 }
-                setNotifications(uiItems);
-                // Keep global store in sync for badge on all tabs
-                updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
+            } catch (error) {
+                console.warn("Failed to load notifications from API:", error);
+            } finally {
+                setIsLoading(false);
+                setIsRefreshing(false);
             }
-        } catch (error) {
-            console.warn("Failed to load notifications from API:", error);
-        } finally {
-            setIsLoading(false);
-            setIsRefreshing(false);
-        }
-    }, [isRetail]);
+        },
+        [isRetail],
+    );
 
     useEffect(() => {
         loadNotifications(true);
@@ -225,28 +250,30 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         socketService.connect();
 
         // Listen for live socket notifications (lightweight trigger or full item)
-        const unsubscribeNotif = socketService.onNewNotification((serverItem: any) => {
-            // If full notification fields were provided, optimistically display
-            if (serverItem?.id && serverItem?.title && serverItem?.createdAt) {
-                const uiItem = mapServerItemToUi(serverItem);
-                if (isRetail || !isPackageReviewTitle(uiItem.title)) {
-                    setNotifications((prev) => {
-                        if (prev.some((n) => n.id === uiItem.id)) {
-                            return prev;
-                        }
-                        return [uiItem, ...prev];
-                    });
+        const unsubscribeNotif = socketService.onNewNotification(
+            (serverItem: any) => {
+                // If full notification fields were provided, optimistically display
+                if (serverItem?.id && serverItem?.title && serverItem?.createdAt) {
+                    const uiItem = mapServerItemToUi(serverItem);
+                    if (isRetail || !isPackageReviewTitle(uiItem.title)) {
+                        setNotifications((prev) => {
+                            if (prev.some((n) => n.id === uiItem.id)) {
+                                return prev;
+                            }
+                            return [uiItem, ...prev];
+                        });
+                    }
                 }
-            }
-            // Once triggered, always fetch latest search/data from DB to update user state cleanly
-            loadNotifications(false);
-        });
+                // Always re-fetch latest data from DB to keep state clean
+                loadNotifications(false);
+            },
+        );
 
         // Listen for unread count updates
         const unsubscribeCount = socketService.onUnreadCountUpdate((count) => {
             if (count === 0) {
                 setNotifications((prev) =>
-                    prev.map((n) => (n.isRead ? n : { ...n, isRead: true }))
+                    prev.map((n) => (n.isRead ? n : { ...n, isRead: true })),
                 );
             }
         });
@@ -268,10 +295,10 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         if (!item.isRead) {
             setNotifications((previous) => {
                 const nextList = previous.map((n) =>
-                    n.id === item.id ? { ...n, isRead: true } : n
+                    n.id === item.id ? { ...n, isRead: true } : n,
                 );
                 const unread = nextList.filter((n) => !n.isRead).length;
-                // Update global store so badge clears on ALL tabs (Sales Dash pattern)
+                // Update global store so badge clears on ALL tabs
                 updateGlobalUnreadCount(unread);
                 socketService.emitLocalUnreadCount(unread);
                 return nextList;
@@ -283,13 +310,18 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             }
         }
 
-        // Navigate based on notification title/type
+        const targetId = item.processOrderId || item.orderId;
+        const isCancelled =
+            !!item.orderStatus && item.orderStatus.toLowerCase() === "cancelled";
+
+        // 1) Package finalization review
         if (isRetail && isPackageReviewTitle(item.title)) {
-            if (item.orderStatus && item.orderStatus.toLowerCase() === "cancelled") {
+            if (isCancelled) {
                 setAlertConfig({
                     visible: true,
                     title: "Cannot Proceed!",
-                    message: "You have already cancelled this order. You cannot proceed to the payment.",
+                    message:
+                        "You have already cancelled this order. You cannot proceed to the payment.",
                     type: "error",
                 });
                 return;
@@ -300,20 +332,45 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 setAlertConfig({
                     visible: true,
                     title: "Already Finalized!",
-                    message: "You have already reviewed and finalized your order. You cannot make any further changes.",
+                    message:
+                        "You have already reviewed and finalized your order. You cannot make any further changes.",
                     type: "warning",
                 });
                 return;
             }
 
             navigation.navigate("ReviewPackage", {
-    orderId: item.processOrderId || item.orderId,
-    invoiceNo: item.invNo,
-    refreshKey: Date.now(), // forces ReviewPackage to reload fresh data
-});
-        } else if (item.processOrderId || item.orderId) {
+                orderId: targetId,
+                invoiceNo: item.invNo,
+                refreshKey: Date.now(), // forces ReviewPackage to reload fresh data
+            });
+            return;
+        }
+
+        // 2) Please Confirm Your Order -> Order Confirmation screen
+        if (isOrderConfirmTitle(item.title)) {
+            if (!targetId) return;
+
+            if (isCancelled) {
+                setAlertConfig({
+                    visible: true,
+                    title: "Cannot Proceed!",
+                    message: "This order has already been cancelled.",
+                    type: "error",
+                });
+                return;
+            }
+
+            navigation.navigate("OrderConfirmation", {
+                orderId: String(targetId),
+            });
+            return;
+        }
+
+        // 3) Everything else -> Order Details
+        if (targetId) {
             navigation.navigate("OrderDetails", {
-                orderId: String(item.processOrderId || item.orderId),
+                orderId: String(targetId),
             });
         }
     };
@@ -325,9 +382,9 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             previous.map((n) => ({
                 ...n,
                 isRead: true,
-            }))
+            })),
         );
-        // Clear badge globally across ALL tabs (Sales Dash pattern)
+        // Clear badge globally across ALL tabs
         updateGlobalUnreadCount(0);
         socketService.emitLocalUnreadCount(0);
         try {
@@ -340,17 +397,17 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     // GROUP NOTIFICATIONS
     const todayNotifications = useMemo(
         () => notifications.filter((item) => item.group === "Today"),
-        [notifications]
+        [notifications],
     );
 
     const yesterdayNotifications = useMemo(
         () => notifications.filter((item) => item.group === "Yesterday"),
-        [notifications]
+        [notifications],
     );
 
     const earlierNotifications = useMemo(
         () => notifications.filter((item) => item.group === "Earlier"),
-        [notifications]
+        [notifications],
     );
 
     // NOTIFICATION CARD
@@ -409,12 +466,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                                 </Text>
                             </View>
 
-                            <Text
-                                style={{
-                                    fontSize: 12,
-                                    color: "#6B7280",
-                                }}
-                            >
+                            <Text style={{ fontSize: 12, color: "#6B7280" }}>
                                 {item.time}
                             </Text>
                         </View>
@@ -453,12 +505,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                             {item.title}
                         </Text>
 
-                        <Text
-                            style={{
-                                fontSize: 12,
-                                color: "#6B7280",
-                            }}
-                        >
+                        <Text style={{ fontSize: 12, color: "#6B7280" }}>
                             {item.time}
                         </Text>
                     </View>
@@ -484,20 +531,33 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                             lineHeight: 18,
                             fontWeight: "700",
                             color: "#111827",
-                        }
+                        },
                     )}
                 </Text>
             </TouchableOpacity>
         );
     };
 
+    const renderGroup = (label: string, list: UiNotificationItem[], last = false) =>
+        list.length > 0 ? (
+            <View style={{ marginBottom: last ? 0 : 6 }}>
+                <Text
+                    style={{
+                        fontSize: 13.5,
+                        fontWeight: "700",
+                        color: "#111827",
+                        marginBottom: 10,
+                        marginTop: 4,
+                    }}
+                >
+                    {label}
+                </Text>
+                {list.map(renderNotification)}
+            </View>
+        ) : null;
+
     return (
-        <View
-            style={{
-                flex: 1,
-                backgroundColor: "#FFFFFF",
-            }}
-        >
+        <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
             {/* HEADER WITH 3-DOTS BUTTON & NO BACK BUTTON */}
             <CustomHeader
                 title="Notifications"
@@ -568,10 +628,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                         <TouchableOpacity
                             activeOpacity={0.7}
                             onPress={handleMarkAllAsRead}
-                            style={{
-                                paddingVertical: 8,
-                                paddingHorizontal: 14,
-                            }}
+                            style={{ paddingVertical: 8, paddingHorizontal: 14 }}
                         >
                             <Text
                                 style={{
@@ -637,7 +694,8 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                             marginTop: 4,
                         }}
                     >
-                        You’ll get real-time updates regarding your orders and packages right here.
+                        You’ll get real-time updates regarding your orders and
+                        packages right here.
                     </Text>
                 </ScrollView>
             ) : (
@@ -657,59 +715,9 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                         />
                     }
                 >
-                    {/* TODAY */}
-                    {todayNotifications.length > 0 && (
-                        <View style={{ marginBottom: 6 }}>
-                            <Text
-                                style={{
-                                    fontSize: 13.5,
-                                    fontWeight: "700",
-                                    color: "#111827",
-                                    marginBottom: 10,
-                                    marginTop: 4,
-                                }}
-                            >
-                                Today
-                            </Text>
-                            {todayNotifications.map(renderNotification)}
-                        </View>
-                    )}
-
-                    {/* YESTERDAY */}
-                    {yesterdayNotifications.length > 0 && (
-                        <View style={{ marginBottom: 6 }}>
-                            <Text
-                                style={{
-                                    fontSize: 13.5,
-                                    fontWeight: "700",
-                                    color: "#111827",
-                                    marginBottom: 10,
-                                    marginTop: 4,
-                                }}
-                            >
-                                Yesterday
-                            </Text>
-                            {yesterdayNotifications.map(renderNotification)}
-                        </View>
-                    )}
-
-                    {/* EARLIER */}
-                    {earlierNotifications.length > 0 && (
-                        <View>
-                            <Text
-                                style={{
-                                    fontSize: 13.5,
-                                    fontWeight: "700",
-                                    color: "#111827",
-                                    marginBottom: 10,
-                                    marginTop: 4,
-                                }}
-                            >
-                                Earlier
-                            </Text>
-                            {earlierNotifications.map(renderNotification)}
-                        </View>
-                    )}
+                    {renderGroup("Today", todayNotifications)}
+                    {renderGroup("Yesterday", yesterdayNotifications)}
+                    {renderGroup("Earlier", earlierNotifications, true)}
                 </ScrollView>
             )}
 
@@ -725,8 +733,12 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 autoClose={false}
                 showOkButton={true}
                 okButtonText="OK"
-                onOkPress={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
-                onClose={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+                onOkPress={() =>
+                    setAlertConfig((prev) => ({ ...prev, visible: false }))
+                }
+                onClose={() =>
+                    setAlertConfig((prev) => ({ ...prev, visible: false }))
+                }
             />
         </View>
     );

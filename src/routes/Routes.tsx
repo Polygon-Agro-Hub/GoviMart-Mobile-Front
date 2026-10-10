@@ -43,6 +43,7 @@ import PaymentMethod from "@/screens/common/payment/PaymentMethodScreen";
 import PaymentScreen from "@/screens/common/payment/PaymentScreen";
 import OrderDeliveryMethod from "@/screens/common/locations/OrderDeliveryMethodScreen";
 import OrderConfirmed from "@/screens/common/order/OrderConfirmedScreen";
+import OrderConfirmation from "@/screens/common/order/OrderConfirmed";
 import SavedAddresses from "@/screens/common/locations/SavedAddressesScreen";
 import EditAddress from "@/screens/common/locations/EditAddressScreen";
 import AddNewAddress from "@/screens/common/locations/AddNewAddressScreen";
@@ -51,6 +52,7 @@ import ChoosePickupCentre from "@/screens/common/locations/ChoosePickupCentreScr
 import ViewLocation from "@/screens/common/locations/ViewLocation";
 import OrderHistory from "@/screens/common/order/OrderHistoryScreen";
 import OrderDetails from "@/screens/common/order/OrderDetailsScreen";
+import ConfirmOrderDetailsScreen from "@/screens/common/order/ConfirmOrderDetailsScreen";
 import OrderCancelConfirmation from "@/screens/common/order/OrderCancelConfirmedScreen";
 import ReportComplaint from "@/screens/common/complaints/ReportComplaintScreen";
 import ComplaintHistory from "@/screens/common/complaints/ComplaintHistoryScreen";
@@ -204,6 +206,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "PaymentScreen", component: PaymentScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderDeliveryMethod", component: OrderDeliveryMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderConfirmed", component: OrderConfirmed, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderConfirmation", component: OrderConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "SavedAddresses", component: SavedAddresses, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "EditAddress", component: EditAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "AddNewAddress", component: AddNewAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
@@ -212,6 +215,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ViewLocation", component: ViewLocation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderHistory", component: OrderHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderDetails", component: OrderDetails, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ConfirmOrderDetailsScreen", component: ConfirmOrderDetailsScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderCancelConfirmation", component: OrderCancelConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ReportComplaint", component: ReportComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
