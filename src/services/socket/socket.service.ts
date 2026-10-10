@@ -6,21 +6,18 @@ import { store } from "@/store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import notificationService, { ServerNotificationItem, NotificationTriggerPayload } from "../notification/notification.service";
 import { updateGlobalUnreadCount, getGlobalUnreadCount } from "@/store/notificationStore";
-import { setPackingSlots } from "@/store/packageReviewSlice";
 
 const LAST_NOTIFIED_ID_KEY = "@govimart_last_notified_notification_id";
 
 type NotificationCallback = (notification: NotificationTriggerPayload | ServerNotificationItem) => void;
 type UnreadCountCallback = (unreadCount: number) => void;
 type CatalogUpdateCallback = (data?: any) => void;
-type PackingSlotsCallback = (data?: any) => void;
 
 class SocketService {
   private socket: Socket | null = null;
   private notificationListeners: Set<NotificationCallback> = new Set();
   private unreadCountListeners: Set<UnreadCountCallback> = new Set();
   private catalogListeners: Set<CatalogUpdateCallback> = new Set();
-  private packingSlotsListeners: Set<PackingSlotsCallback> = new Set();
 
   private isConnecting: boolean = false;
   private currentUserId: number | null = null;
@@ -170,38 +167,6 @@ class SocketService {
       this.socket.on("item_status_changed", handleCatalogUpdate);
       this.socket.on("product_status_changed", handleCatalogUpdate);
       this.socket.on("package_status_changed", handleCatalogUpdate);
-
-      const handlePackingSlotsUpdate = (data: any) => {
-        console.log("📦 [SocketService] Received packing_slots_updated via socket:", data);
-        if (data && typeof data.availableSlots === "number") {
-          const currentScheduleDate = store.getState().packageReview.scheduleDateStr;
-          const eventDate = data.scheduleDate ? String(data.scheduleDate).split("T")[0] : null;
-          const viewDate = currentScheduleDate ? String(currentScheduleDate).split("T")[0] : null;
-
-          // Update Redux state if date matches or if not restricted
-          if (!eventDate || !viewDate || eventDate === viewDate) {
-            store.dispatch(
-              setPackingSlots({
-                availableSlots: Number(data.availableSlots),
-                targetLimit: Number(data.targetLimit || 50),
-                isLimitReached: Boolean(data.isLimitReached || Number(data.availableSlots) <= 0),
-                unreadReminderDays: typeof data.unreadReminderDays === "number" ? data.unreadReminderDays : undefined,
-              })
-            );
-          }
-        }
-
-        this.packingSlotsListeners.forEach((listener) => {
-          try {
-            listener(data);
-          } catch (e) {
-            console.error("[SocketService] Packing slots listener error:", e);
-          }
-        });
-      };
-
-      this.socket.on("packing_slots_updated", handlePackingSlotsUpdate);
-      this.socket.on("order_count_updated", handlePackingSlotsUpdate);
 
       this.socket.on("connect_error", (err) => {
         this.isConnecting = false;
@@ -409,13 +374,6 @@ class SocketService {
     this.catalogListeners.add(callback);
     return () => {
       this.catalogListeners.delete(callback);
-    };
-  }
-
-  onPackingSlotsUpdate(callback: PackingSlotsCallback): () => void {
-    this.packingSlotsListeners.add(callback);
-    return () => {
-      this.packingSlotsListeners.delete(callback);
     };
   }
 

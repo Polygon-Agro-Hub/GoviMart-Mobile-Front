@@ -1160,19 +1160,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     };
   }, [mode, currentStep, selectedAlaCartCategory, checkAllAvailability]);
 
-  // Real-time Packing Target Slots & Available Orders update via Socket.IO
-  useEffect(() => {
-    const unsubscribe = socketService.onPackingSlotsUpdate((data) => {
-      console.log(
-        "📦 [ReviewPackageScreen] Real-time packing slot update received via Socket.IO:",
-        data,
-      );
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
   // Check package & product availability whenever the user enters the confirm step
   useEffect(() => {
     if (mode === "flow" && currentStep.type === "confirm") {
@@ -1939,7 +1926,7 @@ const goToNextStep = async () => {
 
               <View className="mt-5">
                 <HurryBanner
-                  ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 50}
+                  ordersLeft={availableSlots > 0 ? availableSlots : 30}
                   date={scheduleDateStr}
                   showCancelLink={true}
                   onCancelOrder={onCancelOrder}
@@ -2082,7 +2069,7 @@ const goToNextStep = async () => {
               <View>
                 <View className="bg-white pt-1 pb-3">
                   <HurryBanner
-                    ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 50}
+                    ordersLeft={availableSlots > 0 ? availableSlots : 30}
                     date={scheduleDateStr}
                     showCancelLink
                     onCancelOrder={onCancelOrder}
@@ -2277,7 +2264,7 @@ const goToNextStep = async () => {
         >
           <View className="bg-white pt-1 pb-3">
             <HurryBanner
-              ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 50}
+              ordersLeft={availableSlots > 0 ? availableSlots : 30}
               date={scheduleDateStr}
               showCancelLink
               onCancelOrder={onCancelOrder}
@@ -2445,7 +2432,7 @@ const goToNextStep = async () => {
         >
           <View className="bg-white pt-1 pb-3">
             <HurryBanner
-              ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 50}
+              ordersLeft={availableSlots > 0 ? availableSlots : 30}
               date={scheduleDateStr}
               showCancelLink
               onCancelOrder={onCancelOrder}
