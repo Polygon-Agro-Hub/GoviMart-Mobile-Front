@@ -4,7 +4,6 @@ import {
     Text,
     TouchableOpacity,
     Platform,
-    ActivityIndicator,
     StyleProp,
     ViewStyle,
 } from "react-native";
@@ -211,34 +210,30 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                 onPress={onConfirm}
                 style={{
                     height: 52,
-                    backgroundColor: submitting ? "#8799A3" : "#000000",
+                    backgroundColor: "#000000",
                     borderRadius: 26,
                     justifyContent: "center",
                     alignItems: "center",
                     marginTop: 16,
                     shadowColor: "#000",
-                    shadowOpacity: submitting ? 0 : 0.15,
+                    shadowOpacity: 0.15,
                     shadowRadius: 6,
                     shadowOffset: {
                         width: 0,
                         height: 3,
                     },
-                    elevation: submitting ? 0 : 4,
+                    elevation: 4,
                 }}
             >
-                {submitting ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                    <Text
-                        style={{
-                            color: "#FFFFFF",
-                            fontSize: 16,
-                            fontWeight: "700",
-                        }}
-                    >
-                        Confirm Payment Method
-                    </Text>
-                )}
+                <Text
+                    style={{
+                        color: "#FFFFFF",
+                        fontSize: 16,
+                        fontWeight: "700",
+                    }}
+                >
+                    Confirm Payment Method
+                </Text>
             </TouchableOpacity>
         </View>
     );

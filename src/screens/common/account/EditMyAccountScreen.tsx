@@ -1508,7 +1508,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       <Modal
         visible={showCameraPermission}
         animationType="slide"
-        onRequestClose={() => setShowCameraPermission(false)}
+        onRequestClose={() => {}}
       >
         <CameraAccess
           onRequestPermission={ImagePicker.requestCameraPermissionsAsync}
