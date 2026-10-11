@@ -540,6 +540,35 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             return;
           }
 
+          if (
+            orderInfo?.isConfirmed &&
+            (Number(orderInfo.isConfirmed) === 1 || orderInfo.isConfirmed === true)
+          ) {
+            dispatch(setLoadingReview(false));
+            Alert.alert(
+              "Already Confirmed!",
+              "You have already confirmed this order.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (effectiveOrderId) {
+                      navigation.replace("OrderDetails", {
+                        orderId: String(effectiveOrderId),
+                      });
+                    } else if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    } else {
+                      navigation.replace("Home");
+                    }
+                  },
+                },
+              ],
+              { cancelable: false },
+            );
+            return;
+          }
+
           let resolvedProcessOrderId = null;
           let resolvedInvNo = "INV-2660000";
           let resolvedPaidAmount = 0;

@@ -34,6 +34,7 @@ export interface UiNotificationItem {
     invNo?: string;
     orderStatus?: string;
     isFinalized: boolean;
+    isConfirmed: boolean;
     title: string;
     message: string;
     time: string;
@@ -121,6 +122,8 @@ const mapServerItemToUi = (
     const isReadBool = Number(item.isRead) === 1 || Boolean(item.isRead);
     const isFinalizedBool =
         Number(item.isFinalized) === 1 || item.isFinalized === true;
+    const isConfirmedBool =
+        Number(item.isConfirmed) === 1 || item.isConfirmed === true;
 
     // "Please Confirm Your Order" always shows the Action Required badge
     const actionRequired =
@@ -162,6 +165,7 @@ const mapServerItemToUi = (
         invNo: item.invNo,
         orderStatus: item.orderStatus,
         isFinalized: isFinalizedBool,
+        isConfirmed: isConfirmedBool,
         title: item.title,
         message: messageText,
         time,
@@ -327,6 +331,18 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 return;
             }
 
+            // Order already confirmed (processorders.isConfirmed = 1)
+            if (item.isConfirmed) {
+                setAlertConfig({
+                    visible: true,
+                    title: "Already Confirmed!",
+                    message:
+                        "You have already confirmed this order. You cannot make any further changes.",
+                    type: "warning",
+                });
+                return;
+            }
+
             // Order already finalized (processorders.isFinalized = 1)
             if (item.isFinalized) {
                 setAlertConfig({
@@ -357,6 +373,18 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                     title: "Cannot Proceed!",
                     message: "This order has already been cancelled.",
                     type: "error",
+                });
+                return;
+            }
+
+            // Order already confirmed (processorders.isConfirmed = 1)
+            if (item.isConfirmed) {
+                setAlertConfig({
+                    visible: true,
+                    title: "Already Confirmed!",
+                    message:
+                        "You have already confirmed this order. You cannot make any further changes.",
+                    type: "warning",
                 });
                 return;
             }

@@ -145,10 +145,18 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     );
     const hasLivePrices = cartItems.some((i) => i.todayPrice != null);
 
-    // Discount recalculated from today's prices (fallback: stored discount)
-    const productDiscount = hasLivePrices
+    const oldOrderDiscount = parseFloat(order?.discount || 0) || 0;
+    const oldAlaCarteDiscount = cartItems.reduce(
+      (a, i: any) => a + (parseFloat(i.rawDiscount || 0) || 0),
+      0,
+    );
+    const packageDiscount = Math.max(0, oldOrderDiscount - oldAlaCarteDiscount);
+    const alaCarteDiscount = hasLivePrices
       ? Math.max(0, itemsGross - itemsNet)
-      : parseFloat(order?.discount || 0) || 0;
+      : oldAlaCarteDiscount;
+
+    // Discount recalculated from today's prices (preserving package discount)
+    const productDiscount = packageDiscount + alaCarteDiscount;
 
     const couponDiscount =
       order?.isCoupon && !isFreeDeliveryCoupon
@@ -192,6 +200,14 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleConfirm = async () => {
     if (!orderId) return;
+    if (order?.isConfirmed || Number(order?.isConfirmed) === 1) {
+      Alert.alert(
+        "Already Confirmed!",
+        "You have already confirmed this order. You cannot make any further changes.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+      return;
+    }
     try {
       setSubmitting("confirm");
 
@@ -508,6 +524,13 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               const todayNormalRaw =
                 mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
 
+              const effectiveTodayNet = todayPriceRaw ?? priceNum;
+              const effectiveTodayGross = Math.max(
+                originalPriceNum ?? 0,
+                todayNormalRaw ?? 0,
+                effectiveTodayNet,
+              );
+
               return {
                 id: idx + 1,
                 name: item.displayName || "Unknown Item",
@@ -518,7 +541,11 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   item.image ||
                   "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
                 todayPrice: todayPriceRaw ?? undefined,
-                todayNormalPrice: todayNormalRaw ?? undefined,
+                todayNormalPrice:
+                  effectiveTodayGross > effectiveTodayNet
+                    ? effectiveTodayGross
+                    : undefined,
+                rawDiscount: parsePriceValue(item.discount) ?? 0,
               };
             },
           );

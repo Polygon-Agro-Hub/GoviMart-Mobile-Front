@@ -14,6 +14,7 @@ export interface ServerNotificationItem {
   amount?: string | number;
   orderStatus?: string;
   isFinalized?: number | boolean;
+  isConfirmed?: number | boolean;
   delivaryMethod?: string;
   unreadCount?: number;
 }

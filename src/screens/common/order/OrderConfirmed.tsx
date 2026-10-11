@@ -258,16 +258,21 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             const mktDisc = parseFloat(it.marketDiscountedPrice) || 0;
             const perKgNet = mktDisc > 0 ? mktDisc : mktNormal;
 
+            const storedNormal =
+              num(it.normalPrice) > 0 ? num(it.normalPrice) : num(it.price);
+            const storedPrice = num(it.price);
+
             if (perKgNet > 0) {
               live = true;
-              const perKgGross = mktNormal > 0 ? mktNormal : perKgNet;
-              gross += perKgGross * qtyInKg;
-              net += perKgNet * qtyInKg;
+              const todayNet = perKgNet * qtyInKg;
+              const todayNormal = mktNormal > 0 ? mktNormal * qtyInKg : todayNet;
+              const lineGross = Math.max(storedNormal, todayNormal, todayNet);
+              gross += lineGross;
+              net += todayNet;
             } else {
               // Fallback: stored price in orderadditionalitems
-              const stored = num(it.price);
-              gross += stored;
-              net += stored;
+              gross += storedNormal > 0 ? storedNormal : storedPrice;
+              net += storedPrice;
             }
           });
 
@@ -286,6 +291,14 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   // ─── handlers ──────────────────────────────────────────────────────────────
   const handleConfirm = async () => {
+    if (order?.isConfirmed || Number(order?.isConfirmed) === 1) {
+      Alert.alert(
+        "Already Confirmed!",
+        "You have already confirmed this order. You cannot make any further changes.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+      return;
+    }
     try {
       setSubmitting("confirm");
       if (orderId) {
@@ -332,8 +345,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         mktDiscounted > 0 ? mktDiscounted : mktNormal > 0 ? mktNormal : 0;
       const qtyInKg = String(unit).toLowerCase() === "g" ? qty / 1000 : qty;
       const itemPrice = perKg > 0 ? perKg * qtyInKg : num(it.price);
-      const origPrice =
-        mktNormal > 0 ? mktNormal * qtyInKg : num(it.normalPrice);
+      const storedNormal =
+        num(it.normalPrice) > 0 ? num(it.normalPrice) : num(it.price);
+      const todayNormal = mktNormal > 0 ? mktNormal * qtyInKg : itemPrice;
+      const origPrice = Math.max(storedNormal, todayNormal, itemPrice);
 
       return {
         id: String(it.id || it.productId || "item"),
@@ -439,11 +454,19 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         String(order.couponType).toLowerCase().includes("delivery")),
   );
 
-  // Discount is recalculated from today's marketplace prices.
+  // Preserve original package discount if present
+  const oldOrderDiscount = num(order?.discount);
+  const oldAlaCarteDiscount = rawItemsData.reduce(
+    (sum: number, it: any) => sum + num(it.discount),
+    0,
+  );
+  const packageDiscount = Math.max(0, oldOrderDiscount - oldAlaCarteDiscount);
+
+  // Discount is recalculated from today's marketplace prices + preserved package discount.
   // Falls back to the stored discount only when no live prices exist.
   const productDiscount = hasLiveItemPrices
-    ? itemsDiscount
-    : num(order?.discount);
+    ? packageDiscount + itemsDiscount
+    : oldOrderDiscount;
   const couponDiscount =
     isCouponApplied && !isFreeDeliveryCoupon ? num(order?.couponValue) : 0;
 
