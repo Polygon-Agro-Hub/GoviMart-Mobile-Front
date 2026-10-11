@@ -50,6 +50,8 @@ import HomeHeader from "@/component/home/HomeHeader";
 import HomeBannerSlider from "@/component/home/HomeBannerSlider";
 import ReadyToConfirmBanner, {
   ReadyToConfirmOrderData,
+  getTimeElapsedFrom8AM,
+  isWithinConfirmWindow,
 } from "@/component/home/ReadyToConfirmBanner";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import CartToast from "@/component/common/CartToast";
@@ -426,13 +428,34 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   };
 
   const fetchReadyToConfirmOrder = useCallback(async () => {
-    if (!userTokenRef.current) {
+    if (!userTokenRef.current || !isWithinConfirmWindow()) {
       setReadyOrder(null);
       return;
     }
 
     try {
-      // 1. Check notifications first
+      // 1. Call backend schedule orders endpoint (powered by getOrdersForSheduleDate)
+      try {
+        const scheduleRes = await orderService.getScheduleOrders();
+        if (scheduleRes.data?.status && scheduleRes.data?.order) {
+          const ord = scheduleRes.data.order;
+          const targetId = ord.processOrderId || ord.orderId;
+          if (targetId) {
+            setReadyOrder({
+              orderId: targetId,
+              invoiceNo:
+                ord.invNo || ord.invoiceNo || String(targetId),
+              timeAgo: getTimeElapsedFrom8AM(),
+              createdAt: ord.createdAt,
+            });
+            return;
+          }
+        }
+      } catch (scheduleErr) {
+        console.warn("[HomeScreen] getScheduleOrders error:", scheduleErr);
+      }
+
+      // 2. Check notifications fallback
       const notifRes = await notificationService.getNotifications(20, 0);
       if (
         notifRes.data?.status &&
@@ -453,7 +476,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
             setReadyOrder({
               orderId: targetId,
               invoiceNo: confirmNotif.invNo || String(targetId),
-              timeAgo: formatRelativeTime(confirmNotif.createdAt),
+              timeAgo: getTimeElapsedFrom8AM(),
               createdAt: confirmNotif.createdAt,
             });
             return;
@@ -497,7 +520,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 pendingOrder.invoiceNo ||
                 pendingOrder.invNo ||
                 String(targetId),
-              timeAgo: formatRelativeTime(pendingOrder.createdAt),
+              timeAgo: getTimeElapsedFrom8AM(),
               createdAt: pendingOrder.createdAt,
             });
             return;
@@ -1381,7 +1404,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         <HomeHeader onPressProfile={handleProfileNavigation} />
 
         {/* Ready To Confirm Order Banner */}
-        {readyOrder && (
+        {readyOrder && isWithinConfirmWindow() && (
           <ReadyToConfirmBanner
             order={readyOrder}
             onPress={() => handleOpenOrderConfirmation(readyOrder.orderId)}
