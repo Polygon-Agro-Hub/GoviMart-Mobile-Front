@@ -127,7 +127,7 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
           "Camera access is required. Please enable it in settings.",
           [
             {
-              text: "Not Now",
+              text: "Cancel",
               style: "cancel",
               onPress: handleDenyOrClose,
             },
@@ -287,21 +287,12 @@ const CameraAccess: React.FC<CameraAccessProps> = ({
                     adjustsFontSizeToFit
                     className="text-white font-bold text-[15px]"
                   >
-                    {isLoading ? "Requesting..." : "Agree & Continue"}
+                    {isLoading ? "Requesting..." : "Continue"}
                   </Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleDenyOrClose}
-              activeOpacity={0.7}
-              className="py-3 px-6 items-center justify-center"
-            >
-              <Text className="text-gray-400 font-semibold text-sm">
-                Not Now
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
