@@ -185,9 +185,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const [order, setOrder] = useState<any>(null);
   const [packagesTotal, setPackagesTotal] = useState(0);
-  // Ala carte total at today's NORMAL marketplace price (gross)
   const [itemsTotal, setItemsTotal] = useState(0);
-  // Discount = today's normal price - today's discounted price (ala carte)
   const [itemsDiscount, setItemsDiscount] = useState(0);
   const [hasLiveItemPrices, setHasLiveItemPrices] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -243,10 +241,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           const items = (itemsRes.data.data || []) as any[];
           setRawItemsData(items);
 
-          // Today's marketplace prices (marketplaceitems), NOT the stored order price.
-          // gross = normal price, net = discounted price (or normal if no discount)
-          let gross = 0;
-          let net = 0;
+          // ONLY CURRENT MARKETPLACE VALUES ARE USED:
+          // Never compare to previous order prices.
+          // If today normalPrice == discountedPrice (e.g. 300 == 300), discount is 0!
+          let currentGrossTotal = 0;
+          let currentDiscountTotal = 0;
           let live = false;
 
           items.forEach((it) => {
@@ -256,28 +255,32 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
             const mktNormal = parseFloat(it.marketNormalPrice) || 0;
             const mktDisc = parseFloat(it.marketDiscountedPrice) || 0;
-            const perKgNet = mktDisc > 0 ? mktDisc : mktNormal;
 
-            const storedNormal =
-              num(it.normalPrice) > 0 ? num(it.normalPrice) : num(it.price);
-            const storedPrice = num(it.price);
-
-            if (perKgNet > 0) {
+            if (mktNormal > 0 || mktDisc > 0) {
               live = true;
-              const todayNet = perKgNet * qtyInKg;
-              const todayNormal = mktNormal > 0 ? mktNormal * qtyInKg : todayNet;
-              const lineGross = Math.max(storedNormal, todayNormal, todayNet);
-              gross += lineGross;
-              net += todayNet;
+              const currentNormalPerKg = mktNormal > 0 ? mktNormal : mktDisc;
+              const currentNetPerKg =
+                mktDisc > 0 ? mktDisc : currentNormalPerKg;
+
+              const lineGross = currentNormalPerKg * qtyInKg;
+              const lineNet = currentNetPerKg * qtyInKg;
+
+              // Current discount ONLY exists if today's normal price > today's discounted price
+              const lineDiscount =
+                currentNormalPerKg > currentNetPerKg
+                  ? Math.max(0, lineGross - lineNet)
+                  : 0;
+
+              currentGrossTotal += lineGross;
+              currentDiscountTotal += lineDiscount;
             } else {
-              // Fallback: stored price in orderadditionalitems
-              gross += storedNormal > 0 ? storedNormal : storedPrice;
-              net += storedPrice;
+              const storedPrice = num(it.price);
+              currentGrossTotal += storedPrice;
             }
           });
 
-          setItemsTotal(gross);
-          setItemsDiscount(Math.max(0, gross - net));
+          setItemsTotal(currentGrossTotal);
+          setItemsDiscount(currentDiscountTotal);
           setHasLiveItemPrices(live);
         }
       } catch (err) {
@@ -291,6 +294,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   // ─── handlers ──────────────────────────────────────────────────────────────
   const handleConfirm = async () => {
+    if (submitting) return; // prevent double-tap
     if (order?.isConfirmed || Number(order?.isConfirmed) === 1) {
       Alert.alert(
         "Already Confirmed!",
@@ -345,10 +349,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         mktDiscounted > 0 ? mktDiscounted : mktNormal > 0 ? mktNormal : 0;
       const qtyInKg = String(unit).toLowerCase() === "g" ? qty / 1000 : qty;
       const itemPrice = perKg > 0 ? perKg * qtyInKg : num(it.price);
-      const storedNormal =
-        num(it.normalPrice) > 0 ? num(it.normalPrice) : num(it.price);
-      const todayNormal = mktNormal > 0 ? mktNormal * qtyInKg : itemPrice;
-      const origPrice = Math.max(storedNormal, todayNormal, itemPrice);
+      const hasCurrentPromo =
+        mktNormal > 0 && mktDiscounted > 0 && mktNormal - mktDiscounted > 0.01;
+      const origPrice = hasCurrentPromo ? mktNormal * qtyInKg : undefined;
 
       return {
         id: String(it.id || it.productId || "item"),
@@ -356,7 +359,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         image: it.image,
         weight: `${qty} ${unit}`,
         price: itemPrice,
-        originalPrice: origPrice > itemPrice ? origPrice : undefined,
+        originalPrice: origPrice,
       };
     });
 
@@ -454,19 +457,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         String(order.couponType).toLowerCase().includes("delivery")),
   );
 
-  // Preserve original package discount if present
-  const oldOrderDiscount = num(order?.discount);
-  const oldAlaCarteDiscount = rawItemsData.reduce(
-    (sum: number, it: any) => sum + num(it.discount),
-    0,
-  );
-  const packageDiscount = Math.max(0, oldOrderDiscount - oldAlaCarteDiscount);
-
-  // Discount is recalculated from today's marketplace prices + preserved package discount.
-  // Falls back to the stored discount only when no live prices exist.
+  // Discount is calculated ONLY from current active marketplace discounts!
+  // Never use previous order discount (which stored old discounts from past prices like 1000 -> 800).
   const productDiscount = hasLiveItemPrices
-    ? packageDiscount + itemsDiscount
-    : oldOrderDiscount;
+    ? itemsDiscount
+    : num(order?.discount);
   const couponDiscount =
     isCouponApplied && !isFreeDeliveryCoupon ? num(order?.couponValue) : 0;
 

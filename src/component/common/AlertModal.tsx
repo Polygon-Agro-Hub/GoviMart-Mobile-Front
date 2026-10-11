@@ -10,11 +10,13 @@ import {
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import LottieView from "lottie-react-native";
 
+export type AlertType = "success" | "error" | "warning";
+
 interface AlertModalProps {
   visible: boolean;
   title: string;
   message: string | React.ReactNode;
-  type?: "success" | "error";
+  type?: AlertType;
   onClose: () => void;
   showRescanButton?: boolean;
   onRescan?: () => void;
@@ -75,6 +77,19 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             loop={false}
             style={{ width: 120, height: 120 }}
           />
+        );
+      case "warning":
+        return (
+          <View
+            style={{
+              width: 120,
+              height: 120,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="warning" size={84} color="#FF9114" />
+          </View>
         );
       case "error":
       default:
@@ -206,7 +221,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
 type AlertListener = (
   title: string,
   message: string | React.ReactNode,
-  type: "success" | "error",
+  type: AlertType,
   onClose: () => void,
   autoClose: boolean,
   showOkButton?: boolean,
@@ -235,7 +250,7 @@ Alert.alert = (title, message, buttons, options) => {
       lowerTitle.includes("created") ||
       lowerTitle.includes("cancelled") ||
       lowerTitle.includes("completed");
-    const type = isSuccess ? "success" : "error";
+    const type: AlertType = isSuccess ? "success" : "error";
 
     const onCloseCallback = () => {
       if (buttons && buttons.length === 1 && buttons[0].onPress) {
@@ -262,7 +277,7 @@ export const GlobalAlert: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState<string | React.ReactNode>("");
-  const [type, setType] = useState<"success" | "error">("error");
+  const [type, setType] = useState<AlertType>("error");
   const [onCloseCallback, setOnCloseCallback] = useState<() => void>(() => {});
   const [autoClose, setAutoClose] = useState(true);
   const [showOkButton, setShowOkButton] = useState<boolean | undefined>(
