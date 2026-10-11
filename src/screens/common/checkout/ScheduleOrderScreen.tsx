@@ -89,7 +89,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
   const [selectedDays, setSelectedDays] = useState<string[]>(() => [
     getEarliestDayId(getMinDeliveryDate()),
   ]);
-  const [selectedWeeks, setSelectedWeeks] = useState<string>("04");
+  const [selectedWeeks, setSelectedWeeks] = useState<string>("02");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
 
   // Modals
@@ -389,7 +389,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       return { calculatedOrders: [], unfilteredFirstScheduledDate: null };
     }
 
-    const numWeeks = parseInt(selectedWeeks, 10) || 4;
+    const numWeeks = parseInt(selectedWeeks, 10) || 2;
     // Earliest delivery date: seasonal effective start date if any, otherwise today + 3/4 days
     const minDate =
       seasonalInfo?.effectiveStartDate

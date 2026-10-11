@@ -7,6 +7,8 @@ import {
   Alert,
   Image,
   BackHandler,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -1597,6 +1599,50 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onCancel={handleCheckoutCancel}
         onClose={() => setCheckoutModalVisible(false)}
       />
+
+      {/* ─── FULL SCREEN LOADING CONFIRMATION ──────────────────────────── */}
+      <Modal visible={submitting} transparent animationType="fade" statusBarTranslucent>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 32,
+              paddingHorizontal: 36,
+              alignItems: "center",
+              minWidth: 230,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              elevation: 10,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              {paymentMethod === "card" && paymentAmount > 0 && isEarliestDeliveryDate()
+                ? "Processing payment..."
+                : "Confirming your order..."}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
