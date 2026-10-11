@@ -557,6 +557,13 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         ? selectedDate?.replace(/\//g, "-")
         : calculatedOrders[0]?.dateStr || "";
 
+    const earliestAvailDate =
+      seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
+    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+    const earliestDateStr = `${earliestAvailDate.getFullYear()}-${pad(
+      earliestAvailDate.getMonth() + 1,
+    )}-${pad(earliestAvailDate.getDate())}`;
+
     const updatedContext = {
       ...orderContext,
       grandTotal: finalTotal,
@@ -569,6 +576,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         }),
         scheduleType,
         deliveryDate: effectiveFirstDate,
+        earliestDeliveryDate: earliestDateStr,
         recurringDays: selectedDays,
         validityWeeks: selectedWeeks,
         timeSlot: selectedTimeSlot || undefined,

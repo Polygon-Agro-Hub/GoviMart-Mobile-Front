@@ -31,6 +31,7 @@ import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
 import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentsLkAdapter } from "@/services/payment/payments-lk.adapter";
+import { getMinDeliveryDate } from "@/component/common/CustomCalendarModal";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -114,32 +115,42 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       orderContext?.checkoutDetails?.calculatedOrders?.[0]?.date;
     if (!deliveryDateRaw) return false;
 
-    let scheduledDate: Date | null = null;
-    const str = String(deliveryDateRaw).trim().replace(/\//g, "-");
-    if (str.includes("-")) {
-      const parts = str.split("T")[0].split("-");
-      if (parts.length === 3) {
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const d = parseInt(parts[2], 10);
-        if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-          scheduledDate = new Date(y, m, d);
+    const parseDateOnly = (val: any): Date | null => {
+      if (!val) return null;
+      if (val instanceof Date) {
+        return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+      }
+      const s = String(val).trim().replace(/\//g, "-");
+      if (s.includes("-")) {
+        const parts = s.split("T")[0].split("-");
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          const d = parseInt(parts[2], 10);
+          if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+            return new Date(y, m, d);
+          }
         }
       }
-    }
-    if (!scheduledDate) {
-      const parsed = new Date(str);
-      if (!isNaN(parsed.getTime())) {
-        scheduledDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-      }
-    }
-    if (!scheduledDate) return false;
-    scheduledDate.setHours(0, 0, 0, 0);
+      const parsed = new Date(s);
+      return isNaN(parsed.getTime())
+        ? null
+        : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    };
 
-    const now = new Date();
-    const isAfter6PM = now.getHours() >= 18;
-    const extraDays = isAfter6PM ? 3 : 2;
-    const earliestDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + extraDays);
+    const scheduledDate = parseDateOnly(deliveryDateRaw);
+    if (!scheduledDate) return false;
+
+    // 1. Check if earliest delivery date was passed directly from ScheduleOrderScreen
+    const earliestFromContext = parseDateOnly(
+      orderContext?.checkoutDetails?.earliestDeliveryDate
+    );
+    if (earliestFromContext) {
+      return scheduledDate.getTime() <= earliestFromContext.getTime();
+    }
+
+    // 2. Fallback to getMinDeliveryDate()
+    const earliestDate = getMinDeliveryDate();
     earliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() <= earliestDate.getTime();
