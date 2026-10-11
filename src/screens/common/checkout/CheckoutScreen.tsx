@@ -201,6 +201,10 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
       currentDeliveryFee,
   );
 
+  // More than one address -> summary scrolls with the content (at the end of the list).
+  // One address or none -> summary is fixed at the bottom.
+  const scrollSummary = addresses.length > 1;
+
   const handleProceed = () => {
     if (!selectedAddressId) {
       Alert.alert(
@@ -256,6 +260,17 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
+  const summaryProps = {
+    packageTotal: currentPackageTotal,
+    productTotal: currentProductTotal,
+    discount: currentDiscount,
+    deliveryFee: currentDeliveryFee,
+    grandTotal: currentGrandTotal,
+    buttonText: "Proceed to Checkout",
+    disabled: !selectedAddressId,
+    onCheckout: handleProceed,
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* ─── HEADER ──────────────────────────────────────────────────────── */}
@@ -273,8 +288,8 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,
-          paddingTop: 16,
-          paddingBottom: 310,
+          paddingTop: 12,
+      //  paddingBottom: scrollSummary ? 24 : 250
         }}
       >
         {/* Add New Address Card */}
@@ -572,26 +587,33 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
             );
           })
         )}
+
+        {/* ─── ORDER SUMMARY INSIDE SCROLLVIEW (more than 1 address) ──────── */}
+        {scrollSummary && (
+          <OrderSummary
+            {...summaryProps}
+            containerStyle={{
+              marginTop: 8,
+              marginHorizontal: -16,
+              marginBottom: 0,
+            }}
+          />
+        )}
       </ScrollView>
 
-      {/* ─── FIXED BOTTOM SUMMARY & BUTTON ──────────────────────────────── */}
-      <OrderSummary
-        packageTotal={currentPackageTotal}
-        productTotal={currentProductTotal}
-        discount={currentDiscount}
-        deliveryFee={currentDeliveryFee}
-        grandTotal={currentGrandTotal}
-        buttonText="Proceed to Checkout"
-        disabled={!selectedAddressId}
-        onCheckout={handleProceed}
-        containerStyle={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          marginBottom: 0,
-        }}
-      />
+      {/* ─── FIXED BOTTOM SUMMARY (0 or 1 address) ──────────────────────── */}
+      {!scrollSummary && (
+        <OrderSummary
+          {...summaryProps}
+          containerStyle={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            marginBottom: 0,
+          }}
+        />
+      )}
     </View>
   );
 };
