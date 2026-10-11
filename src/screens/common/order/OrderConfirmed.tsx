@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -78,6 +78,20 @@ const formatAmount = (amount: number | string) => {
 };
 
 const num = (v: any) => parseFloat(String(v ?? 0)) || 0;
+
+// Same rules as the backend (isCardPayment in package-review.dao.js)
+const detectPayment = (order: any) => {
+  const m = String(order?.paymentMethod || "").trim().toLowerCase();
+  const paid =
+    Number(order?.isPaid) === 1 ||
+    order?.isPaid === true ||
+    String(order?.isPaid) === "1";
+  const hasCard = /card|payhere|online/.test(m);
+  const hasCash = /cash|cod/.test(m);
+  const hasCredit = m.includes("credit");
+  const isCard = hasCard || (paid && !hasCash && !hasCredit);
+  return { m, paid, isCard, isCash: hasCash, hasCredit };
+};
 
 // ─── CARD BRAND BADGE ────────────────────────────────────────────────────────
 const CardBrand: React.FC<{ brand?: string }> = ({ brand }) => {
@@ -192,9 +206,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState<"confirm" | "cancel" | null>(
     null,
   );
-  // Stores the recalculated total (today's marketplace prices) for the confirm call.
-  // A ref so handleConfirm (defined before derived values) reads the latest value.
-  const newTotalRef = React.useRef<number | null>(null);
+  // Recalculated total (today's marketplace prices) sent to the confirm call.
+  const newTotalRef = useRef<number | null>(null);
 
   const [rawPackagesData, setRawPackagesData] = useState<any[]>([]);
   const [rawItemsData, setRawItemsData] = useState<any[]>([]);
@@ -241,9 +254,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           const items = (itemsRes.data.data || []) as any[];
           setRawItemsData(items);
 
-          // ONLY CURRENT MARKETPLACE VALUES ARE USED:
-          // Never compare to previous order prices.
-          // If today normalPrice == discountedPrice (e.g. 300 == 300), discount is 0!
+          // ONLY CURRENT MARKETPLACE VALUES ARE USED.
+          // If today normalPrice == discountedPrice, discount is 0.
           let currentGrossTotal = 0;
           let currentDiscountTotal = 0;
           let live = false;
@@ -265,7 +277,6 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               const lineGross = currentNormalPerKg * qtyInKg;
               const lineNet = currentNetPerKg * qtyInKg;
 
-              // Current discount ONLY exists if today's normal price > today's discounted price
               const lineDiscount =
                 currentNormalPerKg > currentNetPerKg
                   ? Math.max(0, lineGross - lineNet)
@@ -274,8 +285,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               currentGrossTotal += lineGross;
               currentDiscountTotal += lineDiscount;
             } else {
-              const storedPrice = num(it.price);
-              currentGrossTotal += storedPrice;
+              currentGrossTotal += num(it.price);
             }
           });
 
@@ -292,10 +302,92 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     fetchData();
   }, [orderId]);
 
-  // ─── handlers ──────────────────────────────────────────────────────────────
+  // ─── loading ───────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+        <CustomHeader
+          showBackButton
+          navigation={navigation}
+          title="Order Confirmation"
+        />
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <LoadingPage message="Loading Order..." fullScreen={false} />
+        </View>
+      </View>
+    );
+  }
+
+  // ─── derived values ────────────────────────────────────────────────────────
+  const invoiceNo =
+    order?.invoiceNo || order?.invNo || order?.invoiceNumber || "N/A";
+  const placed = formatPlacedAt(order?.createdAt);
+
+  const isPickup =
+    (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() ===
+    "PICKUP";
+
+  const scheduleDate = formatLongDate(order?.sheduleDate);
+ const scheduleTime =
+  String(order?.sheduleTime || order?.scheduleTime || "").trim() || "N/A";
+
+  const isCouponApplied = Number(order?.isCoupon) === 1;
+
+  const isFreeDeliveryCoupon = Boolean(
+    isCouponApplied &&
+      order?.couponType &&
+      (String(order.couponType).toLowerCase().includes("free") ||
+        String(order.couponType).toLowerCase().includes("delivery")),
+  );
+
+  const productDiscount = hasLiveItemPrices
+    ? itemsDiscount
+    : num(order?.discount);
+  const couponDiscount =
+    isCouponApplied && !isFreeDeliveryCoupon ? num(order?.couponValue) : 0;
+
+  const deliveryFee = num(
+    order?.curDlvrCharge != null && order?.curDlvrCharge !== ""
+      ? order.curDlvrCharge
+      : order?.deliveryCharge,
+  );
+
+  // Total is recalculated from live data. DB fullTotal is only a fallback.
+  const hasLiveData = packagesTotal > 0 || itemsTotal > 0;
+  const calculatedTotal = Math.max(
+    0,
+    packagesTotal +
+      itemsTotal -
+      productDiscount -
+      couponDiscount +
+      (!isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0),
+  );
+  const orderFullTotal = hasLiveData
+    ? calculatedTotal
+    : num(order?.fullTotal ?? order?.total);
+
+  const pay = detectPayment(order);
+  const creditPaid = num(order?.creditPaid);
+  const isCardOrder = pay.isCard;
+  const isCashOrder = pay.isCash;
+  // Credit already applied can never exceed the total
+  const creditApplied = Math.min(creditPaid, orderFullTotal);
+  const remaining = Math.max(0, orderFullTotal - creditApplied);
+
+  const cardBrand: string = order?.cardBrand || order?.cardType || "Master";
+  const cardLast4: string = order?.cardLast4 || order?.cardNumber || "3501";
+
+  // Keep the ref in sync so handleConfirm sends the same total shown on screen.
+  newTotalRef.current = hasLiveData ? orderFullTotal : null;
+
+  const busy = submitting !== null;
+
+  // ─── handlers (defined after the derived values they use) ─────────────────
   const handleConfirm = async () => {
     if (submitting) return; // prevent double-tap
-    if (order?.isConfirmed || Number(order?.isConfirmed) === 1) {
+    if (Number(order?.isConfirmed) === 1) {
       Alert.alert(
         "Already Confirmed!",
         "You have already confirmed this order. You cannot make any further changes.",
@@ -313,9 +405,12 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         });
       }
       navigation.goBack();
-    } catch (err) {
-      console.error("Confirm order failed:", err);
-      Alert.alert("Could not confirm", "Please try again.");
+    } catch (err: any) {
+      console.error("Confirm order failed:", err?.response?.data || err);
+      Alert.alert(
+        "Could not confirm",
+        err?.response?.data?.message || "Please try again.",
+      );
     } finally {
       setSubmitting(null);
     }
@@ -363,17 +458,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       };
     });
 
-    const pMethod = (order?.paymentMethod || "").trim().toLowerCase();
-    const isPaidVal =
-      Number(order?.isPaid) === 1 ||
-      order?.isPaid === true ||
-      String(order?.isPaid) === "1";
-    const isCardOrOnline =
-      pMethod.includes("card") ||
-      pMethod.includes("payhere") ||
-      pMethod.includes("online") ||
-      (isPaidVal && !pMethod.includes("cash") && !pMethod.includes("cod"));
-    const isCashMethod = pMethod.includes("cash") || pMethod.includes("cod");
+    const isCardOrOnline = pay.isCard;
+    const isCashMethod = pay.isCash;
 
     const initialPaidAmount =
       num(order?.amount) > 0 ? num(order?.amount) : orderFullTotal;
@@ -386,17 +472,16 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         : initialPaidAmount
       : 0;
     const totalPaidCredit = creditPaidVal || 0;
-    // Recalculated total from today's prices (same value shown on this screen)
     const processOrderTotal = orderFullTotal;
     const totalCashDue =
-      isCashMethod && !isPaidVal
+      isCashMethod && !pay.paid
         ? Math.max(0, processOrderTotal - totalPaidCredit)
         : 0;
 
     let refundCreditAmount = 0;
     if (isCardOrOnline) {
       refundCreditAmount = totalPaidCard + totalPaidCredit;
-    } else if (pMethod.includes("credit")) {
+    } else if (pay.hasCredit && !isCashMethod) {
       refundCreditAmount =
         totalPaidCredit > 0 ? totalPaidCredit : processOrderTotal;
     } else {
@@ -417,87 +502,6 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       refundCreditAmount,
     });
   };
-
-  // ─── loading ───────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-        <CustomHeader
-          showBackButton
-          navigation={navigation}
-          title="Order Confirmation"
-        />
-        <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-        >
-          <LoadingPage message="Loading Order..." fullScreen={false} />
-        </View>
-      </View>
-    );
-  }
-
-  // ─── derived values ────────────────────────────────────────────────────────
-  const invoiceNo =
-    order?.invoiceNo || order?.invNo || order?.invoiceNumber || "N/A";
-  const placed = formatPlacedAt(order?.createdAt);
-
-  const isPickup =
-    (order?.delivaryMethod || order?.deliveryType || "").toUpperCase() ===
-    "PICKUP";
-
-  const scheduleDate = formatLongDate(order?.sheduleDate);
-  const scheduleTime = isPickup ? "09:30 PM" : order?.sheduleTime || "N/A";
-
-  const isCouponApplied = Number(order?.isCoupon) === 1;
-
-  const isFreeDeliveryCoupon = Boolean(
-    isCouponApplied &&
-      order?.couponType &&
-      (String(order.couponType).toLowerCase().includes("free") ||
-        String(order.couponType).toLowerCase().includes("delivery")),
-  );
-
-  // Discount is calculated ONLY from current active marketplace discounts!
-  // Never use previous order discount (which stored old discounts from past prices like 1000 -> 800).
-  const productDiscount = hasLiveItemPrices
-    ? itemsDiscount
-    : num(order?.discount);
-  const couponDiscount =
-    isCouponApplied && !isFreeDeliveryCoupon ? num(order?.couponValue) : 0;
-
-  const deliveryFee = num(
-    order?.curDlvrCharge != null && order?.curDlvrCharge !== ""
-      ? order.curDlvrCharge
-      : order?.deliveryCharge,
-  );
-
-  // Total is recalculated from live data. DB fullTotal is only a fallback.
-  const hasLiveData = packagesTotal > 0 || itemsTotal > 0;
-  const calculatedTotal = Math.max(
-    0,
-    packagesTotal +
-      itemsTotal -
-      productDiscount -
-      couponDiscount +
-      (!isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0),
-  );
-  const orderFullTotal = hasLiveData
-    ? calculatedTotal
-    : num(order?.fullTotal ?? order?.total);
-
-  const creditPaid = num(order?.creditPaid);
-  const paymentMethod = (order?.paymentMethod || "").toLowerCase();
-  const isCardOrder = paymentMethod === "card" || paymentMethod === "payhere";
-  const isCashOrder = paymentMethod === "cash";
-  const remaining = Math.max(0, orderFullTotal - creditPaid);
-
-  const cardBrand: string = order?.cardBrand || order?.cardType || "Master";
-  const cardLast4: string = order?.cardLast4 || order?.cardNumber || "3501";
-
-  // Keep the ref in sync so handleConfirm always sends the same total shown on screen.
-  newTotalRef.current = hasLiveData ? orderFullTotal : null;
-
-  const busy = submitting !== null;
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -747,10 +751,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             Payment Summery
           </Text>
 
-          {creditPaid > 0 && (
+          {creditApplied > 0 && (
             <SummaryRow
               label="Paid By Credit"
-              value={`Rs. ${formatAmount(creditPaid)}`}
+              value={`Rs. ${formatAmount(creditApplied)}`}
               icon="wallet"
               iconColor="#8D5B4C"
             />
@@ -766,7 +770,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             />
           )}
 
-          {isCashOrder && remaining > 0 && (
+          {!isCardOrder && isCashOrder && remaining > 0 && (
             <SummaryRow
               label="Pay with Cash"
               value={`Rs. ${formatAmount(remaining)}`}
