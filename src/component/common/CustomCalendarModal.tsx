@@ -34,7 +34,10 @@ export const getMinDeliveryDate = (): Date => {
   return minDate;
 };
 
-export const validateDeliveryDate = (dateStr?: string | null): { isValid: boolean; error: string } => {
+export const validateDeliveryDate = (
+  dateStr?: string | null,
+  minDeliveryDate?: Date
+): { isValid: boolean; error: string } => {
   if (!dateStr || !dateStr.trim()) {
     return { isValid: false, error: "Delivery date is required." };
   }
@@ -43,11 +46,23 @@ export const validateDeliveryDate = (dateStr?: string | null): { isValid: boolea
   const selected = new Date(normalized);
   selected.setHours(0, 0, 0, 0);
 
-  const minDate = getMinDeliveryDate();
+  const minDate = minDeliveryDate ? new Date(minDeliveryDate) : getMinDeliveryDate();
+  minDate.setHours(0, 0, 0, 0);
   const now = new Date();
   const isAfterCutoff = now.getHours() >= 18;
 
   if (selected < minDate) {
+    if (minDeliveryDate) {
+      const monthNames = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ];
+      const minFormatted = `${monthNames[minDate.getMonth()]} ${minDate.getDate()}, ${minDate.getFullYear()}`;
+      return {
+        isValid: false,
+        error: `Earliest delivery date available is ${minFormatted}.`,
+      };
+    }
     return {
       isValid: false,
       error: isAfterCutoff

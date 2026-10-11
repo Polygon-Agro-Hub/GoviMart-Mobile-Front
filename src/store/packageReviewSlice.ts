@@ -25,6 +25,8 @@ export interface AlacartSelectedProduct {
   // Falls back to `basePrice` for items loaded from an existing order
   // (where this isn't set) so their unit/qty math keeps working as before.
   perKgPrice?: number;
+  perKgNormalPrice?: number;
+  perKgDiscountedPrice?: number;
   weightDisplay: string;
   unit: "kg" | "g";
   amount: number;
@@ -480,6 +482,8 @@ export const packageReviewSlice = createSlice({
           price: initialPrice,
           basePrice: basePrice,
           perKgPrice,
+          perKgNormalPrice: normalPricePerKg,
+          perKgDiscountedPrice: discountedPricePerKg,
           weightDisplay,
           unit: initialUnit,
           amount: initialAmount,

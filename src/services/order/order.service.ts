@@ -8,6 +8,14 @@ class OrderService {
         return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_HISTORY, { headers });
     }
 
+    async getScheduleOrders(sheduleDate?: string) {
+        const headers = await getAuthHeader();
+        const url = sheduleDate
+            ? `${ENDPOINTS.ORDER.GET_SCHEDULE_ORDERS}?sheduleDate=${sheduleDate}`
+            : ENDPOINTS.ORDER.GET_SCHEDULE_ORDERS;
+        return apiClient.get(url, { headers });
+    }
+
     async getOrderById(orderId: string) {
         const headers = await getAuthHeader();
         return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_BY_ID.replace(":orderId", orderId), { headers });

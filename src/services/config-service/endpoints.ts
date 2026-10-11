@@ -56,6 +56,7 @@ export const ENDPOINTS = {
 
   ORDER: {
     GET_ORDER_HISTORY: "api/order/order-history",
+    GET_SCHEDULE_ORDERS: "api/order/schedule-orders",
     GET_ORDER_BY_ID: "api/order/:orderId",
     GET_ORDER_PACKAGES: "api/order/packages/:orderId",
     GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
