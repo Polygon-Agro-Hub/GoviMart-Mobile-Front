@@ -75,7 +75,8 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout duration
 const MAX_OTP_ATTEMPTS = 5;
 
 export const getForgotPwdStorageKeys = (
@@ -198,6 +199,9 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
             return;
           } else {
             await AsyncStorage.removeItem(key);
+            for (const aKey of attemptsKeys) {
+              await AsyncStorage.removeItem(aKey);
+            }
           }
         }
       } catch (e) {
@@ -209,10 +213,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
     for (const key of attemptsKeys) {
       const attempts = await getRecentAttempts(key);
       if (attempts.length >= MAX_OTP_ATTEMPTS) {
-        const oldest = attempts[0];
-        const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-        const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
-        const lockoutUntil = Date.now() + remainingSec * 1000;
+        const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
         for (const lockKey of lockoutKeys) {
           await AsyncStorage.setItem(lockKey, String(lockoutUntil));
         }

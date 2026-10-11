@@ -17,11 +17,13 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
-import { updateUserProfileImage } from "@/store/authSlice";
+import { updateUserProfileImage, updateUserProfile } from "@/store/authSlice";
 
 import { RootStackParamList } from "@/types/types";
+import { getSignUpStorageKeys } from "@/screens/common/auth/SignUpOTPScreen";
 import { DropdownField, InputField } from "@/component/common/CustomField";
 
 const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
@@ -194,6 +196,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     companyName: string;
     companyMobileCode: string;
     companyMobile: string;
+    image: string;
   } | null>(null);
 
   const isWholesale =
@@ -211,8 +214,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.title) setTitle(data.title);
             if (data.firstName) setFirstName(data.firstName);
             if (data.lastName) setLastName(data.lastName);
-            if (data.profileImage || data.image) {
-              setProfileImage(data.profileImage || data.image);
+            const fetchedImage = (data.profileImage || data.image || "").trim();
+            if (fetchedImage) {
+              setProfileImage(fetchedImage);
+            } else {
+              setProfileImage(null);
             }
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
@@ -235,6 +241,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               companyName: (data.companyName || "").trim(),
               companyMobileCode: (data.companyPhoneCode || data.phoneCode || "+94").trim(),
               companyMobile: (data.companyPhone || "").trim(),
+              image: fetchedImage,
             });
           }
           console.log("acc details fetchihng success: ", response.data.data);
@@ -343,7 +350,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
 
     if (originalAccountData) {
+      const currentImage = (profileImage || "").trim();
+      const origImage = (originalAccountData.image || "").trim();
+      const isImageChanged = currentImage !== origImage;
+
       const isUnchanged =
+        !isImageChanged &&
         title.trim() === originalAccountData.title &&
         firstName.trim() === originalAccountData.firstName &&
         lastName.trim() === originalAccountData.lastName &&
@@ -368,6 +380,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     try {
       setUpdating(true);
 
+      const finalImage = profileImage ? profileImage.trim() : null;
       const payload: any = {
         title: (title || "Mr").trim(),
         firstName: firstName.trim(),
@@ -375,6 +388,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         phoneCode: mobileCode.trim(),
         phoneNumber: mobileNumber.trim(),
         email: email.trim(),
+        image: finalImage,
       };
 
       if (isWholesale) {
@@ -388,6 +402,65 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         mobileCode !== originalMobileCode;
 
       if (phoneChanged) {
+        const method = mobileCode === "+94" ? "sms" : "email";
+        const { lockoutKeys, attemptsKeys } = getSignUpStorageKeys(
+          mobileCode,
+          mobileNumber,
+          email,
+          method,
+        );
+
+        // 1. Check persistent lockout
+        for (const key of lockoutKeys) {
+          try {
+            const storedLockout = await AsyncStorage.getItem(key);
+            if (storedLockout) {
+              const lockoutUntil = parseInt(storedLockout, 10);
+              const remainingMs = lockoutUntil - Date.now();
+              if (remainingMs > 0) {
+                Alert.alert(
+                  "Too Many Attempts",
+                  "Too many verification attempts. Please try again after 15 minutes.",
+                );
+                return;
+              } else {
+                await AsyncStorage.removeItem(key);
+              }
+            }
+          } catch (e) {
+            console.log("Error checking lockout:", e);
+          }
+        }
+
+        // 2. Check recent attempts count
+        const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+        for (const key of attemptsKeys) {
+          try {
+            const raw = await AsyncStorage.getItem(key);
+            if (raw) {
+              const timestamps: number[] = JSON.parse(raw);
+              const now = Date.now();
+              const valid = timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+              if (valid.length >= 5) {
+                const oldest = valid[0];
+                const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+                const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+                const lockoutUntil = Date.now() + remainingSec * 1000;
+                for (const lockKey of lockoutKeys) {
+                  await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+                }
+                Alert.alert(
+                  "Too Many Attempts",
+                  "Too many verification attempts. Please try again after 15 minutes.",
+                );
+                return;
+              }
+            }
+          } catch (e) {
+            console.log("Error checking attempts:", e);
+          }
+        }
+
         const otpResponse = await customerService.sendPhoneChangeOtp({
           phoneCode: mobileCode,
           phoneNumber: mobileNumber,
@@ -396,26 +469,60 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const otpData = otpResponse.data;
 
         if (otpData && otpData.status) {
-          navigation.navigate("SignUpOTP", {
-            phoneCode: mobileCode,
-            phoneNumber: mobileNumber,
-            email: email,
-            method: otpData.method || "sms",
-            referenceId: otpData.referenceId,
-            signupToken: otpData.signupToken,
-            flow: "changePhone",
-            accountDetails: payload,
-          });
-        } else {
+          const now = Date.now();
+          for (const key of attemptsKeys) {
+            try {
+              const raw = await AsyncStorage.getItem(key);
+              const existing = raw ? JSON.parse(raw).filter((ts: number) => now - ts < RATE_LIMIT_WINDOW_MS) : [];
+              const updated = [...existing, now];
+              await AsyncStorage.setItem(key, JSON.stringify(updated));
+            } catch (e) {
+              console.log("Error recording attempt:", e);
+            }
+          }
+
           Alert.alert(
-            "Error",
-            otpData?.message || "Failed to send verification code.",
+            "Verification Code Sent",
+            `A 5-digit verification code has been sent to your ${otpData.method === "email" ? "email address" : "mobile number"}.\n\n(5 OTP resend attempts limit)`,
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  navigation.navigate("SignUpOTP", {
+                    phoneCode: mobileCode,
+                    phoneNumber: mobileNumber,
+                    email: email,
+                    method: otpData.method || "sms",
+                    referenceId: otpData.referenceId,
+                    signupToken: otpData.signupToken,
+                    flow: "changePhone",
+                    accountDetails: payload,
+                  });
+                },
+              },
+            ],
           );
+        } else {
+          const is429 = otpData?.isRateLimited;
+          const msg = otpData?.message || "Failed to send verification code.";
+          if (is429 || msg.toLowerCase().includes("too many")) {
+            const lockoutUntil = Date.now() + RATE_LIMIT_WINDOW_MS;
+            for (const lockKey of lockoutKeys) {
+              await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+            }
+            Alert.alert(
+              "Too Many Attempts",
+              "Too many verification attempts. Please try again after 15 minutes.",
+            );
+          } else {
+            Alert.alert("Error", msg);
+          }
         }
       } else {
         const response = await customerService.updateUserDetails(payload);
 
         if (response.data) {
+          const updatedImageStr = profileImage ? profileImage.trim() : "";
           setOriginalAccountData({
             title: title.trim(),
             firstName: firstName.trim(),
@@ -426,7 +533,43 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             companyName: companyName.trim(),
             companyMobileCode: (companyMobileCode || mobileCode).trim(),
             companyMobile: compnayMobile.trim(),
+            image: updatedImageStr,
           });
+
+          dispatch(updateUserProfileImage({ image: updatedImageStr }));
+          dispatch(
+            updateUserProfile({
+              title: title.trim(),
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              email: email.trim(),
+              phoneNumber: mobileNumber.trim(),
+              phoneCode: mobileCode.trim(),
+              image: updatedImageStr,
+              companyName: isWholesale ? companyName.trim() : undefined,
+            })
+          );
+
+          try {
+            const stored = await AsyncStorage.getItem("userProfile");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              const merged = {
+                ...parsed,
+                title: title.trim(),
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                email: email.trim(),
+                phoneNumber: mobileNumber.trim(),
+                phoneCode: mobileCode.trim(),
+                image: updatedImageStr,
+                companyName: isWholesale ? companyName.trim() : parsed.companyName,
+              };
+              await AsyncStorage.setItem("userProfile", JSON.stringify(merged));
+            }
+          } catch (e) {
+            console.log("Error updating AsyncStorage userProfile:", e);
+          }
 
           Alert.alert(
             "Success",
@@ -467,7 +610,21 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const uploadedUrl = response.data.data.imageUrl;
         setProfileImage(uploadedUrl);
         setProfileImageError(null);
+        setOriginalAccountData((prev) => (prev ? { ...prev, image: uploadedUrl } : null));
         dispatch(updateUserProfileImage({ image: uploadedUrl }));
+        dispatch(updateUserProfile({ image: uploadedUrl }));
+        try {
+          const stored = await AsyncStorage.getItem("userProfile");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            await AsyncStorage.setItem(
+              "userProfile",
+              JSON.stringify({ ...parsed, image: uploadedUrl })
+            );
+          }
+        } catch (e) {
+          console.log("Error updating AsyncStorage userProfile:", e);
+        }
         showAlert("Success", "Profile photo updated successfully.", "success");
       } else {
         const msg = response.data?.message || "Failed to upload image.";

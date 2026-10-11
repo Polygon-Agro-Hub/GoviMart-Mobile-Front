@@ -196,6 +196,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 shadowOpacity: 0.15,
                 shadowRadius: 5,
                 elevation: 3,
+                marginTop:6
               }}
             >
               <Image
@@ -434,6 +435,16 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             title="My Saved Addresses"
             onPress={() => {
               navigation.navigate("SavedAddresses");
+            }}
+          />
+
+          {/* Saved Cards */}
+
+          <ProfileMenuItem
+            icon="credit-card"
+            title="Saved Cards"
+            onPress={() => {
+              navigation.navigate("SavedCards");
             }}
           />
 

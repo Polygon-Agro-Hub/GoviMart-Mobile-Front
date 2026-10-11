@@ -33,6 +33,8 @@ import Home from "@/screens/common/home/HomeScreen";
 import Profile from "@/screens/common/account/ProfileScreen";
 import MyAccount from "@/screens/common/account/EditMyAccountScreen";
 import DeleteAccount from "@/screens/common/account/DeleteAccountScreen";
+import SavedCards from "@/screens/common/account/SavedCardsScreen";
+import SaveCardInfo from "@/screens/common/account/SaveCardInfoScreen";
 import ViewProduct from "@/screens/common/products/ViewProductScreen";
 import MyCart from "@/screens/common/cart/MyCartScreen";
 import CheckoutScreen from "@/screens/common/checkout/CheckoutScreen";
@@ -41,6 +43,7 @@ import PaymentMethod from "@/screens/common/payment/PaymentMethodScreen";
 import PaymentScreen from "@/screens/common/payment/PaymentScreen";
 import OrderDeliveryMethod from "@/screens/common/locations/OrderDeliveryMethodScreen";
 import OrderConfirmed from "@/screens/common/order/OrderConfirmedScreen";
+import OrderConfirmation from "@/screens/common/order/OrderConfirmed";
 import SavedAddresses from "@/screens/common/locations/SavedAddressesScreen";
 import EditAddress from "@/screens/common/locations/EditAddressScreen";
 import AddNewAddress from "@/screens/common/locations/AddNewAddressScreen";
@@ -49,7 +52,9 @@ import ChoosePickupCentre from "@/screens/common/locations/ChoosePickupCentreScr
 import ViewLocation from "@/screens/common/locations/ViewLocation";
 import OrderHistory from "@/screens/common/order/OrderHistoryScreen";
 import OrderDetails from "@/screens/common/order/OrderDetailsScreen";
+import ConfirmOrderDetailsScreen from "@/screens/common/order/ConfirmOrderDetailsScreen";
 import OrderCancelConfirmation from "@/screens/common/order/OrderCancelConfirmedScreen";
+import OrderConfirmedOrderCancelScreen from "@/screens/common/order/OrderConfirmedOrderCancelScreen"
 import ReportComplaint from "@/screens/common/complaints/ReportComplaintScreen";
 import ComplaintHistory from "@/screens/common/complaints/ComplaintHistoryScreen";
 import ViewComplaint from "@/screens/common/complaints/ViewComplaintScreen";
@@ -192,6 +197,8 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "Profile", component: Profile, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "MyAccount", component: MyAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "DeleteAccount", component: DeleteAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "SavedCards", component: SavedCards, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "SaveCardInfo", component: SaveCardInfo, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewProduct", component: ViewProduct, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "MyCart", component: MyCart, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
@@ -200,6 +207,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "PaymentScreen", component: PaymentScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderDeliveryMethod", component: OrderDeliveryMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderConfirmed", component: OrderConfirmed, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderConfirmation", component: OrderConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "SavedAddresses", component: SavedAddresses, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "EditAddress", component: EditAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "AddNewAddress", component: AddNewAddress, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
@@ -208,7 +216,9 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ViewLocation", component: ViewLocation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderHistory", component: OrderHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderDetails", component: OrderDetails, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ConfirmOrderDetailsScreen", component: ConfirmOrderDetailsScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderCancelConfirmation", component: OrderCancelConfirmation, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "OrderConfirmedOrderCancelScreen", component: OrderConfirmedOrderCancelScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ReportComplaint", component: ReportComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },

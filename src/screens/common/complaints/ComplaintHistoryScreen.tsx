@@ -140,6 +140,16 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
     return `${year}/${month}/${day}`;
   };
 
+  const formatComplaintText = (text?: string | null): string => {
+    if (!text) return "";
+    return text
+      .replace(/\\r\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\n")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+  };
+
   useFocusEffect(
     useCallback(() => {
       const onHardwareBack = () => {
@@ -324,8 +334,8 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
               complaint has been resolved.
             </Text>
 
-            <Text className="text-[15px] leading-5 text-[#111111] mb-[30px] ">
-              {selectedComplaint?.reply!}
+            <Text className="text-[15px] leading-[22px] text-[#111111] mb-[30px]">
+              {formatComplaintText(selectedComplaint?.reply)}
             </Text>
 
             <Text className="text-[15px] leading-5 text-[#111111] mb-[30px]">

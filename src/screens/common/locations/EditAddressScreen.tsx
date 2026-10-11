@@ -543,7 +543,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
             style={{
               fontSize: 14,
               lineHeight: 18,
-              color: city ? "#111111" : "#9CA3AF",
+               color: cityLocked ? "#9CA3AF" : city ? "#111111" : "#9CA3AF",
               fontWeight: city ? "500" : "400",
             }}
           >

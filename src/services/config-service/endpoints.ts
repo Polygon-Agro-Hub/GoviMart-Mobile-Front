@@ -70,12 +70,19 @@ export const ENDPOINTS = {
     REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
     RESET_PACKAGE_ITEM: "api/order/package/reset-item",
     CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
+    CONFIRM_ORDER: "api/order/confirm-order",
     GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
     CANCEL_ORDER: "api/order/package/cancel-order",
   },
 
   PAYMENT: {
+    INITIATE: "api/payment/initiate",
+    ACTIVE_GATEWAY: "api/payment/active-gateway",
+    PAYMENTS_LK_INITIATE: "api/payment/payments-lk/initiate",
     PAYHERE_INITIATE: "api/payment/payhere/initiate",
+    CARDS: "api/payment/cards",
+    SYNC_CHECKOUT: "api/payment/sync-checkout",
+    CHARGE_SAVED_CARD: "api/payment/charge-saved-card",
   },
 
   NOTIFICATION: {

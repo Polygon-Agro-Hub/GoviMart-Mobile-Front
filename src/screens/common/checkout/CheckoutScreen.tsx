@@ -177,7 +177,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
   const addressCity = (selectedAddress?.raw?.city || "").toLowerCase().trim();
 
-  let currentDeliveryFee = 300; // default fallback
+  let currentDeliveryFee = 0;
   let currentCompanycenterId = 1;
 
   if (addressCity && cities.length > 0) {
@@ -185,7 +185,7 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
       (c: any) => (c.city || "").toLowerCase().trim() === addressCity,
     );
     if (matchedCity) {
-      currentDeliveryFee = parseFloat(matchedCity.charge) || 300;
+      currentDeliveryFee = parseFloat(matchedCity.charge) || 0;
       currentCompanycenterId = matchedCity.companycenterId || 1;
     }
   }
