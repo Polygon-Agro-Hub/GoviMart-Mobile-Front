@@ -603,19 +603,15 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           if (Array.isArray(additionalItems) && additionalItems.length > 0) {
             additionalItems.forEach((item: any) => {
               const prodId = item.productId || item.additionalItemId;
-              // price = line total for the ordered qty (from orderadditionalitems)
-              const price = parseFloat(item.price || item.normalPrice || 0);
-              // per-kg marketplace rates, used when the user changes qty/unit
-              const perKgNormal = parseFloat(
-                item.perKgNormalPrice || item.normalPrice || 0,
-              );
-              const perKgDiscounted = parseFloat(
-                item.perKgDiscountedPrice || item.discountedPrice || 0,
-              );
+              const perKgNormal = parseFloat(item.perKgNormalPrice || 0);
+              const perKgDiscounted = parseFloat(item.perKgDiscountedPrice || 0);
               const perKgPrice =
-                perKgDiscounted > 0 ? perKgDiscounted : perKgNormal;
-              const basePrice =
-                perKgNormal || parseFloat(item.normalPrice || item.price || 0);
+                perKgDiscounted > 0
+                  ? perKgDiscounted
+                  : perKgNormal > 0
+                    ? perKgNormal
+                    : parseFloat(item.price || item.normalPrice || 0);
+              const basePrice = perKgNormal > 0 ? perKgNormal : perKgPrice;
               const dbUnitType = (item.unitType || "g").toLowerCase();
               // The unit saved on the order row always wins; the product's unitType is only a fallback
               const rowUnit = String(item.unit || "")
@@ -631,6 +627,17 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const rawQty = item.qty || item.quantity || item.weight || 1;
               const parsedAmount = parseFloat(String(rawQty));
               const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
+
+              // Calculate price using marketplaceitems table current rates for the ordered quantity
+              const weightKg = unit === "kg" ? amount : amount / 1000;
+              const livePrice =
+                perKgPrice > 0
+                  ? Number((perKgPrice * weightKg).toFixed(2))
+                  : parseFloat(item.price || item.normalPrice || 0);
+              const liveNormalPrice =
+                perKgNormal > 0
+                  ? Number((perKgNormal * weightKg).toFixed(2))
+                  : livePrice;
 
               const rawChangeBy =
                 item.changeby != null &&
@@ -670,9 +677,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 productId: prodId,
                 displayName: item.productName || item.cropNameEnglish || "Item",
                 image: item.productImage,
-                price: price,
+                price: livePrice,
                 basePrice: basePrice,
                 perKgPrice: perKgPrice,
+                perKgNormalPrice: perKgNormal,
+                perKgDiscountedPrice: perKgDiscounted,
                 weightDisplay: `${amount} ${unit}`,
                 unit: unit,
                 amount: amount,
@@ -685,11 +694,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 unitType: item.unitType,
               };
 
-              // Line price before discount, straight from orderadditionalitems.normalPrice.
-              // Falls back to the paid price when there is no normalPrice (=> no strike-through).
-              const savedNormal = parseFloat(item.normalPrice);
-              loadedNormalMap[itemKey] =
-                !isNaN(savedNormal) && savedNormal > 0 ? savedNormal : price;
+              // Normal line price from marketplaceitems table (used for strikethrough if discounted)
+              loadedNormalMap[itemKey] = liveNormalPrice;
             });
           }
 
@@ -1710,8 +1716,8 @@ const goToNextStep = async () => {
   );
 
   // Normal (pre-discount) line price for an ala carte row.
-  //  • Saved row whose qty/unit is unchanged -> orderadditionalitems.normalPrice
-  //  • Edited or newly added row             -> basePrice (never lower than the current line price)
+  //  • Saved row whose qty/unit is unchanged -> loaded normal price from marketplaceitems
+  //  • Edited or newly added row             -> perKgNormalPrice * weightKg (or basePrice)
   const getNormalLinePrice = (item: any): number => {
     const linePrice = item.price * item.quantity;
 
@@ -1725,7 +1731,15 @@ const goToNextStep = async () => {
         return alacartNormalPriceMap[String(item.id)];
       }
     }
-    return Math.max(Number(item.basePrice) || 0, linePrice);
+
+    const weightKg =
+      (item.unit === "kg" ? item.amount : item.amount / 1000) || 1;
+    const normalRate =
+      item.perKgNormalPrice ||
+      (item.basePrice && item.basePrice > 0 ? item.basePrice : 0);
+    const calcNormal =
+      normalRate > 0 ? Number((normalRate * weightKg).toFixed(2)) : linePrice;
+    return Math.max(calcNormal, linePrice);
   };
 
   // Totals for the final confirm step
