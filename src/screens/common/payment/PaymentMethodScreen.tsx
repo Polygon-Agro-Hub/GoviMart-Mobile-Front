@@ -132,6 +132,33 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           }
         }
       }
+
+      // Handle English date formats like "October 14, 2026" or "Oct 14, 2026"
+      const englishMonths: Record<string, number> = {
+        january: 0, jan: 0,
+        february: 1, feb: 1,
+        march: 2, mar: 2,
+        april: 3, apr: 3,
+        may: 4,
+        june: 5, jun: 5,
+        july: 6, jul: 6,
+        august: 7, aug: 7,
+        september: 8, sep: 8, sept: 8,
+        october: 9, oct: 9,
+        november: 10, nov: 10,
+        december: 11, dec: 11,
+      };
+
+      const match = s.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+      if (match) {
+        const monthName = match[1].toLowerCase();
+        const day = parseInt(match[2], 10);
+        const year = parseInt(match[3], 10);
+        if (englishMonths[monthName] !== undefined && !isNaN(day) && !isNaN(year)) {
+          return new Date(year, englishMonths[monthName], day);
+        }
+      }
+
       const parsed = new Date(s);
       return isNaN(parsed.getTime())
         ? null
@@ -1420,6 +1447,42 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                     .
                   </>
                 )}
+              </Text>
+            </View>
+          )}
+
+          {/* PLEASE NOTE BANNER WHEN SCHEDULED AFTER EPSD */}
+          {!isEarliestDeliveryDate() && (
+            <View
+              style={{
+                marginHorizontal: 15,
+                marginTop: 14,
+                backgroundColor: "#FFF5E9",
+                borderWidth: 1,
+                borderColor: "#FFD8A8",
+                borderRadius: 20,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: "#1E293B",
+                  marginBottom: 4,
+                }}
+              >
+                Please Note :
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#475569",
+                  lineHeight: 19,
+                }}
+              >
+                Your delivery date is scheduled after the earliest possible schedule date. You do not need to pay today; your payment will be due on your scheduled order date.
               </Text>
             </View>
           )}
