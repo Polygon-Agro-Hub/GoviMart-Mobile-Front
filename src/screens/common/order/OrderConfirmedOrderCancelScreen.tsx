@@ -63,6 +63,23 @@ const getPackageUnitPrice = (pkg: PackageItem): number =>
   Number(pkg.packingFee ?? 0) +
   Number(pkg.serviceFee ?? 0);
 
+// The same package passed more than once is merged into ONE row with the
+// quantities added together (so it can be shown as "X2").
+const groupPackages = (list: PackageItem[]): PackageItem[] => {
+  const map = new Map<string, PackageItem>();
+  list.forEach((p) => {
+    const key = `${String(p.name || "").trim().toLowerCase()}|${getPackageUnitPrice(p)}`;
+    const qty = Number(p.qty) || 1;
+    const existing = map.get(key);
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      map.set(key, { ...p, id: key, qty });
+    }
+  });
+  return Array.from(map.values());
+};
+
 const ItemAvatar: React.FC<{ icon?: string; image?: string }> = ({
   icon,
   image,
@@ -107,8 +124,14 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     refundCreditAmount: passedRefundCreditAmount,
   } = route.params || {};
 
-  const packages: PackageItem[] =
-    passedPackages && passedPackages.length > 0 ? passedPackages : [];
+  // Duplicates are merged here, so it works no matter how the caller sends them
+  const packages: PackageItem[] = useMemo(
+    () =>
+      passedPackages && passedPackages.length > 0
+        ? groupPackages(passedPackages as PackageItem[])
+        : [],
+    [passedPackages],
+  );
   const alaCarteItems: AlaCarteItem[] =
     passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [];
 
@@ -307,11 +330,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         </TouchableOpacity>
 
         <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
-          Order Cancel Confirmation  
+          Order Cancel Confirmation
         </Text>
       </View>
 
-    
       <View
         ref={rootRef}
         collapsable={false}
@@ -363,12 +385,15 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                       )}
                       <View className="flex-row items-center pb-3">
                         <ItemAvatar icon={pkg.icon} image={pkg.image} />
-                        <View className="ml-3">
+                        <View className="ml-3 flex-1">
                           <Text className="text-[15px] font-bold text-black">
-                            {pkg.name}{" "}
-                            <Text className="text-[13px] font-normal text-[#8A8A8A]">
-                              (x{pkg.qty})
-                            </Text>
+                            {pkg.name}
+                            {pkg.qty > 1 && (
+                              <Text className="text-[14px] font-semibold text-[#4A4A4A]">
+                                {" "}
+                                (X{pkg.qty})
+                              </Text>
+                            )}
                           </Text>
                           <Text className="text-[13px] text-black mt-0.5">
                             Rs. {formatPrice(unitPrice)}
