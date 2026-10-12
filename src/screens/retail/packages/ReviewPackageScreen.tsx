@@ -53,6 +53,13 @@ import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCar
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
 import socketService from "@/services/socket/socket.service";
+import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
+import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
+import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
+import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import apiClient from "@/services/config-service/axio-config";
+import { ENDPOINTS } from "@/services/config-service/endpoints";
+import { getAuthHeader } from "@/services/config-service/auth-header";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
@@ -345,6 +352,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     Record<string, number>
   >({});
 
+  // ── Additional Card Payment State ──────────────────────────────────────────
+  const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [pendingConfirmPayload, setPendingConfirmPayload] = useState<any>(null);
+
   const [selectedAlaCartCategory, setSelectedAlaCartCategory] =
     useState<string>("Vegetables");
   const [alaCartProducts, setAlaCartProducts] = useState<ProductType[]>([]);
@@ -441,6 +455,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
+  const userProfile = useSelector((state: RootState) => state.auth.userProfile);
   const buyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
   );
@@ -470,6 +485,39 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       );
     }
   }, [buyerType, effectiveOrderId, navigation]);
+
+  // Fetch active payment gateway from backend config
+  useEffect(() => {
+    const fetchActiveGateway = async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await apiClient.get(ENDPOINTS.PAYMENT.ACTIVE_GATEWAY, { headers });
+        if (res.data?.status && res.data?.data?.activeGateway) {
+          setActiveGateway(res.data.data.activeGateway);
+        }
+      } catch {
+        setActiveGateway("payments_lk");
+      }
+    };
+    fetchActiveGateway();
+  }, []);
+
+  // Load saved card for 1-click fast pay (additional payment flow)
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const loadCard = async () => {
+        try {
+          const card = await cardStorageService.getSavedCard(userProfile?.id);
+          if (isMounted) setSavedCard(card);
+        } catch {}
+      };
+      loadCard();
+      return () => {
+        isMounted = false;
+      };
+    }, [userProfile?.id]),
+  );
 
   // Reset EVERYTHING whenever the order being reviewed changes
   // (also runs on first mount, which wipes data left in Redux by a previous
@@ -1286,6 +1334,161 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+// Builds the full confirmPackageReview payload from current Redux + component state.
+// Called from both the card-additional-payment branch and the existing direct-confirm path.
+const buildConfirmPayload = () => {
+  const replacements: Array<{
+    orderPackageId: number;
+    replceId?: number;
+    newProductId: number;
+    productType?: string | number;
+    newQty: number;
+    newPrice: number;
+  }> = [];
+
+  Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
+    const orderPkgId = orderPackageDbIds[pkgKey];
+    if (orderPkgId) {
+      const templateProds = productTemplatesState[pkgKey] || [];
+      prods.forEach((p) => {
+        const templateProd = templateProds.find(
+          (t) =>
+            (t.productId && p.productId && t.productId === p.productId) ||
+            String(t.itemId || t.id) === String(p.itemId || p.id),
+        );
+        const baselineQty =
+          templateProd?.quantity ??
+          p.minQuantity ??
+          p.originalProduct?.quantity;
+        const isQtyChanged =
+          baselineQty !== undefined
+            ? Number(p.quantity) !== Number(baselineQty)
+            : false;
+
+        if (p.isReplaced || isQtyChanged) {
+          const replceId =
+            p.originalProduct?.itemId ||
+            p.itemId ||
+            (p.originalProduct?.id
+              ? parseInt(p.originalProduct.id)
+              : undefined) ||
+            p.productId ||
+            parseInt(p.id) ||
+            undefined;
+          const newProdId = p.productId || parseInt(p.id) || 0;
+          replacements.push({
+            orderPackageId: orderPkgId,
+            replceId: replceId,
+            newProductId: newProdId,
+            productType: p.productTypeId || p.productType || p.category,
+            newQty: p.quantity || 1,
+            newPrice: Number(
+              ((p.price || 0) * (p.quantity || 1)).toFixed(2),
+            ),
+          });
+        }
+      });
+    }
+  });
+
+  const additionalItemsPayload = Object.values(alacartSelection)
+    .filter((item) => item.isAddedNow)
+    .map((item) => ({
+      productId:
+        typeof item.productId === "number"
+          ? item.productId
+          : parseInt(
+              String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            ) || 0,
+      qty: item.amount,
+      unit: item.unit,
+      normalPrice: item.basePrice,
+      price: item.price,
+    }));
+
+  const updatedAdditionalItemsPayload = Object.values(alacartSelection)
+    .filter((item) => {
+      if (item.isAddedNow || !item.additionalItemId) return false;
+      if (isItemUnavailable(item)) return false;
+      const orig = originalAlacartMap[item.additionalItemId];
+      if (!orig) return false;
+      return (
+        Number(orig.amount) !== Number(item.amount) ||
+        orig.unit !== item.unit
+      );
+    })
+    .map((item) => ({
+      id: item.additionalItemId as number,
+      productId:
+        typeof item.productId === "number"
+          ? item.productId
+          : parseInt(
+              String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            ) || 0,
+      qty: item.amount,
+      unit: item.unit,
+      price: Number((item.price * item.quantity).toFixed(2)),
+    }));
+
+  const packagesPayload = Object.entries(packageProducts).map(
+    ([pkgKey, prods]) => ({
+      orderPackageId: orderPackageDbIds[pkgKey],
+      packageId: pkgKey,
+      items: (prods as any[]).map((p) => {
+        const pType =
+          p.productTypeId != null && !isNaN(Number(p.productTypeId))
+            ? Number(p.productTypeId)
+            : p.productType != null && !isNaN(Number(p.productType))
+              ? Number(p.productType)
+              : null;
+        const prodId =
+          p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+        return {
+          productType: pType,
+          productId: prodId,
+          qty: Number(p.quantity) || 1,
+          price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+        };
+      }),
+    }),
+  );
+
+  const pMethodInner = (paymentMethod || "").trim().toLowerCase();
+  const isCardMethod =
+    pMethodInner.includes("card") ||
+    pMethodInner.includes("payhere") ||
+    pMethodInner.includes("online") ||
+    (isPaid && !pMethodInner.includes("cash") && !pMethodInner.includes("cod"));
+
+  const netDiff = totalDiff;
+  const netRefundSavings =
+    (isCardMethod || isPaid) && netDiff < 0
+      ? Number(Math.abs(netDiff).toFixed(2))
+      : 0;
+
+  return {
+    orderId: actualOrderId || effectiveOrderId,
+    processOrderId: processOrderId || undefined,
+    lockNow: true,
+    additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+    newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+    paymentMethod: paymentMethod || undefined,
+    newTotal: finalOrderTotalWithDelivery,
+    creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
+    replacements,
+    additionalItems: additionalItemsPayload,
+    updatedAdditionalItems:
+      updatedAdditionalItemsPayload.length > 0
+        ? updatedAdditionalItemsPayload
+        : undefined,
+    deletedAdditionalItemIds:
+      deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+        ? deletedAdditionalItemIds
+        : undefined,
+    packages: packagesPayload,
+  };
+};
+
 const goToNextStep = async () => {
   // Prevent double taps while the request is running
   if (isSubmitting) return;
@@ -1373,9 +1576,80 @@ const goToNextStep = async () => {
   // Capture everything we need AFTER the Redux state is cleared
   const confirmedInvoiceNo = invoiceNo;
   const confirmedTotal = finalOrderTotalWithDelivery;
+  const confirmedOrderId = String(actualOrderId || effectiveOrderId);
+  const confirmedScheduleDate =
+    scheduleDateStr || (rawScheduleDate || undefined);
+  const confirmedPackageTotal = packagesTotal;
+  const confirmedAlacartTotal = alacartTotal;
+  const confirmedDeliveryCharge = deliveryCharge;
+  const confirmedDeliveryMethod = deliveryMethod;
 
   // Show "Processing..." on the button for EVERY payment type
   setIsSubmitting(true);
+
+  // ── Card order with additional payment required: initiate gateway ──────────
+  if (isCard && additionalPayAmount > 0) {
+    const confirmPayload = buildConfirmPayload();
+    setPendingConfirmPayload(confirmPayload);
+    try {
+      const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+      // Attempt 1-click saved card charge first
+      if (savedCard && adapter.chargeSavedCard) {
+        try {
+          const chargeRes = await adapter.chargeSavedCard({
+            cardId: savedCard.id,
+            amount: additionalPayAmount,
+            paymentType: "order",
+            orderId: String(processOrderId || effectiveOrderId),
+            itemsDescription: `GoviMart Package Additional Payment - ${invoiceNo}`,
+          });
+          if (chargeRes.success) {
+            await handleAdditionalPaymentSuccess(confirmPayload);
+            return;
+          }
+        } catch (chargeErr: any) {
+          const isInvalid =
+            chargeErr?.response?.data?.cardInvalid ||
+            chargeErr?.message?.includes("invalid") ||
+            chargeErr?.message?.includes("expired") ||
+            chargeErr?.message?.includes("No such object");
+          if (!isInvalid) {
+            setIsSubmitting(false);
+            Alert.alert(
+              "Payment Error",
+              chargeErr?.response?.data?.message ||
+                chargeErr?.message ||
+                "Payment failed. Please try again.",
+            );
+            return;
+          }
+          setSavedCard(null); // invalid/expired → fall through to hosted checkout
+        }
+      }
+
+      // Hosted checkout (no saved card, or saved card was invalid/expired)
+      const session = await adapter.initiatePayment({
+        orderId: String(processOrderId || effectiveOrderId),
+        amount: additionalPayAmount,
+        paymentType: "order",
+        itemsDescription: `GoviMart Package Additional Payment - ${invoiceNo}`,
+      });
+
+      setCheckoutSession(session);
+      setCheckoutModalVisible(true);
+      // isSubmitting stays true — button is blocked while the modal is open
+    } catch (err: any) {
+      setIsSubmitting(false);
+      Alert.alert(
+        "Payment Error",
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to start payment. Please try again.",
+      );
+    }
+    return; // Do NOT fall through to the existing confirmPackageReview call
+  }
 
   try {
     const replacements: Array<{
@@ -1582,11 +1856,111 @@ const goToNextStep = async () => {
   // Card / online orders: go to OrderConfirmed using the values
   // captured BEFORE the Redux state was cleared.
   navigation.navigate("OrderConfirmed", {
-    orderId: String(effectiveOrderId),
+    orderId: confirmedOrderId,
     invoiceNumber: confirmedInvoiceNo,
     total: confirmedTotal,
+    scheduleDate: confirmedScheduleDate,
+    orderContext: {
+      grandTotal: confirmedTotal,
+      packageTotal: confirmedPackageTotal,
+      productTotal: confirmedAlacartTotal,
+      deliveryCharge: confirmedDeliveryCharge,
+      discount: 0,
+      paymentMethod: "card",
+      deliveryMethod: confirmedDeliveryMethod?.toLowerCase().includes("pickup")
+        ? "pickup"
+        : "home",
+      checkoutDetails: {
+        deliveryDate: confirmedScheduleDate,
+      } as any,
+    },
   });
 };
+
+  // ── Additional Card Payment Handlers ────────────────────────────────────
+
+  const handleAdditionalPaymentSuccess = async (confirmPayload?: any) => {
+    setCheckoutModalVisible(false);
+
+    const payload = confirmPayload ?? pendingConfirmPayload;
+    if (!payload) {
+      Alert.alert("Error", "Order details missing. Please contact support.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // Capture nav values before Redux state is cleared
+      const confirmedInvoiceNo = invoiceNo;
+      const confirmedTotal = finalOrderTotalWithDelivery;
+      const confirmedOrderId = String(actualOrderId || effectiveOrderId);
+      const confirmedScheduleDate =
+        scheduleDateStr || (rawScheduleDate || undefined);
+      const confirmedPackageTotal = packagesTotal;
+      const confirmedAlacartTotal = alacartTotal;
+      const confirmedDeliveryCharge = deliveryCharge;
+      const confirmedDeliveryMethod = deliveryMethod;
+
+      const confirmRes = await orderService.confirmPackageReview(payload);
+      console.log(
+        "[ReviewPackageScreen] confirmPackageReview (post-payment):",
+        confirmRes.data,
+      );
+
+      // Wipe review state — same as the existing success path in goToNextStep
+      loadedOrderIdRef.current = null;
+      requestIdRef.current += 1;
+      dispatch(clearReviewData());
+      setUnavailablePackageIds({});
+      setAlacartNormalPriceMap({});
+      setDisabledAlacartProductIds(new Set());
+      setOriginalAlacartTotal(0);
+      setOriginalAlacartMap({});
+      setCurrentStepIndex(0);
+      setMode("overview");
+      setPendingConfirmPayload(null);
+
+      navigation.navigate("OrderConfirmed", {
+        orderId: confirmedOrderId,
+        invoiceNumber: confirmedInvoiceNo,
+        total: confirmedTotal,
+        scheduleDate: confirmedScheduleDate,
+        orderContext: {
+          grandTotal: confirmedTotal,
+          packageTotal: confirmedPackageTotal,
+          productTotal: confirmedAlacartTotal,
+          deliveryCharge: confirmedDeliveryCharge,
+          discount: 0,
+          paymentMethod: "card",
+          deliveryMethod: confirmedDeliveryMethod?.toLowerCase().includes("pickup")
+            ? "pickup"
+            : "home",
+          checkoutDetails: {
+            deliveryDate: confirmedScheduleDate,
+          } as any,
+        },
+      });
+    } catch (err: any) {
+      console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
+      Alert.alert(
+        "Order Confirmation Failed",
+        "Your payment was received but the order could not be confirmed. Please contact support.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdditionalPaymentCancel = () => {
+    setCheckoutModalVisible(false);
+    setCheckoutSession(null);
+    setPendingConfirmPayload(null);
+    setIsSubmitting(false);
+    Alert.alert(
+      "Payment Cancelled",
+      "The additional payment was not completed. Your order was not confirmed. You can try again.",
+    );
+  };
 
   const onChangeProduct = (packageId: string, product: ReviewProduct) => {
     navigation.navigate("ReplaceProduct", {
@@ -3302,6 +3676,22 @@ const goToNextStep = async () => {
           </View>
         </View>
       </Modal>
+
+      {/* Additional Card Payment Modal — card orders with extra amount due */}
+      {checkoutSession && (
+        <PaymentCheckoutModal
+          visible={checkoutModalVisible}
+          gatewayName={checkoutSession.gateway}
+          checkoutUrl={checkoutSession.checkoutUrl}
+          postBody={checkoutSession.postBody}
+          orderId={checkoutSession.orderId}
+          amount={checkoutSession.amount}
+          customerAddress={checkoutSession.customerAddress}
+          onSuccess={(_orderId) => handleAdditionalPaymentSuccess()}
+          onCancel={(_orderId) => handleAdditionalPaymentCancel()}
+          onClose={() => handleAdditionalPaymentCancel()}
+        />
+      )}
 
       {/* Success alert — shown briefly after API succeeds (cash orders) */}
       <AlertModal
