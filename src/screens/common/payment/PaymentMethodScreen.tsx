@@ -167,22 +167,24 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
     };
 
+    // 1. If cart has a package that is not available on the system earliest date
+    if (orderContext?.checkoutDetails?.hasPackageUnavailableOnEarliest) {
+      return false;
+    }
+
+    // 2. If earliest delivery date was explicitly null (no earliest date available)
+    if (orderContext?.checkoutDetails?.earliestDeliveryDate === null) {
+      return false;
+    }
+
     const scheduledDate = parseDateOnly(deliveryDateRaw);
     if (!scheduledDate) return false;
 
-    // 1. Check if earliest delivery date was passed directly from ScheduleOrderScreen
-    const earliestFromContext = parseDateOnly(
-      orderContext?.checkoutDetails?.earliestDeliveryDate
-    );
-    if (earliestFromContext) {
-      return scheduledDate.getTime() <= earliestFromContext.getTime();
-    }
+    // 3. System Earliest Possible Schedule Date (e.g. today is 12 -> 15)
+    const sysEarliestDate = getMinDeliveryDate();
+    sysEarliestDate.setHours(0, 0, 0, 0);
 
-    // 2. Fallback to getMinDeliveryDate()
-    const earliestDate = getMinDeliveryDate();
-    earliestDate.setHours(0, 0, 0, 0);
-
-    return scheduledDate.getTime() <= earliestDate.getTime();
+    return scheduledDate.getTime() === sysEarliestDate.getTime();
   };
 
   useEffect(() => {

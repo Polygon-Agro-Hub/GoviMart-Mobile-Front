@@ -269,10 +269,15 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     let expiryDay = 0;
     let cutoffDate: Date | null = null;
+    let sorryExpiryDate: Date | null = null;
     if (earliestExpiryDate) {
       expiryDay = earliestExpiryDate.getDate();
       cutoffDate = new Date(earliestExpiryDate.getTime());
       cutoffDate.setHours(23, 59, 59, 999);
+
+      // In the "We’re Sorry" popup, expiry date is 2 days before the end date (end date minus 2 days)
+      sorryExpiryDate = new Date(earliestExpiryDate.getTime());
+      sorryExpiryDate.setDate(sorryExpiryDate.getDate() - 2);
     }
 
     const MONTH_SHORT = [
@@ -316,6 +321,11 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       ? MONTH_LONG[earliestExpiryDate.getMonth()]
       : "";
 
+    const sorryExpiryDay = sorryExpiryDate ? sorryExpiryDate.getDate() : 0;
+    const sorryExpiryMonth = sorryExpiryDate
+      ? MONTH_LONG[sorryExpiryDate.getMonth()]
+      : "";
+
     const startMonth = MONTH_SHORT[effectiveStartDate.getMonth()];
     const startDay = effectiveStartDate.getDate();
     const startDayOrdinal = getOrdinal(startDay);
@@ -334,15 +344,23 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const isAvailableNow = cutoffDate ? effectiveStartDate <= cutoffDate : true;
 
+    // Package is unavailable on the system earliest date if earliestStartDate > minAvailDate
+    const hasPackageUnavailableOnEarliest = Boolean(
+      earliestStartDate && earliestStartDate > minAvailDate
+    );
+
     return {
       gapDays,
       expiryDay,
       expiryDayOrdinal,
       expiryMonthFull,
+      sorryExpiryDay,
+      sorryExpiryMonth,
       cutoffDate,
       minAvailDate,
       earliestStartDate,
       effectiveStartDate,
+      hasPackageUnavailableOnEarliest,
       rangeTextLong,
       rangeTextShort,
       startDateFormatted: `${startMonth} ${startDay}`,
@@ -618,12 +636,17 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         ? selectedDate?.replace(/\//g, "-")
         : calculatedOrders[0]?.isoDate || "";
 
-    const earliestAvailDate =
-      seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
+    const sysEarliestDate = getMinDeliveryDate();
+    sysEarliestDate.setHours(0, 0, 0, 0);
+
+    const hasPackageUnavailableOnEarliest = Boolean(
+      seasonalInfo?.hasPackageUnavailableOnEarliest
+    );
+
     const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-    const earliestDateStr = `${earliestAvailDate.getFullYear()}-${pad(
-      earliestAvailDate.getMonth() + 1,
-    )}-${pad(earliestAvailDate.getDate())}`;
+    const earliestDateStr = `${sysEarliestDate.getFullYear()}-${pad(
+      sysEarliestDate.getMonth() + 1,
+    )}-${pad(sysEarliestDate.getDate())}`;
 
     const updatedContext = {
       ...orderContext,
@@ -637,7 +660,10 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         }),
         scheduleType,
         deliveryDate: effectiveFirstDate,
-        earliestDeliveryDate: earliestDateStr,
+        earliestDeliveryDate: hasPackageUnavailableOnEarliest
+          ? null
+          : earliestDateStr,
+        hasPackageUnavailableOnEarliest,
         recurringDays: selectedDays,
         validityWeeks: selectedWeeks,
         timeSlot: selectedTimeSlot || undefined,
@@ -1506,7 +1532,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                   <View
                     style={{
                       flexDirection: "row",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       paddingVertical: 6,
                       paddingHorizontal: 4,
                     }}
@@ -1516,7 +1542,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                         fontSize: 15,
                         fontWeight: "500",
                         color: "#64748B",
-                        width: 95,
+                        width: 90,
                       }}
                     >
                       {order.label}
@@ -1527,29 +1553,43 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                         fontSize: 15,
                         fontWeight: "600",
                         color: "#111111",
+                        marginRight: 6,
+                      }}
+                    >
+                      :
+                    </Text>
+
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: "600",
+                        color: "#111111",
                         flex: 1,
                       }}
                     >
-                      : {order.dateStr}
+                      {order.dateStr}
                     </Text>
                   </View>
 
                   {/* Badge for 1st order - full width box: only available when earliest possible schedule date exists */}
                   {order.index === 1 && (() => {
-                    const earliestDate =
-                      seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
-                    const earliestTime = new Date(
-                      earliestDate.getFullYear(),
-                      earliestDate.getMonth(),
-                      earliestDate.getDate()
-                    ).getTime();
+                    const sysEarliestDate = getMinDeliveryDate();
+                    sysEarliestDate.setHours(0, 0, 0, 0);
+
+                    // If a package is not available on the system earliest date
+                    const hasPackageUnavailableOnEarliest = Boolean(
+                      seasonalInfo?.hasPackageUnavailableOnEarliest
+                    );
+                    if (hasPackageUnavailableOnEarliest) return null;
+
+                    const earliestTime = sysEarliestDate.getTime();
                     const orderTime = new Date(
                       order.dateObj.getFullYear(),
                       order.dateObj.getMonth(),
                       order.dateObj.getDate()
                     ).getTime();
 
-                    // Only show if the 1st order is scheduled on/at the earliest possible schedule date
+                    // Only show if the 1st order is scheduled on/at the system earliest possible schedule date (e.g. today is 12 -> 15)
                     if (orderTime !== earliestTime) return null;
 
                     return (
@@ -1593,7 +1633,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         visible={zeroOrdersAlertVisible}
         type="error"
         title="We’re Sorry"
-        message={`We’re sorry, but we’re unable to fulfill your request at this time. Unfortunately, there are no available dates within the next two weeks, and your package expires on ${seasonalInfo ? `${seasonalInfo.expiryMonthFull} ${seasonalInfo.expiryDay}` : "this date"}.\n\nWe apologize for the inconvenience and appreciate your understanding.`}
+        message={`We’re sorry, but we’re unable to fulfill your request at this time. Unfortunately, there are no available dates within the next two weeks, and your package expires on ${seasonalInfo && seasonalInfo.sorryExpiryDay ? `${seasonalInfo.sorryExpiryMonth} ${seasonalInfo.sorryExpiryDay}` : "this date"}.\n\nWe apologize for the inconvenience and appreciate your understanding.`}
         onClose={() => setZeroOrdersAlertVisible(false)}
         showOkButton={true}
         okButtonText="OK"
