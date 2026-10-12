@@ -2020,7 +2020,10 @@ const goToNextStep = async () => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           className="flex-1"
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "space-between",
+          }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -2030,126 +2033,227 @@ const goToNextStep = async () => {
             />
           }
         >
-          <View className="items-center mt-2">
-            <Text className="text-[17px] font-bold text-black">
-              Order : #{invoiceNo || effectiveOrderId}
-            </Text>
-            <Text className="text-[14px] text-[#494A65] mt-1">
-              Schedule to : {scheduleDateStr}
-            </Text>
-          </View>
-
-          {isLocked && (
-            <View className="mx-5 mt-3 bg-[#FFF3CD] border border-[#FFEBAA] rounded-2xl p-4 flex-row items-center">
-              <Ionicons name="lock-closed" size={20} color="#856404" />
-              <Text className="text-[13px] text-[#856404] font-medium ml-2 flex-1">
-                Package reviewing is currently locked. Your order is already
-                being packed.
+          <View>
+            <View className="items-center mt-2">
+              <Text className="text-[17px] font-bold text-black">
+                Order : #{invoiceNo || effectiveOrderId}
+              </Text>
+              <Text className="text-[14px] text-[#494A65] mt-1">
+                Schedule to : {scheduleDateStr}
               </Text>
             </View>
-          )}
 
-          <View className="h-[1px] bg-[#ECECEC] mt-5" />
-
-          {isTimeRanOut ? (
-            <TimeRanOutBanner
-              nextScheduleDateStr={nextScheduleDateStr}
-              onSendReminderTomorrow={onSendReminderTomorrow}
-              onCancelOrder={onCancelOrder}
-            />
-          ) : (
-            <>
-              <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
-                Review and customize your package as per your preference.
-              </Text>
-
-              <View className="mt-5">
-                <HurryBanner
-                  ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
-                  date={scheduleDateStr}
-                  showCancelLink={true}
-                  onCancelOrder={onCancelOrder}
-                />
+            {isLocked && (
+              <View className="mx-5 mt-3 bg-[#FFF3CD] border border-[#FFEBAA] rounded-2xl p-4 flex-row items-center">
+                <Ionicons name="lock-closed" size={20} color="#856404" />
+                <Text className="text-[13px] text-[#856404] font-medium ml-2 flex-1">
+                  Package reviewing is currently locked. Your order is already
+                  being packed.
+                </Text>
               </View>
+            )}
 
-              <View className="h-[1px] bg-[#ECECEC] mt-6" />
+            <View className="h-[1px] bg-[#ECECEC] mt-5" />
 
-              <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
-                Here are the packages you purchased. You can review and update
-                them if needed.
-              </Text>
+            {isTimeRanOut ? (
+              <TimeRanOutBanner
+                nextScheduleDateStr={nextScheduleDateStr}
+                onSendReminderTomorrow={onSendReminderTomorrow}
+                onCancelOrder={onCancelOrder}
+              />
+            ) : (
+              <>
+                <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
+                  Review and customize your package as per your preference.
+                </Text>
 
-              {loadingReview ? (
-                <LoadingPage
-                  message="Loading package details..."
-                  fullScreen={false}
-                />
-              ) : packagesMeta.length === 0 ? (
-                <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
-                  <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
-                  <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">
-                    No packages found for this order.
+                <View className="mt-5">
+                  <HurryBanner
+                    ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
+                    date={scheduleDateStr}
+                    showCancelLink={true}
+                    onCancelOrder={onCancelOrder}
+                  />
+                </View>
+
+                <View className="h-[1px] bg-[#ECECEC] mt-6" />
+
+                <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
+                  Here are the packages you purchased. You can review and update
+                  them if needed.
+                </Text>
+
+                {loadingReview ? (
+                  <LoadingPage
+                    message="Loading package details..."
+                    fullScreen={false}
+                  />
+                ) : packagesMeta.length === 0 ? (
+                  <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
+                    <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
+                    <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">
+                      No packages found for this order.
+                    </Text>
+                  </View>
+                ) : (
+                  packagesMeta.map((pkg, pIdx) => (
+                    <View
+                      key={`pkg-${pkg.id}-${pIdx}`}
+                      className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl px-4 py-2.5 flex-row items-center"
+                    >
+                      <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
+                        {pkg.image ? (
+                          <Image
+                            source={{ uri: pkg.image }}
+                            className="w-12 h-12 rounded-xl"
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
+                        )}
+                      </View>
+                      <View className="ml-3 flex-1">
+                        <Text
+                          className="text-[17px] font-bold text-black"
+                          numberOfLines={2}
+                        >
+                          {pkg.name} (x{pkg.qty})
+                        </Text>
+                        <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
+                          Price :{" "}
+                          <Text className="font-bold text-black">
+                            Rs.{" "}
+                            {formatPrice(
+                              pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
+                            )}{" "}
+                            x {pkg.qty} = Rs.{" "}
+                            {formatPrice(
+                              (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
+                                pkg.qty,
+                            )}
+                          </Text>
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
+                  Lastly, you may also purchase any additional items you want
+                  after reviewing the packages you purchased.
+                </Text>
+
+                <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
+                  <Text className="text-[14px] font-bold text-black mb-1">
+                    Please Note :
+                  </Text>
+                  <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                    If you update the quantities of products in your packages, or
+                    add or replace products, the total amount may change. You'll
+                    need to pay any additional amount due.
                   </Text>
                 </View>
-              ) : (
-                packagesMeta.map((pkg, pIdx) => (
-                  <View
-                    key={`pkg-${pkg.id}-${pIdx}`}
-                    className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl px-4 py-2.5 flex-row items-center"
-                  >
-                    <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
-                      {pkg.image ? (
-                        <Image
-                          source={{ uri: pkg.image }}
-                          className="w-12 h-12 rounded-xl"
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
-                      )}
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text
-                        className="text-[17px] font-bold text-black"
-                        numberOfLines={2}
-                      >
-                        {pkg.name} (x{pkg.qty})
-                      </Text>
-                      <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                        Price :{" "}
-                        <Text className="font-bold text-black">
-                          Rs.{" "}
-                          {formatPrice(
-                            pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
-                          )}{" "}
-                          x {pkg.qty} = Rs.{" "}
-                          {formatPrice(
-                            (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
-                              pkg.qty,
-                          )}
-                        </Text>
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              )}
+              </>
+            )}
+          </View>
 
-              <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
-                Lastly, you may also purchase any additional items you want
-                after reviewing the packages you purchased.
-              </Text>
+          {/* Bottom Payment & Action Section (overview) inside ScrollView */}
+          {!loadingReview && !isTimeRanOut && (
+            <View
+              style={{
+                backgroundColor: "#FFF",
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+                paddingHorizontal: 20,
+                paddingTop: 22,
+                paddingBottom: Platform.OS === "ios" ? 34 : 20,
+                marginTop: 20,
+                shadowColor: "#000",
+                shadowOpacity: 0.12,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: -3 },
+                elevation: 15,
+              }}
+            >
+              {/* Total = Full Total + Discount Received */}
+              <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
 
-              <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
-                <Text className="text-[14px] font-bold text-black mb-1">
+              <RowDivider />
+
+              {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
+              <PriceRow
+                label="Discount Received"
+                value={`- Rs. ${formatPrice(overviewDiscount)}`}
+                valueColor="#1B8A3A"
+              />
+
+              <RowDivider />
+
+              {/* Full Total = productPrice + packingFee + serviceFee */}
+              <PriceRow
+                label="Full Total"
+                value={`Rs. ${formatPrice(overviewFullTotal)}`}
+                strong
+                big
+                marginBottom={14}
+              />
+
+              {/* Note about what is shown from this point onward */}
+              <View
+                style={{
+                  backgroundColor: "#F5F8FF",
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  marginBottom: 18,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#000000",
+                    marginBottom: 4,
+                  }}
+                >
                   Please Note :
                 </Text>
-                <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                  If you update the quantities of products in your packages, or
-                  add or replace products, the total amount may change. You'll
-                  need to pay any additional amount due.
+                <Text style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}>
+                  From this point onward, only the package prices and à la carte
+                  prices will be shown. Any à la carte discounts, coupon discounts,
+                  delivery fees will not be reflected here.
                 </Text>
               </View>
-            </>
+
+              <TouchableOpacity
+                disabled={loadingReview || packagesMeta.length === 0}
+                onPress={() => {
+                  setCurrentStepIndex(0);
+                  setMode("flow");
+                }}
+                activeOpacity={0.85}
+                style={{
+                  height: 54,
+                  backgroundColor:
+                    loadingReview || packagesMeta.length === 0
+                      ? "#7F919C"
+                      : "#000000",
+                  borderRadius: 30,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOpacity:
+                    loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 3 },
+                  elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
+                }}
+              >
+                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+                  {loadingReview ? "Loading Packages..." : "Review My Packages"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </ScrollView>
       ) : null}
@@ -3037,103 +3141,7 @@ const goToNextStep = async () => {
         </ScrollView>
       )}
 
-      {/* Fixed Bottom Payment & Action Section (overview) */}
-      {mode === "overview" && !loadingReview && !isTimeRanOut && (
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 20,
-            paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 12,
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: -3 },
-            elevation: 15,
-          }}
-        >
-          {/* Total = Full Total + Discount Received */}
-          <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
 
-          <RowDivider />
-
-          {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
-          <PriceRow
-            label="Discount Received"
-            value={`- Rs. ${formatPrice(overviewDiscount)}`}
-            valueColor="#1B8A3A"
-          />
-
-          <RowDivider />
-
-          {/* Full Total = productPrice + packingFee + serviceFee */}
-          <PriceRow
-            label="Full Total"
-            value={`Rs. ${formatPrice(overviewFullTotal)}`}
-            strong
-            big
-            marginBottom={14}
-          />
-
-          {/* Note about what is shown from this point onward */}
-          <View
-            style={{
-              backgroundColor: "#F5F8FF",
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              marginBottom: 18,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: "#000000",
-                marginBottom: 4,
-              }}
-            >
-              Please Note :
-            </Text>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}>
-              From this point onward, only the package prices and à la carte
-              prices will be shown. Any à la carte discounts, coupon discounts,
-              delivery fees will not be reflected here.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            disabled={loadingReview || packagesMeta.length === 0}
-            onPress={() => {
-              setCurrentStepIndex(0);
-              setMode("flow");
-            }}
-            activeOpacity={0.85}
-            style={{
-              height: 54,
-              backgroundColor:
-                loadingReview || packagesMeta.length === 0
-                  ? "#7F919C"
-                  : "#000000",
-              borderRadius: 30,
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOpacity:
-                loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
-            }}
-          >
-            <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              {loadingReview ? "Loading Packages..." : "Review My Packages"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {mode === "flow" && currentStep.type === "alacart" && (
         <View
