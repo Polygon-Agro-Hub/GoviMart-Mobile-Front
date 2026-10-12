@@ -212,6 +212,20 @@ export function getPaymentStatusInfo(
     rows.push({ label, amount, status });
   };
 
+  // Card payment with isPaid = 0 -> "Online Transferred Amount (Pending)"
+  const pushUnpaid = (amount: number) => {
+    if (isCardPayment) {
+      push("Online Transferred Amount (Pending)", amount, "pending");
+    } else if (isPickup) {
+      push("Cash On Pickup", amount, "pending");
+    } else {
+      push("Cash On Delivery", amount, "pending");
+    }
+    if (!isPickup) {
+      showDeliveryNote = !isFreeDelivery;
+    }
+  };
+
   if (hasCreditPaid) {
     push("Credit Balance Used", creditPaidNum, "paid");
 
@@ -222,11 +236,8 @@ export function getPaymentStatusInfo(
         } else {
           push(cashLabel, remainingAfterCredit, "paid");
         }
-      } else if (isPickup) {
-        push("Cash On Pickup", remainingAfterCredit, "pending");
       } else {
-        push("Cash On Delivery", remainingAfterCredit, "pending");
-        showDeliveryNote = !isFreeDelivery;
+        pushUnpaid(remainingAfterCredit);
       }
     }
   } else {
@@ -236,11 +247,8 @@ export function getPaymentStatusInfo(
       } else {
         push(cashLabel, grandTotal, "paid");
       }
-    } else if (isPickup) {
-      push("Cash On Pickup", grandTotal, "pending");
     } else {
-      push("Cash On Delivery", grandTotal, "pending");
-      showDeliveryNote = !isFreeDelivery;
+      pushUnpaid(grandTotal);
     }
   }
 
