@@ -3689,7 +3689,7 @@ const goToNextStep = async () => {
           customerAddress={checkoutSession.customerAddress}
           onSuccess={(_orderId) => handleAdditionalPaymentSuccess()}
           onCancel={(_orderId) => handleAdditionalPaymentCancel()}
-          onClose={() => handleAdditionalPaymentCancel()}
+          onClose={() => setCheckoutModalVisible(false)}
         />
       )}
 
