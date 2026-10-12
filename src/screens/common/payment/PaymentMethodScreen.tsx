@@ -7,6 +7,8 @@ import {
   Alert,
   Image,
   BackHandler,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -165,22 +167,24 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
     };
 
+    // 1. If cart has a package that is not available on the system earliest date
+    if (orderContext?.checkoutDetails?.hasPackageUnavailableOnEarliest) {
+      return false;
+    }
+
+    // 2. If earliest delivery date was explicitly null (no earliest date available)
+    if (orderContext?.checkoutDetails?.earliestDeliveryDate === null) {
+      return false;
+    }
+
     const scheduledDate = parseDateOnly(deliveryDateRaw);
     if (!scheduledDate) return false;
 
-    // 1. Check if earliest delivery date was passed directly from ScheduleOrderScreen
-    const earliestFromContext = parseDateOnly(
-      orderContext?.checkoutDetails?.earliestDeliveryDate
-    );
-    if (earliestFromContext) {
-      return scheduledDate.getTime() <= earliestFromContext.getTime();
-    }
+    // 3. System Earliest Possible Schedule Date (e.g. today is 12 -> 15)
+    const sysEarliestDate = getMinDeliveryDate();
+    sysEarliestDate.setHours(0, 0, 0, 0);
 
-    // 2. Fallback to getMinDeliveryDate()
-    const earliestDate = getMinDeliveryDate();
-    earliestDate.setHours(0, 0, 0, 0);
-
-    return scheduledDate.getTime() <= earliestDate.getTime();
+    return scheduledDate.getTime() === sysEarliestDate.getTime();
   };
 
   useEffect(() => {
@@ -1597,6 +1601,50 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onCancel={handleCheckoutCancel}
         onClose={() => setCheckoutModalVisible(false)}
       />
+
+      {/* ─── FULL SCREEN LOADING CONFIRMATION ──────────────────────────── */}
+      <Modal visible={submitting} transparent animationType="fade" statusBarTranslucent>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 32,
+              paddingHorizontal: 36,
+              alignItems: "center",
+              minWidth: 230,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              elevation: 10,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              {paymentMethod === "card" && paymentAmount > 0 && isEarliestDeliveryDate()
+                ? "Processing payment..."
+                : "Confirming your order..."}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

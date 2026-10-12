@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     View,
     Text,
@@ -34,6 +34,7 @@ export interface UiNotificationItem {
     invNo?: string;
     orderStatus?: string;
     isFinalized: boolean;
+    isConfirmed: boolean;
     title: string;
     message: string;
     time: string;
@@ -112,15 +113,19 @@ const formatNotificationTime = (dateStr?: string, group?: string): string => {
     return timeStr;
 };
 
+// Safely converts 1 / "1" / true / "true" to boolean
+const toBool = (value: unknown): boolean =>
+    value === true || value === "true" || Number(value) === 1;
+
 // ─── SERVER -> UI MAPPER ─────────────────────────────────────────────────────
 const mapServerItemToUi = (
     item: ServerNotificationItem,
 ): UiNotificationItem => {
     const group = getNotificationGroup(item.createdAt);
     const time = formatNotificationTime(item.createdAt, group);
-    const isReadBool = Number(item.isRead) === 1 || Boolean(item.isRead);
-    const isFinalizedBool =
-        Number(item.isFinalized) === 1 || item.isFinalized === true;
+    const isReadBool = toBool(item.isRead);
+    const isFinalizedBool = toBool(item.isFinalized);
+    const isConfirmedBool = toBool(item.isConfirmed);
 
     // "Please Confirm Your Order" always shows the Action Required badge
     const actionRequired =
@@ -162,6 +167,7 @@ const mapServerItemToUi = (
         invNo: item.invNo,
         orderStatus: item.orderStatus,
         isFinalized: isFinalizedBool,
+        isConfirmed: isConfirmedBool,
         title: item.title,
         message: messageText,
         time,
@@ -194,6 +200,17 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         message: "",
         type: "error",
     });
+
+    const hasFocusedOnce = useRef(false);
+
+    const showAlert = (
+        title: string,
+        message: string,
+        type: "success" | "error" | "warning",
+    ) => setAlertConfig({ visible: true, title, message, type });
+
+    const hideAlert = () =>
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
 
     // Handle system back button with context-aware dismissal of action menu
     useFocusEffect(
@@ -243,6 +260,17 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         [isRetail],
     );
 
+    // Re-fetch every time the screen regains focus (e.g. returning from
+    // ReviewPackage / OrderConfirmation) so isFinalized / isConfirmed are fresh.
+    useFocusEffect(
+        useCallback(() => {
+            if (hasFocusedOnce.current) {
+                loadNotifications(false);
+            }
+            hasFocusedOnce.current = true;
+        }, [loadNotifications]),
+    );
+
     useEffect(() => {
         loadNotifications(true);
 
@@ -290,8 +318,23 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     };
 
     // MARK NOTIFICATION AS READ & NAVIGATE
-    const handleNotificationPress = async (item: UiNotificationItem) => {
-        // Optimistic UI update
+    const handleNotificationPress = async (tapped: UiNotificationItem) => {
+        // 0) Always decide using the freshest order state from the server,
+        //    because the list in memory may be stale.
+        let item: UiNotificationItem = tapped;
+        try {
+            const res = await notificationService.getNotifications(50, 0);
+            const fresh = res.data?.notifications?.find(
+                (n: any) => n.id === tapped.id,
+            );
+            if (fresh) {
+                item = mapServerItemToUi(fresh);
+            }
+        } catch (err) {
+            console.warn("Failed to refresh notification state:", err);
+        }
+
+        // Optimistic read update
         if (!item.isRead) {
             setNotifications((previous) => {
                 const nextList = previous.map((n) =>
@@ -317,25 +360,31 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         // 1) Package finalization review
         if (isRetail && isPackageReviewTitle(item.title)) {
             if (isCancelled) {
-                setAlertConfig({
-                    visible: true,
-                    title: "Cannot Proceed!",
-                    message:
-                        "You have already cancelled this order. You cannot proceed to the payment.",
-                    type: "error",
-                });
+                showAlert(
+                    "Cannot Proceed!",
+                    "You have already cancelled this order. You cannot proceed to the payment.",
+                    "error",
+                );
                 return;
             }
 
             // Order already finalized (processorders.isFinalized = 1)
             if (item.isFinalized) {
-                setAlertConfig({
-                    visible: true,
-                    title: "Already Finalized!",
-                    message:
-                        "You have already reviewed and finalized your order. You cannot make any further changes.",
-                    type: "warning",
-                });
+                showAlert(
+                    "Already Finalized!",
+                    "You have already reviewed and finalized your order. You cannot make any further changes.",
+                    "warning",
+                );
+                return;
+            }
+
+            // Order already confirmed (processorders.isConfirmed = 1)
+            if (item.isConfirmed) {
+                showAlert(
+                    "Already Confirmed!",
+                    "You have already confirmed this order. You cannot make any further changes.",
+                    "warning",
+                );
                 return;
             }
 
@@ -352,12 +401,21 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             if (!targetId) return;
 
             if (isCancelled) {
-                setAlertConfig({
-                    visible: true,
-                    title: "Cannot Proceed!",
-                    message: "This order has already been cancelled.",
-                    type: "error",
-                });
+                showAlert(
+                    "Cannot Proceed!",
+                    "This order has already been cancelled.",
+                    "error",
+                );
+                return;
+            }
+
+            // Order already confirmed (processorders.isConfirmed = 1)
+            if (item.isConfirmed) {
+                showAlert(
+                    "Already Confirmed!",
+                    "You have already confirmed this order. You cannot make any further changes.",
+                    "warning",
+                );
                 return;
             }
 
@@ -729,16 +787,12 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 visible={alertConfig.visible}
                 title={alertConfig.title}
                 message={alertConfig.message}
-                type="success"
+                type={alertConfig.type}
                 autoClose={false}
                 showOkButton={true}
                 okButtonText="OK"
-                onOkPress={() =>
-                    setAlertConfig((prev) => ({ ...prev, visible: false }))
-                }
-                onClose={() =>
-                    setAlertConfig((prev) => ({ ...prev, visible: false }))
-                }
+                onOkPress={hideAlert}
+                onClose={hideAlert}
             />
         </View>
     );

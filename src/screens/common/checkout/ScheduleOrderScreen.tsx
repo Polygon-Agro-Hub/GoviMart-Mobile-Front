@@ -89,7 +89,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
   const [selectedDays, setSelectedDays] = useState<string[]>(() => [
     getEarliestDayId(getMinDeliveryDate()),
   ]);
-  const [selectedWeeks, setSelectedWeeks] = useState<string>("04");
+  const [selectedWeeks, setSelectedWeeks] = useState<string>("02");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
 
   // Modals
@@ -269,12 +269,15 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     let expiryDay = 0;
     let cutoffDate: Date | null = null;
+    let sorryExpiryDate: Date | null = null;
     if (earliestExpiryDate) {
       expiryDay = earliestExpiryDate.getDate();
-      // Cutoff date is [Expire Date] - 2 days
       cutoffDate = new Date(earliestExpiryDate.getTime());
-      cutoffDate.setDate(cutoffDate.getDate() - 2);
       cutoffDate.setHours(23, 59, 59, 999);
+
+      // In the "We’re Sorry" popup, expiry date is 2 days before the end date (end date minus 2 days)
+      sorryExpiryDate = new Date(earliestExpiryDate.getTime());
+      sorryExpiryDate.setDate(sorryExpiryDate.getDate() - 2);
     }
 
     const MONTH_SHORT = [
@@ -318,6 +321,11 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       ? MONTH_LONG[earliestExpiryDate.getMonth()]
       : "";
 
+    const sorryExpiryDay = sorryExpiryDate ? sorryExpiryDate.getDate() : 0;
+    const sorryExpiryMonth = sorryExpiryDate
+      ? MONTH_LONG[sorryExpiryDate.getMonth()]
+      : "";
+
     const startMonth = MONTH_SHORT[effectiveStartDate.getMonth()];
     const startDay = effectiveStartDate.getDate();
     const startDayOrdinal = getOrdinal(startDay);
@@ -336,15 +344,23 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const isAvailableNow = cutoffDate ? effectiveStartDate <= cutoffDate : true;
 
+    // Package is unavailable on the system earliest date if earliestStartDate > minAvailDate
+    const hasPackageUnavailableOnEarliest = Boolean(
+      earliestStartDate && earliestStartDate > minAvailDate
+    );
+
     return {
       gapDays,
       expiryDay,
       expiryDayOrdinal,
       expiryMonthFull,
+      sorryExpiryDay,
+      sorryExpiryMonth,
       cutoffDate,
       minAvailDate,
       earliestStartDate,
       effectiveStartDate,
+      hasPackageUnavailableOnEarliest,
       rangeTextLong,
       rangeTextShort,
       startDateFormatted: `${startMonth} ${startDay}`,
@@ -391,7 +407,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       return { calculatedOrders: [], unfilteredFirstScheduledDate: null };
     }
 
-    const numWeeks = parseInt(selectedWeeks, 10) || 4;
+    const numWeeks = parseInt(selectedWeeks, 10) || 2;
     // Earliest delivery date: seasonal effective start date if any, otherwise today + 3/4 days
     const minDate =
       seasonalInfo?.effectiveStartDate
@@ -620,12 +636,17 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         ? selectedDate?.replace(/\//g, "-")
         : calculatedOrders[0]?.isoDate || "";
 
-    const earliestAvailDate =
-      seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
+    const sysEarliestDate = getMinDeliveryDate();
+    sysEarliestDate.setHours(0, 0, 0, 0);
+
+    const hasPackageUnavailableOnEarliest = Boolean(
+      seasonalInfo?.hasPackageUnavailableOnEarliest
+    );
+
     const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-    const earliestDateStr = `${earliestAvailDate.getFullYear()}-${pad(
-      earliestAvailDate.getMonth() + 1,
-    )}-${pad(earliestAvailDate.getDate())}`;
+    const earliestDateStr = `${sysEarliestDate.getFullYear()}-${pad(
+      sysEarliestDate.getMonth() + 1,
+    )}-${pad(sysEarliestDate.getDate())}`;
 
     const updatedContext = {
       ...orderContext,
@@ -639,7 +660,10 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         }),
         scheduleType,
         deliveryDate: effectiveFirstDate,
-        earliestDeliveryDate: earliestDateStr,
+        earliestDeliveryDate: hasPackageUnavailableOnEarliest
+          ? null
+          : earliestDateStr,
+        hasPackageUnavailableOnEarliest,
         recurringDays: selectedDays,
         validityWeeks: selectedWeeks,
         timeSlot: selectedTimeSlot || undefined,
@@ -743,8 +767,8 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
             }}
           />
 
-          {/* Seasonal Package Info Banner */}
-          {seasonalInfo ? (
+          {/* Seasonal Package Info Banner or General Gap Banner */}
+          {seasonalInfo && seasonalInfo.expiryDay ? (
             <View
               style={{
                 backgroundColor: "#FFF5E9",
@@ -755,95 +779,50 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                 marginBottom: 16,
               }}
             >
-              {isFirstDateAvailable ? (
-                <>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#1E293B",
-                      lineHeight: 19,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "700" }}>Note : </Text>
-                    A {seasonalInfo.gapDays}-day gap is required. Packages
-                    expiring on the {seasonalInfo.expiryDayOrdinal} can be ordered
-                    between the {seasonalInfo.rangeTextLong}.
-                  </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#1E293B",
+                  lineHeight: 19,
+                }}
+              >
+                <Text style={{ fontWeight: "700" }}>Note : </Text>
+                A {seasonalInfo.gapDays}-day gap is required. Packages
+                expiring on the {seasonalInfo.expiryDayOrdinal}
+                {seasonalInfo.expiryMonthFull ? ` ${seasonalInfo.expiryMonthFull}` : ""} can be ordered
+                between the {seasonalInfo.rangeTextLong}.
+              </Text>
 
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginTop: 10,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: "#EA580C",
-                        marginRight: 8,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        color: "#1E293B",
-                      }}
-                    >
-                      Available schedule dates:{" "}
-                      <Text style={{ fontWeight: "700" }}>
-                        {seasonalInfo.rangeTextShort}
-                      </Text>
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#1E293B",
-                      lineHeight: 19,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "700" }}>Note : </Text>
-                    A {seasonalInfo.gapDays}-day gap is required.
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 10,
+                }}
+              >
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: "#EA580C",
+                    marginRight: 8,
+                  }}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#1E293B",
+                  }}
+                >
+                  Available schedule dates:{" "}
+                  <Text style={{ fontWeight: "700" }}>
+                    {seasonalInfo.rangeTextShort}
                   </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginTop: 8,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: "#EA580C",
-                        marginRight: 8,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        color: "#1E293B",
-                      }}
-                    >
-                      Scheduling available from{" "}
-                      <Text style={{ fontWeight: "700" }}>
-                        {seasonalInfo.startDateFormatted}
-                      </Text>{" "}
-                      onward.
-                    </Text>
-                  </View>
-                </>
-              )}
+                </Text>
+              </View>
             </View>
-          ) : scheduleType === "One Time" ? (
+          ) : (
             <View
               style={{
                 backgroundColor: "#FFF5E9",
@@ -857,22 +836,62 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
               {(() => {
                 const now = new Date();
                 const isAfter6PM = now.getHours() >= 18;
-                const gapDays = isAfter6PM ? 3 : 2;
+                const gapDays = seasonalInfo?.gapDays ?? (isAfter6PM ? 3 : 2);
+                const startDateStr = seasonalInfo?.startDateFormatted || (() => {
+                  const minDate = getMinDeliveryDate();
+                  const MONTH_SHORT = [
+                    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                  ];
+                  return `${MONTH_SHORT[minDate.getMonth()]} ${minDate.getDate()}`;
+                })();
+
                 return (
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#1E293B",
-                      lineHeight: 19,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "700" }}>Note : </Text>
-                    A {gapDays}-day gap is required.
-                  </Text>
+                  <>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: "#1E293B",
+                        lineHeight: 19,
+                      }}
+                    >
+                      <Text style={{ fontWeight: "700" }}>Note : </Text>
+                      A {gapDays}-day gap is required.
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 8,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: "#EA580C",
+                          marginRight: 8,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: "#1E293B",
+                        }}
+                      >
+                        Scheduling available from{" "}
+                        <Text style={{ fontWeight: "700" }}>
+                          {startDateStr}
+                        </Text>{" "}
+                        onward.
+                      </Text>
+                    </View>
+                  </>
                 );
               })()}
             </View>
-          ) : null}
+          )}
 
           {/* ─────────────────────────────────────────────────────────────────
                     ONE TIME ORDER FLOW
@@ -1382,8 +1401,8 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                 paddingBottom: 20,
               }}
             >
-              {/* Seasonal Package Info Banner in Recurring Modal */}
-              {seasonalInfo && (
+              {/* Seasonal Package Info Banner or General Gap Banner in Recurring Modal */}
+              {seasonalInfo && seasonalInfo.expiryDay ? (
                 <View
                   style={{
                     backgroundColor: "#FFF5E9",
@@ -1394,93 +1413,117 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                     marginBottom: 16,
                   }}
                 >
-                  {isFirstDateAvailable ? (
-                    <>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          color: "#1E293B",
-                          lineHeight: 19,
-                        }}
-                      >
-                        <Text style={{ fontWeight: "700" }}>Note : </Text>
-                        A {seasonalInfo.gapDays}-day gap is required. Packages
-                        expiring on the {seasonalInfo.expiryDayOrdinal} can be ordered
-                        between the {seasonalInfo.rangeTextLong}.
-                      </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: "#1E293B",
+                      lineHeight: 19,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "700" }}>Note : </Text>
+                    A {seasonalInfo.gapDays}-day gap is required. Packages
+                    expiring on the {seasonalInfo.expiryDayOrdinal}
+                    {seasonalInfo.expiryMonthFull ? ` ${seasonalInfo.expiryMonthFull}` : ""} can be ordered
+                    between the {seasonalInfo.rangeTextLong}.
+                  </Text>
 
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          marginTop: 10,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: "#EA580C",
-                            marginRight: 8,
-                          }}
-                        />
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: "#1E293B",
-                          }}
-                        >
-                          Available schedule dates:{" "}
-                          <Text style={{ fontWeight: "700" }}>
-                            {seasonalInfo.rangeTextShort}
-                          </Text>
-                        </Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          color: "#1E293B",
-                          lineHeight: 19,
-                        }}
-                      >
-                        <Text style={{ fontWeight: "700" }}>Note : </Text>
-                        A {seasonalInfo.gapDays}-day gap is required.
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginTop: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: "#EA580C",
+                        marginRight: 8,
+                      }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: "#1E293B",
+                      }}
+                    >
+                      Available schedule dates:{" "}
+                      <Text style={{ fontWeight: "700" }}>
+                        {seasonalInfo.rangeTextShort}
                       </Text>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          marginTop: 8,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: "#EA580C",
-                            marginRight: 8,
-                          }}
-                        />
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View
+                  style={{
+                    backgroundColor: "#FFF5E9",
+                    borderWidth: 1,
+                    borderColor: "#FFD8A8",
+                    borderRadius: 16,
+                    padding: 14,
+                    marginBottom: 16,
+                  }}
+                >
+                  {(() => {
+                    const now = new Date();
+                    const isAfter6PM = now.getHours() >= 18;
+                    const gapDays = seasonalInfo?.gapDays ?? (isAfter6PM ? 3 : 2);
+                    const startDateStr = seasonalInfo?.startDateFormatted || (() => {
+                      const minDate = getMinDeliveryDate();
+                      const MONTH_SHORT = [
+                        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                      ];
+                      return `${MONTH_SHORT[minDate.getMonth()]} ${minDate.getDate()}`;
+                    })();
+
+                    return (
+                      <>
                         <Text
                           style={{
                             fontSize: 13,
                             color: "#1E293B",
+                            lineHeight: 19,
                           }}
                         >
-                          Scheduling available from{" "}
-                          <Text style={{ fontWeight: "700" }}>
-                            {seasonalInfo.startDateFormatted}
-                          </Text>{" "}
-                          onward.
+                          <Text style={{ fontWeight: "700" }}>Note : </Text>
+                          A {gapDays}-day gap is required.
                         </Text>
-                      </View>
-                    </>
-                  )}
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginTop: 8,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: "#EA580C",
+                              marginRight: 8,
+                            }}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: "#1E293B",
+                            }}
+                          >
+                            Scheduling available from{" "}
+                            <Text style={{ fontWeight: "700" }}>
+                              {startDateStr}
+                            </Text>{" "}
+                            onward.
+                          </Text>
+                        </View>
+                      </>
+                    );
+                  })()}
                 </View>
               )}
               {calculatedOrders.map((order) => (
@@ -1489,7 +1532,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                   <View
                     style={{
                       flexDirection: "row",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       paddingVertical: 6,
                       paddingHorizontal: 4,
                     }}
@@ -1499,7 +1542,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                         fontSize: 15,
                         fontWeight: "500",
                         color: "#64748B",
-                        width: 95,
+                        width: 90,
                       }}
                     >
                       {order.label}
@@ -1510,29 +1553,43 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                         fontSize: 15,
                         fontWeight: "600",
                         color: "#111111",
+                        marginRight: 6,
+                      }}
+                    >
+                      :
+                    </Text>
+
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: "600",
+                        color: "#111111",
                         flex: 1,
                       }}
                     >
-                      : {order.dateStr}
+                      {order.dateStr}
                     </Text>
                   </View>
 
                   {/* Badge for 1st order - full width box: only available when earliest possible schedule date exists */}
                   {order.index === 1 && (() => {
-                    const earliestDate =
-                      seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
-                    const earliestTime = new Date(
-                      earliestDate.getFullYear(),
-                      earliestDate.getMonth(),
-                      earliestDate.getDate()
-                    ).getTime();
+                    const sysEarliestDate = getMinDeliveryDate();
+                    sysEarliestDate.setHours(0, 0, 0, 0);
+
+                    // If a package is not available on the system earliest date
+                    const hasPackageUnavailableOnEarliest = Boolean(
+                      seasonalInfo?.hasPackageUnavailableOnEarliest
+                    );
+                    if (hasPackageUnavailableOnEarliest) return null;
+
+                    const earliestTime = sysEarliestDate.getTime();
                     const orderTime = new Date(
                       order.dateObj.getFullYear(),
                       order.dateObj.getMonth(),
                       order.dateObj.getDate()
                     ).getTime();
 
-                    // Only show if the 1st order is scheduled on/at the earliest possible schedule date
+                    // Only show if the 1st order is scheduled on/at the system earliest possible schedule date (e.g. today is 12 -> 15)
                     if (orderTime !== earliestTime) return null;
 
                     return (
@@ -1576,7 +1633,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         visible={zeroOrdersAlertVisible}
         type="error"
         title="We’re Sorry"
-        message={`We’re sorry, but we’re unable to fulfill your request at this time. Unfortunately, there are no available dates within the next two weeks, and your package expires on ${seasonalInfo ? `${seasonalInfo.expiryMonthFull} ${seasonalInfo.expiryDay}` : "this date"}.\n\nWe apologize for the inconvenience and appreciate your understanding.`}
+        message={`We’re sorry, but we’re unable to fulfill your request at this time. Unfortunately, there are no available dates within the next two weeks, and your package expires on ${seasonalInfo && seasonalInfo.sorryExpiryDay ? `${seasonalInfo.sorryExpiryMonth} ${seasonalInfo.sorryExpiryDay}` : "this date"}.\n\nWe apologize for the inconvenience and appreciate your understanding.`}
         onClose={() => setZeroOrdersAlertVisible(false)}
         showOkButton={true}
         okButtonText="OK"

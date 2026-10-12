@@ -134,18 +134,20 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       0,
     );
 
-    // gross = today's normal price, net = today's effective (discounted) price
+    // gross = current normal price (only current values!)
     const itemsGross = cartItems.reduce(
       (a, i) => a + (i.todayNormalPrice ?? i.todayPrice ?? i.price),
       0,
     );
+    // net = current effective price
     const itemsNet = cartItems.reduce(
       (a, i) => a + (i.todayPrice ?? i.price),
       0,
     );
     const hasLivePrices = cartItems.some((i) => i.todayPrice != null);
 
-    // Discount recalculated from today's prices (fallback: stored discount)
+    // Current discount from active marketplace promotions only:
+    // If today normalPrice == discountedPrice (e.g. 300 == 300), discount is 0!
     const productDiscount = hasLivePrices
       ? Math.max(0, itemsGross - itemsNet)
       : parseFloat(order?.discount || 0) || 0;
@@ -181,7 +183,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       isPickup,
       isFreeDeliveryCoupon,
       packagesTotal,
-      itemsGross,
+      itemsTotal: itemsGross,
       productDiscount,
       couponDiscount,
       deliveryFee,
@@ -192,6 +194,14 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleConfirm = async () => {
     if (!orderId) return;
+    if (order?.isConfirmed || Number(order?.isConfirmed) === 1) {
+      Alert.alert(
+        "Already Confirmed!",
+        "You have already confirmed this order. You cannot make any further changes.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+      return;
+    }
     try {
       setSubmitting("confirm");
 
@@ -508,17 +518,30 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               const todayNormalRaw =
                 mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
 
+              // ONLY CURRENT MARKETPLACE VALUES ARE USED (never compare with previous order prices):
+              const currentNormal = todayNormalRaw ?? priceNum;
+              const currentNet = todayPriceRaw ?? priceNum;
+              const hasCurrentPromo =
+                todayNormalRaw != null &&
+                todayPriceRaw != null &&
+                todayNormalRaw - todayPriceRaw > 0.01;
+
               return {
                 id: idx + 1,
                 name: item.displayName || "Unknown Item",
                 quantity: `${qty} ${item.unit || "units"}`,
                 price: priceNum,
-                oldPrice: hasDiscount ? originalPriceNum! : undefined,
+                // Do not show oldPrice from previous order when live marketplace price exists
+                oldPrice:
+                  todayPriceRaw == null && hasDiscount
+                    ? originalPriceNum!
+                    : undefined,
                 image:
                   item.image ||
                   "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200",
-                todayPrice: todayPriceRaw ?? undefined,
-                todayNormalPrice: todayNormalRaw ?? undefined,
+                todayPrice: currentNet,
+                todayNormalPrice: hasCurrentPromo ? currentNormal : undefined,
+                rawDiscount: parsePriceValue(item.discount) ?? 0,
               };
             },
           );
@@ -1525,13 +1548,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         )}
 
-        {/* PRICE DIFFERENCE NOTICE BOX */}
-        <InfoNoticeCard
-          message="Please note that the total amount on the delivery date may differ from the amount shown on the order date. If there is any price difference, the final amount applicable on the delivery date will be charged later."
-          containerStyle={{
-            marginBottom: 17,
-          }}
-        />
+     
 
         {/* SUMMARY */}
         {(() => {
@@ -1633,7 +1650,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <>
                     <SummaryRow
                       label="Ala Carte Items"
-                      value={`Rs. ${formatAmount(t.itemsGross)}`}
+                      value={`Rs. ${formatAmount(t.itemsTotal)}`}
                     />
                     <View
                       style={{

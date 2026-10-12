@@ -25,7 +25,8 @@ export interface CheckoutDetails {
   // Schedule fields
   scheduleType?: string;
   deliveryDate?: string;
-  earliestDeliveryDate?: string;
+  earliestDeliveryDate?: string | null;
+  hasPackageUnavailableOnEarliest?: boolean;
   timeSlot?: string;
   recurringDays?: string[];
   validityWeeks?: string;

@@ -35,9 +35,14 @@ function AppContent() {
     // 1. Connect socket at app root level (Sales Dash pattern — runs before any screen mounts)
     socketService.connect();
 
-    // 2. Init push notifications + request permission on APK (Android 13+ requires runtime request)
-    pushNotificationService.init().then(() => {
-      pushNotificationService.requestPermissions();
+    // 2. Init push notifications. Only re-register the push token if permission was
+    //    already granted. The one-time system dialog is shown via NotificationAccess
+    //    screen so we must NOT consume it silently here.
+    pushNotificationService.init().then(async () => {
+      const alreadyGranted = await pushNotificationService.requestPermissions();
+      if (alreadyGranted) {
+        pushNotificationService.registerPushToken().catch(() => {});
+      }
     });
 
     // 3. Global new_notification listener — same as Sales Dash App.tsx lines 164-171
