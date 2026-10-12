@@ -172,6 +172,14 @@ class OrderService {
         const headers = await getAuthHeader();
         return apiClient.get(ENDPOINTS.ORDER.GET_DELIVERED_ORDERS_TOTAL.replace(":userId", String(userId)), { headers });
     }
+
+    async cancelOrderBeforeConfirm(payload: {
+    orderId?: number | string;
+    processOrderId?: number | string;
+}) {
+    const headers = await getAuthHeader();
+    return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER_BEFORE_CONFIRM, payload, { headers });
+}
 }
 
 export default new OrderService();

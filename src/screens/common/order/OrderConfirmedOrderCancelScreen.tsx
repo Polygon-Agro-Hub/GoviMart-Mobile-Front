@@ -262,12 +262,14 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         ? remainingAfterCredit
         : 0;
 
-  // Cash isn't paid yet, so only card + credit are refunded as credit.
+  // Only the credit that was already paid goes back to the credit balance.
+  // The card amount is NOT refunded as credit (the card is only charged when
+  // the customer confirms the order).
   // Capped so it can never exceed the order total.
   const refundCreditAmount = Math.min(
     passedRefundCreditAmount !== undefined
       ? Number(passedRefundCreditAmount)
-      : totalPaidCard + totalPaidCredit,
+      : totalPaidCredit,
     processOrderTotal,
   );
 
@@ -276,7 +278,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     setLoading(true);
     try {
       if (orderId) {
-        await orderService.cancelOrder({
+        await orderService.cancelOrderBeforeConfirm({
           orderId,
           processOrderId: processOrderId || undefined,
         });
@@ -365,7 +367,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                 </Text>
                 <Text className="text-[13px] text-[#E11D48] mt-0.5">
                   {refundCreditAmount > 0
-                    ? "This order has been paid. Refund will be converted to your credit balance."
+                    ? "The credit you paid for this order will be returned to your credit balance."
                     : "This order will be cancelled immediately."}
                 </Text>
               </View>
@@ -500,7 +502,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
               </View>
             </View>
 
-            {/* Credit info component */}
+            {/* Credit info component (only the credit that was paid) */}
             {refundCreditAmount > 0 && (
               <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
                 <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
@@ -510,12 +512,12 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                   Amount will be credited to your credit balance
                 </Text>
                 <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
-                  After canceling, the full converted amount of{" "}
+                  After canceling, the credit amount you paid,{" "}
                   <Text className="font-bold text-[#15803D]">
                     Rs. {formatPrice(refundCreditAmount)}
                   </Text>{" "}
-                  will be added to your credit balance. You can use it for your
-                  next purchase.
+                  will be added back to your credit balance. You can use it
+                  for your next purchase.
                 </Text>
               </View>
             )}

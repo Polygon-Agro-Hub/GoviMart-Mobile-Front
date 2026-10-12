@@ -491,9 +491,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         ? Math.max(0, processOrderTotal - totalPaidCredit)
         : 0;
 
+    // Amount returned to the credit balance on cancel = the creditPaid column value
+    // (same rule as the server).
     let refundCreditAmount = 0;
     if (isCardOrOnline) {
-      refundCreditAmount = totalPaidCard + totalPaidCredit;
+      refundCreditAmount = totalPaidCredit;
     } else if (pay.hasCredit && !isCashMethod) {
       refundCreditAmount =
         totalPaidCredit > 0 ? totalPaidCredit : processOrderTotal;
