@@ -330,8 +330,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     "PICKUP";
 
   const scheduleDate = formatLongDate(order?.sheduleDate);
- const scheduleTime =
-  String(order?.sheduleTime || order?.scheduleTime || "").trim() || "N/A";
+  const scheduleTime =
+    String(order?.sheduleTime || order?.scheduleTime || "").trim() || "N/A";
 
   const isCouponApplied = Number(order?.isCoupon) === 1;
 
@@ -421,19 +421,32 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     const processOrderId =
       order?.processOrderId || order?.proOrderId || order?.id || orderId;
 
-    const pkgs = rawPackagesData.map((p: any) => ({
-      id: String(p.id || p.packageId || p.displayName || "pkg"),
-      name: p.displayName || p.packageName || p.name || "Package",
-      icon: p.icon,
-      image: p.image || p.packageImage,
-      qty: parseFloat(p.packageQty || p.qty || p.quantity) || 1,
-      unitPrice:
-        typeof p.priceNum === "number"
-          ? p.priceNum
-          : num(String(p.productPrice || 0).replace(/Rs\.?|,/gi, "")),
-      serviceFee: parseFloat(p.serviceFee) || 0,
-      packingFee: parseFloat(p.packingFee) || 0,
-    }));
+    // Group the same package (same key as the totals calculation) so a
+    // package ordered twice is ONE row with qty 2 (shown as "X2").
+    const pkgMap = new Map<string, any>();
+    rawPackagesData.forEach((p: any) => {
+      const key = String(p.packageId || p.displayName || p.id || "pkg");
+      const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
+      const existing = pkgMap.get(key);
+      if (existing) {
+        existing.qty += qty;
+        return;
+      }
+      pkgMap.set(key, {
+        id: key,
+        name: p.displayName || p.packageName || p.name || "Package",
+        icon: p.icon,
+        image: p.image || p.packageImage,
+        qty,
+        unitPrice:
+          typeof p.priceNum === "number"
+            ? p.priceNum
+            : num(String(p.productPrice || 0).replace(/Rs\.?|,/gi, "")),
+        serviceFee: parseFloat(p.serviceFee) || 0,
+        packingFee: parseFloat(p.packingFee) || 0,
+      });
+    });
+    const pkgs = Array.from(pkgMap.values());
 
     const alacarts = rawItemsData.map((it: any) => {
       const qty = parseFloat(it.qty) || 1;
@@ -478,9 +491,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         ? Math.max(0, processOrderTotal - totalPaidCredit)
         : 0;
 
+    // Amount returned to the credit balance on cancel = the creditPaid column value
+    // (same rule as the server).
     let refundCreditAmount = 0;
     if (isCardOrOnline) {
-      refundCreditAmount = totalPaidCard + totalPaidCredit;
+      refundCreditAmount = totalPaidCredit;
     } else if (pay.hasCredit && !isCashMethod) {
       refundCreditAmount =
         totalPaidCredit > 0 ? totalPaidCredit : processOrderTotal;

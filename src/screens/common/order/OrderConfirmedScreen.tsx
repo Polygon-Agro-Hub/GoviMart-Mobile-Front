@@ -225,11 +225,19 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   }> => {
     const logoBase64 = await convertLogoToBase64();
     const orderId = route.params?.orderId;
+    const processOrderId = (route.params as any)?.processOrderId;
+    const targetInvoiceNo = route.params?.invoiceNumber || invoiceNo;
     let apiInvoice: any = null;
 
-    if (orderId) {
+    // Prefer processOrderId if available (guarantees exact delivery for Once a Week / Twice a Week)
+    const targetQueryId = processOrderId || orderId;
+
+    if (targetQueryId) {
       try {
-        const res = await orderService.getInvoice(orderId);
+        const res = await orderService.getInvoice(targetQueryId, {
+          processOrderId: processOrderId ? String(processOrderId) : undefined,
+          invNo: targetInvoiceNo && targetInvoiceNo !== "INV-PENDING" ? targetInvoiceNo : undefined,
+        });
         if (res.data?.status && res.data?.invoice) {
           apiInvoice = res.data.invoice.invoice || res.data.invoice;
         }
@@ -307,25 +315,29 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             ]
           : []),
       additionalItems:
-        apiInvoice?.additionalItems ||
-        (orderCtx.additionalItems || []).map((item: any, idx: number) => ({
-          id: item.id || idx + 1,
-          name: item.displayName || item.name || "Item",
-          unitPrice: item.normalPrice || item.unitPrice || 0,
-          quantity: item.qty || item.quantity || 1,
-          unit: item.unit || "kg",
-          amount:
-            item.amount ||
-            item.price ||
-            item.finalPrice ||
-            (item.normalPrice || 0) * (item.qty || 1),
-        })),
+        (apiInvoice?.additionalItems && apiInvoice.additionalItems.length > 0)
+          ? apiInvoice.additionalItems
+          : (orderCtx.additionalItems || []).map((item: any, idx: number) => {
+              const qtyNum = typeof item.quantity === "number" ? item.quantity : (parseFloat(item.qty || item.quantity) || 1);
+              const uPrice = typeof item.unitPrice === "number" ? item.unitPrice : (parseFloat(item.normalPrice || item.unitPrice) || 0);
+              const u = item.unit || "kg";
+              const factor = (u.toLowerCase() === "g" || u.toLowerCase() === "ml") ? 1 / 1000 : 1;
+              const calcAmount = Math.round(uPrice * qtyNum * factor * 100) / 100;
+              return {
+                id: item.id || idx + 1,
+                name: item.displayName || item.name || "Item",
+                unitPrice: uPrice,
+                quantity: qtyNum,
+                unit: u,
+                amount: item.amount || item.price || item.finalPrice || calcAmount,
+              };
+            }),
       familyPackTotal:
         apiInvoice?.familyPackTotal !== undefined
           ? apiInvoice.familyPackTotal
           : packageTotal,
       additionalItemsTotal:
-        apiInvoice?.additionalItemsTotal !== undefined
+        (apiInvoice?.additionalItems && apiInvoice.additionalItems.length > 0)
           ? apiInvoice.additionalItemsTotal
           : productTotal,
       deliveryFee:

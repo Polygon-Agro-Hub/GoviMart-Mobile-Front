@@ -74,6 +74,7 @@ export const ENDPOINTS = {
     CONFIRM_ORDER: "api/order/confirm-order",
     GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
     CANCEL_ORDER: "api/order/package/cancel-order",
+    CANCEL_ORDER_BEFORE_CONFIRM: "/api/order/package/cancel-before-confirm",
   },
 
   PAYMENT: {

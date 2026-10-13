@@ -26,14 +26,20 @@ class OrderService {
         return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_PACKAGES.replace(":orderId", orderId), { headers });
     }
 
-    async getOrderAdditionalItems(orderId: string) {
+    async getOrderAdditionalItems(orderId: string, processOrderId?: string | number) {
         const headers = await getAuthHeader();
-        return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_ADDITIONAL_ITEMS.replace(":orderId", orderId), { headers });
+        return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_ADDITIONAL_ITEMS.replace(":orderId", String(orderId)), {
+            headers,
+            params: processOrderId ? { processOrderId } : undefined,
+        });
     }
 
     async createOrder(payload: any) {
         const headers = await getAuthHeader();
-        return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, { headers });
+        return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, {
+            headers,
+            timeout: 120000, // 2 minutes (120,000 ms) waiting timeout
+        });
     }
 
     async getPickupCenters() {
@@ -61,9 +67,12 @@ class OrderService {
         return apiClient.post(ENDPOINTS.ORDER.CHECK_COUPON, payload, { headers });
     }
 
-    async getInvoice(orderId: string | number) {
+    async getInvoice(orderId: string | number, params?: { processOrderId?: string | number; invNo?: string }) {
         const headers = await getAuthHeader();
-        return apiClient.get(ENDPOINTS.ORDER.GET_INVOICE.replace(":orderId", String(orderId)), { headers });
+        return apiClient.get(ENDPOINTS.ORDER.GET_INVOICE.replace(":orderId", String(orderId)), {
+            headers,
+            params,
+        });
     }
 
     async getPackageReview(orderId: string | number) {
@@ -148,7 +157,10 @@ class OrderService {
         }>;
     }) {
         const headers = await getAuthHeader();
-        return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
+        return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, {
+            headers,
+            timeout: 120000, // 2 minutes (120,000 ms) waiting timeout
+        });
     }
 
     async confirmOrderWithLivePrices(payload: {
@@ -172,6 +184,14 @@ class OrderService {
         const headers = await getAuthHeader();
         return apiClient.get(ENDPOINTS.ORDER.GET_DELIVERED_ORDERS_TOTAL.replace(":userId", String(userId)), { headers });
     }
+
+    async cancelOrderBeforeConfirm(payload: {
+    orderId?: number | string;
+    processOrderId?: number | string;
+}) {
+    const headers = await getAuthHeader();
+    return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER_BEFORE_CONFIRM, payload, { headers });
+}
 }
 
 export default new OrderService();

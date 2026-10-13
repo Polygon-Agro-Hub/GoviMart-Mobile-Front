@@ -51,6 +51,82 @@ type PaymentType = "cash" | "card";
 
 let paymentSessionEndTime: number | null = null;
 
+// ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
+// Payment due date = delivery date minus (gap days + 1).
+// Example with 3-day gap: delivery on 24th -> pay by 20th.
+const PAYMENT_GAP_DAYS = 3;
+
+const MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const getOrdinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+const parseDateOnly = (val: any): Date | null => {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+  }
+  const s = String(val).trim().replace(/\//g, "-");
+  if (s.includes("-")) {
+    const parts = s.split("T")[0].split("-");
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d);
+      }
+    }
+  }
+
+  // Handle English date formats like "October 14, 2026" or "Oct 14, 2026"
+  const englishMonths: Record<string, number> = {
+    january: 0, jan: 0,
+    february: 1, feb: 1,
+    march: 2, mar: 2,
+    april: 3, apr: 3,
+    may: 4,
+    june: 5, jun: 5,
+    july: 6, jul: 6,
+    august: 7, aug: 7,
+    september: 8, sep: 8, sept: 8,
+    october: 9, oct: 9,
+    november: 10, nov: 10,
+    december: 11, dec: 11,
+  };
+
+  const match = s.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (match) {
+    const monthName = match[1].toLowerCase();
+    const day = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    if (englishMonths[monthName] !== undefined && !isNaN(day) && !isNaN(year)) {
+      return new Date(year, englishMonths[monthName], day);
+    }
+  }
+
+  const parsed = new Date(s);
+  return isNaN(parsed.getTime())
+    ? null
+    : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+};
+
 const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
@@ -111,62 +187,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     setBackConfirmVisible(true);
   };
 
-  const isEarliestDeliveryDate = (): boolean => {
+  const getScheduledDeliveryDate = (): Date | null => {
     const deliveryDateRaw =
       orderContext?.checkoutDetails?.deliveryDate ||
       orderContext?.checkoutDetails?.calculatedOrders?.[0]?.date;
-    if (!deliveryDateRaw) return false;
+    return parseDateOnly(deliveryDateRaw);
+  };
 
-    const parseDateOnly = (val: any): Date | null => {
-      if (!val) return null;
-      if (val instanceof Date) {
-        return new Date(val.getFullYear(), val.getMonth(), val.getDate());
-      }
-      const s = String(val).trim().replace(/\//g, "-");
-      if (s.includes("-")) {
-        const parts = s.split("T")[0].split("-");
-        if (parts.length === 3) {
-          const y = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10) - 1;
-          const d = parseInt(parts[2], 10);
-          if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-            return new Date(y, m, d);
-          }
-        }
-      }
-
-      // Handle English date formats like "October 14, 2026" or "Oct 14, 2026"
-      const englishMonths: Record<string, number> = {
-        january: 0, jan: 0,
-        february: 1, feb: 1,
-        march: 2, mar: 2,
-        april: 3, apr: 3,
-        may: 4,
-        june: 5, jun: 5,
-        july: 6, jul: 6,
-        august: 7, aug: 7,
-        september: 8, sep: 8, sept: 8,
-        october: 9, oct: 9,
-        november: 10, nov: 10,
-        december: 11, dec: 11,
-      };
-
-      const match = s.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})/);
-      if (match) {
-        const monthName = match[1].toLowerCase();
-        const day = parseInt(match[2], 10);
-        const year = parseInt(match[3], 10);
-        if (englishMonths[monthName] !== undefined && !isNaN(day) && !isNaN(year)) {
-          return new Date(year, englishMonths[monthName], day);
-        }
-      }
-
-      const parsed = new Date(s);
-      return isNaN(parsed.getTime())
-        ? null
-        : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-    };
-
+  const isEarliestDeliveryDate = (): boolean => {
     // 1. If cart has a package that is not available on the system earliest date
     if (orderContext?.checkoutDetails?.hasPackageUnavailableOnEarliest) {
       return false;
@@ -177,7 +205,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       return false;
     }
 
-    const scheduledDate = parseDateOnly(deliveryDateRaw);
+    const scheduledDate = getScheduledDeliveryDate();
     if (!scheduledDate) return false;
 
     // 3. System Earliest Possible Schedule Date (e.g. today is 12 -> 15)
@@ -185,6 +213,21 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() === sysEarliestDate.getTime();
+  };
+
+  // Payment due = delivery date minus (gap days + 1). Example: delivery 24 -> pay by 20
+  const getPaymentDueText = (): string => {
+    const scheduledDate = getScheduledDeliveryDate();
+    if (!scheduledDate) return "your scheduled order date";
+
+    const due = new Date(scheduledDate);
+    due.setDate(due.getDate() - (PAYMENT_GAP_DAYS + 1));
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (due < today) return "today";
+
+    return `${MONTHS_LONG[due.getMonth()]} ${getOrdinal(due.getDate())}`;
   };
 
   useEffect(() => {
@@ -361,6 +404,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
   const paymentAmount = useCredit ? remainingAfterCredit : totalAmount;
 
+  // Fully paid with credit balance: no earliest-date check, order is saved as paid
+  const isFullCredit = useCredit && creditUsed > 0 && paymentAmount <= 0;
+
   const handleCheckoutSuccess = async (orderId: string) => {
     setCheckoutModalVisible(false);
     setSubmitting(true);
@@ -386,6 +432,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       dispatch(clearCart());
       navigation.navigate("OrderConfirmed", {
         orderId: orderData.orderId,
+        processOrderId: orderData.processOrderId,
         invoiceNumber: orderData.invoiceNumber,
         total: orderData.total || paymentAmount,
         couponValue: appliedCoupon?.discount || 0,
@@ -393,11 +440,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       });
     } catch (err: any) {
       console.error("[PaymentMethod] Order finalization error after payment:", err);
+      const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
       Alert.alert(
-        "Order Processing Issue",
-        err?.response?.data?.message ||
-          err?.message ||
-          "Payment was received, but there was an issue finalizing your order. Please contact customer support."
+        isTimeout ? "Order Processing Delay" : "Order Processing Issue",
+        isTimeout
+          ? "Payment was received, but order confirmation is taking longer than expected. Please check your Order History before retrying."
+          : err?.response?.data?.message ||
+            err?.message ||
+            "Payment was received, but there was an issue finalizing your order. Please contact customer support."
       );
     } finally {
       setSubmitting(false);
@@ -507,6 +557,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 dispatch(clearCart());
                 navigation.navigate("OrderConfirmed", {
                   orderId: orderData.orderId,
+                  processOrderId: orderData.processOrderId,
                   invoiceNumber: orderData.invoiceNumber,
                   total: orderData.total || totalAmount,
                   couponValue: couponVal,
@@ -617,6 +668,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             dispatch(clearCart());
             navigation.navigate("OrderConfirmed", {
               orderId: orderData.orderId,
+              processOrderId: orderData.processOrderId,
               invoiceNumber: orderData.invoiceNumber,
               total: orderData.total || totalAmount,
               couponValue: couponVal,
@@ -652,11 +704,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           }
         } catch (err: any) {
           console.error("[PaymentMethod] Future card order error:", err);
+          const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
           Alert.alert(
-            "Order Failed",
-            err?.response?.data?.message ||
-              err?.message ||
-              "Could not place your order. Please try again."
+            isTimeout ? "Order Processing Delay" : "Order Failed",
+            isTimeout
+              ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
+              : err?.response?.data?.message ||
+                err?.message ||
+                "Could not place your order. Please try again."
           );
         } finally {
           setSubmitting(false);
@@ -680,6 +735,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         deliveryCharge: deliveryChargeToSave,
         creditPaid: creditUsed,
         moneyPaid: paymentAmount,
+        // Full credit payment: processorders.isPaid = 1 and amount = total
+        ...(isFullCredit ? { isPaid: 1, amount: totalAmount } : {}),
         isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
         checkoutDetails: {
           ...(orderContext?.checkoutDetails || {
@@ -700,6 +757,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         dispatch(clearCart());
         navigation.navigate("OrderConfirmed", {
           orderId: response.data.data.orderId,
+          processOrderId: response.data.data.processOrderId,
           invoiceNumber: response.data.data.invoiceNumber,
           total: response.data.data.total,
           couponValue: couponVal,
@@ -752,6 +810,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       console.error("Order error in PaymentMethodScreen:", errorMsg, errorData);
       if (errorData?.code === "ITEMS_UNAVAILABLE") {
         setUnavailableModalVisible(true);
+      } else if (error?.code === "ECONNABORTED" || error?.message?.includes("timeout")) {
+        Alert.alert(
+          "Order Processing Delay",
+          "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again.",
+        );
       } else {
         Alert.alert("Order Failed", errorMsg);
       }
@@ -1456,7 +1519,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           )}
 
           {/* PLEASE NOTE BANNER WHEN SCHEDULED AFTER EPSD */}
-          {!isEarliestDeliveryDate() && (
+          {!isFullCredit && !isEarliestDeliveryDate() && (
             <View
               style={{
                 marginHorizontal: 15,
@@ -1486,7 +1549,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                   lineHeight: 19,
                 }}
               >
-                Your delivery date is scheduled after the earliest possible schedule date. You do not need to pay today; your payment will be due on your scheduled order date.
+                Please make sure to complete your payment by{" "}
+                <Text style={{ fontWeight: "700", color: "#1E293B" }}>
+                  {getPaymentDueText()}
+                </Text>
+                , once you receive your order confirmation.
               </Text>
             </View>
           )}
@@ -1641,6 +1708,17 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               {paymentMethod === "card" && paymentAmount > 0 && isEarliestDeliveryDate()
                 ? "Processing payment..."
                 : "Confirming your order..."}
+            </Text>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                fontWeight: "400",
+                color: "#6B7280",
+                textAlign: "center",
+              }}
+            >
+              Please do not close the app.
             </Text>
           </View>
         </View>

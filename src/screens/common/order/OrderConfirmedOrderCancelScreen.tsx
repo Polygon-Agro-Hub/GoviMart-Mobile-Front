@@ -63,6 +63,23 @@ const getPackageUnitPrice = (pkg: PackageItem): number =>
   Number(pkg.packingFee ?? 0) +
   Number(pkg.serviceFee ?? 0);
 
+// The same package passed more than once is merged into ONE row with the
+// quantities added together (so it can be shown as "X2").
+const groupPackages = (list: PackageItem[]): PackageItem[] => {
+  const map = new Map<string, PackageItem>();
+  list.forEach((p) => {
+    const key = `${String(p.name || "").trim().toLowerCase()}|${getPackageUnitPrice(p)}`;
+    const qty = Number(p.qty) || 1;
+    const existing = map.get(key);
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      map.set(key, { ...p, id: key, qty });
+    }
+  });
+  return Array.from(map.values());
+};
+
 const ItemAvatar: React.FC<{ icon?: string; image?: string }> = ({
   icon,
   image,
@@ -107,8 +124,14 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     refundCreditAmount: passedRefundCreditAmount,
   } = route.params || {};
 
-  const packages: PackageItem[] =
-    passedPackages && passedPackages.length > 0 ? passedPackages : [];
+  // Duplicates are merged here, so it works no matter how the caller sends them
+  const packages: PackageItem[] = useMemo(
+    () =>
+      passedPackages && passedPackages.length > 0
+        ? groupPackages(passedPackages as PackageItem[])
+        : [],
+    [passedPackages],
+  );
   const alaCarteItems: AlaCarteItem[] =
     passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [];
 
@@ -239,12 +262,14 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         ? remainingAfterCredit
         : 0;
 
-  // Cash isn't paid yet, so only card + credit are refunded as credit.
+  // Only the credit that was already paid goes back to the credit balance.
+  // The card amount is NOT refunded as credit (the card is only charged when
+  // the customer confirms the order).
   // Capped so it can never exceed the order total.
   const refundCreditAmount = Math.min(
     passedRefundCreditAmount !== undefined
       ? Number(passedRefundCreditAmount)
-      : totalPaidCard + totalPaidCredit,
+      : totalPaidCredit,
     processOrderTotal,
   );
 
@@ -253,7 +278,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     setLoading(true);
     try {
       if (orderId) {
-        await orderService.cancelOrder({
+        await orderService.cancelOrderBeforeConfirm({
           orderId,
           processOrderId: processOrderId || undefined,
         });
@@ -307,11 +332,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         </TouchableOpacity>
 
         <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
-          Order Cancel Confirmation  
+          Order Cancel Confirmation
         </Text>
       </View>
 
-    
       <View
         ref={rootRef}
         collapsable={false}
@@ -343,7 +367,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                 </Text>
                 <Text className="text-[13px] text-[#E11D48] mt-0.5">
                   {refundCreditAmount > 0
-                    ? "This order has been paid. Refund will be converted to your credit balance."
+                    ? "The credit you paid for this order will be returned to your credit balance."
                     : "This order will be cancelled immediately."}
                 </Text>
               </View>
@@ -363,12 +387,15 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                       )}
                       <View className="flex-row items-center pb-3">
                         <ItemAvatar icon={pkg.icon} image={pkg.image} />
-                        <View className="ml-3">
+                        <View className="ml-3 flex-1">
                           <Text className="text-[15px] font-bold text-black">
-                            {pkg.name}{" "}
-                            <Text className="text-[13px] font-normal text-[#8A8A8A]">
-                              (x{pkg.qty})
-                            </Text>
+                            {pkg.name}
+                            {pkg.qty > 1 && (
+                              <Text className="text-[14px] font-semibold text-[#4A4A4A]">
+                                {" "}
+                                (X{pkg.qty})
+                              </Text>
+                            )}
                           </Text>
                           <Text className="text-[13px] text-black mt-0.5">
                             Rs. {formatPrice(unitPrice)}
@@ -475,7 +502,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
               </View>
             </View>
 
-            {/* Credit info component */}
+            {/* Credit info component (only the credit that was paid) */}
             {refundCreditAmount > 0 && (
               <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
                 <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
@@ -485,12 +512,12 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                   Amount will be credited to your credit balance
                 </Text>
                 <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
-                  After canceling, the full converted amount of{" "}
+                  After canceling, the credit amount you paid,{" "}
                   <Text className="font-bold text-[#15803D]">
                     Rs. {formatPrice(refundCreditAmount)}
                   </Text>{" "}
-                  will be added to your credit balance. You can use it for your
-                  next purchase.
+                  will be added back to your credit balance. You can use it
+                  for your next purchase.
                 </Text>
               </View>
             )}
