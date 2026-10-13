@@ -443,6 +443,17 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 quantity: p.quantity,
                 price: p.price,
             })),
+            additionalItems: products.map((p) => ({
+                id: p.id,
+                name: p.name,
+                unitPrice: p.normalPrice || p.price,
+                normalPrice: p.normalPrice || p.price,
+                quantity: p.weight,
+                qty: p.weight,
+                unit: p.unit,
+                amount: p.price,
+                image: p.image,
+            })),
         };
 
         if (packages.length > 0) {

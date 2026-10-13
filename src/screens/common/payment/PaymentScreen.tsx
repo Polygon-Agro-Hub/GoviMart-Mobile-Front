@@ -216,6 +216,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               dispatch(clearCart());
               navigation.navigate("OrderConfirmed", {
                 orderId: orderData.orderId,
+                processOrderId: orderData.processOrderId,
                 invoiceNumber: orderData.invoiceNumber,
                 total: orderData.total || fullTotal,
                 couponValue: orderContext?.couponValue,
@@ -368,6 +369,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         dispatch(clearCart());
         navigation.navigate("OrderConfirmed", {
           orderId: orderData.orderId,
+          processOrderId: orderData.processOrderId,
           invoiceNumber: orderData.invoiceNumber,
           total: orderData.total || fullTotal,
           couponValue: orderContext?.couponValue,

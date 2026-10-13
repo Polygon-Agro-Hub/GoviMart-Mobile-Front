@@ -345,6 +345,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [showExitModal, setShowExitModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [successInvoiceNo, setSuccessInvoiceNo] = useState<string>("");
 
   // orderadditionalitems.normalPrice (line price BEFORE discount) per saved row.
   // key = redux ala carte item id (e.g. "prev-7073")
@@ -1822,6 +1823,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         { isCard, netRefundSavings, finalOrderTotalWithDelivery },
       );
 
+      // Capture invoice number for the success alert modal
+      const confirmedInv =
+        invoiceNo || routeInvoiceNo || (effectiveOrderId ? `#${effectiveOrderId}` : "");
+      setSuccessInvoiceNo(confirmedInv);
+
       // The order is saved. Wipe the review state so the NEXT order
       // (even one with the same package) never sees these edits.
       loadedOrderIdRef.current = null;
@@ -1864,16 +1870,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
 
     try {
-      // Capture nav values before Redux state is cleared
-      const confirmedInvoiceNo = invoiceNo;
-      const confirmedTotal = finalOrderTotalWithDelivery;
-      const confirmedOrderId = String(actualOrderId || effectiveOrderId);
-      const confirmedScheduleDate =
-        scheduleDateStr || (rawScheduleDate || undefined);
-      const confirmedPackageTotal = packagesTotal;
-      const confirmedAlacartTotal = alacartTotal;
-      const confirmedDeliveryCharge = deliveryCharge;
-      const confirmedDeliveryMethod = deliveryMethod;
+      // Capture invoice number for the success alert modal
+      const confirmedInv =
+        invoiceNo || routeInvoiceNo || (effectiveOrderId ? `#${effectiveOrderId}` : "");
+      setSuccessInvoiceNo(confirmedInv);
 
       const confirmRes = await orderService.confirmPackageReview(payload);
       console.log(
@@ -1894,26 +1894,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       setMode("overview");
       setPendingConfirmPayload(null);
 
-      navigation.navigate("OrderConfirmed", {
-        orderId: confirmedOrderId,
-        invoiceNumber: confirmedInvoiceNo,
-        total: confirmedTotal,
-        scheduleDate: confirmedScheduleDate,
-        orderContext: {
-          grandTotal: confirmedTotal,
-          packageTotal: confirmedPackageTotal,
-          productTotal: confirmedAlacartTotal,
-          deliveryCharge: confirmedDeliveryCharge,
-          discount: 0,
-          paymentMethod: "card",
-          deliveryMethod: confirmedDeliveryMethod?.toLowerCase().includes("pickup")
-            ? "pickup"
-            : "home",
-          checkoutDetails: {
-            deliveryDate: confirmedScheduleDate,
-          } as any,
-        },
-      });
+      // Stop button loading spinner and display success overlay
+      setIsSubmitting(false);
+      setShowSuccessOverlay(true);
     } catch (err: any) {
       console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
       Alert.alert(
@@ -3197,7 +3180,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                       }}
                     >
                       {/* Top row: Image, Name & Price, Trash, Added Now */}
-                      <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-stretch justify-between">
                         <View className="flex-row items-center flex-1">
                           <View
                             className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
@@ -3263,7 +3246,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                           </View>
                         </View>
 
-                        <View className="items-end justify-between h-14">
+                        {/* Right column: trash on top, "Added Now" at the bottom */}
+                        <View className="items-end justify-between min-h-[56px]">
                           {/* Trash button: red background & red icon when disabled */}
                           <TouchableOpacity
                             onPress={() => removeAlacartItem(item.id)}
@@ -3286,10 +3270,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             />
                           </TouchableOpacity>
 
-                          {!isItemDisabled && item.isAddedNow && (
-                            <Text className="text-[12px] font-medium text-[#F04438]">
-                              Added Now
-                            </Text>
+                          {!isItemDisabled && item.isAddedNow ? (
+                            <View className="mt-12">
+                              <Text className="text-[12px] font-medium text-[#F04438]">
+                                Added Now
+                              </Text>
+                            </View>
+                          ) : (
+                            <View />
                           )}
                         </View>
                       </View>
@@ -3664,14 +3652,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         />
       )}
 
-      {/* Success alert — shown briefly after API succeeds (cash orders) */}
+      {/* Success alert — shown briefly after review package succeeds */}
       <AlertModal
         visible={showSuccessOverlay}
         type="success"
-        title="Order Placed!"
-        message="Order reviewed and dispatched successfully!"
+        title="Successful!"
+        message={`Your order ${successInvoiceNo || invoiceNo}\nconfirmed successfully.`}
         autoClose={true}
-        duration={2000}
+        duration={2500}
         onClose={() => {
           setShowSuccessOverlay(false);
           navigation.reset({
