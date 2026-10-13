@@ -21,6 +21,7 @@ import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
 
+// NOTE: add  serviceFee?: number  to this route's params in RootStackParamList.
 type Props = StackScreenProps<RootStackParamList, "OrderConfirmedOrderCancelScreen">;
 
 /* ---------------------------------------------------------
@@ -122,7 +123,11 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
+    serviceFee: passedServiceFee, // DASH: 0 / undefined when not a Dash order
   } = route.params || {};
+
+  // DASH service fee (only passed for orderApp = "Dash")
+  const serviceFee = Number(passedServiceFee ?? 0);
 
   // Duplicates are merged here, so it works no matter how the caller sends them
   const packages: PackageItem[] = useMemo(
@@ -213,7 +218,8 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     0,
   );
   const alaCarteTotal = alaCarteItems.reduce((sum, i) => sum + i.price, 0);
-  const calculatedOrderTotal = packagesTotal + alaCarteTotal;
+  // DASH: the service fee is part of the order total
+  const calculatedOrderTotal = packagesTotal + alaCarteTotal + serviceFee;
 
   const processOrderTotal =
     passedProcessOrderTotal !== undefined && passedProcessOrderTotal > 0
@@ -487,6 +493,16 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                   </Text>
                   <Text className="text-[14px] font-semibold text-[#000000]">
                     Rs. {formatPrice(totalCashDue)}
+                  </Text>
+                </View>
+              )}
+
+              {/* DASH: Service Fee (only for Dash orders) */}
+              {serviceFee > 0 && (
+                <View className="flex-row justify-between pb-2.5">
+                  <Text className="text-[14px] text-[#4A4A4A]">Service Fee</Text>
+                  <Text className="text-[14px] font-semibold text-black">
+                    + Rs. {formatPrice(serviceFee)}
                   </Text>
                 </View>
               )}

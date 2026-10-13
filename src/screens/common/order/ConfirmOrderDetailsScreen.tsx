@@ -63,6 +63,10 @@ interface CartItem {
   todayNormalPrice?: number;
 }
 
+// Fixed service fee for orderApp = "Dash" AND isPackage = 0
+// (must match DASH_SERVICE_FEE on the server). Added on top of the delivery fee.
+const DASH_SERVICE_FEE = 180;
+
 // ─── PICKUP SCHEDULE HELPER ──────────────────────────────────────────────────
 // The DB column `sheduleDate` only stores the date (e.g. 2026-10-21 05:30:00),
 // while pickup orders are shown with a fixed pickup time of 09:30 PM.
@@ -167,6 +171,17 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               0,
           ) || 0;
 
+    // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0 adds a fixed
+    // Rs. 180 ON TOP of the delivery fee. Always charged (no pickup /
+    // free-delivery-coupon waiver) and part of the total.
+    const isPackageValue = order?.isPackage;
+    const isDashServiceFee =
+      String(order?.orderApp || "").trim().toLowerCase() === "dash" &&
+      isPackageValue != null &&
+      String(isPackageValue).trim() !== "" &&
+      Number(isPackageValue) === 0;
+    const serviceFee = isDashServiceFee ? DASH_SERVICE_FEE : 0;
+
     const hasData = packages.length > 0 || cartItems.length > 0;
     const total = hasData
       ? Math.max(
@@ -175,7 +190,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             itemsGross -
             productDiscount -
             couponDiscount +
-            deliveryFee,
+            deliveryFee +
+            serviceFee,
         )
       : parseFloat(order?.fulltotal || order?.fullTotal || 0) || 0;
 
@@ -187,6 +203,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       productDiscount,
       couponDiscount,
       deliveryFee,
+      serviceFee,
       total,
       hasData,
     };
@@ -269,7 +286,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       (isPaidVal && !pMethod.includes("cash") && !pMethod.includes("cod"));
     const isCashMethod = pMethod.includes("cash") || pMethod.includes("cod");
 
-    const orderFullTotal = computeTotals().total;
+    const totalsNow = computeTotals();
+    const orderFullTotal = totalsNow.total;
     const initialPaidAmount =
       parseFloat(order?.amount || 0) > 0
         ? parseFloat(order?.amount)
@@ -311,6 +329,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       processOrderTotal,
       paymentMethod: order?.paymentMethod || "cash",
       refundCreditAmount,
+      serviceFee: totalsNow.serviceFee, // DASH: 0 when not a Dash order
     });
   };
 
@@ -1548,8 +1567,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         )}
 
-     
-
         {/* SUMMARY */}
         {(() => {
           const t = totals;
@@ -1718,6 +1735,23 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                       </Text>
                     )}
 
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: "#E1E7EE",
+                        marginVertical: 6,
+                      }}
+                    />
+                  </>
+                )}
+
+                {/* DASH: Service Fee (orderApp = Dash AND isPackage = 0) */}
+                {t.serviceFee > 0 && (
+                  <>
+                    <SummaryRow
+                      label="Service Fee"
+                      value={`+ Rs. ${formatAmount(t.serviceFee)}`}
+                    />
                     <View
                       style={{
                         height: 1,

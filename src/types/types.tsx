@@ -195,6 +195,7 @@ export type RootStackParamList = {
     processOrderTotal?: number;
     paymentMethod?: string;
     refundCreditAmount?: number;
+    serviceFee?: number; 
   } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;
@@ -223,6 +224,7 @@ export type RootStackParamList = {
     processOrderTotal?: number;
     paymentMethod?: string;
     refundCreditAmount?: number;
+    serviceFee?: number;
   } | undefined;
  ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
 };
