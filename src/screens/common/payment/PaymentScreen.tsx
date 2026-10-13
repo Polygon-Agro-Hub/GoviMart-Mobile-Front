@@ -377,11 +377,14 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         });
       } catch (orderErr: any) {
         console.error("[PaymentScreen] Order finalization error:", orderErr);
+        const isTimeout = orderErr?.code === "ECONNABORTED" || orderErr?.message?.includes("timeout");
         showAlert(
-          "Order Issue",
-          orderErr?.response?.data?.message ||
-            orderErr?.message ||
-            "Payment received, but there was an issue finalizing your order."
+          isTimeout ? "Order Processing Delay" : "Order Issue",
+          isTimeout
+            ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
+            : orderErr?.response?.data?.message ||
+              orderErr?.message ||
+              "Payment received, but there was an issue finalizing your order."
         );
       } finally {
         setLoading(false);

@@ -36,7 +36,10 @@ class OrderService {
 
     async createOrder(payload: any) {
         const headers = await getAuthHeader();
-        return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, { headers });
+        return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, {
+            headers,
+            timeout: 120000, // 2 minutes (120,000 ms) waiting timeout
+        });
     }
 
     async getPickupCenters() {
@@ -154,7 +157,10 @@ class OrderService {
         }>;
     }) {
         const headers = await getAuthHeader();
-        return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, { headers });
+        return apiClient.post(ENDPOINTS.ORDER.CONFIRM_PACKAGE_REVIEW, payload, {
+            headers,
+            timeout: 120000, // 2 minutes (120,000 ms) waiting timeout
+        });
     }
 
     async confirmOrderWithLivePrices(payload: {
