@@ -26,9 +26,12 @@ class OrderService {
         return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_PACKAGES.replace(":orderId", orderId), { headers });
     }
 
-    async getOrderAdditionalItems(orderId: string) {
+    async getOrderAdditionalItems(orderId: string, processOrderId?: string | number) {
         const headers = await getAuthHeader();
-        return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_ADDITIONAL_ITEMS.replace(":orderId", orderId), { headers });
+        return apiClient.get(ENDPOINTS.ORDER.GET_ORDER_ADDITIONAL_ITEMS.replace(":orderId", String(orderId)), {
+            headers,
+            params: processOrderId ? { processOrderId } : undefined,
+        });
     }
 
     async createOrder(payload: any) {
@@ -61,9 +64,12 @@ class OrderService {
         return apiClient.post(ENDPOINTS.ORDER.CHECK_COUPON, payload, { headers });
     }
 
-    async getInvoice(orderId: string | number) {
+    async getInvoice(orderId: string | number, params?: { processOrderId?: string | number; invNo?: string }) {
         const headers = await getAuthHeader();
-        return apiClient.get(ENDPOINTS.ORDER.GET_INVOICE.replace(":orderId", String(orderId)), { headers });
+        return apiClient.get(ENDPOINTS.ORDER.GET_INVOICE.replace(":orderId", String(orderId)), {
+            headers,
+            params,
+        });
     }
 
     async getPackageReview(orderId: string | number) {

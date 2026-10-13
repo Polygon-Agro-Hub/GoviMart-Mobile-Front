@@ -47,6 +47,7 @@ export interface OrderContext {
   productTotal: number;
   discount: number;
   packages?: any[];
+  additionalItems?: any[];
   deliveryCharge?: number;
   isFinalizeImdt?: number;
   deliveryMethod?: "home" | "pickup";
@@ -141,6 +142,7 @@ export type RootStackParamList = {
   OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
   OrderConfirmed: {
     orderId?: string | number;
+    processOrderId?: string | number;
     invoiceNumber?: string;
     total?: number;
     couponValue?: number;

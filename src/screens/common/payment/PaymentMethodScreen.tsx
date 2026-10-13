@@ -432,6 +432,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       dispatch(clearCart());
       navigation.navigate("OrderConfirmed", {
         orderId: orderData.orderId,
+        processOrderId: orderData.processOrderId,
         invoiceNumber: orderData.invoiceNumber,
         total: orderData.total || paymentAmount,
         couponValue: appliedCoupon?.discount || 0,
@@ -553,6 +554,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 dispatch(clearCart());
                 navigation.navigate("OrderConfirmed", {
                   orderId: orderData.orderId,
+                  processOrderId: orderData.processOrderId,
                   invoiceNumber: orderData.invoiceNumber,
                   total: orderData.total || totalAmount,
                   couponValue: couponVal,
@@ -663,6 +665,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             dispatch(clearCart());
             navigation.navigate("OrderConfirmed", {
               orderId: orderData.orderId,
+              processOrderId: orderData.processOrderId,
               invoiceNumber: orderData.invoiceNumber,
               total: orderData.total || totalAmount,
               couponValue: couponVal,
@@ -748,6 +751,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         dispatch(clearCart());
         navigation.navigate("OrderConfirmed", {
           orderId: response.data.data.orderId,
+          processOrderId: response.data.data.processOrderId,
           invoiceNumber: response.data.data.invoiceNumber,
           total: response.data.data.total,
           couponValue: couponVal,
