@@ -79,6 +79,9 @@ const formatAmount = (amount: number | string) => {
 
 const num = (v: any) => parseFloat(String(v ?? 0)) || 0;
 
+// Fixed service fee for orderApp = "Dash" AND isPackage = 0 (must match DASH_SERVICE_FEE on the server)
+const DASH_SERVICE_FEE = 180;
+
 // Same rules as the backend (isCardPayment in package-review.dao.js)
 const detectPayment = (order: any) => {
   const m = String(order?.paymentMethod || "").trim().toLowerCase();
@@ -354,6 +357,21 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       : order?.deliveryCharge,
   );
 
+  // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0 adds a fixed
+  // "Service Fee" (Rs. 180) ON TOP of the normal delivery fee. It is always
+  // charged (no pickup / free-delivery-coupon waiver) and is part of the total.
+  // Display condition only (no extra fetch): uses order.orderApp and order.isPackage.
+  const isPackageValue = order?.isPackage;
+  const isDashServiceFee =
+    String(order?.orderApp || "").trim().toLowerCase() === "dash" &&
+    isPackageValue != null &&
+    String(isPackageValue).trim() !== "" &&
+    Number(isPackageValue) === 0;
+  const serviceFee = isDashServiceFee ? DASH_SERVICE_FEE : 0;
+  // Delivery fee keeps its normal rules for every order
+  const deliveryFeeCharged =
+    !isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0;
+
   // Total is recalculated from live data. DB fullTotal is only a fallback.
   const hasLiveData = packagesTotal > 0 || itemsTotal > 0;
   const calculatedTotal = Math.max(
@@ -362,7 +380,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       itemsTotal -
       productDiscount -
       couponDiscount +
-      (!isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0),
+      deliveryFeeCharged +
+      serviceFee,
   );
   const orderFullTotal = hasLiveData
     ? calculatedTotal
@@ -515,6 +534,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       processOrderTotal,
       paymentMethod: order?.paymentMethod || "cash",
       refundCreditAmount,
+      serviceFee, // DASH: 0 when not a Dash order
     });
   };
 
@@ -665,6 +685,12 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                   : "Delivery Fee"
               }
               value={`+ Rs. ${formatAmount(isFreeDeliveryCoupon ? 0 : deliveryFee)}`}
+            />
+          )}
+          {serviceFee > 0 && (
+            <SummaryRow
+              label="Service Fee"
+              value={`+ Rs. ${formatAmount(serviceFee)}`}
             />
           )}
 
