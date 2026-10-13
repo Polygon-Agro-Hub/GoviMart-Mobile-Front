@@ -41,7 +41,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
   const [hasNegativeCredit, setHasNegativeCredit] = useState(false);
   const [hasProcessingOrders, setHasProcessingOrders] = useState(false);
   const [creditBalance, setCreditBalance] = useState(0);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   useEffect(() => {
     const showEvent =
@@ -49,16 +49,15 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      const height = e?.endCoordinates?.height || 280;
-      setKeyboardHeight(height);
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
     });
 
     return () => {
@@ -181,15 +180,16 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               ref={scrollViewRef}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              scrollEnabled={true}
+              nestedScrollEnabled={true}
+              alwaysBounceVertical={true}
+              bounces={true}
               contentContainerStyle={{
                 flexGrow: 1,
                 paddingHorizontal: 14,
-                paddingBottom:
-                  keyboardHeight > 0
-                    ? keyboardHeight + 20
-                    : !hasProcessingOrders || hasNegativeCredit
-                    ? 80
-                    : 24,
+                paddingBottom: isKeyboardVisible
+                  ? 120
+                  : (!hasProcessingOrders || hasNegativeCredit ? 80 : 24),
               }}
             >
               {/* Delete Icon */}
@@ -197,20 +197,24 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 style={{
                   alignItems: "center",
                   marginTop: 0,
-                  marginBottom: 25,
+                  marginBottom: isKeyboardVisible ? 8 : 25,
                 }}
               >
                 <View
                   style={{
-                    width: 57,
-                    height: 57,
+                    width: isKeyboardVisible ? 46 : 57,
+                    height: isKeyboardVisible ? 46 : 57,
                     borderRadius: 999,
                     backgroundColor: "#FFE8E8",
                     justifyContent: "center",
                     alignItems: "center",
                   }}
                 >
-                  <FontAwesome6 name="trash" size={22} color="#FF383C" />
+                  <FontAwesome6
+                    name="trash"
+                    size={isKeyboardVisible ? 18 : 22}
+                    color="#FF383C"
+                  />
                 </View>
               </View>
 
@@ -221,7 +225,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                   fontSize: 16,
                   fontWeight: "600",
                   color: "#000000",
-                  marginBottom: 7,
+                  marginBottom: isKeyboardVisible ? 4 : 7,
                 }}
               >
                 Delete Your Account?
@@ -231,12 +235,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               <Text
                 style={{
                   textAlign: "center",
-                  fontSize: 14,
-                  lineHeight: 20,
+                  fontSize: isKeyboardVisible ? 13 : 14,
+                  lineHeight: isKeyboardVisible ? 17 : 20,
                   fontWeight: "400",
                   color: "#494A65",
                   paddingHorizontal: 8,
-                  marginBottom: 18,
+                  marginBottom: isKeyboardVisible ? 6 : 18,
                 }}
               >
                 <Text style={{ color: "#FF383C" }}>This action is permanent.</Text>{"\n"}
@@ -252,7 +256,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                   borderColor: "#DDE2E7",
                   borderRadius: 17,
                   paddingHorizontal: 14,
-                  paddingVertical: 12,
+                  paddingVertical: isKeyboardVisible ? 8 : 12,
                   marginHorizontal: 3,
                 }}
               >
@@ -263,7 +267,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     fontWeight: "700",
                     color: "#000000",
                     marginLeft: 10,
-                    marginBottom: 9,
+                    marginBottom: isKeyboardVisible ? 4 : 9,
                   }}
                 >
                   What will be deleted?
@@ -274,7 +278,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     style={{
                       fontSize: 12,
                       color: "#494A65",
-                      lineHeight: 22,
+                      lineHeight: isKeyboardVisible ? 18 : 22,
                     }}
                   >
                     • Your personal information and profile.
@@ -284,7 +288,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     style={{
                       fontSize: 12,
                       color: "#494A65",
-                      lineHeight: 22,
+                      lineHeight: isKeyboardVisible ? 18 : 22,
                     }}
                   >
                     • All order history and transaction details.
@@ -294,7 +298,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     style={{
                       fontSize: 12,
                       color: "#494A65",
-                      lineHeight: 22,
+                      lineHeight: isKeyboardVisible ? 18 : 22,
                     }}
                   >
                     • Saved addresses and payment methods.
@@ -304,7 +308,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     style={{
                       fontSize: 12,
                       color: "#494A65",
-                      lineHeight: 22,
+                      lineHeight: isKeyboardVisible ? 18 : 22,
                     }}
                   >
                     • Account preferences and settings.
@@ -314,7 +318,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     style={{
                       fontSize: 12,
                       color: "#494A65",
-                      lineHeight: 22,
+                      lineHeight: isKeyboardVisible ? 18 : 22,
                     }}
                   >
                     • Any remaining positive credit balance.
@@ -323,7 +327,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               </View>
 
               {/* Flexible spacer to push bottom components close to bottom */}
-              <View style={{ flex: 1, minHeight: 20 }} />
+              <View
+                style={{
+                  flex: isKeyboardVisible ? 0 : 1,
+                  minHeight: isKeyboardVisible ? 0 : 20,
+                }}
+              />
 
               {hasNegativeCredit ? (
                 <View
@@ -397,8 +406,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                   <View
                     style={{
                       alignItems: "center",
-                      marginTop: 12,
-                      marginBottom: 14,
+                      marginTop: isKeyboardVisible ? 4 : 12,
+                      marginBottom: isKeyboardVisible ? 4 : 14,
                     }}
                   >
                     <Text
@@ -407,7 +416,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                         fontWeight: "500",
                         color: "#111111",
                         textAlign: "center",
-                        lineHeight: 19,
+                        lineHeight: isKeyboardVisible ? 17 : 19,
                       }}
                     >
                       To confirm account deletion,
@@ -419,7 +428,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                         fontWeight: "500",
                         color: "#111111",
                         textAlign: "center",
-                        lineHeight: 19,
+                        lineHeight: isKeyboardVisible ? 17 : 19,
                       }}
                     >
                       please type{" "}
@@ -445,7 +454,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                       alignItems: "center",
                       paddingHorizontal: 7,
                       marginHorizontal: 0,
-                      marginBottom: 8,
+                      marginBottom: isKeyboardVisible ? 4 : 8,
                     }}
                   >
                     {/* Lock Icon */}
@@ -472,7 +481,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     <TextInput
                       value={confirmation}
                       onChangeText={(text) => {
-                        setConfirmation(text.toUpperCase());
+                        const cleaned = text.replace(/^\s+/, "").toUpperCase();
+                        setConfirmation(cleaned);
                       }}
                       onFocus={() => {
                         setTimeout(() => {

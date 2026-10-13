@@ -56,6 +56,7 @@ export const ENDPOINTS = {
 
   ORDER: {
     GET_ORDER_HISTORY: "api/order/order-history",
+    GET_SCHEDULE_ORDERS: "api/order/schedule-orders",
     GET_ORDER_BY_ID: "api/order/:orderId",
     GET_ORDER_PACKAGES: "api/order/packages/:orderId",
     GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
@@ -70,12 +71,20 @@ export const ENDPOINTS = {
     REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
     RESET_PACKAGE_ITEM: "api/order/package/reset-item",
     CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
+    CONFIRM_ORDER: "api/order/confirm-order",
     GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
     CANCEL_ORDER: "api/order/package/cancel-order",
+    CANCEL_ORDER_BEFORE_CONFIRM: "/api/order/package/cancel-before-confirm",
   },
 
   PAYMENT: {
+    INITIATE: "api/payment/initiate",
+    ACTIVE_GATEWAY: "api/payment/active-gateway",
+    PAYMENTS_LK_INITIATE: "api/payment/payments-lk/initiate",
     PAYHERE_INITIATE: "api/payment/payhere/initiate",
+    CARDS: "api/payment/cards",
+    SYNC_CHECKOUT: "api/payment/sync-checkout",
+    CHARGE_SAVED_CARD: "api/payment/charge-saved-card",
   },
 
   NOTIFICATION: {

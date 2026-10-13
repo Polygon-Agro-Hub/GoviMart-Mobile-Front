@@ -2,6 +2,7 @@ import {
   IPaymentGatewayAdapter,
   PaymentRequestData,
   PaymentResponseData,
+  UnifiedCheckoutSession,
 } from "./payment.types";
 import apiClient from "../config-service/axio-config";
 import { ENDPOINTS } from "../config-service/endpoints";
@@ -39,7 +40,9 @@ export class PayHereAdapter implements IPaymentGatewayAdapter {
    * Request server-signed PayHere parameters with pre-calculated MD5 hash.
    * Keeps the merchant secret secure on the backend.
    */
-  async initiatePayment(request: PaymentRequestData): Promise<PayHereConfig> {
+  async initiatePayment(
+    request: PaymentRequestData
+  ): Promise<UnifiedCheckoutSession> {
     const headers = await getAuthHeader();
     const response = await apiClient.post(
       ENDPOINTS.PAYMENT.PAYHERE_INITIATE,
@@ -54,10 +57,23 @@ export class PayHereAdapter implements IPaymentGatewayAdapter {
     );
 
     if (response.data && response.data.status && response.data.data) {
-      return response.data.data as PayHereConfig;
+      const config = response.data.data as PayHereConfig;
+      return {
+        gateway: this.gatewayName,
+        checkoutUrl: config.checkout_url,
+        sessionId: config.order_id,
+        orderId: config.order_id,
+        amount: Number(config.amount),
+        currency: config.currency,
+        paymentType: request.paymentType,
+        postBody: config.post_body,
+        rawConfig: config,
+      };
     }
 
-    throw new Error(response.data?.message || "Failed to initiate PayHere payment");
+    throw new Error(
+      response.data?.message || "Failed to initiate PayHere payment"
+    );
   }
 
   /**

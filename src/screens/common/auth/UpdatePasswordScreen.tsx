@@ -6,23 +6,16 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
-  Image,
   Keyboard,
   BackHandler,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
-import {
-  FontAwesome5,
-  Ionicons,
-  MaterialIcons,
-  AntDesign,
-} from "@expo/vector-icons";
+import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
 import CustomHeader from "@/component/common/CustomHeader";
@@ -44,14 +37,98 @@ interface UpdatePasswordProps {
   route: UpdatePasswordRouteProp;
 }
 
+type FieldName = "current" | "new" | "confirm";
+
+// Space (px) to keep between the focused field and the keyboard,
+// so the fields / Update button below it stay visible.
+const EXTRA_SPACE: Record<FieldName, number> = {
+  current: 40,
+  new: 80,
+  confirm: 140,
+};
+
 const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   navigation,
   route,
 }) => {
   const dispatch = useDispatch();
-  const scrollViewRef = useRef<ScrollView>(null);
   const { customerId, name, number, redirectTo } = route.params || {};
 
+  // ---------- Keyboard / scroll handling ----------
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardTopRef = useRef(0);
+  const keyboardOpenRef = useRef(false);
+  const focusedFieldRef = useRef<FieldName>("current");
+  const currentWrapRef = useRef<View>(null);
+  const newWrapRef = useRef<View>(null);
+  const confirmWrapRef = useRef<View>(null);
+
+  // Scroll only as much as needed so the focused field sits just above
+  // the keyboard (not at the top of the screen).
+  const ensureVisible = useCallback(() => {
+    const field = focusedFieldRef.current;
+    const target =
+      field === "current"
+        ? currentWrapRef
+        : field === "new"
+          ? newWrapRef
+          : confirmWrapRef;
+
+    target.current?.measureInWindow((_x, y, _w, h) => {
+      const limit = keyboardTopRef.current - EXTRA_SPACE[field];
+      const overflow = y + h - limit;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: scrollYRef.current + overflow,
+          animated: true,
+        });
+      }
+    });
+  }, []);
+
+  const handleFocus = (field: FieldName) => {
+    focusedFieldRef.current = field;
+    // if keyboard is already open (switching fields), adjust now
+    if (keyboardOpenRef.current) {
+      setTimeout(ensureVisible, 150);
+    }
+  };
+
+  useEffect(() => {
+    const showListener = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardOpenRef.current = true;
+      keyboardTopRef.current = e.endCoordinates.screenY;
+
+      // Measure how much the keyboard REALLY covers the screen. If Android
+      // already resized the window, the overlap is 0 and no extra padding
+      // is added (prevents the long white space).
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+
+      // wait for bottom padding to render, then scroll
+      setTimeout(ensureVisible, 300);
+    });
+
+    const hideListener = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardOpenRef.current = false;
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [ensureVisible]);
+
+  // ---------- Back handling ----------
   useFocusEffect(
     useCallback(() => {
       const handleBack = () => {
@@ -72,12 +149,11 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     }, [navigation, redirectTo]),
   );
 
-  // Form Fields State
+  // ---------- Form state ----------
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
-  // Input Field Visibility Toggles
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
@@ -90,7 +166,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     newPassword.trim() !== "" &&
     confirmNewPassword.trim() !== "";
 
-  // AlertModal States
+  // AlertModal states
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
@@ -175,7 +251,39 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  const redirectToSignIn = async () => {
+    // 1. Best-effort server logout (don't block on failure)
+    try {
+      await authService.logout();
+    } catch (err) {
+      console.log("Server logout failed, proceeding with local logout:", err);
+    }
+
+    // 2. Clear all local session data
+    try {
+      await tokenStorage.clearTokens();
+      await AsyncStorage.multiRemove([
+        "userToken",
+        "userProfile",
+        "userLoginTime",
+      ]);
+    } catch (err) {
+      console.error("Local storage clear error:", err);
+    }
+
+    // 3. Reset redux state
+    dispatch(clearCart());
+    dispatch(logoutSuccess());
+
+    // 4. Go to sign in and wipe the navigation history
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }],
+    });
+  };
+
   const handleUpdatePassword = async () => {
+    Keyboard.dismiss();
     if (!validate()) return;
 
     setLoading(true);
@@ -189,54 +297,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       if (response.data && response.data.status) {
         Alert.alert(
           "Success",
-          "Password updated successfully! Please log in again with your new password.",
-          [
-            {
-              text: "OK",
-              onPress: async () => {
-                if (redirectTo === "ExcludeListAdd") {
-                  navigation.navigate("ExcludeListAdd", {
-                    customerId: customerId || 0,
-                    name: name,
-                    number: number,
-                  });
-                } else {
-                  // Automatically log out and redirect to login screen
-                  try {
-                    await authService.logout().catch((err) => {
-                      console.log(
-                        "Server logout failed, proceeding with local logout:",
-                        err,
-                      );
-                    });
-                  } catch (e) {
-                    console.log("Logout API call error:", e);
-                  } finally {
-                    try {
-                      await tokenStorage.clearTokens();
-                      await AsyncStorage.removeItem("userToken");
-                      await AsyncStorage.removeItem("userProfile");
-                      await AsyncStorage.removeItem("userLoginTime");
-
-                      dispatch(clearCart());
-                      dispatch(logoutSuccess());
-
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: "Login" }],
-                      });
-                    } catch (e) {
-                      console.error("Logout error:", e);
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: "Login" }],
-                      });
-                    }
-                  }
-                }
-              },
-            },
-          ],
+          "Password updated successfully! Please sign in again with your new password.",
+          [{ text: "OK", onPress: redirectToSignIn }],
           { cancelable: false },
         );
       } else {
@@ -268,10 +330,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   };
 
   return (
-    <KeyboardAvoidingView
+    <View
+      ref={rootRef}
+      collapsable={false}
       className="flex-1 bg-white"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
@@ -290,14 +352,21 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       />
 
       <ScrollView
-        ref={scrollViewRef}
+        ref={scrollRef}
         className="flex-1 px-5"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
-          paddingBottom: 24,
+          // Manually lift content above the keyboard (works in production
+          // builds even with edge-to-edge enabled).
+          paddingBottom: 24 + keyboardHeight,
         }}
       >
         <View className="flex-1 justify-start">
@@ -319,7 +388,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
           {/* Form Fields Section */}
           <View className="mt-8 gap-y-4">
             {/* Current Password Field */}
-            <View>
+            <View ref={currentWrapRef} collapsable={false}>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
                   errors.currentPassword
@@ -340,6 +409,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showCurrentPassword}
                       value={currentPassword}
+                      onFocus={() => handleFocus("current")}
                       onChangeText={(t) => {
                         const clean = t.replace(/\s/g, "");
                         setCurrentPassword(clean);
@@ -382,7 +452,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             </View>
 
             {/* New Password Field */}
-            <View>
+            <View ref={newWrapRef} collapsable={false}>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
                   errors.newPassword
@@ -403,6 +473,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showNewPassword}
                       value={newPassword}
+                      onFocus={() => handleFocus("new")}
                       onChangeText={(t) => {
                         const clean = t.replace(/\s/g, "");
                         setNewPassword(clean);
@@ -442,7 +513,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             </View>
 
             {/* Confirm New Password Field */}
-            <View>
+            <View ref={confirmWrapRef} collapsable={false}>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
                   errors.confirmNewPassword
@@ -463,6 +534,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       placeholderTextColor="#9CA3AF"
                       secureTextEntry={!showConfirmNewPassword}
                       value={confirmNewPassword}
+                      onFocus={() => handleFocus("confirm")}
                       onChangeText={(t) => {
                         const clean = t.replace(/\s/g, "");
                         setConfirmNewPassword(clean);
@@ -558,7 +630,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         autoClose={false}
         showOkButton={true}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

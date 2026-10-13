@@ -7,7 +7,6 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
-  Alert,
   Image,
 } from "react-native";
 import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
@@ -29,6 +28,17 @@ interface CouponModalProps {
   cartId?: number;
 }
 
+// Helper: is this coupon type a "free delivery" type (handles backend typo too)
+const isFreeDeliveryType = (type?: string | null) => {
+  if (!type) return false;
+  const t = type.toLowerCase();
+  return (
+    type === "Free Delivery" ||
+    type === "Free Delivary" ||
+    (t.includes("free") && t.includes("deliv"))
+  );
+};
+
 const CouponModal: React.FC<CouponModalProps> = ({
   visible,
   onClose,
@@ -41,6 +51,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
   const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [applyingCode, setApplyingCode] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successModalData, setSuccessModalData] = useState<{
     code: string;
     type: string;
@@ -52,6 +63,9 @@ const CouponModal: React.FC<CouponModalProps> = ({
   useEffect(() => {
     if (visible) {
       setSuccessModalData(null);
+      setErrorMessage(null);
+      setInputCode("");
+      setApplyingCode(null);
       fetchCoupons();
     }
   }, [visible]);
@@ -99,15 +113,12 @@ const CouponModal: React.FC<CouponModalProps> = ({
     return true;
   };
 
+  const isPickup = deliveryMethod?.toLowerCase() === "pickup";
+
   const displayedCoupons = React.useMemo(() => {
     return coupons.filter((item) => {
       if (!isValidCoupon(item)) return false;
-      const isFreeDelivery =
-        item.type === "Free Delivery" ||
-        item.type === "Free Delivary" ||
-        (item.type?.toLowerCase().includes("free") &&
-          item.type?.toLowerCase().includes("deliv"));
-      if (deliveryMethod?.toLowerCase() === "pickup" && isFreeDelivery) {
+      if (isPickup && isFreeDeliveryType(item.type)) {
         return false;
       }
       return true;
@@ -115,8 +126,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
   }, [coupons, deliveryMethod]);
 
   const getCouponDescription = (item: CouponItem) => {
-    const isFreeDel =
-      item.type === "Free Delivery" || item.type === "Free Delivary";
+    const isFreeDel = isFreeDeliveryType(item.type);
     const hasLimit = item.checkLimit === 1 && item.priceLimit;
 
     if (item.type === "Percentage") {
@@ -145,11 +155,25 @@ const CouponModal: React.FC<CouponModalProps> = ({
   const handleApply = async (codeToApply: string) => {
     const trimmed = codeToApply.trim();
     if (!trimmed) {
-      Alert.alert("Coupon Required", "Please enter a valid coupon code.");
+      setErrorMessage("Please enter a valid coupon code.");
       return;
     }
 
+    // Client-side guard: free delivery coupons can't be used for pickup orders
+    if (isPickup) {
+      const match = coupons.find(
+        (c) => c.code?.toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (match && isFreeDeliveryType(match.type)) {
+        setErrorMessage(
+          "Free delivery coupons are not applicable for pickup orders.",
+        );
+        return;
+      }
+    }
+
     try {
+      setErrorMessage(null);
       setApplyingCode(trimmed);
       const res = await orderService.checkCoupon({
         coupon: trimmed,
@@ -161,8 +185,15 @@ const CouponModal: React.FC<CouponModalProps> = ({
       if (res.data && res.data.status) {
         const discountVal = parseFloat(res.data.discount) || 0;
         const couponType = res.data.type || "";
-        const isFreeDelivery =
-          couponType === "Free Delivery" || couponType === "Free Delivary";
+        const isFreeDelivery = isFreeDeliveryType(couponType);
+
+        // Safety net: backend accepted a free-delivery coupon on a pickup order
+        if (isPickup && isFreeDelivery) {
+          setErrorMessage(
+            "Free delivery coupons are not applicable for pickup orders.",
+          );
+          return;
+        }
 
         setSuccessModalData({
           code: res.data.code || trimmed,
@@ -172,18 +203,15 @@ const CouponModal: React.FC<CouponModalProps> = ({
           message: res.data.message || "Coupon is valid.",
         });
       } else {
-        Alert.alert(
-          "Coupon Error",
-          res.data?.message || "Invalid coupon code.",
-        );
+        setErrorMessage(res.data?.message || "Invalid coupon code.");
       }
     } catch (error: any) {
       console.log("Error applying coupon:", error);
-      const msg =
+      setErrorMessage(
         error?.response?.data?.message ||
-        error?.message ||
-        "Failed to apply coupon. Please check the code and try again.";
-      Alert.alert("Cannot Apply Coupon", msg);
+          error?.message ||
+          "Failed to apply coupon. Please check the code and try again.",
+      );
     } finally {
       setApplyingCode(null);
     }
@@ -299,7 +327,6 @@ const CouponModal: React.FC<CouponModalProps> = ({
                 {successModalData.message}
               </Text>
 
-              {/* Exact Card Design with Correct Color from Mockup */}
               <AppliedCouponCard
                 code={successModalData.code}
                 type={successModalData.type}
@@ -386,13 +413,13 @@ const CouponModal: React.FC<CouponModalProps> = ({
                 </Text>
               </View>
 
-              {/* Input Field - Styled same as Edit Address "Save Address As" field */}
+              {/* Input Field */}
               <View
                 style={{
                   height: 67,
                   borderRadius: 40,
                   borderWidth: 1,
-                  borderColor: "#D9DEE5",
+                  borderColor: errorMessage ? "#DC2626" : "#D9DEE5",
                   backgroundColor: "#FFFFFF",
                   flexDirection: "row",
                   alignItems: "center",
@@ -444,7 +471,10 @@ const CouponModal: React.FC<CouponModalProps> = ({
                     placeholder="Type Here"
                     placeholderTextColor="#9CA3AF"
                     value={inputCode}
-                    onChangeText={setInputCode}
+                    onChangeText={(text) => {
+                      setInputCode(text);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
                     autoCapitalize="characters"
                     autoCorrect={false}
                   />
@@ -452,13 +482,49 @@ const CouponModal: React.FC<CouponModalProps> = ({
 
                 {Boolean(inputCode) ? (
                   <TouchableOpacity
-                    onPress={() => setInputCode("")}
+                    onPress={() => {
+                      setInputCode("");
+                      setErrorMessage(null);
+                    }}
                     style={{ padding: 6, marginRight: 4 }}
                   >
                     <Ionicons name="close-circle" size={18} color="#9CA3AF" />
                   </TouchableOpacity>
                 ) : null}
               </View>
+
+              {/* Inline Error Banner (replaces Alert, which fails on iOS inside a Modal) */}
+              {errorMessage ? (
+                <View
+                  style={{
+                    marginTop: 10,
+                    backgroundColor: "#FDE8E8",
+                    borderRadius: 16,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="information-circle"
+                    size={18}
+                    color="#991B1B"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 12.5,
+                      color: "#991B1B",
+                      fontWeight: "500",
+                      lineHeight: 17,
+                    }}
+                  >
+                    {errorMessage}
+                  </Text>
+                </View>
+              ) : null}
 
               {/* Apply Coupon Button */}
               <TouchableOpacity
@@ -482,7 +548,8 @@ const CouponModal: React.FC<CouponModalProps> = ({
                   elevation: 3,
                 }}
               >
-                {applyingCode === inputCode.trim() ? (
+                {applyingCode !== null &&
+                applyingCode === inputCode.trim() ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <Text
@@ -526,6 +593,7 @@ const CouponModal: React.FC<CouponModalProps> = ({
               {/* Available Offers List */}
               <ScrollView
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
                 style={{ maxHeight: 260 }}
               >
                 {loadingCoupons ? (

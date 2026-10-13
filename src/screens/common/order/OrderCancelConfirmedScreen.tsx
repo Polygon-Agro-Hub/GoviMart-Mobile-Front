@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   Text,
@@ -7,9 +13,7 @@ import {
   Image,
   ScrollView,
   TextInput,
-  KeyboardAvoidingView,
   Keyboard,
-  Platform,
   Alert,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
@@ -48,6 +52,10 @@ type AlaCarteItem = {
 /* ---------------------------------------------------------
    Helpers
 --------------------------------------------------------- */
+
+// Space (px) kept between the confirm box and the visible bottom area
+// (this leaves room for the fixed "Cancel Order" button).
+const EXTRA_SPACE = 100;
 
 // Package price = (productPrice | unitPrice) + packingFee + serviceFee
 const getPackageUnitPrice = (pkg: PackageItem): number =>
@@ -107,29 +115,74 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  // Keyboard / scroll refs
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardOpenRef = useRef(false);
+  const confirmWrapRef = useRef<View>(null);
+  const scrollWrapRef = useRef<View>(null);
+
+  // Scroll only as much as needed so the confirm box sits just above the
+  // fixed bottom button (not at the top of the screen).
+  const ensureVisible = useCallback(() => {
+    // The scroll area's bottom edge = top of the keyboard, because the
+    // whole content area is lifted by `keyboardHeight`.
+    scrollWrapRef.current?.measureInWindow((_sx, sy, _sw, sh) => {
+      const areaBottom = sy + sh;
+      confirmWrapRef.current?.measureInWindow((_x, y, _w, h) => {
+        const limit = areaBottom - EXTRA_SPACE;
+        const overflow = y + h - limit;
+        if (overflow > 0) {
+          scrollRef.current?.scrollTo({
+            y: scrollYRef.current + overflow,
+            animated: true,
+          });
+        }
+      });
+    });
+  }, []);
+
+  // Track keyboard height
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSub = Keyboard.addListener(showEvent, () =>
-      setKeyboardVisible(true),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () =>
-      setKeyboardVisible(false),
-    );
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardOpenRef.current = true;
+      setKeyboardVisible(true);
+      // Measure how much the keyboard REALLY covers the screen. If Android already
+      // resized the window, the overlap is 0 and no extra padding is added
+      // (this prevents the long white space).
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+      // wait for the layout to shrink, then scroll
+      setTimeout(ensureVisible, 300);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardOpenRef.current = false;
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
+  }, [ensureVisible]);
 
   const isConfirmed = useMemo(
     () => confirmText.trim().toUpperCase() === "CANCEL",
     [confirmText],
+  );
+
+  // Total package count = sum of quantities (e.g. 2 + 1 = 3)
+  const packagesCount = packages.reduce(
+    (sum, p) => sum + (Number(p.qty) || 0),
+    0,
   );
 
   const packagesTotal = packages.reduce(
@@ -157,28 +210,43 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const method = (paymentMethod || "").toLowerCase();
 
-  const totalPaidCredit =
-    passedTotalPaidCredit !== undefined ? passedTotalPaidCredit : 0;
+  // Credit can never exceed the order total
+  const totalPaidCredit = Math.min(
+    Number(passedTotalPaidCredit ?? 0),
+    processOrderTotal,
+  );
 
-  const totalPaidCard =
-    passedTotalPaidCard !== undefined
-      ? passedTotalPaidCard
+  // Amount left after credit has been applied
+  const remainingAfterCredit = Math.max(0, processOrderTotal - totalPaidCredit);
+
+  // Fully covered by credit -> no card / cash line at all
+  const isFullyPaidByCredit =
+    processOrderTotal > 0 && remainingAfterCredit === 0;
+
+  const totalPaidCard = isFullyPaidByCredit
+    ? 0
+    : passedTotalPaidCard !== undefined
+      ? Math.min(Number(passedTotalPaidCard), remainingAfterCredit)
       : method === "card"
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
+        ? remainingAfterCredit
         : 0;
 
-  const totalCashDue =
-    passedTotalCashDue !== undefined
-      ? passedTotalCashDue
+  const totalCashDue = isFullyPaidByCredit
+    ? 0
+    : passedTotalCashDue !== undefined
+      ? Math.min(Number(passedTotalCashDue), remainingAfterCredit)
       : method.includes("cash") || method === "cod"
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
+        ? remainingAfterCredit
         : 0;
 
-  // Cash is not paid yet, so only card + credit get refunded as credit
-  const refundCreditAmount =
+  // Cash isn't paid yet, so only card + credit are refunded as credit.
+  // Capped so it can never exceed the order total.
+  const refundCreditAmount = Math.min(
     passedRefundCreditAmount !== undefined
-      ? passedRefundCreditAmount
-      : totalPaidCard + totalPaidCredit;
+      ? Number(passedRefundCreditAmount)
+      : totalPaidCard + totalPaidCredit,
+    processOrderTotal,
+  );
 
   const onCancelOrder = async () => {
     if (!isConfirmed || loading) return;
@@ -217,6 +285,14 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+  // 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
+  const formatPrice = (value: number | string | null | undefined): string => {
+    const num = Number(value ?? 0);
+    if (!isFinite(num)) return "0.00";
+    const [intPart, decPart] = num.toFixed(2).split(".");
+    return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decPart}`;
+  };
+
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
@@ -235,207 +311,225 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
         </Text>
       </View>
 
-      <KeyboardAvoidingView
+    
+      <View
+        ref={rootRef}
+        collapsable={false}
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={20}
+        style={{ paddingBottom: keyboardHeight }}
       >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 16 }}
-        >
-          {/* Warning banner */}
-          <View className="mx-5 mt-2 bg-[#FDECEC] rounded-2xl p-4 flex-row">
-            <Ionicons
-              name="warning"
-              size={18}
-              color="#E11D48"
-              style={{ marginTop: 2 }}
-            />
-            <View className="ml-3 flex-1">
-              <Text className="text-[14px] font-bold text-[#E11D48]">
-                You are about to cancel this order.
-              </Text>
-              <Text className="text-[13px] text-[#E11D48] mt-0.5">
-                {refundCreditAmount > 0
-                  ? "This order has been paid. Refund will be converted to your credit balance."
-                  : "This order will be cancelled immediately."}
-              </Text>
+        <View className="flex-1" ref={scrollWrapRef} collapsable={false}>
+          <ScrollView
+            ref={scrollRef}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 16 }}
+            onScroll={(e) => {
+              scrollYRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+          >
+            {/* Warning banner */}
+            <View className="mx-5 mt-2 bg-[#FDECEC] rounded-2xl p-4 flex-row">
+              <Ionicons
+                name="warning"
+                size={18}
+                color="#E11D48"
+                style={{ marginTop: 2 }}
+              />
+              <View className="ml-3 flex-1">
+                <Text className="text-[14px] font-bold text-[#E11D48]">
+                  You are about to cancel this order.
+                </Text>
+                <Text className="text-[13px] text-[#E11D48] mt-0.5">
+                  {refundCreditAmount > 0
+                    ? "This order has been paid. Refund will be converted to your credit balance."
+                    : "This order will be cancelled immediately."}
+                </Text>
+              </View>
             </View>
-          </View>
 
-          {/* Packages */}
-          {packages.length > 0 && (
-            <SectionCard
-              title={`Packages (${String(packages.length).padStart(2, "0")})`}
-            >
-              {packages.map((pkg, idx) => {
-                const unitPrice = getPackageUnitPrice(pkg);
-                return (
-                  <View key={pkg.id}>
+            {/* Packages */}
+            {packages.length > 0 && (
+              <SectionCard
+                title={`Packages (${String(packagesCount).padStart(2, "0")})`}
+              >
+                {packages.map((pkg, idx) => {
+                  const unitPrice = getPackageUnitPrice(pkg);
+                  return (
+                    <View key={pkg.id}>
+                      {idx > 0 && (
+                        <View className="h-[1px] bg-[#ECECEC] my-3" />
+                      )}
+                      <View className="flex-row items-center pb-3">
+                        <ItemAvatar icon={pkg.icon} image={pkg.image} />
+                        <View className="ml-3">
+                          <Text className="text-[15px] font-bold text-black">
+                            {pkg.name}{" "}
+                            <Text className="text-[13px] font-normal text-[#8A8A8A]">
+                              (x{pkg.qty})
+                            </Text>
+                          </Text>
+                          <Text className="text-[13px] text-black mt-0.5">
+                            Rs. {formatPrice(unitPrice)}
+                            {pkg.qty > 1
+                              ? ` x ${pkg.qty} = Rs. ${formatPrice(unitPrice * pkg.qty)}`
+                              : ""}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </SectionCard>
+            )}
+
+            {/* Ala Carte Items */}
+            {alaCarteItems.length > 0 && (
+              <SectionCard
+                title={`Ala Carte Items (${String(alaCarteItems.length).padStart(
+                  2,
+                  "0",
+                )})`}
+              >
+                {alaCarteItems.map((item, idx) => (
+                  <View key={item.id}>
                     {idx > 0 && <View className="h-[1px] bg-[#ECECEC] my-3" />}
                     <View className="flex-row items-center pb-3">
-                      <ItemAvatar icon={pkg.icon} image={pkg.image} />
+                      <ItemAvatar icon={item.icon} image={item.image} />
                       <View className="ml-3">
                         <Text className="text-[15px] font-bold text-black">
-                          {pkg.name}{" "}
-                          <Text className="text-[13px] font-normal text-[#8A8A8A]">
-                            (x{pkg.qty})
+                          {item.name}
+                        </Text>
+                        <Text className="text-[13px] text-[#8A8A8A] mt-0.5">
+                          {item.weight}
+                        </Text>
+                        <View className="flex-row items-center mt-0.5">
+                          <Text className="text-[13px] font-bold text-black">
+                            Rs. {formatPrice(item.price)}
                           </Text>
-                        </Text>
-                        <Text className="text-[13px] text-black mt-0.5">
-                          Rs. {unitPrice.toFixed(2)}
-                          {pkg.qty > 1
-                            ? ` x ${pkg.qty} = Rs. ${(
-                                unitPrice * pkg.qty
-                              ).toFixed(2)}`
-                            : ""}
-                        </Text>
+                          {item.originalPrice != null &&
+                            item.originalPrice > item.price + 0.001 && (
+                              <Text className="text-[12px] text-[#B0B0B0] line-through ml-2">
+                                Rs. {formatPrice(item.originalPrice)}
+                              </Text>
+                            )}
+                        </View>
                       </View>
                     </View>
                   </View>
-                );
-              })}
-            </SectionCard>
-          )}
+                ))}
+              </SectionCard>
+            )}
 
-          {/* Ala Carte Items */}
-          {alaCarteItems.length > 0 && (
-            <SectionCard
-              title={`Ala Carte Items (${String(alaCarteItems.length).padStart(
-                2,
-                "0",
-              )})`}
-            >
-              {alaCarteItems.map((item, idx) => (
-                <View key={item.id}>
-                  {idx > 0 && <View className="h-[1px] bg-[#ECECEC] my-3" />}
-                  <View className="flex-row items-center pb-3">
-                    <ItemAvatar icon={item.icon} image={item.image} />
-                    <View className="ml-3">
-                      <Text className="text-[15px] font-bold text-black">
-                        {item.name}
-                      </Text>
-                      <Text className="text-[13px] text-[#8A8A8A] mt-0.5">
-                        {item.weight}
-                      </Text>
-                      <View className="flex-row items-center mt-0.5">
-                        <Text className="text-[13px] font-bold text-black">
-                          Rs. {item.price.toFixed(2)}
-                        </Text>
-                        {item.originalPrice && (
-                          <Text className="text-[12px] text-[#B0B0B0] line-through ml-2">
-                            Rs. {item.originalPrice.toFixed(2)}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </View>
+            {/* Totals Summary */}
+            <View className="mx-5 mt-6 border border-[#EEEEEE] rounded-2xl p-4 bg-white">
+              <Text className="text-[14px] font-bold text-black mb-3">
+                Payment Summary
+              </Text>
+
+              {/* Total Paid with Card (if any) */}
+              {totalPaidCard > 0 && (
+                <View className="flex-row justify-between pb-2.5">
+                  <Text className="text-[14px] text-[#4A4A4A]">
+                    Total Paid with Card
+                  </Text>
+                  <Text className="text-[14px] font-semibold text-black">
+                    Rs. {formatPrice(totalPaidCard)}
+                  </Text>
                 </View>
-              ))}
-            </SectionCard>
-          )}
+              )}
 
-          {/* Totals Summary */}
-          <View className="mx-5 mt-6 border border-[#EEEEEE] rounded-2xl p-4 bg-white">
-            <Text className="text-[14px] font-bold text-black mb-3">
-              Payment Summary
-            </Text>
+              {/* Total Paid with Credit (if any) */}
+              {totalPaidCredit > 0 && (
+                <View className="flex-row justify-between pb-2.5">
+                  <Text className="text-[14px] text-[#4A4A4A]">
+                    Total Paid with Credit
+                  </Text>
+                  <Text className="text-[14px] font-semibold text-black">
+                    Rs. {formatPrice(totalPaidCredit)}
+                  </Text>
+                </View>
+              )}
 
-            {/* Total Paid with Card (if any) */}
-            {totalPaidCard > 0 && (
-              <View className="flex-row justify-between pb-2.5">
-                <Text className="text-[14px] text-[#4A4A4A]">
-                  Total Paid with Card
-                </Text>
-                <Text className="text-[14px] font-semibold text-black">
-                  Rs. {totalPaidCard.toFixed(2)}
-                </Text>
-              </View>
-            )}
+              {/* Total Cash Due (if any) */}
+              {totalCashDue > 0 && (
+                <View className="flex-row justify-between pb-2.5">
+                  <Text className="text-[14px] text-[#000000]">
+                    Total Cash Due
+                  </Text>
+                  <Text className="text-[14px] font-semibold text-[#000000]">
+                    Rs. {formatPrice(totalCashDue)}
+                  </Text>
+                </View>
+              )}
 
-            {/* Total Paid with Credit (if any) */}
-            {totalPaidCredit > 0 && (
-              <View className="flex-row justify-between pb-2.5">
-                <Text className="text-[14px] text-[#4A4A4A]">
-                  Total Paid with Credit
-                </Text>
-                <Text className="text-[14px] font-semibold text-black">
-                  Rs. {totalPaidCredit.toFixed(2)}
-                </Text>
-              </View>
-            )}
+              <View className="h-[1px] bg-[#ECECEC] my-1" />
 
-            {/* Total Cash Due (if any) */}
-            {totalCashDue > 0 && (
-              <View className="flex-row justify-between pb-2.5">
-                <Text className="text-[14px] text-[#000000]">
-                  Total Cash Due
-                </Text>
-                <Text className="text-[14px] font-semibold text-[#000000]">
-                  Rs. {totalCashDue.toFixed(2)}
-                </Text>
-              </View>
-            )}
-
-            <View className="h-[1px] bg-[#ECECEC] my-1" />
-
-            {/* Grand Total */}
-            <View className="flex-row justify-between pt-2">
-              <Text className="text-[15px] font-bold text-black">Total</Text>
-              <Text className="text-[16px] font-bold text-black">
-                Rs. {processOrderTotal.toFixed(2)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Credit info component */}
-          {refundCreditAmount > 0 && (
-            <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
-              <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
-                <Ionicons name="wallet" size={22} color="#fff" />
-              </View>
-              <Text className="text-[15px] font-bold text-[#15803D] mt-3 text-center">
-                Amount will be credited to your credit balance
-              </Text>
-              <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
-                After canceling, the full converted amount of{" "}
-                <Text className="font-bold text-[#15803D]">
-                  Rs. {refundCreditAmount.toFixed(2)}
-                </Text>{" "}
-                will be added to your credit balance. You can use it for your
-                next purchase.
-              </Text>
-            </View>
-          )}
-
-          {/* Confirm input */}
-          <View className="mx-5 mt-6 border border-black rounded-2xl p-4">
-            <View className="flex-row">
-              <FontAwesome6 name="lock" size={20} color="#000" />
-              <View className="ml-2 flex-1">
-                <Text className="text-[14px] font-bold text-black">
-                  To cancel this order
-                </Text>
-                <Text className="text-[13px] text-[#8A8A8A] mt-0.5">
-                  Type <Text className="font-bold text-black">"CANCEL"</Text> in
-                  the box below to confirm.
+              {/* Grand Total */}
+              <View className="flex-row justify-between pt-2">
+                <Text className="text-[15px] font-bold text-black">Total</Text>
+                <Text className="text-[16px] font-bold text-black">
+                  Rs. {formatPrice(processOrderTotal)}
                 </Text>
               </View>
             </View>
 
-            <TextInput
-              value={confirmText}
-              onChangeText={setConfirmText}
-              placeholder="Type “CANCEL”"
-              placeholderTextColor="#B0B0B0"
-              autoCapitalize="characters"
-              autoCorrect={false}
-              className="mt-4 border rounded-full px-4 py-3 text-[14px] text-center font-semibold border-[#E11D48] text-black"
-            />
-          </View>
-        </ScrollView>
+            {/* Credit info component */}
+            {refundCreditAmount > 0 && (
+              <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
+                <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
+                  <Ionicons name="wallet" size={22} color="#fff" />
+                </View>
+                <Text className="text-[15px] font-bold text-[#15803D] mt-3 text-center">
+                  Amount will be credited to your credit balance
+                </Text>
+                <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
+                  After canceling, the full converted amount of{" "}
+                  <Text className="font-bold text-[#15803D]">
+                    Rs. {formatPrice(refundCreditAmount)}
+                  </Text>{" "}
+                  will be added to your credit balance. You can use it for your
+                  next purchase.
+                </Text>
+              </View>
+            )}
+
+            {/* Confirm input */}
+            <View
+              className="mx-5 mt-6 border border-black rounded-2xl p-4"
+              ref={confirmWrapRef}
+              collapsable={false}
+            >
+              <View className="flex-row">
+                <FontAwesome6 name="lock" size={20} color="#000" />
+                <View className="ml-2 flex-1">
+                  <Text className="text-[14px] font-bold text-black">
+                    To cancel this order
+                  </Text>
+                  <Text className="text-[13px] text-[#8A8A8A] mt-0.5">
+                    Type <Text className="font-bold text-black">"CANCEL"</Text>{" "}
+                    in the box below to confirm.
+                  </Text>
+                </View>
+              </View>
+
+              <TextInput
+                value={confirmText}
+                onChangeText={setConfirmText}
+                placeholder="Type “CANCEL”"
+                placeholderTextColor="#B0B0B0"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                className="mt-4 border rounded-full px-4 py-3 text-[14px] text-center font-semibold border-[#E11D48] text-black"
+                onFocus={() => {
+                  // if keyboard is already open, adjust now
+                  if (keyboardOpenRef.current) setTimeout(ensureVisible, 150);
+                }}
+              />
+            </View>
+          </ScrollView>
+        </View>
 
         {/* Fixed bottom action */}
         <View
@@ -447,7 +541,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             onPress={onCancelOrder}
             disabled={!isConfirmed || loading}
             activeOpacity={0.85}
-          className={`rounded-full py-4 items-center ${
+            className={`rounded-full py-4 items-center ${
               isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
             style={{
@@ -463,7 +557,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 };

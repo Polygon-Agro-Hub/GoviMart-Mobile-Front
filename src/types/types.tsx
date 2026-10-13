@@ -25,6 +25,8 @@ export interface CheckoutDetails {
   // Schedule fields
   scheduleType?: string;
   deliveryDate?: string;
+  earliestDeliveryDate?: string | null;
+  hasPackageUnavailableOnEarliest?: boolean;
   timeSlot?: string;
   recurringDays?: string[];
   validityWeeks?: string;
@@ -44,6 +46,8 @@ export interface OrderContext {
   packageTotal: number;
   productTotal: number;
   discount: number;
+  packages?: any[];
+  additionalItems?: any[];
   deliveryCharge?: number;
   isFinalizeImdt?: number;
   deliveryMethod?: "home" | "pickup";
@@ -115,6 +119,8 @@ export type RootStackParamList = {
     packageName: string;
     image: string;
     price: number;
+    packageType?: string;
+    endDate?: string;
   };
   MyCart: undefined;
   PackageConfirmation: { orderContext?: OrderContext } | undefined;
@@ -126,6 +132,8 @@ export type RootStackParamList = {
   ViewComplaint: { id: number } | undefined;
   MyAccount: undefined;
   DeleteAccount: undefined;
+  SavedCards: undefined;
+  SaveCardInfo: undefined;
   Notification: undefined;
   CheckoutScreen: { orderContext: OrderContext };
   ScheduleOrder: { orderContext: OrderContext };
@@ -134,6 +142,7 @@ export type RootStackParamList = {
   OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
   OrderConfirmed: {
     orderId?: string | number;
+    processOrderId?: string | number;
     invoiceNumber?: string;
     total?: number;
     couponValue?: number;
@@ -146,9 +155,47 @@ export type RootStackParamList = {
   ChoosePickupCentre: { orderContext?: OrderContext } | undefined;
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
+  ConfirmOrderDetailsScreen:{ orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
-  ReviewPackage: { orderId?: string | number; invoiceNo?: string; replacedProduct?: any; targetStepIndex?: number; newScheduleDate?: string; } | undefined;
+  OrderConfirmation: { orderId: string } | undefined;
+ ReviewPackage: {
+  orderId?: number | string;
+  invoiceNo?: string;
+  targetStepIndex?: number;
+  replacedProduct?: any;
+  newScheduleDate?: string;
+  refreshKey?: number; // set ONLY by the Notification tab
+};
  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
+
+  OrderConfirmedOrderCancelScreen: {
+    orderId?: string | number;
+    processOrderId?: string | number;
+    packages?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      qty: number;
+      unitPrice: number;
+    }>;
+    alaCarteItems?: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      image?: string;
+      weight: string;
+      price: number;
+      originalPrice?: number;
+    }>;
+    totalPaid?: number;
+    totalPaidCard?: number;
+    totalPaidCredit?: number;
+    totalCashDue?: number;
+    processOrderTotal?: number;
+    paymentMethod?: string;
+    refundCreditAmount?: number;
+  } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;
     processOrderId?: string | number;
@@ -189,6 +236,8 @@ export interface PackageType {
   subTotal: string;
   image: string;
   totalItems?: number;
+  packageType?: string;
+  endDate?: string;
 }
 
 export interface ProductType {
@@ -275,10 +324,14 @@ export interface UpdateUserDetailsPayload {
   title?: string;
   firstName?: string;
   lastName?: string;
+  phoneCode?: string;
+  phoneNumber?: string;
   email?: string;
   companyName?: string;
   companyPhoneCode?: string;
+  companyPhone?: string;
   companyPhoneNumber?: string;
+  image?: string | null;
 }
 
 export interface AddressPayload {

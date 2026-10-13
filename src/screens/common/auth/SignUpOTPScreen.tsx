@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
   Platform,
   Image,
   Alert,
@@ -18,10 +17,14 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
+import socketService from "@/services/socket/socket.service";
+import cartService from "@/services/cart/cart.service";
+import { useDispatch } from "react-redux";
+import { loginSuccess } from "@/store/authSlice";
+import { setCartFromBackend } from "@/store/cartSlice";
 
 type SignUpOTPRouteProp = RouteProp<RootStackParamList, "SignUpOTP">;
 type SignUpOTPNavigationProp = StackNavigationProp<
@@ -37,28 +40,40 @@ interface SignUpOTPProps {
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
+// Space (px) to keep between the Verify button and the top of the keyboard.
+const VERIFY_EXTRA_SPACE = 16;
+
 export const getSignUpStorageKeys = (
   phoneCode?: string,
   phoneNumber?: string,
   email?: string,
+  method: "email" | "sms" = "sms",
 ): { lockoutKeys: string[]; attemptsKeys: string[] } => {
   const identifiers: string[] = [];
 
-  if (email && String(email).trim()) {
+  if (method === "email" && email && String(email).trim()) {
     const cleanEmail = String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
-    if (cleanEmail) identifiers.push(cleanEmail);
+    if (cleanEmail) identifiers.push(`email_${cleanEmail}`);
   }
 
-  if (phoneNumber && String(phoneNumber).trim()) {
+  if (method === "sms" && phoneNumber && String(phoneNumber).trim()) {
     const rawDigits = String(phoneNumber).trim().replace(/[^0-9]/g, "");
     const noZero = rawDigits.replace(/^0+/, "");
     const codeDigits = String(phoneCode || "94").replace(/[^0-9]/g, "");
 
     if (noZero) {
-      identifiers.push(`${codeDigits}${noZero}`);
-      identifiers.push(`${codeDigits}${rawDigits}`);
-      identifiers.push(noZero);
-      identifiers.push(rawDigits);
+      identifiers.push(`sms_${codeDigits}${noZero}`);
+      identifiers.push(`sms_${codeDigits}${rawDigits}`);
+      identifiers.push(`sms_${noZero}`);
+      identifiers.push(`sms_${rawDigits}`);
+    }
+  }
+
+  if (identifiers.length === 0) {
+    if (email) {
+      identifiers.push(`email_${String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "")}`);
+    } else if (phoneNumber) {
+      identifiers.push(`sms_${String(phoneNumber).replace(/[^0-9]/g, "")}`);
     }
   }
 
@@ -99,11 +114,11 @@ const clearAttempts = async (key: string) => {
 };
 
 const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
-  const scrollViewRef = useRef<ScrollView>(null);
+  const dispatch = useDispatch();
   const phoneCode = route.params?.phoneCode || "+94";
   const phoneNumber = route.params?.phoneNumber || "771122300";
   const email = route.params?.email || "";
-  const method = route.params?.method || "sms";
+  const method = (route.params?.method as "email" | "sms") || "sms";
   const [referenceId, setReferenceId] = useState(
     route.params?.referenceId || "",
   );
@@ -118,8 +133,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     phoneCode,
     phoneNumber,
     email,
+    method,
   );
-  const primaryAttemptKey = attemptsKeys[0] || `@otp_attempts_${phoneNumber}`;
+  const primaryAttemptKey = attemptsKeys[0] || (method === "email" ? `@otp_attempts_email_${email}` : `@otp_attempts_sms_${phoneNumber}`);
 
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
@@ -130,6 +146,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [attemptsCount, setAttemptsCount] = useState<number>(1);
+  const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
   // Input Refs
   const ref_1 = useRef<TextInput>(null);
@@ -140,25 +159,59 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
 
-  // Track keyboard visibility (used to hide the bottom image)
+  // ---------- Keyboard / scroll handling ----------
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const verifyWrapRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardTopRef = useRef(0);
+
+  // Scroll only as much as needed so the Verify button sits just above
+  // the keyboard.
+  const ensureVisible = useCallback(() => {
+    verifyWrapRef.current?.measureInWindow((_x, y, _w, h) => {
+      const limit = keyboardTopRef.current - VERIFY_EXTRA_SPACE;
+      const overflow = y + h - limit;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: scrollYRef.current + overflow,
+          animated: true,
+        });
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const showListener = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardTopRef.current = e.endCoordinates.screenY;
+      setIsKeyboardVisible(true);
+
+      // Measure how much the keyboard REALLY covers the screen. If the OS
+      // already resized the window, the overlap is 0 and no extra padding
+      // is added.
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+
+      // wait for bottom padding to render, then scroll
+      setTimeout(ensureVisible, 300);
+    });
+
     const hideEvent =
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSub = Keyboard.addListener(showEvent, () =>
-      setIsKeyboardVisible(true),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () =>
-      setIsKeyboardVisible(false),
-    );
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
 
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showListener.remove();
+      hideListener.remove();
     };
-  }, []);
+  }, [ensureVisible]);
 
   // Check rate limit on initial mount and record first signup OTP attempt
   useEffect(() => {
@@ -211,17 +264,21 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }
 
-      // Record initial OTP send timestamp if not recently added
+      // Sync attempts count
       const attempts = await getRecentAttempts(primaryAttemptKey);
-      const lastAttempt = attempts[attempts.length - 1];
-      if (!lastAttempt || Date.now() - lastAttempt > 30000) {
+      if (attempts.length === 0) {
+        let currentCount = 1;
         for (const attKey of attemptsKeys) {
-          await saveAttempt(attKey);
+          const updated = await saveAttempt(attKey);
+          currentCount = updated.length;
         }
+        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
+      } else {
+        setAttemptsCount(Math.min(attempts.length, MAX_OTP_ATTEMPTS));
       }
     };
     checkInitialRateLimit();
-  }, [phoneCode, phoneNumber, email]);
+  }, [phoneCode, phoneNumber, email, method]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -383,11 +440,102 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           for (const key of attemptsKeys) {
             await clearAttempts(key);
           }
-          Alert.alert(
-            "Registration Successful",
-            "Your Polygon account created successfully.",
-            [{ text: "OK", onPress: () => navigation.navigate("Login") }],
-          );
+
+          const userData = response.data.data;
+          const token = userData?.token;
+
+          if (token && userData) {
+            dispatch(
+              loginSuccess({
+                token: token,
+                userProfile: userData,
+                loginTime: Date.now(),
+              })
+            );
+            await AsyncStorage.setItem("userToken", token);
+            await AsyncStorage.setItem("userProfile", JSON.stringify(userData));
+            await AsyncStorage.setItem("loginTime", String(Date.now()));
+
+            if (userData.id) {
+              socketService.registerUser(userData.id, token);
+            }
+
+            try {
+              const cartRes = await cartService.getUserCart();
+              if (cartRes.data && cartRes.data.status && cartRes.data.data) {
+                const dbProducts = cartRes.data.data.products || [];
+                const dbPackages = cartRes.data.data.packages || [];
+                dispatch(
+                  setCartFromBackend({
+                    products: dbProducts,
+                    packages: dbPackages,
+                    cartUserId: userData.id,
+                  })
+                );
+              }
+            } catch (cartErr) {
+              console.warn("Failed to load user cart on signup:", cartErr);
+            }
+
+            const isWholesale =
+              (userData.buyerType || "").toLowerCase() === "wholesale";
+
+            const targetScreen: keyof RootStackParamList = isWholesale
+              ? "Home"
+              : "ExcludeListAdd";
+            const targetParams = !isWholesale
+              ? {
+                  customerId: userData.id,
+                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+                  title: userData.title,
+                  number: userData.phoneNumber,
+                  cusId: userData.cusId,
+                }
+              : undefined;
+
+            Alert.alert(
+              "Registration Successful",
+              "Your Polygon account created successfully.",
+              [
+                {
+                  text: "OK",
+                  onPress: async () => {
+                    try {
+                      const hasAsked = await AsyncStorage.getItem(
+                        "hasAskedNotificationPermission"
+                      );
+
+                      if (hasAsked !== "true") {
+                        navigation.navigate("NotificationAccess", {
+                          returnScreen: targetScreen,
+                          returnParams: targetParams,
+                          blockBackNavigation: true,
+                        });
+                        return;
+                      }
+                    } catch (err) {
+                      console.warn(
+                        "Error reading notification permission flag:",
+                        err
+                      );
+                    }
+
+                    if (targetParams) {
+                      navigation.navigate(targetScreen as any, targetParams);
+                    } else {
+                      navigation.navigate(targetScreen as any);
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert(
+              "Registration Successful",
+              "Your Polygon account created successfully.",
+              [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+            );
+          }
         } else {
           const is429 = response.data?.isRateLimited;
           const msg = response.data?.message || "Failed to verify the code.";
@@ -500,6 +648,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const updated = await saveAttempt(key);
             updatedLength = updated.length;
           }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
           setReferenceId(response.data.referenceId);
           setSignupToken(response.data.signupToken);
 
@@ -513,15 +662,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setIsExpired(false);
             Alert.alert(
               "Code Resent",
-              "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
             );
           } else {
             setTimeLeft(240);
             setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              response.data.message ||
-              "A new 5-digit verification code has been sent.",
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
             );
           }
         } else {
@@ -557,6 +706,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const updated = await saveAttempt(key);
             updatedLength = updated.length;
           }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
           setReferenceId(response.data.referenceId);
           setSignupToken(response.data.signupToken);
 
@@ -570,15 +720,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setIsExpired(false);
             Alert.alert(
               "Code Resent",
-              "A new 5-digit verification code has been sent. You have reached the maximum 5 attempts. Next attempt will be available after 15 minutes.",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
             );
           } else {
             setTimeLeft(240);
             setIsExpired(false);
+            const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              response.data.message ||
-              "A new 5-digit verification code has been sent.",
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
             );
           }
         } else {
@@ -631,11 +781,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1"
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={20}
-    >
+    <View ref={rootRef} collapsable={false} className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
 
       {/* Custom Header with Logo instead of Title */}
@@ -646,18 +792,25 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       />
 
       <ScrollView
-        ref={scrollViewRef}
+        ref={scrollRef}
+        className="flex-1 bg-white"
         contentContainerStyle={{
           flexGrow: 1,
-          justifyContent: "center",
-          paddingBottom: isKeyboardVisible ? 20 : 120,
+          justifyContent: "space-between",
+          // Manually lift content above the keyboard (works on iOS and
+          // Android, including edge-to-edge production builds).
+          paddingBottom: keyboardHeight,
         }}
-        className="flex-1 px-4 bg-white"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
-        {/* Verification Content Centered Vertically */}
-        <View className="w-full py-8">
+        {/* Verification Content */}
+        <View className="w-full px-4 py-8 justify-center">
           <Text className="text-2xl font-bold text-black text-center mb-4">
             {method === "email"
               ? "Verify your email address"
@@ -801,39 +954,38 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             )}
           </View>
         </View>
-      </ScrollView>
 
-      {/* Action Buttons */}
-      <View
-        className="px-6 pt-2 bg-white"
-        style={{ paddingBottom: isKeyboardVisible ? 12 : 0 }}
-      >
-        {/* Verify Button (Always shown) */}
-        <TouchableOpacity
-          onPress={handleVerify}
-          disabled={isVerifying || isResending}
-          activeOpacity={0.8}
-          className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-        >
-          <Text className="text-white text-base font-bold">
-            {isVerifying ? "Verifying..." : "Verify"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Bottom image: hidden while the keyboard is open */}
-        {!isKeyboardVisible && (
+        {/* Action Buttons (inside the ScrollView so it scrolls above the keyboard) */}
+        <View className="bg-white">
           <View
-            className="h-14 mt-6"
-            style={{ marginLeft: -16, marginRight: -16 }}
+            ref={verifyWrapRef}
+            collapsable={false}
+            className="px-6 pt-2 pb-3"
           >
-            <Image
-              source={require("@/assets/images/auth/bottom-line.webp")}
-              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-            />
+            <TouchableOpacity
+              onPress={handleVerify}
+              disabled={isVerifying || isResending}
+              activeOpacity={0.8}
+              className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+            >
+              <Text className="text-white text-base font-bold">
+                {isVerifying ? "Verifying..." : "Verify"}
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+
+          {/* Bottom image: hidden while the keyboard is open */}
+          {!isKeyboardVisible && (
+            <View className="h-14 mt-3 w-full">
+              <Image
+                source={require("@/assets/images/auth/bottom-line.webp")}
+                style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
+              />
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 

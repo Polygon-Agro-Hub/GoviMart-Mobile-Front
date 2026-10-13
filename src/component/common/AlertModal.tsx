@@ -1,13 +1,22 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, Modal, Animated, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  Text,
+  Modal,
+  Animated,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import LottieView from "lottie-react-native";
+
+export type AlertType = "success" | "error" | "warning";
 
 interface AlertModalProps {
   visible: boolean;
   title: string;
   message: string | React.ReactNode;
-  type?: "success" | "error";
+  type?: AlertType;
   onClose: () => void;
   showRescanButton?: boolean;
   onRescan?: () => void;
@@ -36,7 +45,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   okButtonText = "OK",
   onOkPress,
 }) => {
-  const isOkButtonVisible = showOkButton !== undefined ? showOkButton : !autoClose;
+  const isOkButtonVisible =
+    showOkButton !== undefined ? showOkButton : !autoClose;
   const loadingBarWidth = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -68,6 +78,19 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             style={{ width: 120, height: 120 }}
           />
         );
+      case "warning":
+        return (
+          <View
+            style={{
+              width: 120,
+              height: 120,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="warning" size={84} color="#FF9114" />
+          </View>
+        );
       case "error":
       default:
         return (
@@ -98,11 +121,17 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   };
 
   return (
-    <Modal 
-      visible={visible} 
-      transparent 
+    <Modal
+      visible={visible}
+      transparent
       animationType="fade"
-      supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']}
+      supportedOrientations={[
+        "portrait",
+        "portrait-upside-down",
+        "landscape",
+        "landscape-left",
+        "landscape-right",
+      ]}
     >
       <View className="flex-1 bg-black/50 justify-center items-center p-4">
         <View className="bg-white p-6 rounded-2xl items-center shadow-lg w-full max-w-md relative">
@@ -192,10 +221,10 @@ export const AlertModal: React.FC<AlertModalProps> = ({
 type AlertListener = (
   title: string,
   message: string | React.ReactNode,
-  type: "success" | "error",
+  type: AlertType,
   onClose: () => void,
   autoClose: boolean,
-  showOkButton?: boolean
+  showOkButton?: boolean,
 ) => void;
 
 let globalAlertListener: AlertListener | null = null;
@@ -219,8 +248,9 @@ Alert.alert = (title, message, buttons, options) => {
       lowerTitle.includes("sent") ||
       lowerTitle.includes("updated") ||
       lowerTitle.includes("created") ||
+      lowerTitle.includes("cancelled") ||
       lowerTitle.includes("completed");
-    const type = isSuccess ? "success" : "error";
+    const type: AlertType = isSuccess ? "success" : "error";
 
     const onCloseCallback = () => {
       if (buttons && buttons.length === 1 && buttons[0].onPress) {
@@ -235,7 +265,7 @@ Alert.alert = (title, message, buttons, options) => {
         type,
         onCloseCallback,
         isSuccess,
-        !isSuccess
+        !isSuccess,
       );
     } else {
       originalAlert(title, message, buttons, options);
@@ -247,21 +277,25 @@ export const GlobalAlert: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState<string | React.ReactNode>("");
-  const [type, setType] = useState<"success" | "error">("error");
+  const [type, setType] = useState<AlertType>("error");
   const [onCloseCallback, setOnCloseCallback] = useState<() => void>(() => {});
   const [autoClose, setAutoClose] = useState(true);
-  const [showOkButton, setShowOkButton] = useState<boolean | undefined>(undefined);
+  const [showOkButton, setShowOkButton] = useState<boolean | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
-    setGlobalAlertListener((title, message, type, onClose, autoClose, showOkButton) => {
-      setTitle(title);
-      setMessage(message);
-      setType(type);
-      setOnCloseCallback(() => onClose);
-      setAutoClose(autoClose);
-      setShowOkButton(showOkButton);
-      setVisible(true);
-    });
+    setGlobalAlertListener(
+      (title, message, type, onClose, autoClose, showOkButton) => {
+        setTitle(title);
+        setMessage(message);
+        setType(type);
+        setOnCloseCallback(() => onClose);
+        setAutoClose(autoClose);
+        setShowOkButton(showOkButton);
+        setVisible(true);
+      },
+    );
 
     return () => {
       setGlobalAlertListener(null);

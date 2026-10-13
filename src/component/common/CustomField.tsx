@@ -24,6 +24,8 @@ export const InputField = React.memo(({
     prefix,
     iconBgColor,
     iconColor,
+    circleSize = 36,
+    iconSize = 17,
     autoCapitalize,
     secureTextEntry,
 }: {
@@ -31,6 +33,8 @@ export const InputField = React.memo(({
     isIconThemeDark?: boolean;
     iconBgColor?: string;
     iconColor?: string;
+    circleSize?: number;
+    iconSize?: number;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
@@ -68,9 +72,9 @@ export const InputField = React.memo(({
 
                 <View
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 999,
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
                         backgroundColor: resolvedBgColor,
                         justifyContent: "center",
                         alignItems: "center",
@@ -79,7 +83,7 @@ export const InputField = React.memo(({
                     <FontAwesome6
                         name={icon}
                         solid
-                        size={17}
+                        size={iconSize}
                         color={resolvedIconColor}
                     />
                 </View>

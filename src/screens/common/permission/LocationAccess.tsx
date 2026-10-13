@@ -130,7 +130,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
           "Location access is required for this feature. Please enable it in settings.",
           [
             {
-              text: "Not Now",
+              text: "Cancel",
               style: "cancel",
               onPress: handleNotNowPress,
             },
@@ -148,7 +148,7 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
         "Unable to request location permission. Please try again.",
         [
           {
-            text: "Not Now",
+            text: "Cancel",
             onPress: handleNotNowPress,
           },
           { text: "OK" },
@@ -297,21 +297,12 @@ const LocationAccess: React.FC<LocationAccessProps> = ({
                     adjustsFontSizeToFit
                     className="text-white font-bold text-[15px]"
                   >
-                    {isLoading ? "Requesting..." : "Agree & Continue"}
+                    {isLoading ? "Requesting..." : "Continue"}
                   </Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleNotNowPress}
-              activeOpacity={0.7}
-              className="py-3 px-6 items-center justify-center"
-            >
-              <Text className="text-gray-400 font-semibold text-sm">
-                Not Now
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
