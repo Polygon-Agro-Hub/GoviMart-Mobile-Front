@@ -440,11 +440,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       });
     } catch (err: any) {
       console.error("[PaymentMethod] Order finalization error after payment:", err);
+      const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
       Alert.alert(
-        "Order Processing Issue",
-        err?.response?.data?.message ||
-          err?.message ||
-          "Payment was received, but there was an issue finalizing your order. Please contact customer support."
+        isTimeout ? "Order Processing Delay" : "Order Processing Issue",
+        isTimeout
+          ? "Payment was received, but order confirmation is taking longer than expected. Please check your Order History before retrying."
+          : err?.response?.data?.message ||
+            err?.message ||
+            "Payment was received, but there was an issue finalizing your order. Please contact customer support."
       );
     } finally {
       setSubmitting(false);
@@ -701,11 +704,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           }
         } catch (err: any) {
           console.error("[PaymentMethod] Future card order error:", err);
+          const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
           Alert.alert(
-            "Order Failed",
-            err?.response?.data?.message ||
-              err?.message ||
-              "Could not place your order. Please try again."
+            isTimeout ? "Order Processing Delay" : "Order Failed",
+            isTimeout
+              ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
+              : err?.response?.data?.message ||
+                err?.message ||
+                "Could not place your order. Please try again."
           );
         } finally {
           setSubmitting(false);
@@ -804,6 +810,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       console.error("Order error in PaymentMethodScreen:", errorMsg, errorData);
       if (errorData?.code === "ITEMS_UNAVAILABLE") {
         setUnavailableModalVisible(true);
+      } else if (error?.code === "ECONNABORTED" || error?.message?.includes("timeout")) {
+        Alert.alert(
+          "Order Processing Delay",
+          "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again.",
+        );
       } else {
         Alert.alert("Order Failed", errorMsg);
       }
@@ -1697,6 +1708,17 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               {paymentMethod === "card" && paymentAmount > 0 && isEarliestDeliveryDate()
                 ? "Processing payment..."
                 : "Confirming your order..."}
+            </Text>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                fontWeight: "400",
+                color: "#6B7280",
+                textAlign: "center",
+              }}
+            >
+              Please do not close the app.
             </Text>
           </View>
         </View>
