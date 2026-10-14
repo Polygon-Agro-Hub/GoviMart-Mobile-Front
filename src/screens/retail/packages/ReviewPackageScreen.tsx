@@ -346,7 +346,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [successInvoiceNo, setSuccessInvoiceNo] = useState<string>("");
-  const isConfirmedRef = useRef(false);
 
   // orderadditionalitems.normalPrice (line price BEFORE discount) per saved row.
   // key = redux ala carte item id (e.g. "prev-7073")
@@ -532,7 +531,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     setShowExitModal(false);
     setIsSubmitting(false);
     setShowSuccessOverlay(false);
-    isConfirmedRef.current = false;
     setUnavailablePackageIds({});
     setDisabledAlacartProductIds(new Set());
     setOriginalAlacartTotal(0);
@@ -547,9 +545,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const fetchReviewData = useCallback(
     async (force = false) => {
       if (buyerType && buyerType.toLowerCase() !== "retail") {
-        return;
-      }
-      if (isConfirmedRef.current) {
         return;
       }
       // Tag this request; only the latest one is allowed to write to Redux
@@ -599,15 +594,27 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             (Number(orderInfo.isFinalized) === 1 || orderInfo.isFinalized === true)
           ) {
             dispatch(setLoadingReview(false));
-            if (effectiveOrderId) {
-              navigation.replace("OrderDetails", {
-                orderId: String(effectiveOrderId),
-              });
-            } else if (navigation.canGoBack()) {
-              navigation.goBack();
-            } else {
-              navigation.replace("Home");
-            }
+            Alert.alert(
+              "Already Finalized!",
+              "You have already reviewed and finalized this order.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (effectiveOrderId) {
+                      navigation.replace("OrderDetails", {
+                        orderId: String(effectiveOrderId),
+                      });
+                    } else if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    } else {
+                      navigation.replace("Home");
+                    }
+                  },
+                },
+              ],
+              { cancelable: false },
+            );
             return;
           }
 
@@ -1901,7 +1908,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       const confirmedInv =
         invoiceNo || routeInvoiceNo || (effectiveOrderId ? `#${effectiveOrderId}` : "");
       setSuccessInvoiceNo(confirmedInv);
-      isConfirmedRef.current = true;
 
       // The order is saved. Wipe the review state so the NEXT order
       // (even one with the same package) never sees these edits.
@@ -1962,7 +1968,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       );
 
       // Wipe review state — same as the existing success path in goToNextStep
-      isConfirmedRef.current = true;
       loadedOrderIdRef.current = null;
       requestIdRef.current += 1;
       dispatch(clearReviewData());
