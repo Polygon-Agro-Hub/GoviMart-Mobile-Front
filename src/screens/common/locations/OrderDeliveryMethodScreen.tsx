@@ -42,10 +42,18 @@ const OrderDeliveryMethod: React.FC<Props> = ({ navigation, route }) => {
     };
 
     if (deliveryMethod === "pickup") {
+      const baseGrandTotal = Math.max(
+        0,
+        (currentContext.packageTotal || 0) +
+          (currentContext.productTotal || 0) -
+          (currentContext.discount || 0)
+      );
       navigation.navigate("ChoosePickupCentre", {
         orderContext: {
           ...currentContext,
           deliveryMethod: "pickup",
+          deliveryCharge: 0,
+          grandTotal: baseGrandTotal,
         },
       });
     } else {
