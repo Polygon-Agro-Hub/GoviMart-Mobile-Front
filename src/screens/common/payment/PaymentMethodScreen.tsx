@@ -132,7 +132,24 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
   const orderContext = route.params?.orderContext;
   const isNavigatingAwayRef = useRef(false);
+  const isOrderFinalizedRef = useRef(false);
+  const timerIntervalRef = useRef<any>(null);
+  const sessionExpiredTimeoutRef = useRef<any>(null);
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Helper to safely clear all timers and session state
+  const clearSessionTimers = useCallback(() => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (sessionExpiredTimeoutRef.current) {
+      clearTimeout(sessionExpiredTimeoutRef.current);
+      sessionExpiredTimeoutRef.current = null;
+    }
+    paymentSessionEndTime = null;
+  }, []);
 
   // ─── SAVED CARD & GATEWAY STATE ─────────────────────────────────────────
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
@@ -231,11 +248,26 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   };
 
   useEffect(() => {
+    // Reset finalized flag when entering screen
+    isOrderFinalizedRef.current = false;
+
     if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
       paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
     }
 
-    const interval = setInterval(() => {
+    timerIntervalRef.current = setInterval(() => {
+      // 1. If order is already completed, navigating away, or submitting, never expire session
+      if (isOrderFinalizedRef.current || isNavigatingAwayRef.current || submitting) {
+        return;
+      }
+
+      // 2. If Payments.lk checkout modal is currently active, pause/extend timer so customer is not interrupted
+      if (checkoutModalVisible) {
+        paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
+        setRemainingSeconds(300);
+        return;
+      }
+
       if (!paymentSessionEndTime) return;
       const diff = Math.max(
         0,
@@ -244,29 +276,39 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       setRemainingSeconds(diff);
 
       if (diff <= 0) {
-        clearInterval(interval);
-        paymentSessionEndTime = null;
+        clearSessionTimers();
         isNavigatingAwayRef.current = true;
 
+        setCheckoutModalVisible(false);
         setCouponModalVisible(false);
         setUnavailableModalVisible(false);
         setBackConfirmVisible(false);
+        pendingOrderPayloadRef.current = null;
+        setPendingOrderPayload(null);
 
-        setTimeout(() => {
+        sessionExpiredTimeoutRef.current = setTimeout(() => {
+          if (isOrderFinalizedRef.current) return;
           Alert.alert(
             "Session Expired",
             "Your payment session has expired. You are being redirected to your cart.",
             [{ text: "OK", onPress: () => navigation.navigate("MyCart") }],
             { cancelable: false },
           );
-        }, 400);
+        }, 300);
       }
     }, 1000);
 
     return () => {
-      clearInterval(interval);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      if (sessionExpiredTimeoutRef.current) {
+        clearTimeout(sessionExpiredTimeoutRef.current);
+        sessionExpiredTimeoutRef.current = null;
+      }
     };
-  }, [navigation]);
+  }, [navigation, checkoutModalVisible, submitting, clearSessionTimers]);
 
   useFocusEffect(
     useCallback(() => {
@@ -351,7 +393,6 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const [cashLimit, setCashLimit] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentType>("cash");
   const [useCredit, setUseCredit] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const isImmediateFinalize = orderContext?.isFinalizeImdt === 1;
   const isExceedCashLimit = cashLimit !== null && totalAmount >= cashLimit;
@@ -408,6 +449,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const isFullCredit = useCredit && creditUsed > 0 && paymentAmount <= 0;
 
   const handleCheckoutSuccess = async (orderId: string) => {
+    // 1. Mark order as finalized immediately & kill the session timer to prevent any expiry alert
+    isOrderFinalizedRef.current = true;
+    isNavigatingAwayRef.current = true;
+    clearSessionTimers();
+
     setCheckoutModalVisible(false);
     setSubmitting(true);
     try {
@@ -427,8 +473,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       }
 
       const orderData = response.data.data;
-      isNavigatingAwayRef.current = true;
-      paymentSessionEndTime = null;
+      clearSessionTimers();
       dispatch(clearCart());
       navigation.navigate("OrderConfirmed", {
         orderId: orderData.orderId,
@@ -439,6 +484,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         orderContext,
       });
     } catch (err: any) {
+      isOrderFinalizedRef.current = false;
+      isNavigatingAwayRef.current = false;
       console.error("[PaymentMethod] Order finalization error after payment:", err);
       const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
       Alert.alert(
@@ -460,6 +507,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     setCheckoutModalVisible(false);
     pendingOrderPayloadRef.current = null;
     setPendingOrderPayload(null);
+
+    // Give customer a fresh 5-minute session to select another method or retry
+    paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
+    setRemainingSeconds(300);
+
     Alert.alert(
       "Payment Cancelled",
       "The card payment was not completed. You can try again whenever you are ready."
@@ -552,8 +604,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 }
                 const orderData = response.data.data;
 
+                isOrderFinalizedRef.current = true;
                 isNavigatingAwayRef.current = true;
-                paymentSessionEndTime = null;
+                clearSessionTimers();
                 dispatch(clearCart());
                 navigation.navigate("OrderConfirmed", {
                   orderId: orderData.orderId,
@@ -663,8 +716,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           const response = await orderService.createOrder(payload);
           if (response.data && response.data.status && response.data.data) {
             const orderData = response.data.data;
+            isOrderFinalizedRef.current = true;
             isNavigatingAwayRef.current = true;
-            paymentSessionEndTime = null;
+            clearSessionTimers();
             dispatch(clearCart());
             navigation.navigate("OrderConfirmed", {
               orderId: orderData.orderId,
@@ -752,8 +806,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
       const response = await orderService.createOrder(payload);
       if (response.data && response.data.status && response.data.data) {
+        isOrderFinalizedRef.current = true;
         isNavigatingAwayRef.current = true;
-        paymentSessionEndTime = null;
+        clearSessionTimers();
         dispatch(clearCart());
         navigation.navigate("OrderConfirmed", {
           orderId: response.data.data.orderId,
@@ -1649,7 +1704,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onConfirm={() => {
           setBackConfirmVisible(false);
           isNavigatingAwayRef.current = true;
-          paymentSessionEndTime = null;
+          clearSessionTimers();
           navigation.navigate("MyCart");
         }}
         onCancel={() => {
