@@ -127,10 +127,19 @@ const ChoosePickupCentre: React.FC<Props> = ({ navigation, route }) => {
       ? `${userProfile.firstName || ""} ${userProfile.lastName || ""}`.trim()
       : "";
 
+    const baseGrandTotal = Math.max(
+      0,
+      (currentContext.packageTotal || 0) +
+        (currentContext.productTotal || 0) -
+        (currentContext.discount || 0)
+    );
+
     navigation.navigate("ScheduleOrder", {
       orderContext: {
         ...currentContext,
         deliveryMethod: "pickup",
+        deliveryCharge: 0,
+        grandTotal: baseGrandTotal,
         checkoutDetails: {
           ...(currentContext.checkoutDetails || {}),
           deliveryMethod: "pickup",
