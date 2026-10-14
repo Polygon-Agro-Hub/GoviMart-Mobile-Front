@@ -39,7 +39,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   onRescan,
   showOpenOngoingButton = false,
   onOpenOngoing,
-  duration = 4000,
+  duration = 3000,
   autoClose = true,
   showOkButton,
   okButtonText = "OK",
@@ -143,7 +143,15 @@ export const AlertModal: React.FC<AlertModalProps> = ({
           </TouchableOpacity>
 
           {/* Title */}
-          <Text className="font-bold text-lg mb-4 text-center">
+          <Text
+  style={{
+    fontWeight: "700",
+    fontSize: 18,
+    lineHeight: 28,
+    marginBottom: 16,
+    textAlign: "center",
+  }}
+>
             {getModalTitle()}
           </Text>
 
