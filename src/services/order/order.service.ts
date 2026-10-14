@@ -116,6 +116,7 @@ class OrderService {
         additionalAmount?: number;
         newScheduleDate?: string;
         paymentMethod?: string;
+        isPaid?: number | boolean;
         newTotal?: number;
         creditToAdd?: number;
         replacements?: Array<{
