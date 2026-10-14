@@ -52,9 +52,10 @@ type PaymentType = "cash" | "card";
 let paymentSessionEndTime: number | null = null;
 
 // ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
-// Payment due date = delivery date minus (gap days + 1).
-// Example with 3-day gap: delivery on 24th -> pay by 20th.
-const PAYMENT_GAP_DAYS = 3;
+// Normal orders: pay-by date = delivery - 3 (18 -> 15)
+const NORMAL_GAP_DAYS = 3;
+// Package orders with isFinalizeImdt = 0: delivery - 2 (18 -> 16)
+const PACKAGE_GAP_DAYS = 2;
 
 const MONTHS_LONG = [
   "January",
@@ -215,20 +216,24 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     return scheduledDate.getTime() === sysEarliestDate.getTime();
   };
 
-  // Payment due = delivery date minus (gap days + 1). Example: delivery 24 -> pay by 20
-  const getPaymentDueText = (): string => {
-    const scheduledDate = getScheduledDeliveryDate();
-    if (!scheduledDate) return "your scheduled order date";
+const getPaymentDueText = (): string => {
+  const scheduledDate = getScheduledDeliveryDate();
+  if (!scheduledDate) return "your scheduled order date";
 
-    const due = new Date(scheduledDate);
-    due.setDate(due.getDate() - (PAYMENT_GAP_DAYS + 1));
+  const hasPkg =
+    (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
+  const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (due < today) return "today";
+  const offset = isPackageFlow ? PACKAGE_GAP_DAYS : NORMAL_GAP_DAYS;
+  const due = new Date(scheduledDate);
+  due.setDate(due.getDate() - offset);
 
-    return `${MONTHS_LONG[due.getMonth()]} ${getOrdinal(due.getDate())}`;
-  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (due < today) return "today";
+
+  return `${MONTHS_LONG[due.getMonth()]} ${getOrdinal(due.getDate())}`;
+};
 
   useEffect(() => {
     if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
@@ -356,6 +361,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const isImmediateFinalize = orderContext?.isFinalizeImdt === 1;
   const isExceedCashLimit = cashLimit !== null && totalAmount >= cashLimit;
   const isCashDisabled = isImmediateFinalize || isExceedCashLimit;
+
+  const hasPackageInCart =
+  (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
+
+// isFinalizeImdt = 0 AND has package -> no EPSD check
+const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
 
   useEffect(() => {
     const fetchBalanceAndLimit = async () => {
@@ -1519,7 +1530,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           )}
 
           {/* PLEASE NOTE BANNER WHEN SCHEDULED AFTER EPSD */}
-          {!isFullCredit && !isEarliestDeliveryDate() && (
+         {(isPackagePayToConfirm || (!isFullCredit && !isEarliestDeliveryDate())) && (
             <View
               style={{
                 marginHorizontal: 15,
