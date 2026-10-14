@@ -432,14 +432,12 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     const productTotal = products.reduce((total, product) => {
         if (product.isUnavailable) return total;
         const weightMultiplier = product.unit === "kg" ? product.weight : product.weight / 1000;
-        const lineTotal = Math.round(product.price * weightMultiplier * 100) / 100;
-        return total + lineTotal;
+        return total + product.price * weightMultiplier;
     }, 0);
 
     const packageTotal = packages.reduce((total, pkg) => {
         if (pkg.isUnavailable) return total;
-        const pkgLineTotal = Math.round(pkg.price * pkg.quantity * 100) / 100;
-        return total + pkgLineTotal;
+        return total + pkg.price * pkg.quantity;
     }, 0);
 
     const totalDiscount = products.reduce((total, product) => {
@@ -448,8 +446,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
         const discountedPrice = product.discountedPrice;
         if (!discountedPrice || discountedPrice >= normalPrice) return total;
         const weightMultiplier = product.unit === "kg" ? product.weight : product.weight / 1000;
-        const lineDiscount = Math.round((normalPrice - discountedPrice) * weightMultiplier * 100) / 100;
-        return total + lineDiscount;
+        return total + (normalPrice - discountedPrice) * weightMultiplier;
     }, 0);
 
     const savedAmount = products.reduce((total, product) => {
@@ -518,7 +515,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                 return;
             }
 
-            const grandTotal = Math.round(Math.max(0, packageTotal + productTotal - totalDiscount) * 100) / 100;
+            const grandTotal = Math.max(0, packageTotal + productTotal - totalDiscount);
             const orderContext: OrderContext = {
                 cartId: effectiveCartId || undefined,
                 grandTotal,
