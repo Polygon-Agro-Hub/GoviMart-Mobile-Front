@@ -42,6 +42,12 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
+  // Payment info fetched from the backend invoice (credit / money paid)
+  const [apiPayment, setApiPayment] = useState<{
+    creditPaid: number;
+    moneyPaid: number;
+  } | null>(null);
+
   React.useEffect(() => {
     dispatch(clearCart());
   }, [dispatch]);
@@ -49,6 +55,39 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   const orderContext = route.params?.orderContext;
   const invoiceNo = route.params?.invoiceNumber || "INV-PENDING";
   const passedTotal = route.params?.total;
+
+  // Fetch the saved invoice so we know how much was paid using credit
+  React.useEffect(() => {
+    const orderId = route.params?.orderId;
+    const processOrderId = (route.params as any)?.processOrderId;
+    const targetQueryId = processOrderId || orderId;
+    if (!targetQueryId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await orderService.getInvoice(targetQueryId, {
+          processOrderId: processOrderId ? String(processOrderId) : undefined,
+          invNo:
+            invoiceNo && invoiceNo !== "INV-PENDING" ? invoiceNo : undefined,
+        });
+        if (cancelled) return;
+        if (res.data?.status && res.data?.invoice) {
+          const inv = res.data.invoice.invoice || res.data.invoice;
+          setApiPayment({
+            creditPaid: parseFloat(String(inv.creditPaid ?? 0)) || 0,
+            moneyPaid: parseFloat(String(inv.moneyPaid ?? 0)) || 0,
+          });
+        }
+      } catch (e) {
+        // fall back to local order context
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [route.params?.orderId, invoiceNo]);
 
   const now = new Date();
   const formattedDate = now.toLocaleDateString("en-US", {
@@ -133,6 +172,22 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
               couponDiscount +
               (isFreeDeliveryCoupon ? 0 : deliveryFee),
           );
+
+  // ─── CREDIT PAYMENT ────────────────────────────────────────────────────────
+  // Prefer the saved invoice value; fall back to what the order context carried.
+  const creditPaid: number =
+    apiPayment && apiPayment.creditPaid > 0
+      ? apiPayment.creditPaid
+      : parseFloat(
+          String(
+            (orderContext as any)?.creditPaid ??
+              (orderContext as any)?.checkoutDetails?.creditPaid ??
+              (route.params as any)?.creditPaid ??
+              0,
+          ),
+        ) || 0;
+
+  const amountToPay = Math.max(0, Number(total) - creditPaid);
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("en-US", {
@@ -996,6 +1051,57 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
               Rs. {formatAmount(total)}
             </Text>
           </View>
+
+          {/* Paid using Credit (only if > 0) */}
+          {creditPaid > 0 && (
+            <>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingVertical: 4,
+                }}
+              >
+                <Text style={{ fontSize: 13, color: "#60647A" }}>
+                  Paid using Credit
+                </Text>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
+                >
+                  - Rs. {formatAmount(creditPaid)}
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingVertical: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13.5,
+                    fontWeight: "700",
+                    color: "#111111",
+                  }}
+                >
+                  Amount to Pay
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "800",
+                    color: "#111111",
+                  }}
+                >
+                  Rs. {formatAmount(amountToPay)}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* ─── DELIVERY NOTIFICATION BANNER ─────────────────────────────── */}

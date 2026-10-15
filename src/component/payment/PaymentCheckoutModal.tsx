@@ -8,6 +8,7 @@ import {
   Alert,
   SafeAreaView,
   Platform,
+  Linking,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +52,23 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   useEffect(() => {
     if (visible) {
       isHandledRef.current = false;
+
+      // Listen for OS deep links (e.g. polygon://payments-lk/return) when returning from bank app or browser
+      const sub = Linking.addEventListener("url", (event) => {
+        if (event?.url) {
+          handleUrlIntercept(event.url);
+        }
+      });
+
+      Linking.getInitialURL().then((url) => {
+        if (url) {
+          handleUrlIntercept(url);
+        }
+      });
+
+      return () => {
+        sub.remove();
+      };
     }
   }, [visible]);
 

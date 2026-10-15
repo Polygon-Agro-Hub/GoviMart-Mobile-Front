@@ -15,6 +15,15 @@ import CustomHeader from "@/component/common/CustomHeader";
 import { SummaryRow } from "@/component/order/SummaryRow";
 import LoadingPage from "@/component/common/LoadingPage";
 import orderService from "@/services/order/order.service";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
+import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
+import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
+import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
+import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import apiClient from "@/services/config-service/axio-config";
+import { ENDPOINTS } from "@/services/config-service/endpoints";
+import { getAuthHeader } from "@/services/config-service/auth-header";
 
 // NOTE: add  OrderConfirmation: { orderId: number }  to RootStackParamList
 type OrderConfirmationNavigationProp = StackNavigationProp<
@@ -215,6 +224,54 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const [rawPackagesData, setRawPackagesData] = useState<any[]>([]);
   const [rawItemsData, setRawItemsData] = useState<any[]>([]);
 
+  const userProfile = useSelector((state: RootState) => state.auth.userProfile);
+
+  // ── Payment Gateway & Saved Card State ───────────────────────────────────
+  const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [checkoutSession, setCheckoutSession] =
+    useState<UnifiedCheckoutSession | null>(null);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [pendingConfirmPayload, setPendingConfirmPayload] = useState<{
+    orderId: string | number;
+    processOrderId?: string | number;
+    newTotal?: number;
+    isPaid?: number;
+  } | null>(null);
+
+  // Fetch active payment gateway
+  useEffect(() => {
+    const fetchActiveGateway = async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await apiClient.get(ENDPOINTS.PAYMENT.ACTIVE_GATEWAY, {
+          headers,
+        });
+        if (res.data?.status && res.data?.data?.activeGateway) {
+          setActiveGateway(res.data.data.activeGateway);
+        }
+      } catch {
+        setActiveGateway("payments_lk");
+      }
+    };
+    fetchActiveGateway();
+  }, []);
+
+  // Fetch saved card for 1-click charge
+  useEffect(() => {
+    let isMounted = true;
+    const loadCard = async () => {
+      try {
+        const card = await cardStorageService.getSavedCard(userProfile?.id);
+        if (isMounted) setSavedCard(card);
+      } catch {}
+    };
+    loadCard();
+    return () => {
+      isMounted = false;
+    };
+  }, [userProfile?.id]);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!orderId) {
@@ -395,8 +452,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const creditApplied = Math.min(creditPaid, orderFullTotal);
   const remaining = Math.max(0, orderFullTotal - creditApplied);
 
-  const cardBrand: string = order?.cardBrand || order?.cardType || "Master";
-  const cardLast4: string = order?.cardLast4 || order?.cardNumber || "3501";
+  const isUnpaidCardOrder = isCardOrder && !pay.paid;
+  const cardBrand: string =
+    savedCard?.scheme || order?.cardBrand || order?.cardType || "Master";
+  const cardLast4: string =
+    savedCard?.last4 || order?.cardLast4 || order?.cardNumber || "";
 
   // Keep the ref in sync so handleConfirm sends the same total shown on screen.
   newTotalRef.current = hasLiveData ? orderFullTotal : null;
@@ -404,6 +464,53 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const busy = submitting !== null;
 
   // ─── handlers (defined after the derived values they use) ─────────────────
+  const handlePaymentSuccess = async (confirmPayload?: any) => {
+    setCheckoutModalVisible(false);
+    setCheckoutSession(null);
+
+    const payload = confirmPayload ?? pendingConfirmPayload;
+    if (!payload) {
+      Alert.alert("Error", "Order details missing. Please contact support.");
+      setSubmitting(null);
+      return;
+    }
+
+    try {
+      setSubmitting("confirm");
+      await orderService.confirmOrderWithLivePrices({
+        ...payload,
+        isPaid: 1,
+      });
+
+      setPendingConfirmPayload(null);
+      Alert.alert(
+        "Order Confirmed",
+        "Your order has been paid and confirmed successfully.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+    } catch (err: any) {
+      console.error("Post-payment confirm order failed:", err);
+      Alert.alert(
+        "Confirmation Error",
+        "Your payment was received but the order could not be confirmed. Please contact support.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const handlePaymentCancel = () => {
+    setCheckoutModalVisible(false);
+    setCheckoutSession(null);
+    setPendingConfirmPayload(null);
+    setSubmitting(null);
+    Alert.alert(
+      "Payment Cancelled",
+      "The payment was not completed. Your order was not confirmed. You can try again.",
+    );
+  };
+
   const handleConfirm = async () => {
     if (submitting) return; // prevent double-tap
     if (Number(order?.isConfirmed) === 1) {
@@ -414,13 +521,91 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       );
       return;
     }
+
+    const liveTotal = newTotalRef.current;
+    const effectiveOrderId = orderId ? String(orderId) : "";
+    const processOrderId =
+      order?.processOrderId || order?.proOrderId || order?.id || orderId;
+
+    // ── If paymentMethod == "card" and isPaid == 0 -> settle total from gateway ──
+    if (isUnpaidCardOrder && remaining > 0) {
+      const confirmPayload = {
+        orderId: effectiveOrderId,
+        processOrderId: processOrderId || undefined,
+        ...(liveTotal != null ? { newTotal: liveTotal } : {}),
+        isPaid: 1,
+      };
+      setPendingConfirmPayload(confirmPayload);
+      setSubmitting("confirm");
+
+      try {
+        const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+        // 1-Click Saved Card attempt first
+        if (savedCard && adapter.chargeSavedCard) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: remaining,
+              paymentType: "order",
+              orderId: String(processOrderId || effectiveOrderId),
+              itemsDescription: `GoviMart Order Payment - ${invoiceNo}`,
+            });
+            if (chargeRes.success) {
+              await handlePaymentSuccess(confirmPayload);
+              return;
+            }
+          } catch (chargeErr: any) {
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+            if (!isInvalid) {
+              setSubmitting(null);
+              Alert.alert(
+                "Payment Error",
+                chargeErr?.response?.data?.message ||
+                  chargeErr?.message ||
+                  "Payment failed. Please try again.",
+              );
+              return;
+            }
+            setSavedCard(null); // Fallback to hosted checkout modal
+          }
+        }
+
+        // Hosted Checkout Modal
+        const session = await adapter.initiatePayment({
+          orderId: String(processOrderId || effectiveOrderId),
+          amount: remaining,
+          paymentType: "order",
+          itemsDescription: `GoviMart Order Payment - ${invoiceNo}`,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+      } catch (err: any) {
+        setSubmitting(null);
+        Alert.alert(
+          "Payment Error",
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to start payment. Please try again.",
+        );
+      }
+      return;
+    }
+
+    // Direct confirm (Cash, already paid card order, or 100% credit covered)
     try {
       setSubmitting("confirm");
       if (orderId) {
-        const liveTotal = newTotalRef.current;
         await orderService.confirmOrderWithLivePrices({
           orderId,
+          processOrderId: processOrderId || undefined,
           ...(liveTotal != null ? { newTotal: liveTotal } : {}),
+          ...(isUnpaidCardOrder ? { isPaid: 1 } : {}),
         });
       }
       navigation.goBack();
@@ -705,39 +890,133 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
         {/* PAYMENT NOTICE */}
         {isCardOrder ? (
-          <View
-            style={{
-              backgroundColor: "#EEF3FF",
-              borderRadius: 12,
-              padding: 12,
-              marginBottom: 14,
-            }}
-          >
-            <Text style={{ fontSize: 11, color: "#111", lineHeight: 16 }}>
-              You will be charged{" "}
-              <Text style={{ fontWeight: "700" }}>
-                Rs. {formatAmount(remaining)}
-              </Text>{" "}
-              upon clicking confirm using the saved card number.
-            </Text>
+          isUnpaidCardOrder ? (
+            remaining > 0 ? (
+              <View
+                style={{
+                  backgroundColor: "#EEF3FF",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 14,
+                }}
+              >
+                <Text style={{ fontSize: 11, color: "#111", lineHeight: 16 }}>
+                  {savedCard ? (
+                    <>
+                      You will be charged{" "}
+                      <Text style={{ fontWeight: "700" }}>
+                        Rs. {formatAmount(remaining)}
+                      </Text>{" "}
+                      upon clicking confirm using your saved card.
+                    </>
+                  ) : (
+                    <>
+                      You will be redirected to the secure payment gateway to pay{" "}
+                      <Text style={{ fontWeight: "700" }}>
+                        Rs. {formatAmount(remaining)}
+                      </Text>{" "}
+                      upon clicking confirm.
+                    </>
+                  )}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "#FFF",
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    marginTop: 8,
+                  }}
+                >
+                  {savedCard ? (
+                    <>
+                      <CardBrand brand={cardBrand} />
+                      <Text style={{ fontSize: 11, color: "#111" }}>
+                        {/visa/i.test(cardBrand) ? "Visa" : "Master"} ●●●●{" "}
+                        {String(cardLast4).slice(-4)}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="card-outline"
+                        size={16}
+                        color="#0066FF"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "600",
+                          color: "#111",
+                        }}
+                      >
+                        Pay via Payment Gateway (Card)
+                      </Text>
+                    </>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#E8F9EC",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 14,
+                }}
+              >
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color="#1F7A3A"
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: 11,
+                    color: "#1F7A3A",
+                    lineHeight: 16,
+                  }}
+                >
+                  Your order is fully covered by your credit balance.
+                </Text>
+              </View>
+            )
+          ) : (
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "#FFF",
-                borderRadius: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-                marginTop: 8,
+                backgroundColor: "#E8F9EC",
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 14,
               }}
             >
-              <CardBrand brand={cardBrand} />
-              <Text style={{ fontSize: 11, color: "#111" }}>
-                {/visa/i.test(cardBrand) ? "Visa" : "Master"} ●●●●{" "}
-                {String(cardLast4).slice(-4)}
+              <Ionicons
+                name="checkmark-circle"
+                size={16}
+                color="#1F7A3A"
+                style={{ marginRight: 8 }}
+              />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 11,
+                  color: "#1F7A3A",
+                  lineHeight: 16,
+                }}
+              >
+                This order has been paid online.
               </Text>
             </View>
-          </View>
+          )
         ) : (
           <View
             style={{
@@ -873,11 +1152,34 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFF" }}>
-              Confirm & Accept My Order
+              {isUnpaidCardOrder && remaining > 0
+                ? `Pay Rs. ${formatAmount(remaining)} & Confirm Order`
+                : "Confirm & Accept My Order"}
             </Text>
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Payment Gateway Checkout Modal */}
+      {checkoutSession && (
+        <PaymentCheckoutModal
+          visible={checkoutModalVisible}
+          gatewayName={checkoutSession.gateway}
+          checkoutUrl={checkoutSession.checkoutUrl}
+          postBody={checkoutSession.postBody}
+          orderId={checkoutSession.orderId}
+          amount={checkoutSession.amount}
+          customerAddress={checkoutSession.customerAddress}
+          onSuccess={(_orderId) => handlePaymentSuccess()}
+          onCancel={(_orderId) => handlePaymentCancel()}
+          onClose={() => {
+            setCheckoutModalVisible(false);
+            setCheckoutSession(null);
+            setPendingConfirmPayload(null);
+            setSubmitting(null);
+          }}
+        />
+      )}
     </View>
   );
 };

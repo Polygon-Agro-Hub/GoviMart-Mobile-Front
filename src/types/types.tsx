@@ -134,6 +134,7 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   SavedCards: undefined;
   SaveCardInfo: undefined;
+  Developer: undefined;
   Notification: undefined;
   CheckoutScreen: { orderContext: OrderContext };
   ScheduleOrder: { orderContext: OrderContext };
