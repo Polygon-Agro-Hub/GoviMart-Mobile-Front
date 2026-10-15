@@ -2,6 +2,8 @@ import { getDevServerHostIp } from "./getHostIp";
 const devHostIp = getDevServerHostIp();
 
 export const environment = {
+  // ⚠️ DEVELOPER MODE (Default false) --------------------
+  isDeveloper: false,
 
   // LOCAL --------------------
   API_BASE_URL: `http://${devHostIp}:3000/polygon/`,

@@ -24,6 +24,7 @@ import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
+import { environment } from "@/environment/environment";
 
 const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 
@@ -466,6 +467,17 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             danger={true}
             onPress={handleLogoutPress}
           />
+
+          {/* Developer Mode (Shown only when environment.isDeveloper is true) */}
+          {environment.isDeveloper && (
+            <ProfileMenuItem
+              icon="code-working"
+              title="DEVELOPER MODE"
+              onPress={() => {
+                navigation.navigate("Developer");
+              }}
+            />
+          )}
         </View>
       </ScrollView>
 
