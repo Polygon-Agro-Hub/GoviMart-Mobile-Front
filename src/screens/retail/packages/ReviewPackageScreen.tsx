@@ -1671,9 +1671,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
 
     // ── Path 2: Card order not yet paid (full total + additional amount must be paid via gateway) ──
+    // Deduct coupon discount ONLY for payment gateway payable value
+    const couponDeduction =
+      Number(isCoupon) === 1 && !isFreeDeliveryCoupon
+        ? Number(couponValue) || 0
+        : 0;
     const fullPayableAmount = Math.max(
       0,
-      Number((finalOrderTotalWithDelivery - (creditPaid || 0)).toFixed(2)),
+      Number(
+        (finalOrderTotalWithDelivery - (creditPaid || 0) - couponDeduction).toFixed(2),
+      ),
     );
 
     if (isUnpaidCardOrder && fullPayableAmount > 0) {
@@ -2237,10 +2244,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
   const grandTotal = packagesTotal + alacartTotal + effectiveDeliveryCharge;
   const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
-  const finalOrderTotalWithDelivery = Math.max(
+  // Total before coupon deduction — passed unreduced to the backend
+  const finalOrderTotalWithDelivery = confirmGrandTotal + effectiveDeliveryCharge;
+
+  // Payable amount for payment gateway (unpaid card orders): deduct creditPaid and coupon discount
+  const fullPayableAmount = Math.max(
     0,
     Number(
-      (confirmGrandTotal + effectiveDeliveryCharge - couponDiscount).toFixed(2),
+      (finalOrderTotalWithDelivery - (creditPaid || 0) - couponDiscount).toFixed(2),
     ),
   );
   // Signed diff between the original paid-for total and the reviewed total.
@@ -3548,7 +3559,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 <Text className="text-[13px] text-[#6B6B6B] leading-5">
                   This scheduled order has not been paid yet. The total amount{" "}
                   <Text className="font-bold text-black">
-                    Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                    Rs. {formatPrice(fullPayableAmount)}
                   </Text>{" "}
                   will need to be paid via card to confirm your order.
                 </Text>
@@ -3587,7 +3598,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   </Text>
                   . Your new total of{" "}
                   <Text className="font-bold text-black">
-                    Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                    Rs. {formatPrice(fullPayableAmount)}
                   </Text>{" "}
                   will need to be paid via card to confirm.
                 </Text>
@@ -3610,7 +3621,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               <Text className="text-[13px] text-[#6B6B6B] leading-5">
                 This scheduled order has not been paid yet. The total amount of{" "}
                 <Text className="font-bold text-black">
-                  Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                  Rs. {formatPrice(fullPayableAmount)}
                 </Text>{" "}
                 will need to be paid via card to confirm your order.
               </Text>
@@ -3699,22 +3710,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             </>
           )}
 
-          {isCouponApplied && couponDiscount > 0 && (
-            <>
-              <RowDivider />
-              <PriceRow
-                label="Coupon Discount"
-                value={`- Rs. ${formatPrice(couponDiscount)}`}
-                valueColor="#1B8A3A"
-              />
-            </>
-          )}
-
           <RowDivider />
 
           <PriceRow
             label="Total"
-            value={`Rs. ${formatPrice(Math.max(0, confirmGrandTotal - couponDiscount))}`}
+            value={`Rs. ${formatPrice(confirmGrandTotal)}`}
             strong
             big
             marginBottom={20}
@@ -3749,8 +3749,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               </>
             ) : (
               <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-                {!isCashPayment && !isPaid && Math.max(0, Number((finalOrderTotalWithDelivery - (creditPaid || 0)).toFixed(2))) > 0
-                  ? `Pay Rs. ${formatPrice(Math.max(0, finalOrderTotalWithDelivery - (creditPaid || 0)))} & Confirm`
+                {!isCashPayment && !isPaid && fullPayableAmount > 0
+                  ? `Pay Rs. ${formatPrice(fullPayableAmount)} & Confirm`
                   : !isCashPayment && isPaid && additionalPayAmount > 0
                     ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)} & Confirm`
                     : "Confirm Order Details"}
