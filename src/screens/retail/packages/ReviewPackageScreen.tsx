@@ -335,6 +335,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     isLimitReached,
     unreadReminderDays,
     deliveryCharge: reduxDeliveryCharge,
+    isCoupon,
+    couponType,
+    couponValue,
   } = useSelector((state: RootState) => state.packageReview);
 
   // Prefer the API-fetched invoice number; fall back to the one passed via route params
@@ -392,6 +395,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // Monotonically increasing id so a slow response for an OLD order
   // can never overwrite the data of the order the user is looking at now.
   const requestIdRef = useRef(0);
+  // Tracks whether the user has successfully confirmed this order,
+  // preventing background re-fetches and alerts while the success overlay is showing.
+  const isConfirmedRef = useRef(false);
 
   const isTimeRanOut = useMemo(() => {
     const currentHour = new Date().getHours();
@@ -544,6 +550,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // Fetch review data from backend
   const fetchReviewData = useCallback(
     async (force = false) => {
+      if (isConfirmedRef.current) return;
       if (buyerType && buyerType.toLowerCase() !== "retail") {
         return;
       }
@@ -594,27 +601,17 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             (Number(orderInfo.isFinalized) === 1 || orderInfo.isFinalized === true)
           ) {
             dispatch(setLoadingReview(false));
-            Alert.alert(
-              "Already Finalized!",
-              "You have already reviewed and finalized this order.",
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (effectiveOrderId) {
-                      navigation.replace("OrderDetails", {
-                        orderId: String(effectiveOrderId),
-                      });
-                    } else if (navigation.canGoBack()) {
-                      navigation.goBack();
-                    } else {
-                      navigation.replace("Home");
-                    }
-                  },
-                },
-              ],
-              { cancelable: false },
-            );
+            if (!isConfirmedRef.current) {
+              if (effectiveOrderId) {
+                navigation.replace("OrderDetails", {
+                  orderId: String(effectiveOrderId),
+                });
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.replace("Home");
+              }
+            }
             return;
           }
 
@@ -631,6 +628,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           let resolvedDeliveryCharge = 0;
           let resolvedDateStr = "14th August";
           let resolvedRawDate: string | null = null;
+          let resolvedIsCoupon = 0;
+          let resolvedCouponType: string | null = null;
+          let resolvedCouponValue = 0;
 
           if (orderInfo) {
             resolvedProcessOrderId =
@@ -659,6 +659,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             }
             resolvedIsPaid =
               parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
+            resolvedIsCoupon = Number(orderInfo.isCoupon) === 1 ? 1 : 0;
+            resolvedCouponType = orderInfo.couponType || null;
+            resolvedCouponValue = parseFloat(orderInfo.couponValue) || 0;
             if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
               const rawDateVal =
                 orderInfo.sheduleDate || orderInfo.processScheduleDate;
@@ -957,6 +960,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               isPaid: resolvedIsPaid,
               processOrderAmount: resolvedProcessOrderAmount,
               deliveryCharge: resolvedDeliveryCharge,
+              isCoupon: resolvedIsCoupon,
+              couponType: resolvedCouponType,
+              couponValue: resolvedCouponValue,
               packagesMeta: newMeta,
               packageProducts: newProducts,
               productTemplatesState: newTemplates,
@@ -992,6 +998,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // (e.g. coming back from ReplaceProduct) — that would wipe their edits.
   useFocusEffect(
     useCallback(() => {
+      if (isConfirmedRef.current) return;
       const dataIsForThisOrder = loadedOrderIdRef.current === orderKey;
 
       // Never refetch while the user is editing in the flow
@@ -1664,9 +1671,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
 
     // ── Path 2: Card order not yet paid (full total + additional amount must be paid via gateway) ──
+    // Deduct coupon discount ONLY for payment gateway payable value
+    const couponDeduction =
+      Number(isCoupon) === 1 && !isFreeDeliveryCoupon
+        ? Number(couponValue) || 0
+        : 0;
     const fullPayableAmount = Math.max(
       0,
-      Number((finalOrderTotalWithDelivery - (creditPaid || 0)).toFixed(2)),
+      Number(
+        (finalOrderTotalWithDelivery - (creditPaid || 0) - couponDeduction).toFixed(2),
+      ),
     );
 
     if (isUnpaidCardOrder && fullPayableAmount > 0) {
@@ -1925,6 +1939,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       // Stop the button spinner
       setIsSubmitting(false);
 
+      isConfirmedRef.current = true;
       // Show success alert overlay (auto-dismisses in 2s and redirects to Home)
       setShowSuccessOverlay(true);
       return;
@@ -1982,6 +1997,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
       // Stop button loading spinner and display success overlay
       setIsSubmitting(false);
+      isConfirmedRef.current = true;
       setShowSuccessOverlay(true);
     } catch (err: any) {
       console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
@@ -2202,19 +2218,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     .filter((item) => item.isAddedNow && !isItemUnavailable(item))
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const deliveryCharge = Number(reduxDeliveryCharge || 0);
-  const grandTotal = packagesTotal + alacartTotal + deliveryCharge;
-  const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
-  const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
-  // Signed diff between the original paid-for total and the reviewed total.
-  // Positive => customer owes more. Negative => total went down (reduced / refundable).
-  // Compare against what the customer ORIGINALLY paid:
-  // original packages + ala carte items that were already in the order.
-  const originalPaidTotal = packagesTotal + originalAlacartTotal;
-  const totalDiff = confirmGrandTotal - originalPaidTotal;
-  const additionalPayAmount = Math.max(0, totalDiff);
-  const totalSavingsAmount = Math.max(0, -totalDiff);
-
   // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
   // Cash payment (COD or pickup) vs card/online — used to word the "Please Note" box
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
@@ -2225,6 +2228,40 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
+
+  const deliveryCharge = Number(reduxDeliveryCharge || 0);
+  const isCouponApplied = Number(isCoupon) === 1;
+  const couponTypeStr = String(couponType || "").toLowerCase();
+  const isFreeDeliveryCoupon =
+    isCouponApplied &&
+    (couponTypeStr.includes("free") || couponTypeStr.includes("delivery"));
+  const effectiveDeliveryCharge =
+    isPickup || isFreeDeliveryCoupon ? 0 : deliveryCharge;
+  const couponDiscount =
+    isCouponApplied && !isFreeDeliveryCoupon
+      ? Number(couponValue) || 0
+      : 0;
+
+  const grandTotal = packagesTotal + alacartTotal + effectiveDeliveryCharge;
+  const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
+  // Total before coupon deduction — passed unreduced to the backend
+  const finalOrderTotalWithDelivery = confirmGrandTotal + effectiveDeliveryCharge;
+
+  // Payable amount for payment gateway (unpaid card orders): deduct creditPaid and coupon discount
+  const fullPayableAmount = Math.max(
+    0,
+    Number(
+      (finalOrderTotalWithDelivery - (creditPaid || 0) - couponDiscount).toFixed(2),
+    ),
+  );
+  // Signed diff between the original paid-for total and the reviewed total.
+  // Positive => customer owes more. Negative => total went down (reduced / refundable).
+  // Compare against what the customer ORIGINALLY paid:
+  // original packages + ala carte items that were already in the order.
+  const originalPaidTotal = packagesTotal + originalAlacartTotal;
+  const totalDiff = confirmGrandTotal - originalPaidTotal;
+  const additionalPayAmount = Math.max(0, totalDiff);
+  const totalSavingsAmount = Math.max(0, -totalDiff);
 
   // True when at least one package in the confirm step is no longer available
   const hasUnavailablePackage = packagesMeta.some(
@@ -3522,7 +3559,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 <Text className="text-[13px] text-[#6B6B6B] leading-5">
                   This scheduled order has not been paid yet. The total amount{" "}
                   <Text className="font-bold text-black">
-                    Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                    Rs. {formatPrice(fullPayableAmount)}
                   </Text>{" "}
                   will need to be paid via card to confirm your order.
                 </Text>
@@ -3561,7 +3598,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   </Text>
                   . Your new total of{" "}
                   <Text className="font-bold text-black">
-                    Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                    Rs. {formatPrice(fullPayableAmount)}
                   </Text>{" "}
                   will need to be paid via card to confirm.
                 </Text>
@@ -3584,7 +3621,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               <Text className="text-[13px] text-[#6B6B6B] leading-5">
                 This scheduled order has not been paid yet. The total amount of{" "}
                 <Text className="font-bold text-black">
-                  Rs. {formatPrice(finalOrderTotalWithDelivery)}
+                  Rs. {formatPrice(fullPayableAmount)}
                 </Text>{" "}
                 will need to be paid via card to confirm your order.
               </Text>
@@ -3712,8 +3749,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               </>
             ) : (
               <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-                {!isCashPayment && !isPaid && Math.max(0, Number((finalOrderTotalWithDelivery - (creditPaid || 0)).toFixed(2))) > 0
-                  ? `Pay Rs. ${formatPrice(Math.max(0, finalOrderTotalWithDelivery - (creditPaid || 0)))} & Confirm`
+                {!isCashPayment && !isPaid && fullPayableAmount > 0
+                  ? `Pay Rs. ${formatPrice(fullPayableAmount)} & Confirm`
                   : !isCashPayment && isPaid && additionalPayAmount > 0
                     ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)} & Confirm`
                     : "Confirm Order Details"}
