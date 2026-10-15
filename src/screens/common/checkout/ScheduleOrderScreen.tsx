@@ -331,10 +331,8 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       return n + (s[(v - 20) % 10] || s[v] || s[0]);
     };
 
-    const expiryDayOrdinal = expiryDay ? getOrdinal(expiryDay) : "";
-    const expiryMonthFull = earliestExpiryDate
-      ? MONTH_LONG[earliestExpiryDate.getMonth()]
-      : "";
+    const expiryDayOrdinal = cutoffDate ? getOrdinal(cutoffDate.getDate()) : "";
+    const expiryMonthFull = cutoffDate ? MONTH_LONG[cutoffDate.getMonth()] : "";
 
     const sorryExpiryDay = sorryExpiryDate ? sorryExpiryDate.getDate() : 0;
     const sorryExpiryMonth = sorryExpiryDate
