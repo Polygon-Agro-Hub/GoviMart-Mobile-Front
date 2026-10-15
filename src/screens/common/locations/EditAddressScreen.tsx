@@ -951,9 +951,9 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         />
 
         {/* TITLE + BILLING NAME */}
-        <View style={{ flexDirection: "row", gap: 5 }}>
+        <View style={{ flexDirection: "row", gap: 5, width: "100%", overflow: "hidden" }}>
           {/* TITLE */}
-          <View style={{ flex: 0.7 }}>
+          <View style={{ flex: 0.65, minWidth: 0 }}>
             <View style={{ marginBottom: titleError ? 4 : 12 }}>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -1040,7 +1040,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
           </View>
 
           {/* BILLING NAME */}
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
             <InputField
               icon="user"
               circleSize={30}

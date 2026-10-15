@@ -5,10 +5,11 @@ import { updateToken, logoutSuccess } from "@/store/authSlice";
 import { clearCart } from "@/store/cartSlice";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { ENDPOINTS } from "./endpoints";
+import { networkSimulator, ENABLE_NETWORK_SIMULATOR } from "@/services/network/networkSimulator.service";
 
 const apiClient = axios.create({
   baseURL: environment.API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000, // increased to 30s to allow testing simulated slow networks
   headers: {
     "Content-Type": "application/json",
   },
@@ -16,6 +17,11 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   async (config) => {
+    // ── Global Network Speed Simulator (Active ONLY when isDeveloper === true) ──
+    if (networkSimulator.isEnabled()) {
+      await networkSimulator.handleRequest(config);
+    }
+
     if (!config.headers.Authorization) {
       const token = store.getState().auth.token || (await tokenStorage.getToken());
       if (token) {
@@ -25,6 +31,9 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    if (networkSimulator.isEnabled()) {
+      networkSimulator.handleResponseComplete();
+    }
     return Promise.reject(error);
   }
 );
@@ -48,8 +57,16 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (networkSimulator.isEnabled()) {
+      networkSimulator.handleResponseComplete();
+    }
+    return response;
+  },
   async (error: AxiosError) => {
+    if (networkSimulator.isEnabled()) {
+      networkSimulator.handleResponseComplete();
+    }
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // If no response or status isn't 401, reject immediately
