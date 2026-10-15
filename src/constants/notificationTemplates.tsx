@@ -95,8 +95,11 @@ export const NOTIFICATION_TEMPLATES: Record<
 };
 
 /**
- * Parses message text to highlight invoice number (e.g. `#[Invoice No]`, `#[2609030012]`, `#2609030012`)
- * and Schedule Date (e.g. `August 8`, `September 3`, `2026-09-03`) in bold.
+ * Parses message text to highlight:
+ * 1. invoice number (e.g. `#[Invoice No]`, `#[2609030012]`, `#2609030012`)
+ * 2. Schedule Date (e.g. `scheduled for August 8`, `scheduled for September 3`, `scheduled for 2026-09-03`)
+ * 3. Payment deadline (e.g. `before September 1 at 6:00 PM`, `before September 1`, `before 2026-09-01 at 6:00 PM`)
+ * in bold.
  */
 export const renderBoldInvoiceMessage = (
   message: string,
@@ -105,11 +108,12 @@ export const renderBoldInvoiceMessage = (
 ): React.ReactNode => {
   if (!message) return null;
 
-  // Replace "scheduled for <Date>" with a delimited marker so we can parse both invoice & date tokens
-  // Regex to match:
+  // Pattern captures:
   // 1. Invoice token: (#\[[^\]\r\n]+\]|#[A-Za-z0-9_-]+)
-  // 2. Schedule date token preceded by "scheduled for ": (scheduled for\s+)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s*,\s*\d{4})?|\d{4}-\d{2}-\d{2})
-  const pattern = /(#(?:\[[^\]\r\n]+\]|[A-Za-z0-9_-]+))|(scheduled for\s+)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s*,\s*\d{4})?|\d{4}-\d{2}-\d{2})/gi;
+  // 2 & 3. "scheduled for " + <Date>
+  // 4. "before <Date> at <Time>" or "before <Date>"
+  const pattern =
+    /(#(?:\[[^\]\r\n]+\]|[A-Za-z0-9_-]+))|(scheduled for\s+)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s*,\s*\d{4})?|\d{4}-\d{2}-\d{2})|(before\s+(?:(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s*,\s*\d{4})?|\d{4}-\d{2}-\d{2})(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))?)/gi;
 
   const elements: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -148,6 +152,13 @@ export const renderBoldInvoiceMessage = (
       elements.push(
         <Text key={`sched-date-${match.index}`} style={boldMergedStyle}>
           {match[3]}
+        </Text>
+      );
+    } else if (match[4]) {
+      // Deadline match: "before September 1 at 6:00 PM"
+      elements.push(
+        <Text key={`deadline-${match.index}`} style={boldMergedStyle}>
+          {match[4]}
         </Text>
       );
     }

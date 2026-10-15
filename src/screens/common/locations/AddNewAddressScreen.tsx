@@ -466,9 +466,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       >
         <View
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
+            width: 30,
+            height: 30,
+            borderRadius: 15,
             backgroundColor: "#000000",
             justifyContent: "center",
             alignItems: "center",
@@ -477,7 +477,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           <FontAwesome6
             name="mountain-city"
             solid
-            size={17}
+            size={14}
             color="#FFFFFF"
           />
         </View>
@@ -878,6 +878,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           {/* SAVE ADDRESS AS */}
         <InputField
           icon="bookmark"
+          circleSize={30}
+          iconSize={14}
           label="Save Address As *"
           value={saveAddressAs}
           onChangeText={handleSaveAddressAsChange}
@@ -894,9 +896,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         />
 
         {/* TITLE + BILLING NAME */}
-        <View style={{ flexDirection: "row", gap: 5 }}>
+        <View style={{ flexDirection: "row", gap: 5, width: "100%", overflow: "hidden" }}>
           {/* TITLE */}
-          <View style={{ flex: 0.7 }}>
+          <View style={{ flex: 0.65, minWidth: 0 }}>
             <View style={{ marginBottom: titleError ? 4 : 12 }}>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -920,9 +922,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
               >
                 <View
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
                     backgroundColor: "#000000",
                     justifyContent: "center",
                     alignItems: "center",
@@ -931,7 +933,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                   <FontAwesome6
                     name="user"
                     solid
-                    size={17}
+                    size={14}
                     color="#FFFFFF"
                   />
                 </View>
@@ -977,9 +979,11 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           </View>
 
           {/* BILLING NAME */}
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
             <InputField
               icon="user"
+              circleSize={30}
+              iconSize={14}
               label="Billing Name *"
               value={billingName}
               onChangeText={handleBillingNameChange}
@@ -1000,6 +1004,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         {/* MOBILE 1 */}
         <InputField
           icon="phone"
+          circleSize={30}
+          iconSize={14}
           label="Mobile Number - 1 *"
           value={mobileNumber1}
           onChangeText={handleMobile1Change}
@@ -1013,6 +1019,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         {/* MOBILE 2 */}
         <InputField
           icon="phone"
+          circleSize={30}
+          iconSize={14}
           label="Mobile Number - 2 (Optional)"
           value={mobileNumber2}
           onChangeText={handleMobile2Change}
@@ -1047,9 +1055,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           >
             <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
                 backgroundColor: "#000000",
                 justifyContent: "center",
                 alignItems: "center",
@@ -1058,7 +1066,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
               <FontAwesome6
                 name="house"
                 solid
-                size={17}
+                size={14}
                 color="#FFFFFF"
               />
             </View>
@@ -1107,6 +1115,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           <>
             <InputField
               icon="building"
+              circleSize={30}
+              iconSize={14}
               label="Apartment / Building No *"
               value={buildingNo}
               onChangeText={handleBuildingNoChange}
@@ -1122,6 +1132,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             />
             <InputField
               icon="tag"
+              circleSize={30}
+              iconSize={14}
               label="Apartment / Building Name *"
               value={apartmentName}
               onChangeText={handleApartmentNameChange}
@@ -1137,6 +1149,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             />
             <InputField
               icon="hotel"
+              circleSize={30}
+              iconSize={14}
               label="Flat / Unit Number *"
               value={unitNo}
               onChangeText={handleUnitNoChange}
@@ -1152,6 +1166,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             />
             <InputField
               icon="stairs"
+              circleSize={30}
+              iconSize={14}
               label="Floor Number *"
               value={floorNo}
               onChangeText={handleFloorNoChange}
@@ -1168,6 +1184,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             {/* NEW: Building / House No for Apartment */}
             <InputField
               icon="house"
+              circleSize={30}
+              iconSize={14}
               label="Building / House No *"
               value={houseNo}
               onChangeText={handleHouseNoChange}
@@ -1183,6 +1201,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             />
             <InputField
               icon="road"
+              circleSize={30}
+              iconSize={14}
               label="Street Name *"
               value={streetName}
               onChangeText={handleStreetNameChange}
@@ -1205,6 +1225,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           <>
             <InputField
               icon="house"
+              circleSize={30}
+              iconSize={14}
               label="Building / House No *"
               value={buildingNo}
               onChangeText={handleBuildingNoChange}
@@ -1220,6 +1242,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             />
             <InputField
               icon="road"
+              circleSize={30}
+              iconSize={14}
               label="Street Name *"
               value={streetName}
               onChangeText={handleStreetNameChange}
@@ -1267,15 +1291,15 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           {/* Location Icon */}
           <View
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
+              width: 30,
+              height: 30,
+              borderRadius: 15,
               backgroundColor: "#FF9518",
               justifyContent: "center",
               alignItems: "center",
             }}
           >
-            <Ionicons name="location" size={19} color="#FFFFFF" />
+            <Ionicons name="location" size={15} color="#FFFFFF" />
           </View>
 
           {/* Text */}
@@ -1326,19 +1350,19 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           {latitude !== null && longitude !== null ? (
             <View
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
                 borderColor: "#FF9518",
                 justifyContent: "center",
                 alignItems: "center",
                 marginRight: 6,
               }}
             >
-              <FontAwesome6 solid name="pen" size={17} color="#FF9518" />
+              <FontAwesome6 solid name="pen" size={14} color="#FF9518" />
             </View>
           ) : (
-            <Ionicons name="chevron-forward" size={20} color="#FF9518" style={{ marginRight: 6 }} />
+            <Ionicons name="chevron-forward" size={18} color="#FF9518" style={{ marginRight: 6 }} />
           )}
         </TouchableOpacity>
         {geoLocationError ? (

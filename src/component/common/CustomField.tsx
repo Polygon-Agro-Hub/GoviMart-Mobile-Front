@@ -1,11 +1,23 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
     View,
     Text,
     TextInput,
-    TouchableOpacity
+    TouchableOpacity,
+    Platform,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
+
+const formatDisplayText = (val: string, ph?: string, width?: number) => {
+    if (!val) return ph || "";
+    if (!width || width <= 0) return val;
+    // At fontSize 14, average char width is ~8.2px, "..." takes ~16px
+    const maxChars = Math.floor((width - 8) / 8.2);
+    if (maxChars > 3 && val.length > maxChars) {
+        return val.slice(0, Math.max(3, maxChars - 1)).trimEnd() + "...";
+    }
+    return val;
+};
 
 // INPUT FIELD
 
@@ -24,6 +36,8 @@ export const InputField = React.memo(({
     prefix,
     iconBgColor,
     iconColor,
+    circleSize = 36,
+    iconSize = 17,
     autoCapitalize,
     secureTextEntry,
 }: {
@@ -31,6 +45,8 @@ export const InputField = React.memo(({
     isIconThemeDark?: boolean;
     iconBgColor?: string;
     iconColor?: string;
+    circleSize?: number;
+    iconSize?: number;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
@@ -46,6 +62,16 @@ export const InputField = React.memo(({
 }) => {
     const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
     const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
+    const inputRef = useRef<TextInput>(null);
+    const [isFocused, setIsFocused] = useState(false);
+    const [containerWidth, setContainerWidth] = useState<number>(0);
+
+    useEffect(() => {
+        if (isFocused && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isFocused]);
+
     return (
         <View
             style={{
@@ -62,15 +88,16 @@ export const InputField = React.memo(({
                     alignItems: "center",
                     paddingHorizontal: 11,
                     backgroundColor: "#FFFFFF",
+                    overflow: "hidden",
                 }}
             >
                 {/* Icon */}
 
                 <View
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 999,
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
                         backgroundColor: resolvedBgColor,
                         justifyContent: "center",
                         alignItems: "center",
@@ -79,7 +106,7 @@ export const InputField = React.memo(({
                     <FontAwesome6
                         name={icon}
                         solid
-                        size={17}
+                        size={iconSize}
                         color={resolvedIconColor}
                     />
                 </View>
@@ -89,8 +116,10 @@ export const InputField = React.memo(({
                 <View
                     style={{
                         flex: 1,
+                        minWidth: 0,
                         marginLeft: 10,
                         justifyContent: "center",
+                        overflow: "hidden",
                     }}
                 >
                     <Text
@@ -108,6 +137,8 @@ export const InputField = React.memo(({
                         flexDirection: "row",
                         alignItems: "center",
                         width: "100%",
+                        minWidth: 0,
+                        overflow: "hidden",
                     }}>
                         {prefix && (
                             <Text
@@ -122,28 +153,77 @@ export const InputField = React.memo(({
                             </Text>
                         )}
 
-                        <TextInput
-                            value={value}
-                            onChangeText={onChangeText}
-                            onBlur={onBlur}
-                            onFocus={onFocus}
-                            keyboardType={keyboardType}
-                            placeholder={placeholder}
-                            placeholderTextColor="#9CA3AF"
-                            maxLength={maxLength}
-                            autoCapitalize={autoCapitalize}
-                            secureTextEntry={secureTextEntry}
+                        <View
                             style={{
                                 flex: 1,
-                                height: 24,
-                                paddingVertical: 0,
-                                paddingHorizontal: 1.7,
-                                fontSize: 14,
-                                color: "#111111",
-                                fontWeight: "500",
-                                textAlignVertical: "center",
+                                minWidth: 0,
+                                justifyContent: "center",
+                                overflow: "hidden",
                             }}
-                        />
+                            onLayout={(e) => {
+                                const w = e.nativeEvent.layout.width;
+                                if (w > 0 && Math.abs(w - containerWidth) > 1) {
+                                    setContainerWidth(w);
+                                }
+                            }}
+                        >
+                            {!isFocused && !secureTextEntry ? (
+                                <TouchableOpacity
+                                    activeOpacity={1}
+                                    onPress={() => setIsFocused(true)}
+                                    style={{
+                                        width: "100%",
+                                        height: 24,
+                                        justifyContent: "center",
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    <Text
+                                        numberOfLines={1}
+                                        ellipsizeMode="tail"
+                                        style={{
+                                            fontSize: 14,
+                                            color: value ? "#111111" : "#9CA3AF",
+                                            fontWeight: "500",
+                                            paddingHorizontal: 1.7,
+                                            width: containerWidth > 0 ? containerWidth - 4 : "100%",
+                                        }}
+                                    >
+                                        {formatDisplayText(value, placeholder, containerWidth)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TextInput
+                                    ref={inputRef}
+                                    value={value}
+                                    onChangeText={onChangeText}
+                                    onBlur={() => {
+                                        setIsFocused(false);
+                                        onBlur?.();
+                                    }}
+                                    onFocus={() => {
+                                        setIsFocused(true);
+                                        onFocus?.();
+                                    }}
+                                    keyboardType={keyboardType}
+                                    placeholder={placeholder}
+                                    placeholderTextColor="#9CA3AF"
+                                    maxLength={maxLength}
+                                    autoCapitalize={autoCapitalize}
+                                    secureTextEntry={secureTextEntry}
+                                    style={{
+                                        width: "100%",
+                                        height: 24,
+                                        paddingVertical: 0,
+                                        paddingHorizontal: 1.7,
+                                        fontSize: 14,
+                                        color: "#111111",
+                                        fontWeight: "500",
+                                        textAlignVertical: "center",
+                                    }}
+                                />
+                            )}
+                        </View>
                     </View>
                 </View>
             </View>

@@ -16,6 +16,7 @@ import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
+import LoadingPage from "@/component/common/LoadingPage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { environment } from "@/environment/environment";
@@ -95,8 +96,11 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     phoneNumber: phoneNumber || user?.phoneNumber || "",
   });
 
+  const [loading, setLoading] = useState(true);
+
   const fetchLists = useCallback(async () => {
     try {
+      setLoading(true);
       const token = await getEffectiveToken();
       if (!token) {
         Alert.alert("Authentication Required", "Please log in to view customize packages summary.");
@@ -154,6 +158,8 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
     } catch (error) {
       setExcludeCrops([]);
       setPreferCrops([]);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -309,10 +315,14 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   };
 
   const handleBackNavigation = useCallback(() => {
+    if (isFromAccount) {
+      navigation.navigate("Profile");
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate(isFromAccount ? "Profile" : "Home");
+      navigation.navigate("Home");
     }
   }, [navigation, isFromAccount]);
 
@@ -387,6 +397,24 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       </View>
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-white">
+        <CustomHeader
+          title={fullTitle}
+          titleColor="black"
+          showBackButton={true}
+          navigation={navigation}
+          onBackPress={handleBackNavigation}
+          titleLines={2}
+        />
+        <View className="flex-1 justify-center items-center">
+          <LoadingPage message="Loading Summary..." fullScreen={false} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView

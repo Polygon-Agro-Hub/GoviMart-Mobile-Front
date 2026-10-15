@@ -4,6 +4,7 @@ import {
     Text,
     Image,
     TouchableOpacity,
+    ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
@@ -186,22 +187,29 @@ const PackageCartCard: React.FC<Props> = ({
                     }}
                 >
                     {/* TOTAL ITEMS */}
-                    <Text
-                        style={{
-                            fontSize: 14,
-                            color: "#777",
-                        }}
-                    >
-                        Total Items:{" "}
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
                         <Text
                             style={{
-                                color: "#111",
-                                fontWeight: "600",
+                                fontSize: 14,
+                                color: "#777",
                             }}
                         >
-                            {item.totalItems}
+                            Total Items:{" "}
                         </Text>
-                    </Text>
+                        {item.totalItems != null && item.totalItems > 0 ? (
+                            <Text
+                                style={{
+                                    color: "#111",
+                                    fontWeight: "600",
+                                    fontSize: 14,
+                                }}
+                            >
+                                {item.totalItems}
+                            </Text>
+                        ) : (
+                            <ActivityIndicator size="small" color="#FF9114" style={{ marginLeft: 2 }} />
+                        )}
+                    </View>
 
                     <View style={{ flex: 1 }} />
 

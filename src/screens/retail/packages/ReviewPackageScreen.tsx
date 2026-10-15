@@ -27,6 +27,7 @@ import { RootState } from "@/store";
 import {
   initReviewData,
   setLoadingReview,
+  setPackingSlots,
   replacePackageProduct,
   resetPackageProduct,
   updateProductQuantity as updateProductQuantityAction,
@@ -35,6 +36,7 @@ import {
   toggleAlacartItemUnit as toggleAlacartItemUnitAction,
   updateAlacartItemQuantity as updateAlacartItemQuantityAction,
   revertReviewChanges,
+  clearPackageReview as clearReviewData,
   AlacartSelectedProduct,
   PackageMeta,
 } from "@/store/packageReviewSlice";
@@ -51,6 +53,13 @@ import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCar
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
 import socketService from "@/services/socket/socket.service";
+import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
+import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
+import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
+import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import apiClient from "@/services/config-service/axio-config";
+import { ENDPOINTS } from "@/services/config-service/endpoints";
+import { getAuthHeader } from "@/services/config-service/auth-header";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
@@ -184,17 +193,17 @@ const toDisplayProduct = (p: ReviewProduct): ReviewProduct => ({
   price: Number(((p.price || 0) * (p.quantity || 0)).toFixed(2)),
   originalProduct: p.originalProduct
     ? {
-        ...p.originalProduct,
-        price: Number(
-          (
-            (p.originalProduct.price || 0) * (p.originalProduct.quantity || 0)
-          ).toFixed(2),
-        ),
-      }
+      ...p.originalProduct,
+      price: Number(
+        (
+          (p.originalProduct.price || 0) * (p.originalProduct.quantity || 0)
+        ).toFixed(2),
+      ),
+    }
     : undefined,
 });
 
-// NEW: shape of what we remember about ala carte rows already saved in the DB
+// Shape of what we remember about ala carte rows already saved in the DB
 type OriginalAlacartEntry = { amount: number; unit: string };
 
 /* ---------------------------------------------------------
@@ -225,6 +234,26 @@ const ProgressDots: React.FC<{ total: number; current: number }> = ({
     ))}
   </View>
 );
+
+// Renders the exclude warning with the product name in bold.
+const renderExcludedWarning = (warning: string, productName?: string) => {
+  if (!productName) return warning;
+
+  const idx = warning.toLowerCase().indexOf(productName.toLowerCase());
+  if (idx === -1) return warning;
+
+  const before = warning.slice(0, idx);
+  const match = warning.slice(idx, idx + productName.length);
+  const after = warning.slice(idx + productName.length);
+
+  return (
+    <>
+      {before}
+      <Text style={{ fontWeight: "700" }}>{match}</Text>
+      {after}
+    </>
+  );
+};
 
 const PriceRow: React.FC<{
   label: string;
@@ -274,6 +303,8 @@ const RowDivider = () => (
 
 const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const effectiveOrderId = route.params?.orderId || 3906;
+  // String key so "3906" vs 3906 never counts as a different order
+  const orderKey = String(effectiveOrderId);
   // invoiceNo from route params acts as an initial display value before the API fetch completes
   const routeInvoiceNo = route.params?.invoiceNo;
   const dispatch = useDispatch();
@@ -287,6 +318,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     deletedAdditionalItemIds,
     invoiceNo: reduxInvoiceNo,
     scheduleDateStr,
+    rawScheduleDate,
     initialPaidAmount,
     moneyPaid,
     creditPaid,
@@ -303,6 +335,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     isLimitReached,
     unreadReminderDays,
     deliveryCharge: reduxDeliveryCharge,
+    isCoupon,
+    couponType,
+    couponValue,
   } = useSelector((state: RootState) => state.packageReview);
 
   // Prefer the API-fetched invoice number; fall back to the one passed via route params
@@ -313,6 +348,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [showExitModal, setShowExitModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [successInvoiceNo, setSuccessInvoiceNo] = useState<string>("");
+
+  // orderadditionalitems.normalPrice (line price BEFORE discount) per saved row.
+  // key = redux ala carte item id (e.g. "prev-7073")
+  const [alacartNormalPriceMap, setAlacartNormalPriceMap] = useState<
+    Record<string, number>
+  >({});
+
+  // ── Additional Card Payment State ──────────────────────────────────────────
+  const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [pendingConfirmPayload, setPendingConfirmPayload] = useState<any>(null);
 
   const [selectedAlaCartCategory, setSelectedAlaCartCategory] =
     useState<string>("Vegetables");
@@ -331,7 +380,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
   const [originalAlacartTotal, setOriginalAlacartTotal] = useState<number>(0);
 
-  // NEW: the qty + unit each SAVED ala carte row had when the review loaded
+  // The qty + unit each SAVED ala carte row had when the review loaded
   // (key = orderadditionalitems.id). Used to detect which saved rows the
   // customer edited so we can send them to the backend for an UPDATE.
   const [originalAlacartMap, setOriginalAlacartMap] = useState<
@@ -339,6 +388,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   >({});
 
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  // Which order (as a string key) the data currently in Redux was loaded for.
+  // null = nothing loaded yet (or it was cleared) → a fetch is required.
+  const loadedOrderIdRef = useRef<string | null>(null);
+  // Monotonically increasing id so a slow response for an OLD order
+  // can never overwrite the data of the order the user is looking at now.
+  const requestIdRef = useRef(0);
+  // Tracks whether the user has successfully confirmed this order,
+  // preventing background re-fetches and alerts while the success overlay is showing.
+  const isConfirmedRef = useRef(false);
 
   const isTimeRanOut = useMemo(() => {
     const currentHour = new Date().getHours();
@@ -403,6 +462,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
+  const userProfile = useSelector((state: RootState) => state.auth.userProfile);
   const buyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
   );
@@ -433,15 +493,76 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [buyerType, effectiveOrderId, navigation]);
 
+  // Fetch active payment gateway from backend config
+  useEffect(() => {
+    const fetchActiveGateway = async () => {
+      try {
+        const headers = await getAuthHeader();
+        const res = await apiClient.get(ENDPOINTS.PAYMENT.ACTIVE_GATEWAY, { headers });
+        if (res.data?.status && res.data?.data?.activeGateway) {
+          setActiveGateway(res.data.data.activeGateway);
+        }
+      } catch {
+        setActiveGateway("payments_lk");
+      }
+    };
+    fetchActiveGateway();
+  }, []);
+
+  // Load saved card for 1-click fast pay (additional payment flow)
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const loadCard = async () => {
+        try {
+          const card = await cardStorageService.getSavedCard(userProfile?.id);
+          if (isMounted) setSavedCard(card);
+        } catch { }
+      };
+      loadCard();
+      return () => {
+        isMounted = false;
+      };
+    }, [userProfile?.id]),
+  );
+
+  // Reset EVERYTHING whenever the order being reviewed changes
+  // (also runs on first mount, which wipes data left in Redux by a previous
+  // order). Depends on orderKey (a string) so a type change of the same id
+  // ("3906" vs 3906) can never trigger a reset. Must stay ABOVE the
+  // useFocusEffect that fetches, so the reset runs first and the fetch afterwards.
+  useEffect(() => {
+    setMode("overview");
+    setCurrentStepIndex(0);
+    setShowExitModal(false);
+    setIsSubmitting(false);
+    setShowSuccessOverlay(false);
+    setUnavailablePackageIds({});
+    setDisabledAlacartProductIds(new Set());
+    setOriginalAlacartTotal(0);
+    setOriginalAlacartMap({});
+    setAlacartNormalPriceMap({});
+    loadedOrderIdRef.current = null;
+    // NOTE: Redux is NOT cleared here. clearReviewData() runs only after the
+    // final confirm step succeeds (see goToNextStep).
+  }, [orderKey]);
+
   // Fetch review data from backend
   const fetchReviewData = useCallback(
     async (force = false) => {
+      if (isConfirmedRef.current) return;
       if (buyerType && buyerType.toLowerCase() !== "retail") {
         return;
       }
+      // Tag this request; only the latest one is allowed to write to Redux
+      const reqId = ++requestIdRef.current;
       dispatch(setLoadingReview(true));
       try {
         const res = await orderService.getPackageReview(effectiveOrderId);
+
+        // A newer request (e.g. a different order) superseded this one
+        if (reqId !== requestIdRef.current) return;
+
         if (res.data?.status && res.data?.data) {
           const { orderInfo, packages, additionalItems, packingSlots } =
             res.data.data;
@@ -475,6 +596,25 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             return;
           }
 
+          if (
+            orderInfo?.isFinalized &&
+            (Number(orderInfo.isFinalized) === 1 || orderInfo.isFinalized === true)
+          ) {
+            dispatch(setLoadingReview(false));
+            if (!isConfirmedRef.current) {
+              if (effectiveOrderId) {
+                navigation.replace("OrderDetails", {
+                  orderId: String(effectiveOrderId),
+                });
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.replace("Home");
+              }
+            }
+            return;
+          }
+
           let resolvedProcessOrderId = null;
           let resolvedInvNo = "INV-2660000";
           let resolvedPaidAmount = 0;
@@ -487,6 +627,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           let resolvedProcessOrderAmount = 0;
           let resolvedDeliveryCharge = 0;
           let resolvedDateStr = "14th August";
+          let resolvedRawDate: string | null = null;
+          let resolvedIsCoupon = 0;
+          let resolvedCouponType: string | null = null;
+          let resolvedCouponValue = 0;
 
           if (orderInfo) {
             resolvedProcessOrderId =
@@ -515,11 +659,15 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             }
             resolvedIsPaid =
               parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
+            resolvedIsCoupon = Number(orderInfo.isCoupon) === 1 ? 1 : 0;
+            resolvedCouponType = orderInfo.couponType || null;
+            resolvedCouponValue = parseFloat(orderInfo.couponValue) || 0;
             if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
-              const d = new Date(
-                orderInfo.sheduleDate || orderInfo.processScheduleDate,
-              );
+              const rawDateVal =
+                orderInfo.sheduleDate || orderInfo.processScheduleDate;
+              const d = new Date(rawDateVal);
               if (!isNaN(d.getTime())) {
+                resolvedRawDate = d.toISOString().split("T")[0];
                 resolvedDateStr = d.toLocaleDateString("en-US", {
                   day: "numeric",
                   month: "long",
@@ -530,26 +678,29 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
           const loadedAlacart: Record<string | number, AlacartSelectedProduct> =
             {};
+          // orderadditionalitems.normalPrice per saved row (line price before discount)
+          const loadedNormalMap: Record<string, number> = {};
+
           if (Array.isArray(additionalItems) && additionalItems.length > 0) {
             additionalItems.forEach((item: any) => {
               const prodId = item.productId || item.additionalItemId;
-              // price = line total for the ordered qty (from orderadditionalitems)
-              const price = parseFloat(item.price || item.normalPrice || 0);
-              // per-kg marketplace rates, used when the user changes qty/unit
-              const perKgNormal = parseFloat(
-                item.perKgNormalPrice || item.normalPrice || 0,
-              );
-              const perKgDiscounted = parseFloat(
-                item.perKgDiscountedPrice || item.discountedPrice || 0,
-              );
+              const perKgNormal = parseFloat(item.perKgNormalPrice || 0);
+              const perKgDiscounted = parseFloat(item.perKgDiscountedPrice || 0);
               const perKgPrice =
-                perKgDiscounted > 0 ? perKgDiscounted : perKgNormal;
-              const basePrice =
-                perKgNormal || parseFloat(item.normalPrice || item.price || 0);
+                perKgDiscounted > 0
+                  ? perKgDiscounted
+                  : perKgNormal > 0
+                    ? perKgNormal
+                    : parseFloat(item.price || item.normalPrice || 0);
+              const basePrice = perKgNormal > 0 ? perKgNormal : perKgPrice;
               const dbUnitType = (item.unitType || "g").toLowerCase();
+              // The unit saved on the order row always wins; the product's unitType is only a fallback
+              const rowUnit = String(item.unit || "")
+                .trim()
+                .toLowerCase();
               const unit = (
-                item.unit?.toLowerCase() === "g"
-                  ? "g"
+                rowUnit === "kg" || rowUnit === "g"
+                  ? rowUnit
                   : dbUnitType === "g"
                     ? "g"
                     : "kg"
@@ -558,10 +709,21 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               const parsedAmount = parseFloat(String(rawQty));
               const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
 
+              // Calculate price using marketplaceitems table current rates for the ordered quantity
+              const weightKg = unit === "kg" ? amount : amount / 1000;
+              const livePrice =
+                perKgPrice > 0
+                  ? Number((perKgPrice * weightKg).toFixed(2))
+                  : parseFloat(item.price || item.normalPrice || 0);
+              const liveNormalPrice =
+                perKgNormal > 0
+                  ? Number((perKgNormal * weightKg).toFixed(2))
+                  : livePrice;
+
               const rawChangeBy =
                 item.changeby != null &&
-                String(item.changeby).trim() !== "" &&
-                parseFloat(String(item.changeby)) > 0
+                  String(item.changeby).trim() !== "" &&
+                  parseFloat(String(item.changeby)) > 0
                   ? parseFloat(String(item.changeby))
                   : item.startValue
                     ? parseFloat(String(item.startValue))
@@ -596,9 +758,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 productId: prodId,
                 displayName: item.productName || item.cropNameEnglish || "Item",
                 image: item.productImage,
-                price: price,
+                price: livePrice,
                 basePrice: basePrice,
                 perKgPrice: perKgPrice,
+                perKgNormalPrice: perKgNormal,
+                perKgDiscountedPrice: perKgDiscounted,
                 weightDisplay: `${amount} ${unit}`,
                 unit: unit,
                 amount: amount,
@@ -610,8 +774,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 startValue: item.startValue,
                 unitType: item.unitType,
               };
+
+              // Normal line price from marketplaceitems table (used for strikethrough if discounted)
+              loadedNormalMap[itemKey] = liveNormalPrice;
             });
           }
+
+          setAlacartNormalPriceMap(loadedNormalMap);
 
           // Remember what the customer ORIGINALLY paid for ala carte items,
           // so "Pay Additional" only counts real changes.
@@ -622,7 +791,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             ),
           );
 
-          // NEW: remember the original qty + unit of every SAVED ala carte row
+          // Remember the original qty + unit of every SAVED ala carte row
           // (keyed by orderadditionalitems.id) so we can detect edits later.
           setOriginalAlacartMap(
             Object.values(loadedAlacart).reduce(
@@ -702,33 +871,33 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     excludedWarning: i.excludedWarning,
                     originalProduct: i.originalProduct
                       ? {
-                          id: String(i.originalProduct.id),
-                          itemId: i.originalProduct.itemId
-                            ? Number(i.originalProduct.itemId)
-                            : i.itemId
-                              ? Number(i.itemId)
-                              : undefined,
-                          productId: i.originalProduct.productId
-                            ? Number(i.originalProduct.productId)
-                            : i.productId
-                              ? Number(i.productId)
-                              : undefined,
-                          category:
-                            i.originalProduct.category || "Original Item",
-                          name: i.originalProduct.name,
-                          icon: "🥗",
-                          image: i.originalProduct.image,
-                          price: parseFloat(i.originalProduct.price || 0),
-                          quantity: parseFloat(i.originalProduct.quantity ?? 1),
-                          unit: "kg" as "kg" | "g",
-                          step: parseFloat(
-                            i.originalProduct.step ||
-                              i.originalProduct.changeby ||
-                              itemStep,
-                          ),
-                          productType: i.originalProduct.productType,
-                          productTypeId: i.originalProduct.productType,
-                        }
+                        id: String(i.originalProduct.id),
+                        itemId: i.originalProduct.itemId
+                          ? Number(i.originalProduct.itemId)
+                          : i.itemId
+                            ? Number(i.itemId)
+                            : undefined,
+                        productId: i.originalProduct.productId
+                          ? Number(i.originalProduct.productId)
+                          : i.productId
+                            ? Number(i.productId)
+                            : undefined,
+                        category:
+                          i.originalProduct.category || "Original Item",
+                        name: i.originalProduct.name,
+                        icon: "🥗",
+                        image: i.originalProduct.image,
+                        price: parseFloat(i.originalProduct.price || 0),
+                        quantity: parseFloat(i.originalProduct.quantity ?? 1),
+                        unit: "kg" as "kg" | "g",
+                        step: parseFloat(
+                          i.originalProduct.step ||
+                          i.originalProduct.changeby ||
+                          itemStep,
+                        ),
+                        productType: i.originalProduct.productType,
+                        productTypeId: i.originalProduct.productType,
+                      }
                       : undefined,
                   };
                 },
@@ -782,6 +951,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               actualOrderId: orderInfo?.actualOrderId,
               invoiceNo: resolvedInvNo,
               scheduleDateStr: resolvedDateStr,
+              rawScheduleDate: resolvedRawDate,
               initialPaidAmount: resolvedPaidAmount,
               moneyPaid: resolvedMoneyPaid,
               creditPaid: resolvedCreditPaid,
@@ -790,6 +960,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               isPaid: resolvedIsPaid,
               processOrderAmount: resolvedProcessOrderAmount,
               deliveryCharge: resolvedDeliveryCharge,
+              isCoupon: resolvedIsCoupon,
+              couponType: resolvedCouponType,
+              couponValue: resolvedCouponValue,
               packagesMeta: newMeta,
               packageProducts: newProducts,
               productTemplatesState: newTemplates,
@@ -802,23 +975,39 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               unreadReminderDays: packingSlots?.unreadReminderDays,
             }),
           );
+
+          // Redux now holds data for THIS order (stored as a string key)
+          loadedOrderIdRef.current = orderKey;
         }
       } catch (err) {
         console.log("Failed to load package review details from API:", err);
       } finally {
-        dispatch(setLoadingReview(false));
+        // Only the latest request may turn the loading flag off
+        if (reqId === requestIdRef.current) {
+          dispatch(setLoadingReview(false));
+        }
       }
     },
-    [dispatch, effectiveOrderId, buyerType, navigation],
+    [dispatch, effectiveOrderId, orderKey, buyerType, navigation],
   );
 
-  // Refresh review data from backend whenever user is on/enters overview screen
+  // Fetch when:
+  //  • the user is on the overview screen (always refresh), OR
+  //  • Redux holds data for a DIFFERENT order than the one being opened.
+  // NEVER refetch while the user is editing inside the flow for the same order
+  // (e.g. coming back from ReplaceProduct) — that would wipe their edits.
   useFocusEffect(
     useCallback(() => {
-      if (mode === "overview") {
+      if (isConfirmedRef.current) return;
+      const dataIsForThisOrder = loadedOrderIdRef.current === orderKey;
+
+      // Never refetch while the user is editing in the flow
+      if (mode === "flow" && dataIsForThisOrder) return;
+
+      if (mode === "overview" || !dataIsForThisOrder) {
         fetchReviewData(true);
       }
-    }, [mode, fetchReviewData]),
+    }, [mode, orderKey, fetchReviewData]),
   );
 
   const handleRefresh = useCallback(async () => {
@@ -826,6 +1015,45 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     await fetchReviewData(true);
     setIsRefreshing(false);
   }, [fetchReviewData]);
+
+  // Poll packing slots remaining count every 1 minute while screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(async () => {
+        try {
+          const orderIdParam = processOrderId || effectiveOrderId;
+          const res = await orderService.getPackingLimit(
+            rawScheduleDate || undefined,
+            orderIdParam,
+          );
+          if (res.data?.status && res.data?.data) {
+            const slotData = res.data.data;
+            const slots =
+              slotData.remaining !== undefined
+                ? slotData.remaining
+                : slotData.availableSlots;
+            dispatch(
+              setPackingSlots({
+                availableSlots: slots,
+                targetLimit: slotData.targetLimit,
+                isLimitReached: slotData.isLimitReached || slots <= 0,
+                unreadReminderDays: slotData.unreadReminderDays,
+              }),
+            );
+          }
+        } catch (err) {
+          console.warn(
+            "[ReviewPackageScreen] Polling packing limit error:",
+            err,
+          );
+        }
+      }, 60000);
+
+      return () => {
+        clearInterval(interval);
+      };
+    }, [dispatch, rawScheduleDate, processOrderId, effectiveOrderId]),
+  );
 
   // Handle navigation returns with step or replaced item
   useEffect(() => {
@@ -906,9 +1134,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         }
       } else {
         setAlaCartProducts([]);
-        const message =
-          response.data?.message || `No products available for ${categoryId}.`;
-        Alert.alert("Notice", message);
       }
     } catch (error: any) {
       console.error("Failed to load products by category from API:", error);
@@ -1060,7 +1285,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               setAlaCartProducts(products);
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
       // Re-check both packages and ala carte items availability in real time via socket
       checkAllAvailability();
@@ -1117,230 +1342,683 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  const goToNextStep = async () => {
-    if (currentStepIndex < steps.length - 1) {
-      setCurrentStepIndex((prev) => prev + 1);
-    } else {
-      // Confirm order completion & finalize review (BATCH UPDATE ON LAST STEP)
+  // Builds the full confirmPackageReview payload from current Redux + component state.
+  // Called from both the card-additional-payment branch and the existing direct-confirm path.
+  const buildConfirmPayload = (overrideIsPaid?: boolean | number) => {
+    const replacements: Array<{
+      orderPackageId: number;
+      replceId?: number;
+      newProductId: number;
+      productType?: string | number;
+      newQty: number;
+      newPrice: number;
+    }> = [];
 
-      // Detect payment method early so we can show loading overlay immediately
-      const pMethod = (paymentMethod || "").trim().toLowerCase();
-      const isCard =
-        pMethod.includes("card") ||
-        pMethod.includes("payhere") ||
-        pMethod.includes("online") ||
-        (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
+    Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
+      const orderPkgId = orderPackageDbIds[pkgKey];
+      if (orderPkgId) {
+        const templateProds = productTemplatesState[pkgKey] || [];
+        prods.forEach((p) => {
+          const templateProd = templateProds.find(
+            (t) =>
+              (t.productId && p.productId && t.productId === p.productId) ||
+              String(t.itemId || t.id) === String(p.itemId || p.id),
+          );
+          const baselineQty =
+            templateProd?.quantity ??
+            p.minQuantity ??
+            p.originalProduct?.quantity;
+          const isQtyChanged =
+            baselineQty !== undefined
+              ? Number(p.quantity) !== Number(baselineQty)
+              : false;
 
-      // Detect Cash on Delivery or Cash on Pickup — skip OrderConfirmed for these
-      const dMethod = (deliveryMethod || "").trim().toLowerCase();
-      const isCashOrder =
-        pMethod.includes("cash") ||
-        pMethod === "cod" ||
-        pMethod.includes("pickup");
-      const isCashOnPickup =
-        dMethod.includes("pickup") || pMethod.includes("pickup");
-      const shouldSkipConfirmScreen = isCashOrder || isCashOnPickup;
-
-      // For cash/pickup orders: show loading overlay immediately
-      if (shouldSkipConfirmScreen) {
-        setIsSubmitting(true);
-      }
-
-      try {
-        const replacements: Array<{
-          orderPackageId: number;
-          replceId?: number;
-          newProductId: number;
-          productType?: string | number;
-          newQty: number;
-          newPrice: number;
-        }> = [];
-
-        Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
-          const orderPkgId = orderPackageDbIds[pkgKey];
-          if (orderPkgId) {
-            const templateProds = productTemplatesState[pkgKey] || [];
-            prods.forEach((p) => {
-              const templateProd = templateProds.find(
-                (t) =>
-                  (t.productId && p.productId && t.productId === p.productId) ||
-                  String(t.itemId || t.id) === String(p.itemId || p.id),
-              );
-              const baselineQty =
-                templateProd?.quantity ??
-                p.minQuantity ??
-                p.originalProduct?.quantity;
-              const isQtyChanged =
-                baselineQty !== undefined
-                  ? Number(p.quantity) !== Number(baselineQty)
-                  : false;
-
-              if (p.isReplaced || isQtyChanged) {
-                const replceId =
-                  p.originalProduct?.itemId ||
-                  p.itemId ||
-                  (p.originalProduct?.id
-                    ? parseInt(p.originalProduct.id)
-                    : undefined) ||
-                  p.productId ||
-                  parseInt(p.id) ||
-                  undefined;
-                const newProdId = p.productId || parseInt(p.id) || 0;
-                replacements.push({
-                  orderPackageId: orderPkgId,
-                  replceId: replceId,
-                  newProductId: newProdId,
-                  productType: p.productTypeId || p.productType || p.category,
-                  newQty: p.quantity || 1,
-                  newPrice: Number(
-                    ((p.price || 0) * (p.quantity || 1)).toFixed(2),
-                  ),
-                });
-              }
+          if (p.isReplaced || isQtyChanged) {
+            const replceId =
+              p.originalProduct?.itemId ||
+              p.itemId ||
+              (p.originalProduct?.id
+                ? parseInt(p.originalProduct.id)
+                : undefined) ||
+              p.productId ||
+              parseInt(p.id) ||
+              undefined;
+            const newProdId = p.productId || parseInt(p.id) || 0;
+            replacements.push({
+              orderPackageId: orderPkgId,
+              replceId: replceId,
+              newProductId: newProdId,
+              productType: p.productTypeId || p.productType || p.category,
+              newQty: p.quantity || 1,
+              newPrice: Number(
+                ((p.price || 0) * (p.quantity || 1)).toFixed(2),
+              ),
             });
           }
         });
+      }
+    });
 
-        // Ala carte items ADDED in this review session (new rows / merge by productId)
-        const additionalItemsPayload = Object.values(alacartSelection)
-          .filter((item) => item.isAddedNow)
-          .map((item) => ({
-            productId:
-              typeof item.productId === "number"
-                ? item.productId
-                : parseInt(
-                    String(item.productId || item.id).replace(/[^0-9]/g, ""),
-                  ) || 0,
-            qty: item.amount,
-            unit: item.unit,
-            normalPrice: item.basePrice,
-            price: item.price,
-          }));
+    const additionalItemsPayload = Object.values(alacartSelection)
+      .filter((item) => item.isAddedNow)
+      .map((item) => ({
+        productId:
+          typeof item.productId === "number"
+            ? item.productId
+            : parseInt(
+              String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            ) || 0,
+        qty: item.amount,
+        unit: item.unit,
+        normalPrice: item.basePrice,
+        price: item.price,
+      }));
 
-        // NEW: Ala carte items ALREADY SAVED in the order whose qty or unit the
-        // customer changed. Sent with their orderadditionalitems.id so the
-        // backend UPDATEs that exact row (qty, unit, normalPrice, price, discount).
-        const updatedAdditionalItemsPayload = Object.values(alacartSelection)
-          .filter((item) => {
-            if (item.isAddedNow || !item.additionalItemId) return false;
-            if (isItemUnavailable(item)) return false;
-            const orig = originalAlacartMap[item.additionalItemId];
-            if (!orig) return false;
-            return (
-              Number(orig.amount) !== Number(item.amount) ||
-              orig.unit !== item.unit
-            );
-          })
-          .map((item) => ({
-            id: item.additionalItemId as number, // orderadditionalitems.id
-            productId:
-              typeof item.productId === "number"
-                ? item.productId
-                : parseInt(
-                    String(item.productId || item.id).replace(/[^0-9]/g, ""),
-                  ) || 0,
-            qty: item.amount,
-            unit: item.unit,
-            // fallback only: backend recalculates from marketplace per-kg rates
-            price: Number((item.price * item.quantity).toFixed(2)),
-          }));
+    const updatedAdditionalItemsPayload = Object.values(alacartSelection)
+      .filter((item) => {
+        if (item.isAddedNow || !item.additionalItemId) return false;
+        if (isItemUnavailable(item)) return false;
+        const orig = originalAlacartMap[item.additionalItemId];
+        if (!orig) return false;
+        return (
+          Number(orig.amount) !== Number(item.amount) ||
+          orig.unit !== item.unit
+        );
+      })
+      .map((item) => ({
+        id: item.additionalItemId as number,
+        productId:
+          typeof item.productId === "number"
+            ? item.productId
+            : parseInt(
+              String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            ) || 0,
+        qty: item.amount,
+        unit: item.unit,
+        price: Number((item.price * item.quantity).toFixed(2)),
+      }));
 
-        // Build packages payload for initial insert into orderpackageitems (Todo packages)
-        const packagesPayload = Object.entries(packageProducts).map(
-          ([pkgKey, prods]) => ({
-            orderPackageId: orderPackageDbIds[pkgKey],
-            packageId: pkgKey,
-            items: (prods as any[]).map((p) => {
-              const pType =
-                p.productTypeId != null && !isNaN(Number(p.productTypeId))
-                  ? Number(p.productTypeId)
-                  : p.productType != null && !isNaN(Number(p.productType))
-                    ? Number(p.productType)
-                    : null;
-              const prodId =
-                p.productId ||
-                (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
-              return {
-                productType: pType,
-                productId: prodId,
-                qty: Number(p.quantity) || 1,
-                price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
-              };
-            }),
+    const packagesPayload = Object.entries(packageProducts).map(
+      ([pkgKey, prods]) => ({
+        orderPackageId: orderPackageDbIds[pkgKey],
+        packageId: pkgKey,
+        items: (prods as any[]).map((p) => {
+          const pType =
+            p.productTypeId != null && !isNaN(Number(p.productTypeId))
+              ? Number(p.productTypeId)
+              : p.productType != null && !isNaN(Number(p.productType))
+                ? Number(p.productType)
+                : null;
+          const prodId =
+            p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+          return {
+            productType: pType,
+            productId: prodId,
+            qty: Number(p.quantity) || 1,
+            price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+          };
+        }),
+      }),
+    );
+
+    const pMethodInner = (paymentMethod || "").trim().toLowerCase();
+    const isCardMethod =
+      pMethodInner.includes("card") ||
+      pMethodInner.includes("payhere") ||
+      pMethodInner.includes("online") ||
+      (isPaid && !pMethodInner.includes("cash") && !pMethodInner.includes("cod"));
+
+    const netDiff = totalDiff;
+    const netRefundSavings =
+      Boolean(isPaid) && netDiff < 0
+        ? Number(Math.abs(netDiff).toFixed(2))
+        : 0;
+
+    const resolvedIsPaidPayload =
+      overrideIsPaid !== undefined
+        ? (overrideIsPaid ? 1 : 0)
+        : isPaid
+          ? 1
+          : 0;
+
+    return {
+      orderId: actualOrderId || effectiveOrderId,
+      processOrderId: processOrderId || undefined,
+      lockNow: true,
+      additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+      newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+      paymentMethod: paymentMethod || undefined,
+      isPaid: resolvedIsPaidPayload,
+      newTotal: finalOrderTotalWithDelivery,
+      creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
+      replacements,
+      additionalItems: additionalItemsPayload,
+      updatedAdditionalItems:
+        updatedAdditionalItemsPayload.length > 0
+          ? updatedAdditionalItemsPayload
+          : undefined,
+      deletedAdditionalItemIds:
+        deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+          ? deletedAdditionalItemIds
+          : undefined,
+      packages: packagesPayload,
+    };
+  };
+
+  const goToNextStep = async () => {
+    // Prevent double taps while the request is running
+    if (isSubmitting) return;
+
+    // Validate packing slot remaining count: if 0, show error
+    try {
+      const orderIdParam = processOrderId || effectiveOrderId;
+      const res = await orderService.getPackingLimit(
+        rawScheduleDate || undefined,
+        orderIdParam,
+      );
+      if (res.data?.status && res.data?.data) {
+        const slotData = res.data.data;
+        const currentRemaining =
+          slotData.remaining !== undefined
+            ? slotData.remaining
+            : slotData.availableSlots;
+        dispatch(
+          setPackingSlots({
+            availableSlots: currentRemaining,
+            targetLimit: slotData.targetLimit,
+            isLimitReached: slotData.isLimitReached || currentRemaining <= 0,
+            unreadReminderDays: slotData.unreadReminderDays,
           }),
         );
-
-        console.log(
-          "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
-          {
-            orderId: effectiveOrderId,
-            processOrderId: processOrderId || undefined,
-            lockNow: true,
-            additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
-            newScheduleDate:
-              (route.params as any)?.newScheduleDate || undefined,
-            replacements,
-            additionalItems: additionalItemsPayload,
-            updatedAdditionalItems: updatedAdditionalItemsPayload,
-            packagesCount: packagesPayload.length,
-          },
+        if (currentRemaining <= 0) {
+          Alert.alert(
+            "Packing Limit Reached",
+            "Sorry, we are not accepting any more orders for this schedule date.",
+            [{ text: "OK" }],
+          );
+          return;
+        }
+      } else if (availableSlots <= 0) {
+        Alert.alert(
+          "Packing Limit Reached",
+          "Sorry, we are not accepting any more orders for this schedule date.",
+          [{ text: "OK" }],
         );
+        return;
+      }
+    } catch (valErr) {
+      console.warn(
+        "[ReviewPackageScreen] Packing limit validation error:",
+        valErr,
+      );
+      if (availableSlots <= 0) {
+        Alert.alert(
+          "Packing Limit Reached",
+          "Sorry, we are not accepting any more orders for this schedule date.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+    }
 
-        // Net package diff (pure package + alacart items, without delivery fee)
-        const netDiff = totalDiff;
-        const netRefundSavings =
-          (isCard || isPaid) && netDiff < 0
-            ? Number(Math.abs(netDiff).toFixed(2))
-            : 0;
+    // Not the last step yet: just move forward
+    if (currentStepIndex < steps.length - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+      return;
+    }
 
-        const confirmRes = await orderService.confirmPackageReview({
-          orderId: actualOrderId || effectiveOrderId,
+    // ───────────────────────────────────────────────────────────
+    // Last step: confirm order completion & finalize review
+    // ───────────────────────────────────────────────────────────
+
+    // Detect payment method
+    const pMethod = (paymentMethod || "").trim().toLowerCase();
+    const isCard =
+      pMethod.includes("card") ||
+      pMethod.includes("payhere") ||
+      pMethod.includes("online") ||
+      (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
+
+    const isPaidCardOrder = isCard && Boolean(isPaid);
+    const isUnpaidCardOrder = isCard && !isPaid;
+
+    // Detect Cash on Delivery or Cash on Pickup, which skip OrderConfirmed
+    const dMethod = (deliveryMethod || "").trim().toLowerCase();
+    const isCashOrder =
+      pMethod.includes("cash") ||
+      pMethod === "cod" ||
+      pMethod.includes("pickup");
+    const isCashOnPickup =
+      dMethod.includes("pickup") || pMethod.includes("pickup");
+    const shouldSkipConfirmScreen = isCashOrder || isCashOnPickup;
+
+    // Capture everything we need AFTER the Redux state is cleared
+    const confirmedInvoiceNo = invoiceNo;
+    const confirmedTotal = finalOrderTotalWithDelivery;
+    const confirmedOrderId = String(actualOrderId || effectiveOrderId);
+    const confirmedScheduleDate =
+      scheduleDateStr || (rawScheduleDate || undefined);
+    const confirmedPackageTotal = packagesTotal;
+    const confirmedAlacartTotal = alacartTotal;
+    const confirmedDeliveryCharge = deliveryCharge;
+    const confirmedDeliveryMethod = deliveryMethod;
+
+    // Show "Processing..." on the button for EVERY payment type
+    setIsSubmitting(true);
+
+    // ── Path 1: Card order already paid, but additional payment required ───────
+    if (isPaidCardOrder && additionalPayAmount > 0) {
+      const confirmPayload = buildConfirmPayload(1);
+      setPendingConfirmPayload(confirmPayload);
+      try {
+        const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+        // Attempt 1-click saved card charge first
+        if (savedCard && adapter.chargeSavedCard) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: additionalPayAmount,
+              paymentType: "order",
+              orderId: String(processOrderId || effectiveOrderId),
+              itemsDescription: `GoviMart Package Additional Payment - ${invoiceNo}`,
+            });
+            if (chargeRes.success) {
+              await handleAdditionalPaymentSuccess(confirmPayload);
+              return;
+            }
+          } catch (chargeErr: any) {
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+            if (!isInvalid) {
+              setIsSubmitting(false);
+              Alert.alert(
+                "Payment Error",
+                chargeErr?.response?.data?.message ||
+                chargeErr?.message ||
+                "Payment failed. Please try again.",
+              );
+              return;
+            }
+            setSavedCard(null); // invalid/expired → fall through to hosted checkout
+          }
+        }
+
+        // Hosted checkout (no saved card, or saved card was invalid/expired)
+        const session = await adapter.initiatePayment({
+          orderId: String(processOrderId || effectiveOrderId),
+          amount: additionalPayAmount,
+          paymentType: "order",
+          itemsDescription: `GoviMart Package Additional Payment - ${invoiceNo}`,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+        // isSubmitting stays true — button is blocked while the modal is open
+      } catch (err: any) {
+        setIsSubmitting(false);
+        Alert.alert(
+          "Payment Error",
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to start payment. Please try again.",
+        );
+      }
+      return; // Do NOT fall through to the direct confirmPackageReview call
+    }
+
+    // ── Path 2: Card order not yet paid (full total + additional amount must be paid via gateway) ──
+    // Deduct coupon discount ONLY for payment gateway payable value
+    const couponDeduction =
+      Number(isCoupon) === 1 && !isFreeDeliveryCoupon
+        ? Number(couponValue) || 0
+        : 0;
+    const fullPayableAmount = Math.max(
+      0,
+      Number(
+        (finalOrderTotalWithDelivery - (creditPaid || 0) - couponDeduction).toFixed(2),
+      ),
+    );
+
+    if (isUnpaidCardOrder && fullPayableAmount > 0) {
+      const confirmPayload = buildConfirmPayload(1);
+      setPendingConfirmPayload(confirmPayload);
+      try {
+        const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+        // Attempt 1-click saved card charge first
+        if (savedCard && adapter.chargeSavedCard) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: fullPayableAmount,
+              paymentType: "order",
+              orderId: String(processOrderId || effectiveOrderId),
+              itemsDescription: `GoviMart Package Order Payment - ${invoiceNo}`,
+            });
+            if (chargeRes.success) {
+              await handleAdditionalPaymentSuccess(confirmPayload);
+              return;
+            }
+          } catch (chargeErr: any) {
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+            if (!isInvalid) {
+              setIsSubmitting(false);
+              Alert.alert(
+                "Payment Error",
+                chargeErr?.response?.data?.message ||
+                chargeErr?.message ||
+                "Payment failed. Please try again.",
+              );
+              return;
+            }
+            setSavedCard(null); // invalid/expired → fall through to hosted checkout
+          }
+        }
+
+        // Hosted checkout (no saved card, or saved card was invalid/expired)
+        const session = await adapter.initiatePayment({
+          orderId: String(processOrderId || effectiveOrderId),
+          amount: fullPayableAmount,
+          paymentType: "order",
+          itemsDescription: `GoviMart Package Order Payment - ${invoiceNo}`,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+        // isSubmitting stays true — button is blocked while the modal is open
+      } catch (err: any) {
+        setIsSubmitting(false);
+        Alert.alert(
+          "Payment Error",
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to start payment. Please try again.",
+        );
+      }
+      return; // Do NOT fall through to the direct confirmPackageReview call
+    }
+
+    try {
+      const replacements: Array<{
+        orderPackageId: number;
+        replceId?: number;
+        newProductId: number;
+        productType?: string | number;
+        newQty: number;
+        newPrice: number;
+      }> = [];
+
+      Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
+        const orderPkgId = orderPackageDbIds[pkgKey];
+        if (orderPkgId) {
+          const templateProds = productTemplatesState[pkgKey] || [];
+          prods.forEach((p) => {
+            const templateProd = templateProds.find(
+              (t) =>
+                (t.productId && p.productId && t.productId === p.productId) ||
+                String(t.itemId || t.id) === String(p.itemId || p.id),
+            );
+            const baselineQty =
+              templateProd?.quantity ??
+              p.minQuantity ??
+              p.originalProduct?.quantity;
+            const isQtyChanged =
+              baselineQty !== undefined
+                ? Number(p.quantity) !== Number(baselineQty)
+                : false;
+
+            if (p.isReplaced || isQtyChanged) {
+              const replceId =
+                p.originalProduct?.itemId ||
+                p.itemId ||
+                (p.originalProduct?.id
+                  ? parseInt(p.originalProduct.id)
+                  : undefined) ||
+                p.productId ||
+                parseInt(p.id) ||
+                undefined;
+              const newProdId = p.productId || parseInt(p.id) || 0;
+              replacements.push({
+                orderPackageId: orderPkgId,
+                replceId: replceId,
+                newProductId: newProdId,
+                productType: p.productTypeId || p.productType || p.category,
+                newQty: p.quantity || 1,
+                newPrice: Number(
+                  ((p.price || 0) * (p.quantity || 1)).toFixed(2),
+                ),
+              });
+            }
+          });
+        }
+      });
+
+      // Ala carte items ADDED in this review session (new rows / merge by productId)
+      const additionalItemsPayload = Object.values(alacartSelection)
+        .filter((item) => item.isAddedNow)
+        .map((item) => ({
+          productId:
+            typeof item.productId === "number"
+              ? item.productId
+              : parseInt(
+                String(item.productId || item.id).replace(/[^0-9]/g, ""),
+              ) || 0,
+          qty: item.amount,
+          unit: item.unit,
+          normalPrice: item.basePrice,
+          price: item.price,
+        }));
+
+      // Ala carte items ALREADY SAVED whose qty or unit the customer changed.
+      // Sent with their orderadditionalitems.id so the backend UPDATEs that row.
+      const updatedAdditionalItemsPayload = Object.values(alacartSelection)
+        .filter((item) => {
+          if (item.isAddedNow || !item.additionalItemId) return false;
+          if (isItemUnavailable(item)) return false;
+          const orig = originalAlacartMap[item.additionalItemId];
+          if (!orig) return false;
+          return (
+            Number(orig.amount) !== Number(item.amount) ||
+            orig.unit !== item.unit
+          );
+        })
+        .map((item) => ({
+          id: item.additionalItemId as number, // orderadditionalitems.id
+          productId:
+            typeof item.productId === "number"
+              ? item.productId
+              : parseInt(
+                String(item.productId || item.id).replace(/[^0-9]/g, ""),
+              ) || 0,
+          qty: item.amount,
+          unit: item.unit,
+          // fallback only: backend recalculates from marketplace per-kg rates
+          price: Number((item.price * item.quantity).toFixed(2)),
+        }));
+
+      // Packages payload for initial insert into orderpackageitems (Todo packages)
+      const packagesPayload = Object.entries(packageProducts).map(
+        ([pkgKey, prods]) => ({
+          orderPackageId: orderPackageDbIds[pkgKey],
+          packageId: pkgKey,
+          items: (prods as any[]).map((p) => {
+            const pType =
+              p.productTypeId != null && !isNaN(Number(p.productTypeId))
+                ? Number(p.productTypeId)
+                : p.productType != null && !isNaN(Number(p.productType))
+                  ? Number(p.productType)
+                  : null;
+            const prodId =
+              p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+            return {
+              productType: pType,
+              productId: prodId,
+              qty: Number(p.quantity) || 1,
+              price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+            };
+          }),
+        }),
+      );
+
+      console.log(
+        "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
+        {
+          orderId: effectiveOrderId,
           processOrderId: processOrderId || undefined,
           lockNow: true,
           additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
           newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
-          paymentMethod: paymentMethod || undefined,
-          newTotal: finalOrderTotalWithDelivery,
-          creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
           replacements,
           additionalItems: additionalItemsPayload,
-          updatedAdditionalItems:
-            updatedAdditionalItemsPayload.length > 0
-              ? updatedAdditionalItemsPayload
-              : undefined, // NEW
-          deletedAdditionalItemIds:
-            deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
-              ? deletedAdditionalItemIds
-              : undefined,
-          packages: packagesPayload,
-        });
-        console.log(
-          "[ReviewPackageScreen] confirmPackageReview response:",
-          confirmRes.data,
-          { isCard, netRefundSavings, finalOrderTotalWithDelivery },
-        );
+          updatedAdditionalItems: updatedAdditionalItemsPayload,
+          packagesCount: packagesPayload.length,
+        },
+      );
 
-        if (shouldSkipConfirmScreen) {
-          // Hide loading spinner, show AlertModal success message.
-          // Navigation to Home is handled inside AlertModal's onClose callback.
-          setIsSubmitting(false);
-          setShowSuccessOverlay(true);
-          return;
-        }
-      } catch (err) {
-        console.error("[ReviewPackageScreen] Confirm review API error:", err);
-        setIsSubmitting(false);
-        setShowSuccessOverlay(false);
-        if (shouldSkipConfirmScreen) return;
-      }
+      // Net package diff (pure package + alacart items, without delivery fee)
+      const netDiff = totalDiff;
+      const netRefundSavings =
+        Boolean(isPaid) && netDiff < 0
+          ? Number(Math.abs(netDiff).toFixed(2))
+          : 0;
 
-      // Navigate directly to OrderConfirmed (card/online payment methods only)
-      navigation.navigate("OrderConfirmed", {
-        orderId: String(effectiveOrderId),
-        invoiceNumber: invoiceNo,
-        total: finalOrderTotalWithDelivery,
+      const confirmRes = await orderService.confirmPackageReview({
+        orderId: actualOrderId || effectiveOrderId,
+        processOrderId: processOrderId || undefined,
+        lockNow: true,
+        additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+        newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+        paymentMethod: paymentMethod || undefined,
+        isPaid: isUnpaidCardOrder ? 1 : isPaid ? 1 : 0,
+        newTotal: finalOrderTotalWithDelivery,
+        creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
+        replacements,
+        additionalItems: additionalItemsPayload,
+        updatedAdditionalItems:
+          updatedAdditionalItemsPayload.length > 0
+            ? updatedAdditionalItemsPayload
+            : undefined,
+        deletedAdditionalItemIds:
+          deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+            ? deletedAdditionalItemIds
+            : undefined,
+        packages: packagesPayload,
       });
+      console.log(
+        "[ReviewPackageScreen] confirmPackageReview response:",
+        confirmRes.data,
+        { isCard, netRefundSavings, finalOrderTotalWithDelivery },
+      );
+
+      // Capture invoice number for the success alert modal
+      const confirmedInv =
+        invoiceNo || routeInvoiceNo || (effectiveOrderId ? `#${effectiveOrderId}` : "");
+      setSuccessInvoiceNo(confirmedInv);
+
+      // The order is saved. Wipe the review state so the NEXT order
+      // (even one with the same package) never sees these edits.
+      loadedOrderIdRef.current = null;
+      requestIdRef.current += 1; // invalidate any in-flight fetch
+      dispatch(clearReviewData());
+      setUnavailablePackageIds({});
+      setAlacartNormalPriceMap({});
+      setDisabledAlacartProductIds(new Set());
+      setOriginalAlacartTotal(0);
+      setOriginalAlacartMap({});
+      setCurrentStepIndex(0);
+      setMode("overview");
+
+      // Stop the button spinner
+      setIsSubmitting(false);
+
+      isConfirmedRef.current = true;
+      // Show success alert overlay (auto-dismisses in 2s and redirects to Home)
+      setShowSuccessOverlay(true);
+      return;
+    } catch (err) {
+      console.error("[ReviewPackageScreen] Confirm review API error:", err);
+      setIsSubmitting(false);
+      setShowSuccessOverlay(false);
+      // Stay on the confirm step so the user can retry
+      Alert.alert("Error", "Could not confirm your order. Please try again.");
+      return;
     }
+  };
+
+  // ── Additional Card Payment Handlers ────────────────────────────────────
+
+  const handleAdditionalPaymentSuccess = async (confirmPayload?: any) => {
+    setCheckoutModalVisible(false);
+
+    const payload = confirmPayload ?? pendingConfirmPayload;
+    if (!payload) {
+      Alert.alert("Error", "Order details missing. Please contact support.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // Capture invoice number for the success alert modal
+      const confirmedInv =
+        invoiceNo || routeInvoiceNo || (effectiveOrderId ? `#${effectiveOrderId}` : "");
+      setSuccessInvoiceNo(confirmedInv);
+
+      const finalPayload = {
+        ...payload,
+        isPaid: 1,
+      };
+
+      const confirmRes = await orderService.confirmPackageReview(finalPayload);
+      console.log(
+        "[ReviewPackageScreen] confirmPackageReview (post-payment):",
+        confirmRes.data,
+      );
+
+      // Wipe review state — same as the existing success path in goToNextStep
+      loadedOrderIdRef.current = null;
+      requestIdRef.current += 1;
+      dispatch(clearReviewData());
+      setUnavailablePackageIds({});
+      setAlacartNormalPriceMap({});
+      setDisabledAlacartProductIds(new Set());
+      setOriginalAlacartTotal(0);
+      setOriginalAlacartMap({});
+      setCurrentStepIndex(0);
+      setMode("overview");
+      setPendingConfirmPayload(null);
+
+      // Stop button loading spinner and display success overlay
+      setIsSubmitting(false);
+      isConfirmedRef.current = true;
+      setShowSuccessOverlay(true);
+    } catch (err: any) {
+      console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
+      Alert.alert(
+        "Order Confirmation Failed",
+        "Your payment was received but the order could not be confirmed. Please contact support.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdditionalPaymentCancel = () => {
+    setCheckoutModalVisible(false);
+    setCheckoutSession(null);
+    setPendingConfirmPayload(null);
+    setIsSubmitting(false);
+    Alert.alert(
+      "Payment Cancelled",
+      "The payment was not completed. Your order was not confirmed. You can try again.",
+    );
   };
 
   const onChangeProduct = (packageId: string, product: ReviewProduct) => {
@@ -1372,8 +2050,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       name: item.displayName,
       image: item.image,
       weight: formatWeightDisplay(item.weightDisplay, item.amount, item.unit),
-      price: item.price,
-      originalPrice: item.basePrice,
+      // line price actually paid
+      price: item.price * item.quantity,
+      // line price before discount (orderadditionalitems.normalPrice)
+      originalPrice: getNormalLinePrice(item),
     }));
 
     const pMethod = (paymentMethod || "").trim().toLowerCase();
@@ -1433,10 +2113,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     const list: {
       pkg: PackageMeta;
       stepIndex: number;
-      originalPrice: number;
-      diff: number;
+      originalPrice: number; // total (x qty) - still used for totals
+      unitOriginalPrice: number; // price of ONE package
+      unitCurrentPrice: number; // price of ONE package incl. changes
+      diff: number; // change for ONE package
       additionalChanges: number;
-      currentPrice: number;
+      currentPrice: number; // total (x qty)
     }[] = [];
 
     steps.forEach((step, idx) => {
@@ -1453,22 +2135,19 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         const currentSum = prods.reduce((s, p) => s + p.price * p.quantity, 0);
         const diff = currentSum - templateSum;
 
-        // originalPrice = marketplacepackages (productPrice + fees) x qty
-        // (what the customer originally paid for)
-        const originalPrice =
-          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) * pkg.qty;
-        const additionalChanges = diff * pkg.qty; // signed
-        // currentPrice = original package price + changes
-        const currentPrice =
-          (pkg.unitPrice + pkg.serviceFee + pkg.packingFee + diff) * pkg.qty;
+        const unitOriginalPrice =
+          pkg.unitPrice + pkg.serviceFee + pkg.packingFee;
+        const unitCurrentPrice = unitOriginalPrice + diff;
 
         list.push({
           pkg,
           stepIndex: idx,
-          originalPrice,
+          originalPrice: unitOriginalPrice * pkg.qty,
+          unitOriginalPrice,
+          unitCurrentPrice,
           diff,
-          additionalChanges,
-          currentPrice,
+          additionalChanges: diff * pkg.qty,
+          currentPrice: unitCurrentPrice * pkg.qty,
         });
       }
     });
@@ -1498,6 +2177,33 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     [disabledAlacartProductIds],
   );
 
+  // Normal (pre-discount) line price for an ala carte row.
+  //  • Saved row whose qty/unit is unchanged -> loaded normal price from marketplaceitems
+  //  • Edited or newly added row             -> perKgNormalPrice * weightKg (or basePrice)
+  const getNormalLinePrice = (item: any): number => {
+    const linePrice = item.price * item.quantity;
+
+    if (!item.isAddedNow && item.additionalItemId) {
+      const orig = originalAlacartMap[item.additionalItemId];
+      const unchanged =
+        !!orig &&
+        Number(orig.amount) === Number(item.amount) &&
+        orig.unit === item.unit;
+      if (unchanged && alacartNormalPriceMap[String(item.id)] != null) {
+        return alacartNormalPriceMap[String(item.id)];
+      }
+    }
+
+    const weightKg =
+      (item.unit === "kg" ? item.amount : item.amount / 1000) || 1;
+    const normalRate =
+      item.perKgNormalPrice ||
+      (item.basePrice && item.basePrice > 0 ? item.basePrice : 0);
+    const calcNormal =
+      normalRate > 0 ? Number((normalRate * weightKg).toFixed(2)) : linePrice;
+    return Math.max(calcNormal, linePrice);
+  };
+
   // Totals for the final confirm step
   // originalPrice in packageSummaries = productPrice + fees (what was originally paid)
   const packagesTotal = packageSummaries.reduce(
@@ -1512,19 +2218,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     .filter((item) => item.isAddedNow && !isItemUnavailable(item))
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const deliveryCharge = Number(reduxDeliveryCharge || 0);
-  const grandTotal = packagesTotal + alacartTotal + deliveryCharge;
-  const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
-  const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
-  // Signed diff between the original paid-for total and the reviewed total.
-  // Positive => customer owes more. Negative => total went down (reduced / refundable).
-  // Compare against what the customer ORIGINALLY paid:
-  // original packages + ala carte items that were already in the order.
-  const originalPaidTotal = packagesTotal + originalAlacartTotal;
-  const totalDiff = confirmGrandTotal - originalPaidTotal;
-  const additionalPayAmount = Math.max(0, totalDiff);
-  const totalSavingsAmount = Math.max(0, -totalDiff);
-
   // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
   // Cash payment (COD or pickup) vs card/online — used to word the "Please Note" box
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
@@ -1535,6 +2228,40 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
+
+  const deliveryCharge = Number(reduxDeliveryCharge || 0);
+  const isCouponApplied = Number(isCoupon) === 1;
+  const couponTypeStr = String(couponType || "").toLowerCase();
+  const isFreeDeliveryCoupon =
+    isCouponApplied &&
+    (couponTypeStr.includes("free") || couponTypeStr.includes("delivery"));
+  const effectiveDeliveryCharge =
+    isPickup || isFreeDeliveryCoupon ? 0 : deliveryCharge;
+  const couponDiscount =
+    isCouponApplied && !isFreeDeliveryCoupon
+      ? Number(couponValue) || 0
+      : 0;
+
+  const grandTotal = packagesTotal + alacartTotal + effectiveDeliveryCharge;
+  const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
+  // Total before coupon deduction — passed unreduced to the backend
+  const finalOrderTotalWithDelivery = confirmGrandTotal + effectiveDeliveryCharge;
+
+  // Payable amount for payment gateway (unpaid card orders): deduct creditPaid and coupon discount
+  const fullPayableAmount = Math.max(
+    0,
+    Number(
+      (finalOrderTotalWithDelivery - (creditPaid || 0) - couponDiscount).toFixed(2),
+    ),
+  );
+  // Signed diff between the original paid-for total and the reviewed total.
+  // Positive => customer owes more. Negative => total went down (reduced / refundable).
+  // Compare against what the customer ORIGINALLY paid:
+  // original packages + ala carte items that were already in the order.
+  const originalPaidTotal = packagesTotal + originalAlacartTotal;
+  const totalDiff = confirmGrandTotal - originalPaidTotal;
+  const additionalPayAmount = Math.max(0, totalDiff);
+  const totalSavingsAmount = Math.max(0, -totalDiff);
 
   // True when at least one package in the confirm step is no longer available
   const hasUnavailablePackage = packagesMeta.some(
@@ -1747,7 +2474,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           className="flex-1"
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "space-between",
+          }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -1757,126 +2487,227 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             />
           }
         >
-          <View className="items-center mt-2">
-            <Text className="text-[17px] font-bold text-black">
-              Order : #{invoiceNo || effectiveOrderId}
-            </Text>
-            <Text className="text-[14px] text-[#494A65] mt-1">
-              Schedule to : {scheduleDateStr}
-            </Text>
-          </View>
-
-          {isLocked && (
-            <View className="mx-5 mt-3 bg-[#FFF3CD] border border-[#FFEBAA] rounded-2xl p-4 flex-row items-center">
-              <Ionicons name="lock-closed" size={20} color="#856404" />
-              <Text className="text-[13px] text-[#856404] font-medium ml-2 flex-1">
-                Package reviewing is currently locked. Your order is already
-                being packed.
+          <View>
+            <View className="items-center mt-2">
+              <Text className="text-[17px] font-bold text-black">
+                Order : #{invoiceNo || effectiveOrderId}
+              </Text>
+              <Text className="text-[14px] text-[#494A65] mt-1">
+                Schedule to : {scheduleDateStr}
               </Text>
             </View>
-          )}
 
-          <View className="h-[1px] bg-[#ECECEC] mt-5" />
-
-          {isTimeRanOut ? (
-            <TimeRanOutBanner
-              nextScheduleDateStr={nextScheduleDateStr}
-              onSendReminderTomorrow={onSendReminderTomorrow}
-              onCancelOrder={onCancelOrder}
-            />
-          ) : (
-            <>
-              <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
-                Review and customize your package as per your preference.
-              </Text>
-
-              <View className="mt-5">
-                <HurryBanner
-                  ordersLeft={availableSlots > 0 ? availableSlots : 30}
-                  date={scheduleDateStr}
-                  showCancelLink={true}
-                  onCancelOrder={onCancelOrder}
-                />
+            {isLocked && (
+              <View className="mx-5 mt-3 bg-[#FFF3CD] border border-[#FFEBAA] rounded-2xl p-4 flex-row items-center">
+                <Ionicons name="lock-closed" size={20} color="#856404" />
+                <Text className="text-[13px] text-[#856404] font-medium ml-2 flex-1">
+                  Package reviewing is currently locked. Your order is already
+                  being packed.
+                </Text>
               </View>
+            )}
 
-              <View className="h-[1px] bg-[#ECECEC] mt-6" />
+            <View className="h-[1px] bg-[#ECECEC] mt-5" />
 
-              <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
-                Here are the packages you purchased. You can review and update
-                them if needed.
-              </Text>
+            {isTimeRanOut ? (
+              <TimeRanOutBanner
+                nextScheduleDateStr={nextScheduleDateStr}
+                onSendReminderTomorrow={onSendReminderTomorrow}
+                onCancelOrder={onCancelOrder}
+              />
+            ) : (
+              <>
+                <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
+                  Review and customize your package as per your preference.
+                </Text>
 
-              {loadingReview ? (
-                <LoadingPage
-                  message="Loading package details..."
-                  fullScreen={false}
-                />
-              ) : packagesMeta.length === 0 ? (
-                <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
-                  <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
-                  <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">
-                    No packages found for this order.
+                <View className="mt-5">
+                  <HurryBanner
+                    ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
+                    date={scheduleDateStr}
+                    showCancelLink={true}
+                    onCancelOrder={onCancelOrder}
+                  />
+                </View>
+
+                <View className="h-[1px] bg-[#ECECEC] mt-6" />
+
+                <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
+                  Here are the packages you purchased. You can review and update
+                  them if needed.
+                </Text>
+
+                {loadingReview ? (
+                  <LoadingPage
+                    message="Loading package details..."
+                    fullScreen={false}
+                  />
+                ) : packagesMeta.length === 0 ? (
+                  <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
+                    <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
+                    <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">
+                      No packages found for this order.
+                    </Text>
+                  </View>
+                ) : (
+                  packagesMeta.map((pkg, pIdx) => (
+                    <View
+                      key={`pkg-${pkg.id}-${pIdx}`}
+                      className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl px-4 py-2.5 flex-row items-center"
+                    >
+                      <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
+                        {pkg.image ? (
+                          <Image
+                            source={{ uri: pkg.image }}
+                            className="w-12 h-12 rounded-xl"
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
+                        )}
+                      </View>
+                      <View className="ml-3 flex-1">
+                        <Text
+                          className="text-[17px] font-bold text-black"
+                          numberOfLines={2}
+                        >
+                          {pkg.name} (x{pkg.qty})
+                        </Text>
+                        <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
+                          Price :{" "}
+                          <Text className="font-bold text-black">
+                            Rs.{" "}
+                            {formatPrice(
+                              pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
+                            )}{" "}
+                            x {pkg.qty} = Rs.{" "}
+                            {formatPrice(
+                              (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
+                              pkg.qty,
+                            )}
+                          </Text>
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
+                  Lastly, you may also purchase any additional items you want
+                  after reviewing the packages you purchased.
+                </Text>
+
+                <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
+                  <Text className="text-[14px] font-bold text-black mb-1">
+                    Please Note :
+                  </Text>
+                  <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                    If you update the quantities of products in your packages, or
+                    add or replace products, the total amount may change. You'll
+                    need to pay any additional amount due.
                   </Text>
                 </View>
-              ) : (
-                packagesMeta.map((pkg, pIdx) => (
-                  <View
-                    key={`pkg-${pkg.id}-${pIdx}`}
-                    className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl p-4 flex-row items-center"
-                  >
-                    <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
-                      {pkg.image ? (
-                        <Image
-                          source={{ uri: pkg.image }}
-                          className="w-12 h-12 rounded-xl"
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Text style={{ fontSize: 24 }}>{pkg.icon || "📦"}</Text>
-                      )}
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <Text
-                        className="text-[17px] font-bold text-black"
-                        numberOfLines={1}
-                      >
-                        {pkg.name} (x{pkg.qty})
-                      </Text>
-                      <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                        Price :{" "}
-                        <Text className="font-bold text-black">
-                          Rs.{" "}
-                          {formatPrice(
-                            pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
-                          )}{" "}
-                          x {pkg.qty} = Rs.{" "}
-                          {formatPrice(
-                            (pkg.unitPrice + pkg.serviceFee + pkg.packingFee) *
-                              pkg.qty,
-                          )}
-                        </Text>
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              )}
+              </>
+            )}
+          </View>
 
-              <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
-                Lastly, you may also purchase any additional items you want
-                after reviewing the packages you purchased.
-              </Text>
+          {/* Bottom Payment & Action Section (overview) inside ScrollView */}
+          {!loadingReview && !isTimeRanOut && (
+            <View
+              style={{
+                backgroundColor: "#FFF",
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+                paddingHorizontal: 20,
+                paddingTop: 22,
+                paddingBottom: Platform.OS === "ios" ? 34 : 20,
+                marginTop: 20,
+                shadowColor: "#000",
+                shadowOpacity: 0.12,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: -3 },
+                elevation: 15,
+              }}
+            >
+              {/* Total = Full Total + Discount Received */}
+              <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
 
-              <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
-                <Text className="text-[14px] font-bold text-black mb-1">
+              <RowDivider />
+
+              {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
+              <PriceRow
+                label="Discount Received"
+                value={`- Rs. ${formatPrice(overviewDiscount)}`}
+                valueColor="#1B8A3A"
+              />
+
+              <RowDivider />
+
+              {/* Full Total = productPrice + packingFee + serviceFee */}
+              <PriceRow
+                label="Full Total"
+                value={`Rs. ${formatPrice(overviewFullTotal)}`}
+                strong
+                big
+                marginBottom={14}
+              />
+
+              {/* Note about what is shown from this point onward */}
+              <View
+                style={{
+                  backgroundColor: "#F5F8FF",
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  marginBottom: 18,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#000000",
+                    marginBottom: 4,
+                  }}
+                >
                   Please Note :
                 </Text>
-                <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                  If you update the quantities of products in your packages, or
-                  add or replace products, the total amount may change. You'll
-                  need to pay any additional amount due.
+                <Text style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}>
+                  From this point onward, only the package prices and à la carte
+                  prices will be shown. Any à la carte discounts, coupon discounts,
+                  delivery fees will not be reflected here.
                 </Text>
               </View>
-            </>
+
+              <TouchableOpacity
+                disabled={loadingReview || packagesMeta.length === 0}
+                onPress={() => {
+                  setCurrentStepIndex(0);
+                  setMode("flow");
+                }}
+                activeOpacity={0.85}
+                style={{
+                  height: 54,
+                  backgroundColor:
+                    loadingReview || packagesMeta.length === 0
+                      ? "#7F919C"
+                      : "#000000",
+                  borderRadius: 30,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOpacity:
+                    loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 3 },
+                  elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
+                }}
+              >
+                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+                  {loadingReview ? "Loading Packages..." : "Review My Packages"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </ScrollView>
       ) : null}
@@ -1935,7 +2766,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               <View>
                 <View className="bg-white pt-1 pb-3">
                   <HurryBanner
-                    ordersLeft={availableSlots > 0 ? availableSlots : 30}
+                    ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
                     date={scheduleDateStr}
                     showCancelLink
                     onCancelOrder={onCancelOrder}
@@ -1995,7 +2826,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                           className="flex-1 text-[13px] leading-5"
                           style={{ color: "#FF383C" }}
                         >
-                          {product.excludedWarning}
+                          {renderExcludedWarning(
+                            product.excludedWarning,
+                            product.name,
+                          )}
                         </Text>
                       </View>
                     )}
@@ -2127,7 +2961,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         >
           <View className="bg-white pt-1 pb-3">
             <HurryBanner
-              ordersLeft={availableSlots > 0 ? availableSlots : 30}
+              ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
               date={scheduleDateStr}
               showCancelLink
               onCancelOrder={onCancelOrder}
@@ -2249,7 +3083,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                       const isSelected = Object.values(alacartSelection).some(
                         (item) =>
                           String(item.productId || item.id) ===
-                            String(product.id) && Boolean(item.isAddedNow),
+                          String(product.id) && Boolean(item.isAddedNow),
                       );
                       return (
                         <AlacartProductCard
@@ -2295,7 +3129,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         >
           <View className="bg-white pt-1 pb-3">
             <HurryBanner
-              ordersLeft={availableSlots > 0 ? availableSlots : 30}
+              ordersLeft={typeof availableSlots === "number" ? Math.max(0, availableSlots) : 0}
               date={scheduleDateStr}
               showCancelLink
               onCancelOrder={onCancelOrder}
@@ -2349,14 +3183,13 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         }}
                       >
                         {item.pkg.name}
-                        {item.pkg.qty > 1 ? ` (x${item.pkg.qty})` : ""}
                       </Text>
                       {!isUnavailable && (
                         <>
                           <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
                             Original Price :{" "}
                             <Text className="font-bold text-black">
-                              Rs. {formatPrice(item.originalPrice)}
+                              Rs. {formatPrice(item.unitOriginalPrice)}
                             </Text>
                           </Text>
                           <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
@@ -2373,7 +3206,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 }}
                               >
                                 {item.diff > 0 ? "+ " : "- "}Rs.{" "}
-                                {formatPrice(Math.abs(item.additionalChanges))}
+                                {formatPrice(Math.abs(item.diff))}
                               </Text>
                             )}
                           </Text>
@@ -2410,7 +3243,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                       <Text className="text-[14px] text-black">
                         Current Price :{" "}
                         <Text className="font-bold">
-                          Rs. {formatPrice(item.currentPrice)}
+                          Rs. {formatPrice(item.unitCurrentPrice)}
+                          {item.pkg.qty > 1 ? ` X ${item.pkg.qty}` : ""}
                         </Text>
                       </Text>
                       <TouchableOpacity
@@ -2449,6 +3283,12 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 {Object.values(alacartSelection).map((item, aIdx) => {
                   const isItemDisabled = isItemUnavailable(item);
 
+                  // Normal (pre-discount) vs paid line price
+                  const paidLine = item.price * item.quantity;
+                  const normalLine = getNormalLinePrice(item);
+                  const showStrike =
+                    !isItemDisabled && normalLine > paidLine + 0.001;
+
                   return (
                     <View
                       key={`alacart-item-${item.id}-${aIdx}`}
@@ -2463,7 +3303,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                       }}
                     >
                       {/* Top row: Image, Name & Price, Trash, Added Now */}
-                      <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-stretch justify-between">
                         <View className="flex-row items-center flex-1">
                           <View
                             className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
@@ -2494,26 +3334,43 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                           <View className="flex-1 pr-2">
                             <Text
                               className="text-[16px] font-bold text-black"
-                              numberOfLines={1}
+                              numberOfLines={2}
                             >
                               {item.displayName}
                             </Text>
-                            <Text
-                              className="text-[15px] font-bold mt-0.5"
-                              style={{
-                                color: isItemDisabled
-                                  ? "#F04438"
-                                  : item.isAddedNow
+
+                            {/* Normal price (struck through) + discounted price */}
+                            <View className="flex-row items-center mt-0.5">
+                              {showStrike && (
+                                <Text
+                                  style={{
+                                    fontSize: 13,
+                                    color: "#9CA3AF",
+                                    textDecorationLine: "line-through",
+                                    marginRight: 6,
+                                  }}
+                                >
+                                  Rs. {formatPrice(normalLine)}
+                                </Text>
+                              )}
+                              <Text
+                                className="text-[15px] font-bold"
+                                style={{
+                                  color: isItemDisabled
                                     ? "#F04438"
-                                    : "#000000",
-                              }}
-                            >
-                              Rs. {formatPrice(item.price)}
-                            </Text>
+                                    : item.isAddedNow
+                                      ? "#F04438"
+                                      : "#000000",
+                                }}
+                              >
+                                Rs. {formatPrice(item.price)}
+                              </Text>
+                            </View>
                           </View>
                         </View>
 
-                        <View className="items-end justify-between h-14">
+                        {/* Right column: trash on top, "Added Now" at the bottom */}
+                        <View className="items-end justify-between min-h-[56px]">
                           {/* Trash button: red background & red icon when disabled */}
                           <TouchableOpacity
                             onPress={() => removeAlacartItem(item.id)}
@@ -2536,10 +3393,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             />
                           </TouchableOpacity>
 
-                          {!isItemDisabled && item.isAddedNow && (
-                            <Text className="text-[12px] font-medium text-[#F04438]">
-                              Added Now
-                            </Text>
+                          {!isItemDisabled && item.isAddedNow ? (
+                            <View className="mt-12">
+                              <Text className="text-[12px] font-medium text-[#F04438]">
+                                Added Now
+                              </Text>
+                            </View>
+                          ) : (
+                            <View />
                           )}
                         </View>
                       </View>
@@ -2592,11 +3453,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 toggleAlacartItemUnit(item.id, "kg")
                               }
                               activeOpacity={0.8}
-                              className={`px-3.5 py-1 rounded-full mr-1.5 ${
-                                item.unit === "kg"
-                                  ? "bg-[#FF9114]"
-                                  : "bg-[#FCE1C5]"
-                              }`}
+                              className={`px-3.5 py-1 rounded-full mr-1.5 ${item.unit === "kg"
+                                ? "bg-[#FF9114]"
+                                : "bg-[#FCE1C5]"
+                                }`}
                             >
                               <Text className="text-white font-bold text-[12px]">
                                 kg
@@ -2607,11 +3467,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 toggleAlacartItemUnit(item.id, "g")
                               }
                               activeOpacity={0.8}
-                              className={`px-3.5 py-1 rounded-full ${
-                                item.unit === "g"
-                                  ? "bg-[#FF9114]"
-                                  : "bg-[#FCE1C5]"
-                              }`}
+                              className={`px-3.5 py-1 rounded-full ${item.unit === "g"
+                                ? "bg-[#FF9114]"
+                                : "bg-[#FCE1C5]"
+                                }`}
                             >
                               <Text className="text-white font-bold text-[12px]">
                                 g
@@ -2640,9 +3499,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                   }
                                   disabled={isAtMin}
                                   activeOpacity={0.7}
-                                  className={`w-6 h-6 rounded-full items-center justify-center ${
-                                    isAtMin ? "bg-[#D1D1D6]" : "bg-black"
-                                  }`}
+                                  className={`w-6 h-6 rounded-full items-center justify-center ${isAtMin ? "bg-[#D1D1D6]" : "bg-black"
+                                    }`}
                                 >
                                   <Ionicons
                                     name="remove"
@@ -2697,6 +3555,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   </Text>
                   .
                 </Text>
+              ) : !isPaid ? (
+                <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                  This scheduled order has not been paid yet. The total amount{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(fullPayableAmount)}
+                  </Text>{" "}
+                  will need to be paid via card to confirm your order.
+                </Text>
               ) : (
                 <Text className="text-[13px] text-[#6B6B6B] leading-5">
                   You have already paid for this order. The additional amount{" "}
@@ -2724,6 +3590,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   </Text>
                   .
                 </Text>
+              ) : !isPaid ? (
+                <Text className="text-[13px] text-[#475467] leading-5">
+                  This scheduled order has not been paid yet. Your total has been reduced by{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(totalSavingsAmount)}
+                  </Text>
+                  . Your new total of{" "}
+                  <Text className="font-bold text-black">
+                    Rs. {formatPrice(fullPayableAmount)}
+                  </Text>{" "}
+                  will need to be paid via card to confirm.
+                </Text>
               ) : (
                 <Text className="text-[13px] text-[#475467] leading-5">
                   You have already paid for this order, so the remaining balance
@@ -2735,107 +3613,24 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
               )}
             </View>
+          ) : !isCashPayment && !isPaid ? (
+            <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
+              <Text className="text-[14px] font-bold text-black mb-1">
+                Please Note :
+              </Text>
+              <Text className="text-[13px] text-[#6B6B6B] leading-5">
+                This scheduled order has not been paid yet. The total amount of{" "}
+                <Text className="font-bold text-black">
+                  Rs. {formatPrice(fullPayableAmount)}
+                </Text>{" "}
+                will need to be paid via card to confirm your order.
+              </Text>
+            </View>
           ) : null}
         </ScrollView>
       )}
 
-      {/* Fixed Bottom Payment & Action Section (overview) */}
-      {mode === "overview" && !loadingReview && !isTimeRanOut && (
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 20,
-            paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 12,
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: -3 },
-            elevation: 15,
-          }}
-        >
-          {/* Total = Full Total + Discount Received */}
-          <PriceRow label="Total" value={`Rs. ${formatPrice(overviewTotal)}`} />
 
-          <RowDivider />
-
-          {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
-          <PriceRow
-            label="Discount Received"
-            value={`- Rs. ${formatPrice(overviewDiscount)}`}
-            valueColor="#1B8A3A"
-          />
-
-          <RowDivider />
-
-          {/* Full Total = productPrice + packingFee + serviceFee */}
-          <PriceRow
-            label="Full Total"
-            value={`Rs. ${formatPrice(overviewFullTotal)}`}
-            strong
-            big
-            marginBottom={14}
-          />
-
-          {/* Note about what is shown from this point onward */}
-          <View
-            style={{
-              backgroundColor: "#F5F8FF",
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              marginBottom: 18,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: "#000000",
-                marginBottom: 4,
-              }}
-            >
-              Please Note :
-            </Text>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}>
-              From this point onward, only the package prices and à la carte
-              prices will be shown. Any à la carte discounts, coupon discounts,
-              delivery fees will not be reflected here.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            disabled={loadingReview || packagesMeta.length === 0}
-            onPress={() => {
-              setCurrentStepIndex(0);
-              setMode("flow");
-            }}
-            activeOpacity={0.85}
-            style={{
-              height: 54,
-              backgroundColor:
-                loadingReview || packagesMeta.length === 0
-                  ? "#7F919C"
-                  : "#000000",
-              borderRadius: 30,
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOpacity:
-                loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
-            }}
-          >
-            <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              {loadingReview ? "Loading Packages..." : "Review My Packages"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {mode === "flow" && currentStep.type === "alacart" && (
         <View
@@ -2926,15 +3721,18 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           />
 
           <TouchableOpacity
-            onPress={isConfirmDisabled ? undefined : goToNextStep}
-            disabled={isConfirmDisabled}
-            activeOpacity={0.85}
+            onPress={isConfirmDisabled || isSubmitting ? undefined : goToNextStep}
+            disabled={isConfirmDisabled || isSubmitting}
+            activeOpacity={isSubmitting ? 1 : 0.85}
             style={{
               height: 54,
               backgroundColor: isConfirmDisabled ? "#7F919C" : "#000000",
+              opacity: isSubmitting ? 0.85 : 1,
               borderRadius: 30,
               justifyContent: "center",
               alignItems: "center",
+              flexDirection: "row",
+              gap: 8,
               shadowColor: "#000",
               shadowOpacity: isConfirmDisabled ? 0 : 0.15,
               shadowRadius: 6,
@@ -2942,9 +3740,22 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               elevation: isConfirmDisabled ? 0 : 5,
             }}
           >
-            <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              Confirm Order Details
-            </Text>
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator color="#FFFFFF" />
+                <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+                  Processing...
+                </Text>
+              </>
+            ) : (
+              <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
+                {!isCashPayment && !isPaid && fullPayableAmount > 0
+                  ? `Pay Rs. ${formatPrice(fullPayableAmount)} & Confirm`
+                  : !isCashPayment && isPaid && additionalPayAmount > 0
+                    ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)} & Confirm`
+                    : "Confirm Order Details"}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -2985,14 +3796,30 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         </View>
       </Modal>
 
-      {/* Success alert — shown briefly after API succeeds (cash orders) */}
+      {/* Additional Card Payment Modal — card orders with extra amount due */}
+      {checkoutSession && (
+        <PaymentCheckoutModal
+          visible={checkoutModalVisible}
+          gatewayName={checkoutSession.gateway}
+          checkoutUrl={checkoutSession.checkoutUrl}
+          postBody={checkoutSession.postBody}
+          orderId={checkoutSession.orderId}
+          amount={checkoutSession.amount}
+          customerAddress={checkoutSession.customerAddress}
+          onSuccess={(_orderId) => handleAdditionalPaymentSuccess()}
+          onCancel={(_orderId) => handleAdditionalPaymentCancel()}
+          onClose={() => setCheckoutModalVisible(false)}
+        />
+      )}
+
+      {/* Success alert — shown briefly after review package succeeds */}
       <AlertModal
         visible={showSuccessOverlay}
         type="success"
-        title="Order Confirmed!"
-        message="Order reviewed and dispatched successfully!"
+        title="Successful!"
+        message={`Your order ${successInvoiceNo || invoiceNo}\n reviewed and dispatched successfully!`}
         autoClose={true}
-        duration={2000}
+        duration={2500}
         onClose={() => {
           setShowSuccessOverlay(false);
           navigation.reset({
@@ -3023,7 +3850,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           setCurrentStepIndex(0);
           setMode("overview");
           dispatch(revertReviewChanges());
-          fetchReviewData(true);
+          // fetch happens via useFocusEffect (mode === "overview")
         }}
         onCancel={() => setShowExitModal(false)}
       />
