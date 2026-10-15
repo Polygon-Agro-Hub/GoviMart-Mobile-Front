@@ -395,6 +395,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // Monotonically increasing id so a slow response for an OLD order
   // can never overwrite the data of the order the user is looking at now.
   const requestIdRef = useRef(0);
+  // Tracks whether the user has successfully confirmed this order,
+  // preventing background re-fetches and alerts while the success overlay is showing.
+  const isConfirmedRef = useRef(false);
 
   const isTimeRanOut = useMemo(() => {
     const currentHour = new Date().getHours();
@@ -547,6 +550,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // Fetch review data from backend
   const fetchReviewData = useCallback(
     async (force = false) => {
+      if (isConfirmedRef.current) return;
       if (buyerType && buyerType.toLowerCase() !== "retail") {
         return;
       }
@@ -597,27 +601,17 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             (Number(orderInfo.isFinalized) === 1 || orderInfo.isFinalized === true)
           ) {
             dispatch(setLoadingReview(false));
-            Alert.alert(
-              "Already Finalized!",
-              "You have already reviewed and finalized this order.",
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (effectiveOrderId) {
-                      navigation.replace("OrderDetails", {
-                        orderId: String(effectiveOrderId),
-                      });
-                    } else if (navigation.canGoBack()) {
-                      navigation.goBack();
-                    } else {
-                      navigation.replace("Home");
-                    }
-                  },
-                },
-              ],
-              { cancelable: false },
-            );
+            if (!isConfirmedRef.current) {
+              if (effectiveOrderId) {
+                navigation.replace("OrderDetails", {
+                  orderId: String(effectiveOrderId),
+                });
+              } else if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.replace("Home");
+              }
+            }
             return;
           }
 
@@ -1004,6 +998,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // (e.g. coming back from ReplaceProduct) — that would wipe their edits.
   useFocusEffect(
     useCallback(() => {
+      if (isConfirmedRef.current) return;
       const dataIsForThisOrder = loadedOrderIdRef.current === orderKey;
 
       // Never refetch while the user is editing in the flow
@@ -1937,6 +1932,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       // Stop the button spinner
       setIsSubmitting(false);
 
+      isConfirmedRef.current = true;
       // Show success alert overlay (auto-dismisses in 2s and redirects to Home)
       setShowSuccessOverlay(true);
       return;
@@ -1994,6 +1990,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
       // Stop button loading spinner and display success overlay
       setIsSubmitting(false);
+      isConfirmedRef.current = true;
       setShowSuccessOverlay(true);
     } catch (err: any) {
       console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
