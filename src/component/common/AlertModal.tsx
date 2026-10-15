@@ -143,18 +143,21 @@ export const AlertModal: React.FC<AlertModalProps> = ({
           </TouchableOpacity>
 
           {/* Title */}
+          {/* Title */}
           <Text
-  style={{
-    fontWeight: "700",
-    fontSize: 18,
-    lineHeight: 28,
-    marginBottom: 16,
-    textAlign: "center",
-  }}
->
+            style={{
+              width: "100%",
+              paddingHorizontal: 40,
+              fontWeight: "700",
+              fontSize: 18,
+              lineHeight: 28,
+              marginBottom: 16,
+              textAlign: "center",
+              includeFontPadding: false,
+            }}
+          >
             {getModalTitle()}
           </Text>
-
           {getContent()}
 
           {renderMessage()}

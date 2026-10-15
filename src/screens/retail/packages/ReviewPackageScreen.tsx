@@ -3817,7 +3817,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         visible={showSuccessOverlay}
         type="success"
         title="Successful!"
-        message={`Your order ${successInvoiceNo || invoiceNo}\nconfirmed successfully.`}
+        message={`Your order ${successInvoiceNo || invoiceNo}\n reviewed and dispatched successfully!`}
         autoClose={true}
         duration={2500}
         onClose={() => {
