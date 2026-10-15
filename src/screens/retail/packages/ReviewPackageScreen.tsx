@@ -335,6 +335,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     isLimitReached,
     unreadReminderDays,
     deliveryCharge: reduxDeliveryCharge,
+    isCoupon,
+    couponType,
+    couponValue,
   } = useSelector((state: RootState) => state.packageReview);
 
   // Prefer the API-fetched invoice number; fall back to the one passed via route params
@@ -631,6 +634,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           let resolvedDeliveryCharge = 0;
           let resolvedDateStr = "14th August";
           let resolvedRawDate: string | null = null;
+          let resolvedIsCoupon = 0;
+          let resolvedCouponType: string | null = null;
+          let resolvedCouponValue = 0;
 
           if (orderInfo) {
             resolvedProcessOrderId =
@@ -659,6 +665,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             }
             resolvedIsPaid =
               parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
+            resolvedIsCoupon = Number(orderInfo.isCoupon) === 1 ? 1 : 0;
+            resolvedCouponType = orderInfo.couponType || null;
+            resolvedCouponValue = parseFloat(orderInfo.couponValue) || 0;
             if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
               const rawDateVal =
                 orderInfo.sheduleDate || orderInfo.processScheduleDate;
@@ -957,6 +966,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               isPaid: resolvedIsPaid,
               processOrderAmount: resolvedProcessOrderAmount,
               deliveryCharge: resolvedDeliveryCharge,
+              isCoupon: resolvedIsCoupon,
+              couponType: resolvedCouponType,
+              couponValue: resolvedCouponValue,
               packagesMeta: newMeta,
               packageProducts: newProducts,
               productTemplatesState: newTemplates,
@@ -2202,19 +2214,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     .filter((item) => item.isAddedNow && !isItemUnavailable(item))
     .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const deliveryCharge = Number(reduxDeliveryCharge || 0);
-  const grandTotal = packagesTotal + alacartTotal + deliveryCharge;
-  const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
-  const finalOrderTotalWithDelivery = confirmGrandTotal + deliveryCharge;
-  // Signed diff between the original paid-for total and the reviewed total.
-  // Positive => customer owes more. Negative => total went down (reduced / refundable).
-  // Compare against what the customer ORIGINALLY paid:
-  // original packages + ala carte items that were already in the order.
-  const originalPaidTotal = packagesTotal + originalAlacartTotal;
-  const totalDiff = confirmGrandTotal - originalPaidTotal;
-  const additionalPayAmount = Math.max(0, totalDiff);
-  const totalSavingsAmount = Math.max(0, -totalDiff);
-
   // Cash on Delivery vs card/online — used to word the "Please Note" box correctly
   // Cash payment (COD or pickup) vs card/online — used to word the "Please Note" box
   const pMethodLower = (paymentMethod || "").trim().toLowerCase();
@@ -2225,6 +2224,36 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
+
+  const deliveryCharge = Number(reduxDeliveryCharge || 0);
+  const isCouponApplied = Number(isCoupon) === 1;
+  const couponTypeStr = String(couponType || "").toLowerCase();
+  const isFreeDeliveryCoupon =
+    isCouponApplied &&
+    (couponTypeStr.includes("free") || couponTypeStr.includes("delivery"));
+  const effectiveDeliveryCharge =
+    isPickup || isFreeDeliveryCoupon ? 0 : deliveryCharge;
+  const couponDiscount =
+    isCouponApplied && !isFreeDeliveryCoupon
+      ? Number(couponValue) || 0
+      : 0;
+
+  const grandTotal = packagesTotal + alacartTotal + effectiveDeliveryCharge;
+  const confirmGrandTotal = confirmPackagesTotal + alacartTotal;
+  const finalOrderTotalWithDelivery = Math.max(
+    0,
+    Number(
+      (confirmGrandTotal + effectiveDeliveryCharge - couponDiscount).toFixed(2),
+    ),
+  );
+  // Signed diff between the original paid-for total and the reviewed total.
+  // Positive => customer owes more. Negative => total went down (reduced / refundable).
+  // Compare against what the customer ORIGINALLY paid:
+  // original packages + ala carte items that were already in the order.
+  const originalPaidTotal = packagesTotal + originalAlacartTotal;
+  const totalDiff = confirmGrandTotal - originalPaidTotal;
+  const additionalPayAmount = Math.max(0, totalDiff);
+  const totalSavingsAmount = Math.max(0, -totalDiff);
 
   // True when at least one package in the confirm step is no longer available
   const hasUnavailablePackage = packagesMeta.some(
@@ -3673,11 +3702,22 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             </>
           )}
 
+          {isCouponApplied && couponDiscount > 0 && (
+            <>
+              <RowDivider />
+              <PriceRow
+                label="Coupon Discount"
+                value={`- Rs. ${formatPrice(couponDiscount)}`}
+                valueColor="#1B8A3A"
+              />
+            </>
+          )}
+
           <RowDivider />
 
           <PriceRow
             label="Total"
-            value={`Rs. ${formatPrice(confirmGrandTotal)}`}
+            value={`Rs. ${formatPrice(Math.max(0, confirmGrandTotal - couponDiscount))}`}
             strong
             big
             marginBottom={20}

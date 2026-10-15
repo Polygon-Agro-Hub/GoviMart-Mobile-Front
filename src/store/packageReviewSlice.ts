@@ -66,6 +66,9 @@ export interface PackageReviewState {
   isLimitReached: boolean;
   unreadReminderDays: number;
   deliveryCharge?: number;
+  isCoupon?: number;
+  couponType?: string | null;
+  couponValue?: number;
 }
 
 const initialState: PackageReviewState = {
@@ -83,6 +86,9 @@ const initialState: PackageReviewState = {
   isPaid: false,
   processOrderAmount: 0,
   deliveryCharge: 0,
+  isCoupon: 0,
+  couponType: null,
+  couponValue: 0,
   packagesMeta: [],
   packageProducts: {},
   productTemplatesState: {},
@@ -147,6 +153,9 @@ export const packageReviewSlice = createSlice({
         isLimitReached?: boolean;
         unreadReminderDays?: number;
         deliveryCharge?: number;
+        isCoupon?: number;
+        couponType?: string | null;
+        couponValue?: number;
       }>,
     ) => {
       const payload = action.payload;
@@ -187,6 +196,15 @@ export const packageReviewSlice = createSlice({
       }
       if (typeof payload.deliveryCharge === "number") {
         state.deliveryCharge = payload.deliveryCharge;
+      }
+      if (payload.isCoupon !== undefined) {
+        state.isCoupon = Number(payload.isCoupon);
+      }
+      if (payload.couponType !== undefined) {
+        state.couponType = payload.couponType;
+      }
+      if (payload.couponValue !== undefined) {
+        state.couponValue = Number(payload.couponValue) || 0;
       }
       state.packagesMeta = payload.packagesMeta;
       state.productTemplatesState = payload.productTemplatesState;
