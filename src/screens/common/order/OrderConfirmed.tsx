@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -14,6 +15,7 @@ import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import { SummaryRow } from "@/component/order/SummaryRow";
 import LoadingPage from "@/component/common/LoadingPage";
+import { AlertModal } from "@/component/common/AlertModal";
 import orderService from "@/services/order/order.service";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
@@ -223,6 +225,24 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const [rawPackagesData, setRawPackagesData] = useState<any[]>([]);
   const [rawItemsData, setRawItemsData] = useState<any[]>([]);
+
+  // ── Success modal state ──────────────────────────────────────────────────
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [successInvoiceNo, setSuccessInvoiceNo] = useState("");
+
+  // True from the moment the gateway reports success until the confirm API
+  // finishes. Kept in a ref too so the gateway modal's onClose (which fires
+  // right after onSuccess) can't reset the loading state mid-confirm.
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const paymentProcessingRef = useRef(false);
+  const startPaymentProcessing = () => {
+    paymentProcessingRef.current = true;
+    setPaymentProcessing(true);
+  };
+  const stopPaymentProcessing = () => {
+    paymentProcessingRef.current = false;
+    setPaymentProcessing(false);
+  };
 
   const userProfile = useSelector((state: RootState) => state.auth.userProfile);
 
@@ -462,32 +482,42 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   newTotalRef.current = hasLiveData ? orderFullTotal : null;
 
   const busy = submitting !== null;
+  // Loading modal: hidden while the gateway checkout modal or the success
+  // modal is on screen so two native modals are never stacked.
+  const isSubmitting =
+    (submitting === "confirm" || paymentProcessing) &&
+    !checkoutModalVisible &&
+    !showSuccessOverlay;
 
   // ─── handlers (defined after the derived values they use) ─────────────────
+  const showSuccess = () => {
+    setSuccessInvoiceNo(invoiceNo);
+    setShowSuccessOverlay(true);
+  };
+
   const handlePaymentSuccess = async (confirmPayload?: any) => {
+    // Show loading immediately, before anything else changes.
+    startPaymentProcessing();
+    setSubmitting("confirm");
     setCheckoutModalVisible(false);
     setCheckoutSession(null);
 
     const payload = confirmPayload ?? pendingConfirmPayload;
     if (!payload) {
       Alert.alert("Error", "Order details missing. Please contact support.");
+      stopPaymentProcessing();
       setSubmitting(null);
       return;
     }
 
     try {
-      setSubmitting("confirm");
       await orderService.confirmOrderWithLivePrices({
         ...payload,
         isPaid: 1,
       });
 
       setPendingConfirmPayload(null);
-      Alert.alert(
-        "Order Confirmed",
-        "Your order has been paid and confirmed successfully.",
-        [{ text: "OK", onPress: () => navigation.goBack() }],
-      );
+      showSuccess();
     } catch (err: any) {
       console.error("Post-payment confirm order failed:", err);
       Alert.alert(
@@ -496,11 +526,13 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         [{ text: "OK", onPress: () => navigation.goBack() }],
       );
     } finally {
+      stopPaymentProcessing();
       setSubmitting(null);
     }
   };
 
   const handlePaymentCancel = () => {
+    if (paymentProcessingRef.current) return; // payment already succeeded
     setCheckoutModalVisible(false);
     setCheckoutSession(null);
     setPendingConfirmPayload(null);
@@ -608,7 +640,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           ...(isUnpaidCardOrder ? { isPaid: 1 } : {}),
         });
       }
-      navigation.goBack();
+      showSuccess();
     } catch (err: any) {
       console.error("Confirm order failed:", err?.response?.data || err);
       Alert.alert(
@@ -1160,6 +1192,43 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Loading modal: blocks taps between payment completing and the
+          success modal / navigation. */}
+      <Modal visible={isSubmitting} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Confirming your order...
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* Payment Gateway Checkout Modal */}
       {checkoutSession && (
         <PaymentCheckoutModal
@@ -1174,12 +1243,32 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           onCancel={(_orderId) => handlePaymentCancel()}
           onClose={() => {
             setCheckoutModalVisible(false);
+            // onClose fires right after onSuccess: don't wipe the loading
+            // state / payload while the confirm call is still running.
+            if (paymentProcessingRef.current) return;
             setCheckoutSession(null);
             setPendingConfirmPayload(null);
             setSubmitting(null);
           }}
         />
       )}
+
+      {/* Success alert — shown briefly after the order is confirmed */}
+      <AlertModal
+        visible={showSuccessOverlay}
+        type="success"
+        title="Successful!"
+        message={`Your order ${successInvoiceNo || invoiceNo}\nconfirmed successfully.`}
+        autoClose={true}
+        duration={2500}
+        onClose={() => {
+          setShowSuccessOverlay(false);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Home" }],
+          });
+        }}
+      />
     </View>
   );
 };
