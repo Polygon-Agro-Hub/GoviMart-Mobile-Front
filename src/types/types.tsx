@@ -138,8 +138,18 @@ export type RootStackParamList = {
   Notification: undefined;
   CheckoutScreen: { orderContext: OrderContext };
   ScheduleOrder: { orderContext: OrderContext };
-  PaymentMethod: { total: number; orderContext?: OrderContext };
-  PaymentScreen: { amount?: number; title?: string; orderContext?: OrderContext } | undefined;
+  PaymentMethod: {
+    total?: number;
+    orderContext?: OrderContext;
+  } | undefined;
+  PaymentScreen: {
+    amount?: number;
+    title?: string;
+    orderContext?: OrderContext;
+    orderId?: string | number;
+    processOrderId?: string | number;
+    invoiceNo?: string;
+  } | undefined;
   OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
   OrderConfirmed: {
     orderId?: string | number;

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Image } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
+import UnstableConnectionBanner from "./UnstableConnectionBanner";
 
 interface CustomHeaderProps {
   title?: string;
@@ -13,6 +14,7 @@ interface CustomHeaderProps {
   rightComponent?: React.ReactNode;
   backgroundColor?: string;
   titleLines?: number; 
+  showUnstableBanner?: boolean;
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
@@ -26,16 +28,18 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
   rightComponent,
   backgroundColor,
   titleLines = 1,
+  showUnstableBanner = true,
 }) => {
   const isMultiLine = titleLines > 1;
 
   return (
-    <View
-      className={`flex-row items-center justify-between px-4 py-4 ${
-        dark ? "bg-black" : "bg-white"
-      }`}
-      style={backgroundColor ? { backgroundColor } : undefined}
-    >
+    <View style={backgroundColor ? { backgroundColor } : undefined}>
+      <View
+        className={`flex-row items-center justify-between px-4 py-4 ${
+          dark ? "bg-black" : "bg-white"
+        }`}
+        style={backgroundColor ? { backgroundColor } : undefined}
+      >
       {/* Left section for Back Button */}
       <View
         className="w-14 items-start justify-center"
@@ -102,6 +106,10 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
         {rightComponent || null}
       </View>
     </View>
+
+    {/* ─── UNSTABLE CONNECTION BANNER (Immediately after header) ─── */}
+    {showUnstableBanner && <UnstableConnectionBanner />}
+  </View>
   );
 };
 

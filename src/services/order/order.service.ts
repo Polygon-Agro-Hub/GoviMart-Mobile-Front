@@ -169,6 +169,8 @@ class OrderService {
         processOrderId?: number | string;
         newTotal?: number;
         isPaid?: number | boolean;
+        amount?: number;
+        moneyPaid?: number;
     }) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_ORDER, payload, { headers });

@@ -17,8 +17,10 @@ import notificationService, {
     ServerNotificationItem,
 } from "@/services/notification/notification.service";
 import socketService from "@/services/socket/socket.service";
+import orderService from "@/services/order/order.service";
 import {
     isActionRequiredNotification,
+    isPaymentReminderTitle,
     renderBoldInvoiceMessage,
 } from "@/constants/notificationTemplates";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,6 +37,7 @@ export interface UiNotificationItem {
     orderStatus?: string;
     isFinalized: boolean;
     isConfirmed: boolean;
+    isPaid?: boolean;
     title: string;
     message: string;
     time: string;
@@ -126,6 +129,7 @@ const mapServerItemToUi = (
     const isReadBool = toBool(item.isRead);
     const isFinalizedBool = toBool(item.isFinalized);
     const isConfirmedBool = toBool(item.isConfirmed);
+    const isPaidBool = toBool((item as any).isPaid);
 
     // "Please Confirm Your Order" always shows the Action Required badge
     const actionRequired =
@@ -168,6 +172,7 @@ const mapServerItemToUi = (
         orderStatus: item.orderStatus,
         isFinalized: isFinalizedBool,
         isConfirmed: isConfirmedBool,
+        isPaid: isPaidBool,
         title: item.title,
         message: messageText,
         time,
@@ -188,6 +193,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     const [notifications, setNotifications] = useState<UiNotificationItem[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+    const [itemLoadingId, setItemLoadingId] = useState<number | null>(null);
     const [showMenu, setShowMenu] = useState<boolean>(false);
     const [alertConfig, setAlertConfig] = useState<{
         visible: boolean;
@@ -319,117 +325,214 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
     // MARK NOTIFICATION AS READ & NAVIGATE
     const handleNotificationPress = async (tapped: UiNotificationItem) => {
-        // 0) Always decide using the freshest order state from the server,
-        //    because the list in memory may be stale.
-        let item: UiNotificationItem = tapped;
+        if (itemLoadingId !== null) return;
+        setItemLoadingId(tapped.id);
+
         try {
-            const res = await notificationService.getNotifications(50, 0);
-            const fresh = res.data?.notifications?.find(
-                (n: any) => n.id === tapped.id,
-            );
-            if (fresh) {
-                item = mapServerItemToUi(fresh);
-            }
-        } catch (err) {
-            console.warn("Failed to refresh notification state:", err);
-        }
-
-        // Optimistic read update
-        if (!item.isRead) {
-            setNotifications((previous) => {
-                const nextList = previous.map((n) =>
-                    n.id === item.id ? { ...n, isRead: true } : n,
-                );
-                const unread = nextList.filter((n) => !n.isRead).length;
-                // Update global store so badge clears on ALL tabs
-                updateGlobalUnreadCount(unread);
-                socketService.emitLocalUnreadCount(unread);
-                return nextList;
-            });
+            // 0) Always decide using the freshest order state from the server,
+            //    because the list in memory may be stale.
+            let item: UiNotificationItem = tapped;
             try {
-                await notificationService.markAsRead(item.id);
+                const res = await notificationService.getNotifications(50, 0);
+                const fresh = res.data?.notifications?.find(
+                    (n: any) => n.id === tapped.id,
+                );
+                if (fresh) {
+                    item = mapServerItemToUi(fresh);
+                    // Retain local isPaid if previously confirmed paid
+                    if (tapped.isPaid) {
+                        item.isPaid = true;
+                    }
+                }
             } catch (err) {
-                console.warn("Failed to mark notification as read:", err);
+                console.warn("Failed to refresh notification state:", err);
             }
-        }
 
-        const targetId = item.processOrderId || item.orderId;
-        const isCancelled =
-            !!item.orderStatus && item.orderStatus.toLowerCase() === "cancelled";
+            // Optimistic read update
+            if (!item.isRead) {
+                setNotifications((previous) => {
+                    const nextList = previous.map((n) =>
+                        n.id === item.id ? { ...n, isRead: true } : n,
+                    );
+                    const unread = nextList.filter((n) => !n.isRead).length;
+                    // Update global store so badge clears on ALL tabs
+                    updateGlobalUnreadCount(unread);
+                    socketService.emitLocalUnreadCount(unread);
+                    return nextList;
+                });
+                try {
+                    await notificationService.markAsRead(item.id);
+                } catch (err) {
+                    console.warn("Failed to mark notification as read:", err);
+                }
+            }
 
-        // 1) Package finalization review
-        if (isRetail && isPackageReviewTitle(item.title)) {
-            if (isCancelled) {
-                showAlert(
-                    "Cannot Proceed!",
-                    "You have already cancelled this order. You cannot proceed to the payment.",
-                    "error",
-                );
+            const targetId = item.processOrderId || item.orderId;
+            const isCancelled =
+                !!item.orderStatus && item.orderStatus.toLowerCase() === "cancelled";
+
+            // 1) Package finalization review
+            if (isRetail && isPackageReviewTitle(item.title)) {
+                if (isCancelled) {
+                    showAlert(
+                        "Cannot Proceed!",
+                        "You have already cancelled this order. You cannot proceed to the payment.",
+                        "error",
+                    );
+                    return;
+                }
+
+                // Order already finalized (processorders.isFinalized = 1)
+                if (item.isFinalized) {
+                    showAlert(
+                        "Already Finalized!",
+                        "You have already reviewed and finalized your order. You cannot make any further changes.",
+                        "warning",
+                    );
+                    return;
+                }
+
+                // Order already confirmed (processorders.isConfirmed = 1)
+                if (item.isConfirmed) {
+                    showAlert(
+                        "Already Confirmed!",
+                        "You have already confirmed this order. You cannot make any further changes.",
+                        "warning",
+                    );
+                    return;
+                }
+
+                navigation.navigate("ReviewPackage", {
+                    orderId: targetId,
+                    invoiceNo: item.invNo,
+                    refreshKey: Date.now(), // forces ReviewPackage to reload fresh data
+                });
                 return;
             }
 
-            // Order already finalized (processorders.isFinalized = 1)
-            if (item.isFinalized) {
-                showAlert(
-                    "Already Finalized!",
-                    "You have already reviewed and finalized your order. You cannot make any further changes.",
-                    "warning",
-                );
+            // 2) Please Confirm Your Order -> Order Confirmation screen
+            if (isOrderConfirmTitle(item.title)) {
+                if (!targetId) return;
+
+                if (isCancelled) {
+                    showAlert(
+                        "Cannot Proceed!",
+                        "This order has already been cancelled.",
+                        "error",
+                    );
+                    return;
+                }
+
+                // Order already confirmed (processorders.isConfirmed = 1)
+                if (item.isConfirmed) {
+                    showAlert(
+                        "Already Confirmed!",
+                        "You have already confirmed this order. You cannot make any further changes.",
+                        "warning",
+                    );
+                    return;
+                }
+
+                navigation.navigate("OrderConfirmation", {
+                    orderId: String(targetId),
+                });
                 return;
             }
 
-            // Order already confirmed (processorders.isConfirmed = 1)
-            if (item.isConfirmed) {
-                showAlert(
-                    "Already Confirmed!",
-                    "You have already confirmed this order. You cannot make any further changes.",
-                    "warning",
-                );
-                return;
+            // 3) Payment Reminder !!! -> Navigate to PaymentScreen for unpaid order
+            if (isPaymentReminderTitle(item.title)) {
+                if (!targetId) return;
+
+                if (isCancelled) {
+                    showAlert(
+                        "Cannot Proceed!",
+                        "This order has already been cancelled.",
+                        "error",
+                    );
+                    return;
+                }
+
+                // Check if already paid locally
+                if (item.isPaid) {
+                    showAlert(
+                        "Already Paid!",
+                        "You have already completed the payment for this order.",
+                        "error",
+                    );
+                    return;
+                }
+
+                // Proactively query server for fresh order payment status
+                const queryId = item.processOrderId || item.orderId || targetId;
+                try {
+                    const orderRes = await orderService.getOrderById(String(queryId));
+                    if (orderRes.data && orderRes.data.status && (orderRes.data.order || orderRes.data.data)) {
+                        const order = orderRes.data.order || orderRes.data.data;
+                        const isPaid =
+                            Number(order.isPaid) === 1 ||
+                            order.isPaid === true ||
+                            String(order.isPaid) === "1" ||
+                            order.status === "Paid";
+
+                        if (isPaid) {
+                            setNotifications((prev) =>
+                                prev.map((n) =>
+                                    n.id === item.id ? { ...n, isPaid: true } : n,
+                                ),
+                            );
+                            showAlert(
+                                "Already Paid!",
+                                "You have already completed the payment for this order.",
+                                "error",
+                            );
+                            return;
+                        }
+
+                        const orderFullTotal = parseFloat(
+                            order.fulltotal || order.fullTotal || 0,
+                        );
+                        const creditPaid = parseFloat(order.creditPaid || 0);
+                        const moneyPaid = parseFloat(order.moneyPaid || 0);
+                        const payableAmount =
+                            moneyPaid > 0
+                                ? moneyPaid
+                                : Math.max(0, orderFullTotal - creditPaid);
+
+                        navigation.navigate("PaymentScreen", {
+                            orderId: String(item.orderId || order.orderId || targetId),
+                            processOrderId: item.processOrderId || order.processOrderId || targetId,
+                            invoiceNo: item.invNo || order.invoiceNo,
+                            amount: payableAmount,
+                            title: "Pay Order",
+                        });
+                        return;
+                    } else {
+                        showAlert(
+                            "Order Unavailable",
+                            "Could not retrieve order details. Please try again later.",
+                            "error",
+                        );
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("Failed to check order for payment reminder:", err);
+                    showAlert(
+                        "Network Error",
+                        "Failed to verify order payment status. Please check your internet connection.",
+                        "error",
+                    );
+                    return;
+                }
             }
 
-            navigation.navigate("ReviewPackage", {
-                orderId: targetId,
-                invoiceNo: item.invNo,
-                refreshKey: Date.now(), // forces ReviewPackage to reload fresh data
-            });
-            return;
-        }
-
-        // 2) Please Confirm Your Order -> Order Confirmation screen
-        if (isOrderConfirmTitle(item.title)) {
-            if (!targetId) return;
-
-            if (isCancelled) {
-                showAlert(
-                    "Cannot Proceed!",
-                    "This order has already been cancelled.",
-                    "error",
-                );
-                return;
+            // 4) Everything else -> Order Details
+            if (targetId) {
+                navigation.navigate("OrderDetails", {
+                    orderId: String(targetId),
+                });
             }
-
-            // Order already confirmed (processorders.isConfirmed = 1)
-            if (item.isConfirmed) {
-                showAlert(
-                    "Already Confirmed!",
-                    "You have already confirmed this order. You cannot make any further changes.",
-                    "warning",
-                );
-                return;
-            }
-
-            navigation.navigate("OrderConfirmation", {
-                orderId: String(targetId),
-            });
-            return;
-        }
-
-        // 3) Everything else -> Order Details
-        if (targetId) {
-            navigation.navigate("OrderDetails", {
-                orderId: String(targetId),
-            });
+        } finally {
+            setItemLoadingId(null);
         }
     };
 
@@ -470,10 +573,12 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
     // NOTIFICATION CARD
     const renderNotification = (item: UiNotificationItem) => {
+        const isThisItemLoading = itemLoadingId === item.id;
         return (
             <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.8}
+                disabled={itemLoadingId !== null}
                 onPress={() => handleNotificationPress(item)}
                 style={{
                     width: "100%",
@@ -794,6 +899,35 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
                 onOkPress={hideAlert}
                 onClose={hideAlert}
             />
+
+            {/* ─── ACTION LOADING OVERLAY ────────────────────────────────────── */}
+            {itemLoadingId !== null && (
+                <View
+                    style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(255, 255, 255, 0.75)",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        zIndex: 9999,
+                    }}
+                >
+                    <ActivityIndicator size="large" color="#FF8A00" />
+                    <Text
+                        style={{
+                            marginTop: 12,
+                            fontSize: 14,
+                            color: "#1E293B",
+                            fontWeight: "600",
+                        }}
+                    >
+                        Checking order details...
+                    </Text>
+                </View>
+            )}
         </View>
     );
 };

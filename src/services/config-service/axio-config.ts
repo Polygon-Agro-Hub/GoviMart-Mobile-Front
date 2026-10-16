@@ -6,6 +6,7 @@ import { clearCart } from "@/store/cartSlice";
 import { tokenStorage } from "@/utils/tokenStorage";
 import { ENDPOINTS } from "./endpoints";
 import { networkSimulator, ENABLE_NETWORK_SIMULATOR } from "@/services/network/networkSimulator.service";
+import { connectionStatusService } from "@/services/network/connectionStatus.service";
 
 const apiClient = axios.create({
   baseURL: environment.API_BASE_URL,
@@ -17,6 +18,7 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   async (config) => {
+    (config as any)._startTime = Date.now();
     // ── Global Network Speed Simulator (Active ONLY when isDeveloper === true) ──
     if (networkSimulator.isEnabled()) {
       await networkSimulator.handleRequest(config);
@@ -61,11 +63,24 @@ apiClient.interceptors.response.use(
     if (networkSimulator.isEnabled()) {
       networkSimulator.handleResponseComplete();
     }
+    const elapsed = Date.now() - ((response.config as any)?._startTime || Date.now());
+    if (elapsed > 3500) {
+      connectionStatusService.reportHighLatencyOrTimeout();
+    } else {
+      connectionStatusService.reportFastSuccess();
+    }
     return response;
   },
   async (error: AxiosError) => {
     if (networkSimulator.isEnabled()) {
       networkSimulator.handleResponseComplete();
+    }
+    if (
+      error.code === "ECONNABORTED" ||
+      error.message?.toLowerCase().includes("timeout") ||
+      error.message?.toLowerCase().includes("network error")
+    ) {
+      connectionStatusService.reportHighLatencyOrTimeout();
     }
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
