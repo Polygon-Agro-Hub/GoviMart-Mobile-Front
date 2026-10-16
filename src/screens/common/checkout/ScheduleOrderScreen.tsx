@@ -240,9 +240,9 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       return isNaN(parsed.getTime()) ? null : parsed;
     };
 
-    // Find the package that expires the soonest and latest package start date
+    // Find the package that expires the soonest
     let earliestExpiryDate: Date | null = null;
-    let earliestStartDate: Date | null = null;
+    let hasStartDate = false;
     for (const pkg of seasonalPackages) {
       if (pkg.endDate) {
         const d = parseDateStr(pkg.endDate);
@@ -253,16 +253,11 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         }
       }
       if (pkg.startDate) {
-        const d = parseDateStr(pkg.startDate);
-        if (d) {
-          if (!earliestStartDate || d > earliestStartDate) {
-            earliestStartDate = d;
-          }
-        }
+        hasStartDate = true;
       }
     }
 
-    if (!earliestExpiryDate && !earliestStartDate) return null;
+    if (!earliestExpiryDate && !hasStartDate) return null;
 
     // Current hour gap check (6:00 PM cutoff)
     const now = new Date();
@@ -272,14 +267,9 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     const minAvailDate = getMinDeliveryDate(); // today + (>=18 ? 4 : 3) days
     minAvailDate.setHours(0, 0, 0, 0);
 
-    const effectiveStartDate =
-      earliestStartDate && earliestStartDate > minAvailDate
-        ? new Date(
-            earliestStartDate.getFullYear(),
-            earliestStartDate.getMonth(),
-            earliestStartDate.getDate(),
-          )
-        : minAvailDate;
+    // Rule: Do not count package start date for scheduling availability.
+    // Earliest scheduling is always available from the system earliest date (minAvailDate).
+    const effectiveStartDate = minAvailDate;
 
     let expiryDay = 0;
     let cutoffDate: Date | null = null;
@@ -357,10 +347,8 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const isAvailableNow = cutoffDate ? effectiveStartDate <= cutoffDate : true;
 
-    // Package is unavailable on the system earliest date if earliestStartDate > minAvailDate
-    const hasPackageUnavailableOnEarliest = Boolean(
-      earliestStartDate && earliestStartDate > minAvailDate,
-    );
+    // Rule: Package start date is not counted, so package is available from system earliest date
+    const hasPackageUnavailableOnEarliest = false;
 
     return {
       gapDays,
@@ -371,7 +359,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       sorryExpiryMonth,
       cutoffDate,
       minAvailDate,
-      earliestStartDate,
+      earliestStartDate: null as Date | null,
       effectiveStartDate,
       hasPackageUnavailableOnEarliest,
       rangeTextLong,
@@ -454,14 +442,9 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     // Sort chronologically
     allDates.sort((a, b) => a.getTime() - b.getTime());
 
-    if (seasonalInfo) {
-      if (seasonalInfo.earliestStartDate) {
-        allDates = allDates.filter((d) => d >= seasonalInfo.earliestStartDate!);
-      }
-      if (seasonalInfo.cutoffDate) {
-        const cutoff = seasonalInfo.cutoffDate;
-        allDates = allDates.filter((d) => d <= cutoff);
-      }
+    if (seasonalInfo?.cutoffDate) {
+      const cutoff = seasonalInfo.cutoffDate;
+      allDates = allDates.filter((d) => d <= cutoff);
     }
 
     const ALL_MONTHS = [
@@ -516,12 +499,6 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       if (!selectedDate) return true;
       const parsedSel = new Date(selectedDate);
       parsedSel.setHours(0, 0, 0, 0);
-      if (
-        seasonalInfo.earliestStartDate &&
-        parsedSel < seasonalInfo.earliestStartDate
-      ) {
-        return false;
-      }
       if (seasonalInfo.cutoffDate && parsedSel > seasonalInfo.cutoffDate) {
         return false;
       }
@@ -529,12 +506,6 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     }
     if (calculatedOrders.length === 0) return false;
     if (unfilteredFirstScheduledDate) {
-      if (
-        seasonalInfo.earliestStartDate &&
-        unfilteredFirstScheduledDate < seasonalInfo.earliestStartDate
-      ) {
-        return false;
-      }
       if (
         seasonalInfo.cutoffDate &&
         unfilteredFirstScheduledDate > seasonalInfo.cutoffDate

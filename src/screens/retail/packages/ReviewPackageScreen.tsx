@@ -1621,7 +1621,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               amount: additionalPayAmount,
               paymentType: "order",
               orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `GoviMart Package Additional Payment - ${invoiceNo}`,
+              itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
             });
             if (chargeRes.success) {
               await handleAdditionalPaymentSuccess(confirmPayload);
@@ -1652,7 +1652,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           orderId: String(processOrderId || effectiveOrderId),
           amount: additionalPayAmount,
           paymentType: "order",
-          itemsDescription: `GoviMart Package Additional Payment - ${invoiceNo}`,
+          itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
         });
 
         setCheckoutSession(session);
@@ -1697,7 +1697,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               amount: fullPayableAmount,
               paymentType: "order",
               orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `GoviMart Package Order Payment - ${invoiceNo}`,
+              itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
             });
             if (chargeRes.success) {
               await handleAdditionalPaymentSuccess(confirmPayload);
@@ -1728,7 +1728,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           orderId: String(processOrderId || effectiveOrderId),
           amount: fullPayableAmount,
           paymentType: "order",
-          itemsDescription: `GoviMart Package Order Payment - ${invoiceNo}`,
+          itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
         });
 
         setCheckoutSession(session);

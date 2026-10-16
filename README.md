@@ -1,6 +1,6 @@
-# GoviMart Mobile — Frontend Application
+# Polygon Mobile — Frontend Application
 
-React Native (Expo SDK 54) mobile application for **GoviMart / Polygon**, an agricultural produce marketplace application supporting retail and wholesale users.
+React Native (Expo SDK 54) mobile application for **Polygon**, an agricultural produce marketplace application supporting retail and wholesale users.
 
 ---
 
@@ -59,7 +59,7 @@ npm run ios
 ## 📂 Project Structure
 
 ```
-GoviMart-Mobile-Front/
+Polygon-Mobile-Front/
 ├── .expo/                      # Expo development build files
 ├── assets/                     # Images, icons, and animations
 ├── src/

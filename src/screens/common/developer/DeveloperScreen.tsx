@@ -20,6 +20,8 @@ import {
   NetworkProfileId,
   ENABLE_NETWORK_SIMULATOR,
 } from "@/services/network/networkSimulator.service";
+import UnstableConnectionBanner from "@/component/common/UnstableConnectionBanner";
+import connectionStatusService, { useIsConnectionUnstable } from "@/services/network/connectionStatus.service";
 
 type DeveloperScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -39,6 +41,7 @@ const DeveloperScreen: React.FC<DeveloperScreenProps> = ({ navigation }) => {
   );
   const [testingRequest, setTestingRequest] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const isUnstable = useIsConnectionUnstable();
 
   // Animated progress bar
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -120,10 +123,70 @@ const DeveloperScreen: React.FC<DeveloperScreenProps> = ({ navigation }) => {
         <View style={{ width: 40 }} />
       </View>
 
+      {/* Unstable Connection Banner - Live Test Preview */}
+      <UnstableConnectionBanner />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Unstable Connection Banner Tester Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="warning-outline" size={18} color="#FF9A00" />
+            <Text style={styles.cardTitle}>Unstable Connection Alert</Text>
+          </View>
+          <Text style={styles.cardDescription}>
+            This banner automatically displays right below the CustomHeader across all screens whenever network connectivity is slow (2G / Slow 3G), offline, or experiencing latency/timeouts.
+          </Text>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Banner Status:</Text>
+            <View style={isUnstable ? styles.badgeError : styles.badgeSuccess}>
+              <Text style={isUnstable ? styles.badgeErrorText : styles.badgeSuccessText}>
+                {isUnstable ? "UNSTABLE (VISIBLE)" : "NORMAL (HIDDEN)"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => connectionStatusService.setForcedUnstable(true)}
+              style={[
+                styles.testButton,
+                { flex: 1, backgroundColor: "#181D24", paddingVertical: 10 },
+              ]}
+            >
+              <Ionicons name="eye-outline" size={15} color="#FFFFFF" />
+              <Text style={[styles.testButtonText, { fontSize: 12 }]}>Force Show</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => connectionStatusService.setForcedUnstable(false)}
+              style={[
+                styles.testButton,
+                { flex: 1, backgroundColor: "#64748B", paddingVertical: 10 },
+              ]}
+            >
+              <Ionicons name="eye-off-outline" size={15} color="#FFFFFF" />
+              <Text style={[styles.testButtonText, { fontSize: 12 }]}>Force Hide</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => connectionStatusService.setForcedUnstable(null)}
+              style={[
+                styles.testButton,
+                { flex: 1, backgroundColor: "#0284C7", paddingVertical: 10 },
+              ]}
+            >
+              <Ionicons name="refresh-outline" size={15} color="#FFFFFF" />
+              <Text style={[styles.testButtonText, { fontSize: 12 }]}>Auto Mode</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         {/* Environment Info Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -396,6 +459,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#065F46",
+  },
+  badgeError: {
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  badgeErrorText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#DC2626",
   },
   profileOption: {
     flexDirection: "row",

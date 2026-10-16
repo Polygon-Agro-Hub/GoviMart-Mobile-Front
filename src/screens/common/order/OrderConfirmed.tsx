@@ -581,7 +581,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               amount: remaining,
               paymentType: "order",
               orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `GoviMart Order Payment - ${invoiceNo}`,
+              itemsDescription: `Polygon Order Payment - ${invoiceNo}`,
             });
             if (chargeRes.success) {
               await handlePaymentSuccess(confirmPayload);
@@ -612,7 +612,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           orderId: String(processOrderId || effectiveOrderId),
           amount: remaining,
           paymentType: "order",
-          itemsDescription: `GoviMart Order Payment - ${invoiceNo}`,
+          itemsDescription: `Polygon Order Payment - ${invoiceNo}`,
         });
 
         setCheckoutSession(session);
