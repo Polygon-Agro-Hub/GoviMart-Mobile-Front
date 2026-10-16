@@ -604,7 +604,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
               const chargeRes = await adapter.chargeSavedCard({
                 cardId: savedCard.id,
                 amount: paymentAmount,
-                itemsDescription: "GoviMart Order Payment",
+                itemsDescription: "Polygon Order Payment",
                 paymentType: "order",
               });
 
@@ -653,7 +653,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                           const fallbackSession = await adapter.initiatePayment({
                             amount: paymentAmount,
                             paymentType: "order",
-                            itemsDescription: "GoviMart Order Payment",
+                            itemsDescription: "Polygon Order Payment",
                             saveCard: true,
                           });
                           setCheckoutSession(fallbackSession);
@@ -679,7 +679,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           const session = await adapter.initiatePayment({
             amount: paymentAmount,
             paymentType: "order",
-            itemsDescription: "GoviMart Order Payment",
+            itemsDescription: "Polygon Order Payment",
             saveCard: true,
           });
 

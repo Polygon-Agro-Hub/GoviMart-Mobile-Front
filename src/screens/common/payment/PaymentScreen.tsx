@@ -200,7 +200,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
             paymentType: isClearBalanceFlow ? "clear_balance" : "order",
             itemsDescription: isClearBalanceFlow
               ? "Clear Negative Credit Balance"
-              : "GoviMart Order Payment",
+              : "Polygon Order Payment",
           });
 
           if (chargeRes.success) {
@@ -284,7 +284,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         const session = await adapter.initiatePayment({
           amount: fullTotal,
           paymentType: "order",
-          itemsDescription: "GoviMart Order Payment",
+          itemsDescription: "Polygon Order Payment",
           saveCard: saveCardForFuture,
         });
 

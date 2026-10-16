@@ -282,7 +282,7 @@ const SaveCardInfoScreen: React.FC<Props> = ({ navigation }) => {
           >
             To ensure maximum security and PCI-DSS compliance, your card is
             entered directly into the official **Payments.lk** hosted sheet.
-            GoviMart never receives, sees, or stores your card numbers.
+            Polygon never receives, sees, or stores your card numbers.
           </Text>
 
           {/* Benefits Bullet Points */}
