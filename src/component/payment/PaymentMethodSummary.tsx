@@ -16,6 +16,7 @@ export interface PaymentMethodSummaryProps {
     paymentMethod: "cash" | "card";
     totalAmount: number;
     submitting?: boolean;
+    disabled?: boolean;
     onConfirm: () => void;
     containerStyle?: StyleProp<ViewStyle>;
 }
@@ -27,6 +28,7 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
     paymentMethod,
     totalAmount,
     submitting = false,
+    disabled = false,
     onConfirm,
     containerStyle,
 }) => {
@@ -205,12 +207,12 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
 
             {/* Confirm Payment Method Button */}
             <TouchableOpacity
-                activeOpacity={submitting ? 1 : 0.85}
-                disabled={submitting}
+                activeOpacity={submitting || disabled ? 1 : 0.85}
+                disabled={submitting || disabled}
                 onPress={onConfirm}
                 style={{
                     height: 52,
-                    backgroundColor: "#000000",
+                    backgroundColor: submitting || disabled ? "#9CA3AF" : "#000000",
                     borderRadius: 26,
                     justifyContent: "center",
                     alignItems: "center",
@@ -222,7 +224,7 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                         width: 0,
                         height: 3,
                     },
-                    elevation: 4,
+                    elevation: submitting || disabled ? 0 : 4,
                 }}
             >
                 <Text

@@ -9,6 +9,8 @@ import {
   BackHandler,
   Modal,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -134,6 +136,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const orderContext = route.params?.orderContext;
   const isNavigatingAwayRef = useRef(false);
   const isOrderFinalizedRef = useRef(false);
+  const isSessionExpiredRef = useRef(false);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
   const timerIntervalRef = useRef<any>(null);
   const sessionExpiredTimeoutRef = useRef<any>(null);
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
@@ -151,6 +155,36 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     }
     paymentSessionEndTime = null;
   }, []);
+
+  const handleSessionExpiry = useCallback(() => {
+    if (isOrderFinalizedRef.current || isSessionExpiredRef.current) return;
+    isSessionExpiredRef.current = true;
+    setIsSessionExpired(true);
+    isNavigatingAwayRef.current = true;
+    setSubmitting(false);
+
+    clearSessionTimers();
+    setCheckoutModalVisible(false);
+    setCouponModalVisible(false);
+    setUnavailableModalVisible(false);
+    setBackConfirmVisible(false);
+    pendingOrderPayloadRef.current = null;
+    setPendingOrderPayload(null);
+
+    Alert.alert(
+      "Session Expired",
+      "Your payment session has expired. You are being redirected to your cart.",
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            navigation.navigate("MyCart");
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [navigation, clearSessionTimers]);
 
   // ─── SAVED CARD & GATEWAY STATE ─────────────────────────────────────────
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
@@ -253,20 +287,26 @@ const getPaymentDueText = (): string => {
 };
 
   useEffect(() => {
-    // Reset finalized flag when entering screen
+    // Reset finalized and expired flags when entering screen
     isOrderFinalizedRef.current = false;
+    isSessionExpiredRef.current = false;
+    setIsSessionExpired(false);
 
     if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
       paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
     }
 
-    timerIntervalRef.current = setInterval(() => {
-      // 1. If order is already completed, navigating away, or submitting, never expire session
-      if (isOrderFinalizedRef.current || isNavigatingAwayRef.current || submitting) {
+    const checkTimer = () => {
+      // 1. If order is already completed, navigating away, or expired, do not tick
+      if (
+        isOrderFinalizedRef.current ||
+        isNavigatingAwayRef.current ||
+        isSessionExpiredRef.current
+      ) {
         return;
       }
 
-      // 2. If Payments.lk checkout modal is currently active, pause/extend timer so customer is not interrupted
+      // 2. If Payments.lk checkout modal is currently active, extend timer so customer is not interrupted
       if (checkoutModalVisible) {
         paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
         setRemainingSeconds(300);
@@ -281,27 +321,12 @@ const getPaymentDueText = (): string => {
       setRemainingSeconds(diff);
 
       if (diff <= 0) {
-        clearSessionTimers();
-        isNavigatingAwayRef.current = true;
-
-        setCheckoutModalVisible(false);
-        setCouponModalVisible(false);
-        setUnavailableModalVisible(false);
-        setBackConfirmVisible(false);
-        pendingOrderPayloadRef.current = null;
-        setPendingOrderPayload(null);
-
-        sessionExpiredTimeoutRef.current = setTimeout(() => {
-          if (isOrderFinalizedRef.current) return;
-          Alert.alert(
-            "Session Expired",
-            "Your payment session has expired. You are being redirected to your cart.",
-            [{ text: "OK", onPress: () => navigation.navigate("MyCart") }],
-            { cancelable: false },
-          );
-        }, 300);
+        handleSessionExpiry();
       }
-    }, 1000);
+    };
+
+    checkTimer();
+    timerIntervalRef.current = setInterval(checkTimer, 1000);
 
     return () => {
       if (timerIntervalRef.current) {
@@ -313,7 +338,31 @@ const getPaymentDueText = (): string => {
         sessionExpiredTimeoutRef.current = null;
       }
     };
-  }, [navigation, checkoutModalVisible, submitting, clearSessionTimers]);
+  }, [checkoutModalVisible, handleSessionExpiry]);
+
+  // Handle app resuming from background after sleep/multitasking
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        if (isOrderFinalizedRef.current || isSessionExpiredRef.current) return;
+        if (paymentSessionEndTime && paymentSessionEndTime <= Date.now()) {
+          setRemainingSeconds(0);
+          handleSessionExpiry();
+        } else if (paymentSessionEndTime) {
+          const diff = Math.max(
+            0,
+            Math.floor((paymentSessionEndTime - Date.now()) / 1000),
+          );
+          setRemainingSeconds(diff);
+        }
+      }
+    };
+
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => {
+      sub.remove();
+    };
+  }, [handleSessionExpiry]);
 
   useFocusEffect(
     useCallback(() => {
@@ -530,6 +579,19 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
   };
 
   const handleConfirm = async () => {
+    // 1. Strict guard: NEVER proceed or enter payment flow if session is expired or navigating away
+    const isExpired =
+      isSessionExpired ||
+      isSessionExpiredRef.current ||
+      isNavigatingAwayRef.current ||
+      remainingSeconds <= 0 ||
+      (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now());
+
+    if (isExpired) {
+      handleSessionExpiry();
+      return;
+    }
+
     // Proactively check availability of items in cart
     const productIds: number[] = (cartProducts || []).map((p: any) => p.id);
     const packageIds: number[] = (cartPackages || []).map((p: any) => p.id);
@@ -539,6 +601,16 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           productIds,
           packageIds,
         );
+
+        if (
+          isSessionExpiredRef.current ||
+          isNavigatingAwayRef.current ||
+          (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+        ) {
+          handleSessionExpiry();
+          return;
+        }
+
         if (availRes.data && availRes.data.status && availRes.data.data) {
           const { products: pMap, packages: pkgMap } = availRes.data.data;
           const hasUnavailProd = productIds.some(
@@ -557,6 +629,16 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
       }
     }
 
+    // Guard: check again before initiating payment
+    if (
+      isSessionExpiredRef.current ||
+      isNavigatingAwayRef.current ||
+      (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+    ) {
+      handleSessionExpiry();
+      return;
+    }
+
     const itemDiscount = orderContext?.discount || 0;
     const isFreeDelivery = Boolean(appliedCoupon?.isFreeDelivery);
     const couponVal = appliedCoupon
@@ -572,6 +654,14 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
       if (isEarliest) {
         // Earliest possible date: User pays NOW via payment gateway
         try {
+          if (
+            isSessionExpiredRef.current ||
+            isNavigatingAwayRef.current ||
+            (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+          ) {
+            handleSessionExpiry();
+            return;
+          }
           setSubmitting(true);
           const payload = {
             cartId: orderContext?.cartId || 0,
@@ -647,6 +737,14 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                     {
                       text: "Continue to Pay",
                       onPress: async () => {
+                        if (
+                          isSessionExpiredRef.current ||
+                          isNavigatingAwayRef.current ||
+                          (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+                        ) {
+                          handleSessionExpiry();
+                          return;
+                        }
                         try {
                           pendingOrderPayloadRef.current = payload;
                           setPendingOrderPayload(payload);
@@ -672,6 +770,15 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           }
 
           // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
+          if (
+            isSessionExpiredRef.current ||
+            isNavigatingAwayRef.current ||
+            (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+          ) {
+            handleSessionExpiry();
+            return;
+          }
+
           // Store order payload in ref/state — order will ONLY be created upon payment success!
           pendingOrderPayloadRef.current = payload;
           setPendingOrderPayload(payload);
@@ -699,6 +806,14 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
         return;
       } else {
         // NOT earliest possible date: Do NOT navigate to payment gateway. Confirm order directly with isPaid = 0, amount = 0.0, moneyPaid = 0.0
+        if (
+          isSessionExpiredRef.current ||
+          isNavigatingAwayRef.current ||
+          (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+        ) {
+          handleSessionExpiry();
+          return;
+        }
         try {
           setSubmitting(true);
           const payload = {
@@ -783,6 +898,15 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
         }
         return;
       }
+    }
+
+    if (
+      isSessionExpiredRef.current ||
+      isNavigatingAwayRef.current ||
+      (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+    ) {
+      handleSessionExpiry();
+      return;
     }
 
     try {
@@ -1677,6 +1801,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           paymentMethod={paymentMethod}
           totalAmount={totalAmount}
           submitting={submitting}
+          disabled={isSessionExpired || remainingSeconds <= 0}
           onConfirm={handleConfirm}
         />
       </ScrollView>
