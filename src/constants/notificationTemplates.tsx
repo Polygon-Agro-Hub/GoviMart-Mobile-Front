@@ -30,6 +30,12 @@ export const isActionRequiredNotification = (title?: string): boolean => {
   );
 };
 
+export const isPaymentReminderTitle = (title?: string): boolean => {
+  if (!title) return false;
+  const normalized = title.trim().toLowerCase();
+  return normalized.includes("payment reminder");
+};
+
 export interface NotificationTemplateParams {
   invoiceNo?: string;
   date?: string;
