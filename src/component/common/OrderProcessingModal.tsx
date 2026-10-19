@@ -9,10 +9,285 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Polygon, Rect, Circle } from "react-native-svg"; // npx expo install react-native-svg
 
+/**
+ * Solid red rounded triangle with a white "!" – matches the design icon.
+ */
+export const WarningIcon: React.FC<{ size?: number; color?: string }> = ({
+  size = 36,
+  color = "#C80000",
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 48 48">
+    {/* Rounded triangle: fill + same-colour stroke with round joins */}
+    <Polygon
+      points="24,9 41,38 7,38"
+      fill={color}
+      stroke={color}
+      strokeWidth={5}
+      strokeLinejoin="round"
+    />
+    {/* Exclamation mark */}
+    <Rect x="22" y="19" width="4" height="10" rx="2" fill="#FFFFFF" />
+    <Circle cx="24" cy="33.5" r="2.3" fill="#FFFFFF" />
+  </Svg>
+);
+
+/**
+ * FONT NOTE
+ * The design uses Poppins. Install & load it once at app root:
+ *   npx expo install @expo-google-fonts/poppins expo-font
+ *   const [loaded] = useFonts({ Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold });
+ * If Poppins isn't loaded, RN silently falls back to the system font.
+ */
+const FONT = {
+  regular: "Poppins_400Regular",
+  medium: "Poppins_500Medium",
+  semibold: "Poppins_600SemiBold",
+  bold: "Poppins_700Bold",
+};
+
+const COLORS = {
+  black: "#000000",
+  title: "#0F0F1A",
+  body: "#4B4B63",
+  dangerBg: "#FBE4E4",
+  danger: "#C81E1E",
+  warnBg: "#FEF3C7",
+  warn: "#D97706",
+  secondaryBg: "#EDEEF2",
+  secondaryText: "#4A4D68",
+  overlay: "rgba(0, 0, 0, 0.65)",
+};
+
+const { width } = Dimensions.get("window");
+
+/* ────────────────────────────────────────────────────────────
+ * 1. AlertModal – the exact design from the screenshot
+ *    (icon circle, title, message, black pill + gray pill)
+ * ──────────────────────────────────────────────────────────── */
+export interface AlertModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  primaryLabel: string;
+  onPrimaryPress: () => void;
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
+  iconName?: keyof typeof Ionicons.glyphMap;
+  tone?: "danger" | "warning";
+  loadingPrimary?: boolean;
+  disabled?: boolean;
+  onRequestClose?: () => void;
+}
+
+export const AlertModal: React.FC<AlertModalProps> = ({
+  visible,
+  title,
+  message,
+  primaryLabel,
+  onPrimaryPress,
+  secondaryLabel,
+  onSecondaryPress,
+  iconName = "warning",
+  tone = "danger",
+  loadingPrimary = false,
+  disabled = false,
+  onRequestClose,
+}) => (
+  <Modal
+    transparent
+    animationType="fade"
+    statusBarTranslucent
+    visible={visible}
+    onRequestClose={onRequestClose}
+  >
+    <View style={styles.overlay}>
+      <View style={styles.card}>
+        <AlertBody
+          title={title}
+          message={message}
+          primaryLabel={primaryLabel}
+          onPrimaryPress={onPrimaryPress}
+          secondaryLabel={secondaryLabel}
+          onSecondaryPress={onSecondaryPress}
+          iconName={iconName}
+          tone={tone}
+          loadingPrimary={loadingPrimary}
+          disabled={disabled}
+        />
+      </View>
+    </View>
+  </Modal>
+);
+
+/** Reusable inner content so both modals share the same look */
+const AlertBody: React.FC<Omit<AlertModalProps, "visible" | "onRequestClose">> = ({
+  title,
+  message,
+  primaryLabel,
+  onPrimaryPress,
+  secondaryLabel,
+  onSecondaryPress,
+  iconName = "warning",
+  tone = "danger",
+  loadingPrimary,
+  disabled,
+}) => (
+  <View style={styles.alertWrapper}>
+    <View
+      style={[
+        styles.iconCircle,
+        { backgroundColor: tone === "danger" ? COLORS.dangerBg : COLORS.warnBg },
+      ]}
+    >
+      {iconName === "warning" ? (
+        <WarningIcon size={38} color={tone === "danger" ? "#C80000" : COLORS.warn} />
+      ) : (
+        <Ionicons
+          name={iconName}
+          size={34}
+          color={tone === "danger" ? COLORS.danger : COLORS.warn}
+        />
+      )}
+    </View>
+
+    <Text style={styles.alertTitle}>{title}</Text>
+    <Text style={styles.alertMessage}>{message}</Text>
+
+    <TouchableOpacity
+      style={[styles.primaryButton, disabled && styles.buttonDisabled]}
+      activeOpacity={0.85}
+      disabled={disabled}
+      onPress={onPrimaryPress}
+    >
+      {loadingPrimary ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : (
+        <Text style={styles.primaryText}>{primaryLabel}</Text>
+      )}
+    </TouchableOpacity>
+
+    {secondaryLabel && onSecondaryPress && (
+      <TouchableOpacity
+        style={[styles.secondaryButton, disabled && styles.buttonDisabled]}
+        activeOpacity={0.85}
+        disabled={disabled}
+        onPress={onSecondaryPress}
+      >
+        <Text style={styles.secondaryText}>{secondaryLabel}</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+/* ────────────────────────────────────────────────────────────
+ * 1b. ConfirmModal – confirm / cancel dialog with the warning icon.
+ *     Accepts the custom colour props used in ReviewPackageScreen.
+ * ──────────────────────────────────────────────────────────── */
+export interface ConfirmModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmButtonColor?: string;
+  confirmButtonTextColor?: string;
+  cancelButtonBgColor?: string;
+  cancelButtonTextColor?: string;
+  iconBackgroundColor?: string;
+  iconColor?: string;
+  showIcon?: boolean;
+  isLoading?: boolean;
+  /** hide the secondary button (single-button dialog like "View my cart") */
+  hideCancel?: boolean;
+}
+
+export const ConfirmModal: React.FC<ConfirmModalProps> = ({
+  visible,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  onConfirm,
+  onCancel,
+  confirmButtonColor = COLORS.black,
+  confirmButtonTextColor = "#FFFFFF",
+  cancelButtonBgColor = COLORS.secondaryBg,
+  cancelButtonTextColor = COLORS.secondaryText,
+  iconBackgroundColor = COLORS.dangerBg,
+  iconColor = "#C80000",
+  showIcon = true,
+  isLoading = false,
+  hideCancel = false,
+}) => (
+  <Modal
+    transparent
+    animationType="fade"
+    statusBarTranslucent
+    visible={visible}
+    onRequestClose={onCancel}
+  >
+    <View style={styles.overlay}>
+      <View style={styles.card}>
+        <View style={styles.alertWrapper}>
+          {showIcon && (
+            <View style={[styles.iconCircle, { backgroundColor: iconBackgroundColor }]}>
+              <WarningIcon size={38} color={iconColor} />
+            </View>
+          )}
+
+          <Text style={styles.alertTitle}>{title}</Text>
+          <Text style={styles.alertMessage}>{message}</Text>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              { backgroundColor: confirmButtonColor },
+              isLoading && styles.buttonDisabled,
+            ]}
+            activeOpacity={0.85}
+            disabled={isLoading}
+            onPress={onConfirm}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color={confirmButtonTextColor} />
+            ) : (
+              <Text style={[styles.primaryText, { color: confirmButtonTextColor }]}>
+                {confirmLabel}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {!hideCancel && (
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                { backgroundColor: cancelButtonBgColor },
+                isLoading && styles.buttonDisabled,
+              ]}
+              activeOpacity={0.85}
+              disabled={isLoading}
+              onPress={onCancel}
+            >
+              <Text style={[styles.secondaryText, { color: cancelButtonTextColor }]}>
+                {cancelLabel}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+/* ────────────────────────────────────────────────────────────
+ * 2. OrderProcessingModal – your original logic, restyled
+ * ──────────────────────────────────────────────────────────── */
 export interface ProcessingStep {
   id: string;
   label: string;
@@ -32,26 +307,26 @@ export interface UnconfirmedStateProps {
 
 export interface OrderProcessingModalProps {
   visible: boolean;
-  currentStepIndex: number;
-  steps: ProcessingStep[];
+  currentStepIndex?: number;
+  steps?: ProcessingStep[];
   title?: string;
   isReconciling?: boolean;
   unconfirmedState?: UnconfirmedStateProps | null;
   slowThresholdSeconds?: number;
+  /** false (default) = no steps screen; modal only appears for the connection-lost state */
+  showSteps?: boolean;
   onCancel?: () => void;
 }
 
-const { width } = Dimensions.get("window");
-
 export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
   visible,
-  currentStepIndex,
-  steps,
+  currentStepIndex = 0,
+  steps = [],
   title = "Processing Your Order",
   isReconciling = false,
   unconfirmedState = null,
   slowThresholdSeconds = 6,
-  onCancel,
+  showSteps = false,
 }) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isSlowNetwork, setIsSlowNetwork] = useState(false);
@@ -66,7 +341,6 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
   const isRetrying =
     Boolean(unconfirmedState?.isLoadingRetry) || isRetryingInternal;
 
-  // Reset internal loading states when modal is hidden
   useEffect(() => {
     if (!visible) {
       setIsCheckingStatusInternal(false);
@@ -98,62 +372,41 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
     }
   };
 
-  // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideWarningAnim = useRef(new Animated.Value(-20)).current;
   const opacityWarningAnim = useRef(new Animated.Value(0)).current;
 
-  // 1. Intercept Android Hardware Back Button while modal is open
+  // Block Android back button while processing
   useEffect(() => {
     if (!visible) return;
-
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        // Prevent back press during order processing to protect against duplicate submissions
-        return true;
-      }
-    );
-
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => backHandler.remove();
   }, [visible]);
 
-  // 2. Track elapsed time and trigger slow network notice
+  // Elapsed timer + slow network flag
   useEffect(() => {
     if (!visible) {
       setElapsedSeconds(0);
       setIsSlowNetwork(false);
       return;
     }
-
     const interval = setInterval(() => {
       setElapsedSeconds((prev) => {
         const next = prev + 1;
-        if (next >= slowThresholdSeconds && !isSlowNetwork) {
-          setIsSlowNetwork(true);
-        }
+        if (next >= slowThresholdSeconds && !isSlowNetwork) setIsSlowNetwork(true);
         return next;
       });
     }, 1000);
-
     return () => clearInterval(interval);
   }, [visible, slowThresholdSeconds, isSlowNetwork]);
 
-  // 3. Pulse animation for active step & slow network badge
+  // Pulse animation
   useEffect(() => {
     if (visible) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 900, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
         ])
       ).start();
     } else {
@@ -161,20 +414,12 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
     }
   }, [visible]);
 
-  // 4. Slide in slow network warning banner when slow
+  // Slow banner animation
   useEffect(() => {
     if (isSlowNetwork && !unconfirmedState) {
       Animated.parallel([
-        Animated.timing(slideWarningAnim, {
-          toValue: 0,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityWarningAnim, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
+        Animated.timing(slideWarningAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
+        Animated.timing(opacityWarningAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
       ]).start();
     } else if (!isSlowNetwork) {
       slideWarningAnim.setValue(-20);
@@ -183,6 +428,10 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
   }, [isSlowNetwork, unconfirmedState]);
 
   if (!visible) return null;
+
+  // No steps screen: show the modal ONLY when the connection was lost
+  // (Check Order Status / Retry Submission / Go Back).
+  if (!unconfirmedState && !showSteps) return null;
 
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -196,26 +445,21 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
       animationType="fade"
       statusBarTranslucent
       visible={visible}
-      onRequestClose={() => {
-        // Do nothing to block dismissal
-      }}
+      onRequestClose={() => {}}
     >
       <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* ── Unconfirmed Timeout Fallback State (Phase 3) ── */}
+        <View style={styles.card}>
           {unconfirmedState ? (
-            <View style={styles.unconfirmedWrapper}>
-              <View style={styles.unconfirmedIconContainer}>
-                <Ionicons name="cloud-offline" size={40} color="#D97706" />
+            /* ── Unconfirmed state: same design as screenshot ── */
+            <View style={styles.alertWrapper}>
+              <View style={[styles.iconCircle, { backgroundColor: COLORS.dangerBg }]}>
+                <WarningIcon size={38} color="#C80000" />
               </View>
 
-              <Text style={styles.unconfirmedTitle}>
+              <Text style={styles.alertTitle}>
                 {unconfirmedState.title || "Network Delay Detected"}
               </Text>
-
-              <Text style={styles.unconfirmedMessage}>
-                {unconfirmedState.message}
-              </Text>
+              <Text style={styles.alertMessage}>{unconfirmedState.message}</Text>
 
               {unconfirmedState.isPaid && (
                 <View style={styles.paidBadge}>
@@ -226,91 +470,75 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                 </View>
               )}
 
-              <View style={styles.buttonStack}>
+              {/* Primary – black pill */}
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (isCheckingStatus || isRetrying) && styles.buttonDisabled,
+                ]}
+                activeOpacity={0.85}
+                disabled={isCheckingStatus || isRetrying}
+                onPress={handleCheckStatus}
+              >
+                {isCheckingStatus ? (
+                  <View style={styles.row}>
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryText}>Checking Status...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryText}>Check Order Status</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Secondary – gray pill */}
+              {unconfirmedState.onRetry && (
                 <TouchableOpacity
                   style={[
-                    styles.primaryActionButton,
-                    isCheckingStatus && styles.primaryActionButtonDisabled,
+                    styles.secondaryButton,
+                    (isRetrying || isCheckingStatus) && styles.buttonDisabled,
                   ]}
-                  activeOpacity={0.8}
-                  disabled={isCheckingStatus || isRetrying}
-                  onPress={handleCheckStatus}
+                  activeOpacity={0.85}
+                  disabled={isRetrying || isCheckingStatus}
+                  onPress={handleRetry}
                 >
-                  {isCheckingStatus ? (
-                    <>
-                      <ActivityIndicator
-                        size="small"
-                        color="#FFFFFF"
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={styles.primaryActionText}>Checking Status...</Text>
-                    </>
+                  {isRetrying ? (
+                    <View style={styles.row}>
+                      <ActivityIndicator size="small" color={COLORS.secondaryText} style={{ marginRight: 8 }} />
+                      <Text style={styles.secondaryText}>Retrying...</Text>
+                    </View>
                   ) : (
-                    <>
-                      <Ionicons name="refresh" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.primaryActionText}>Check Order Status</Text>
-                    </>
+                    <Text style={styles.secondaryText}>Retry Submission</Text>
                   )}
                 </TouchableOpacity>
+              )}
 
-                {unconfirmedState.onRetry && (
-                  <TouchableOpacity
+              {unconfirmedState.onCancel && (
+                <TouchableOpacity
+                  style={styles.textButton}
+                  activeOpacity={0.8}
+                  disabled={isCheckingStatus || isRetrying}
+                  onPress={unconfirmedState.onCancel}
+                >
+                  <Text
                     style={[
-                      styles.secondaryActionButton,
-                      (isRetrying || isCheckingStatus) && styles.secondaryActionButtonDisabled,
+                      styles.textButtonLabel,
+                      (isCheckingStatus || isRetrying) && { opacity: 0.5 },
                     ]}
-                    activeOpacity={0.8}
-                    disabled={isRetrying || isCheckingStatus}
-                    onPress={handleRetry}
                   >
-                    {isRetrying ? (
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <ActivityIndicator
-                          size="small"
-                          color="#374151"
-                          style={{ marginRight: 8 }}
-                        />
-                        <Text style={styles.secondaryActionText}>Retrying...</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.secondaryActionText}>Retry Submission</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-
-                {unconfirmedState.onCancel && (
-                  <TouchableOpacity
-                    style={styles.textActionButton}
-                    activeOpacity={0.8}
-                    disabled={isCheckingStatus || isRetrying}
-                    onPress={unconfirmedState.onCancel}
-                  >
-                    <Text
-                      style={[
-                        styles.textActionText,
-                        (isCheckingStatus || isRetrying) && { opacity: 0.5 },
-                      ]}
-                    >
-                      Go Back
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                    Go Back
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
-            /* ── Normal Processing State (Phase 2) ── */
+            /* ── Normal processing state ── */
             <View>
-              {/* Header */}
               <View style={styles.header}>
-                <View style={styles.spinnerContainer}>
-                  {isReconciling ? (
-                    <ActivityIndicator size="large" color="#2563EB" />
-                  ) : (
-                    <ActivityIndicator size="large" color="#16A34A" />
-                  )}
+                <View style={[styles.iconCircle, { backgroundColor: "#F3F4F6" }]}>
+                  <ActivityIndicator size="large" color={COLORS.black} />
                 </View>
 
-                <Text style={styles.title}>
+                <Text style={styles.alertTitle}>
                   {isReconciling ? "Verifying with Server..." : title}
                 </Text>
 
@@ -323,7 +551,7 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                           ? "#2563EB"
                           : isSlowNetwork
                           ? "#EAB308"
-                          : "#16A34A",
+                          : COLORS.black,
                         transform: [{ scale: pulseAnim }],
                       },
                     ]}
@@ -336,15 +564,11 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                 </View>
               </View>
 
-              {/* Slow Network Dynamic Banner */}
               {isSlowNetwork && !isReconciling && (
                 <Animated.View
                   style={[
                     styles.slowBanner,
-                    {
-                      transform: [{ translateY: slideWarningAnim }],
-                      opacity: opacityWarningAnim,
-                    },
+                    { transform: [{ translateY: slideWarningAnim }], opacity: opacityWarningAnim },
                   ]}
                 >
                   <Ionicons name="cellular-outline" size={18} color="#92400E" />
@@ -357,16 +581,13 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                 </Animated.View>
               )}
 
-              {/* Progress Milestones / Steps */}
               <View style={styles.stepsList}>
                 {steps.map((step, idx) => {
                   const isCompleted = idx < currentStepIndex;
                   const isActive = idx === currentStepIndex;
-                  const isPending = idx > currentStepIndex;
 
                   return (
                     <View key={step.id || idx} style={styles.stepRow}>
-                      {/* Step Indicator */}
                       <View style={styles.indicatorCol}>
                         {isCompleted ? (
                           <View style={styles.stepCompletedIcon}>
@@ -374,15 +595,13 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                           </View>
                         ) : isActive ? (
                           <View style={styles.stepActiveIcon}>
-                            <ActivityIndicator size="small" color="#16A34A" />
+                            <ActivityIndicator size="small" color={COLORS.black} />
                           </View>
                         ) : (
                           <View style={styles.stepPendingIcon}>
                             <View style={styles.stepPendingInnerDot} />
                           </View>
                         )}
-
-                        {/* Connector line between steps */}
                         {idx < steps.length - 1 && (
                           <View
                             style={[
@@ -393,7 +612,6 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                         )}
                       </View>
 
-                      {/* Step Text */}
                       <View style={styles.stepContentCol}>
                         <Text
                           style={[
@@ -407,16 +625,13 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
                         >
                           {step.label}
                         </Text>
-                        {step.sublabel && (
-                          <Text style={styles.stepSublabel}>{step.sublabel}</Text>
-                        )}
+                        {step.sublabel && <Text style={styles.stepSublabel}>{step.sublabel}</Text>}
                       </View>
                     </View>
                   );
                 })}
               </View>
 
-              {/* Reassuring Footer */}
               <View style={styles.footer}>
                 <Ionicons name="lock-closed" size={13} color="#6B7280" />
                 <Text style={styles.footerText}>
@@ -431,99 +646,156 @@ export const OrderProcessingModal: React.FC<OrderProcessingModalProps> = ({
   );
 };
 
+/* ────────────────────────────────────────────────────────────
+ * Styles
+ * ──────────────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    backgroundColor: COLORS.overlay,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
   },
-  container: {
-    width: Math.min(width - 32, 380),
+  card: {
+    width: Math.min(width - 40, 360),
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    borderRadius: 28,
+    paddingTop: 28,
+    paddingBottom: 24,
+    paddingHorizontal: 22,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 18,
     elevation: 10,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  spinnerContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#F0FDF4",
+  row: { flexDirection: "row", alignItems: "center" },
+
+  /* Alert layout (matches screenshot) */
+  alertWrapper: { alignItems: "center" },
+  iconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 22,
   },
-  title: {
-    fontSize: 18,
+  alertTitle: {
+    fontFamily: FONT.bold,
     fontWeight: "700",
-    color: "#111827",
+    fontSize: 19,
+    color: COLORS.title,
     textAlign: "center",
+    marginBottom: 10,
   },
-  timerRow: {
+  alertMessage: {
+    fontFamily: FONT.regular,
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.body,
+    textAlign: "center",
+    marginBottom: 22,
+    paddingHorizontal: 4,
+  },
+
+  /* Buttons */
+  primaryButton: {
+    width: "100%",
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: COLORS.black,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  primaryText: {
+    fontFamily: FONT.semibold,
+    fontSize: 16,
+    color: "#FFFFFF",
+    letterSpacing: 0.4,
+  },
+  secondaryButton: {
+    width: "100%",
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: COLORS.secondaryBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  secondaryText: {
+    fontFamily: FONT.semibold,
+    fontSize: 16,
+    color: COLORS.secondaryText,
+    letterSpacing: 0.4,
+  },
+  buttonDisabled: { opacity: 0.6 },
+  textButton: { alignItems: "center", paddingVertical: 14 },
+  textButtonLabel: {
+    fontFamily: FONT.medium,
+    fontSize: 14,
+    color: COLORS.body,
+  },
+
+  /* Paid badge */
+  paidBadge: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 6,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 18,
   },
-  pulsingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  timerText: {
+  paidBadgeText: {
+    fontFamily: FONT.medium,
     fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
+    color: "#15803D",
+    marginLeft: 6,
   },
+
+  /* Processing state */
+  header: { alignItems: "center", marginBottom: 12 },
+  timerRow: { flexDirection: "row", alignItems: "center" },
+  pulsingDot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
+  timerText: { fontFamily: FONT.medium, fontSize: 12, color: "#6B7280" },
   slowBanner: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FEF3C7",
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 10,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "#FDE68A",
   },
-  slowBannerTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#92400E",
-  },
+  slowBannerTitle: { fontFamily: FONT.semibold, fontSize: 12, color: "#92400E" },
   slowBannerText: {
+    fontFamily: FONT.regular,
     fontSize: 11,
     color: "#78350F",
     marginTop: 2,
-    lineHeight: 14,
+    lineHeight: 15,
   },
-  stepsList: {
-    marginVertical: 6,
-    paddingHorizontal: 6,
-  },
-  stepRow: {
-    flexDirection: "row",
-    minHeight: 46,
-  },
-  indicatorCol: {
-    alignItems: "center",
-    width: 28,
-  },
+  stepsList: { marginVertical: 6, paddingHorizontal: 6 },
+  stepRow: { flexDirection: "row", minHeight: 46 },
+  indicatorCol: { alignItems: "center", width: 28 },
   stepCompletedIcon: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#16A34A",
+    backgroundColor: COLORS.black,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -532,8 +804,8 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#16A34A",
-    backgroundColor: "#F0FDF4",
+    borderColor: COLORS.black,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -546,49 +818,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stepPendingInnerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#D1D5DB",
-  },
-  connectorLine: {
-    width: 2,
-    flex: 1,
-    marginVertical: 2,
-  },
-  connectorCompleted: {
-    backgroundColor: "#16A34A",
-  },
-  connectorPending: {
-    backgroundColor: "#E5E7EB",
-  },
-  stepContentCol: {
-    flex: 1,
-    marginLeft: 10,
-    justifyContent: "flex-start",
-    paddingTop: 1,
-  },
-  stepLabel: {
-    fontSize: 13,
-  },
-  stepLabelCompleted: {
-    color: "#1F2937",
-    fontWeight: "500",
-  },
-  stepLabelActive: {
-    color: "#16A34A",
-    fontWeight: "700",
-  },
-  stepLabelPending: {
-    color: "#9CA3AF",
-    fontWeight: "400",
-  },
-  stepSublabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginTop: 1,
-  },
+  stepPendingInnerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D1D5DB" },
+  connectorLine: { width: 2, flex: 1, marginVertical: 2 },
+  connectorCompleted: { backgroundColor: COLORS.black },
+  connectorPending: { backgroundColor: "#E5E7EB" },
+  stepContentCol: { flex: 1, marginLeft: 10, paddingTop: 1 },
+  stepLabel: { fontFamily: FONT.regular, fontSize: 13 },
+  stepLabelCompleted: { fontFamily: FONT.medium, color: "#1F2937" },
+  stepLabelActive: { fontFamily: FONT.semibold, color: COLORS.black },
+  stepLabelPending: { color: "#9CA3AF" },
+  stepSublabel: { fontFamily: FONT.regular, fontSize: 11, color: "#6B7280", marginTop: 1 },
   footer: {
     flexDirection: "row",
     alignItems: "center",
@@ -598,100 +837,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
   },
-  footerText: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginLeft: 5,
-  },
-  /* Unconfirmed state styling */
-  unconfirmedWrapper: {
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  unconfirmedIconContainer: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#FEF3C7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  unconfirmedTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  unconfirmedMessage: {
-    fontSize: 13,
-    color: "#4B5563",
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  paidBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  paidBadgeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#15803D",
-    marginLeft: 6,
-  },
-  buttonStack: {
-    width: "100%",
-    marginTop: 4,
-  },
-  primaryActionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#16A34A",
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  primaryActionButtonDisabled: {
-    backgroundColor: "#22C55E",
-    opacity: 0.85,
-  },
-  primaryActionText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  secondaryActionButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F4F6",
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginBottom: 6,
-  },
-  secondaryActionButtonDisabled: {
-    opacity: 0.6,
-  },
-  secondaryActionText: {
-    color: "#374151",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  textActionButton: {
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  textActionText: {
-    color: "#6B7280",
-    fontSize: 13,
-  },
+  footerText: { fontFamily: FONT.regular, fontSize: 11, color: "#6B7280", marginLeft: 5 },
 });
 
 export default OrderProcessingModal;
