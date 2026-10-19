@@ -152,6 +152,98 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
+/* ------------------------------------------------------------------ */
+/* PHONE VALIDATION (per country)                                      */
+/* Numbers are entered WITHOUT the country code and WITHOUT leading 0  */
+/* ------------------------------------------------------------------ */
+interface PhoneRule {
+  regex: RegExp;
+  maxLength: number;
+  error: string;
+}
+
+const PHONE_RULES: Record<string, PhoneRule> = {
+  // Sri Lanka – 9 digits, starts with 7
+  "+94": {
+    regex: /^7\d{8}$/,
+    maxLength: 9,
+    error: "Sri Lanka number must be 9 digits and start with 7",
+  },
+  // Vietnam – 9 digits, starts with 3, 5, 7, 8 or 9
+  "+84": {
+    regex: /^[35789]\d{8}$/,
+    maxLength: 9,
+    error: "Vietnam number must be 9 digits and start with 3, 5, 7, 8 or 9",
+  },
+  // Cambodia – exactly 8 digits, valid mobile prefix
+  "+855": {
+    regex:
+      /^(10|11|12|14|15|16|17|61|66|67|68|69|70|76|77|78|79|81|85|86|87|88|89|90|92|93|95|96|97|98|99)\d{6}$/,
+    maxLength: 8,
+    error: "Cambodia number must be 8 digits with a valid prefix (e.g. 12345678)",
+  },
+  // Bangladesh – 10 digits, starts with 13–19
+  "+880": {
+    regex: /^1[3-9]\d{8}$/,
+    maxLength: 10,
+    error: "Bangladesh number must be 10 digits and start with 13–19",
+  },
+  // India – 10 digits, starts with 6, 7, 8 or 9
+  "+91": {
+    regex: /^[6-9]\d{9}$/,
+    maxLength: 10,
+    error: "India number must be 10 digits and start with 6, 7, 8 or 9",
+  },
+  // Netherlands – 9 digits, starts with 6
+  "+31": {
+    regex: /^6\d{8}$/,
+    maxLength: 9,
+    error: "Netherlands number must be 9 digits and start with 6",
+  },
+};
+
+const getPhoneMaxLength = (dialCode: string): number =>
+  PHONE_RULES[dialCode]?.maxLength ?? 10;
+
+/** Strips non-digits and leading zeros, then trims to the country's max length */
+const cleanPhoneInput = (text: string, dialCode: string): string =>
+  text
+    .replace(/[^0-9]/g, "")
+    .replace(/^0+/, "")
+    .slice(0, getPhoneMaxLength(dialCode));
+
+/** Returns "" when valid, otherwise an error message */
+const validatePhone = (
+  dialCode: string,
+  number: string,
+  emptyMessage = "Mobile number is required",
+): string => {
+  const n = number.trim().replace(/^0+/, "");
+  if (!n) return emptyMessage;
+  const rule = PHONE_RULES[dialCode];
+  if (!rule) return /^\d{7,12}$/.test(n) ? "" : "Invalid phone number";
+  return rule.regex.test(n) ? "" : rule.error;
+};
+
+/** true if `n` can still be completed into a valid number for this country */
+const isPhonePartialValid = (dialCode: string, n: string): boolean => {
+  const rule = PHONE_RULES[dialCode];
+  if (!rule) return true;
+  if (n.length >= rule.maxLength) return rule.regex.test(n);
+  const rest = rule.maxLength - n.length;
+  for (let d = 0; d <= 9; d++) {
+    if (rule.regex.test(n + String(d).repeat(rest))) return true;
+  }
+  return false;
+};
+
+/** Live check while typing: "" if empty / no code / still possibly valid */
+const liveValidatePhone = (dialCode: string, n: string): string => {
+  if (!n || !dialCode) return "";
+  if (isPhonePartialValid(dialCode, n)) return "";
+  return PHONE_RULES[dialCode]?.error ?? "Invalid phone number";
+};
+
 const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -218,12 +310,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
   const titles = ["Mr", "Mrs", "Ms", "Rev"];
 
-  const isValidSriLankanMobile = (num: string): boolean =>
-    /^7[0-9]{8}$/.test(num);
-
-  const isValidGenericMobile = (num: string): boolean =>
-    /^[0-9]{9}$/.test(num);
-
   // Validate fields helper
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -244,7 +330,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       newErrors.lastName = "Last name must contain only letters";
     }
 
-    // User Mobile Phone Validate (Separated)
+    // User Mobile Phone Validate (country specific)
     if (!phoneCode) {
       newErrors.phoneCode = "Country code is required";
     }
@@ -252,16 +338,9 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       newErrors.phoneNumber = "Mobile number is required";
     } else if (/\s/.test(phoneNumber)) {
       newErrors.phoneNumber = "Mobile number cannot contain spaces";
-    } else {
-      const cleanedPhone = phoneNumber.trim().replace(/^0+/, ""); // strip ALL leading zeros, not just one
-      if (phoneCode === "+94") {
-        if (!isValidSriLankanMobile(cleanedPhone)) {
-          newErrors.phoneNumber =
-            "Enter a valid 9-digit mobile number starting with 7";
-        }
-      } else if (!isValidGenericMobile(cleanedPhone)) {
-        newErrors.phoneNumber = "Invalid number";
-      }
+    } else if (phoneCode) {
+      const err = validatePhone(phoneCode, phoneNumber);
+      if (err) newErrors.phoneNumber = err;
     }
 
     if (!email.trim()) {
@@ -288,7 +367,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         newErrors.companyName = "Company name is required";
       }
 
-      // Company Mobile Phone Validate (Separated)
+      // Company Mobile Phone Validate (country specific)
       if (!companyPhoneCode) {
         newErrors.companyPhoneCode = "Country code is required";
       }
@@ -296,16 +375,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         newErrors.companyNumber = "Company number is required";
       } else if (/\s/.test(companyNumber)) {
         newErrors.companyNumber = "Company number cannot contain spaces";
-      } else {
-        const cleanedCompanyPhone = companyNumber.trim().replace(/^0+/, "");
-        if (companyPhoneCode === "+94") {
-          if (!isValidSriLankanMobile(cleanedCompanyPhone)) {
-            newErrors.companyNumber =
-              "Enter a valid 9-digit mobile number starting with 7";
-          }
-        } else if (!isValidGenericMobile(cleanedCompanyPhone)) {
-          newErrors.companyNumber = "Invalid number";
-        }
+      } else if (companyPhoneCode) {
+        const err = validatePhone(
+          companyPhoneCode,
+          companyNumber,
+          "Company number is required",
+        );
+        if (err) newErrors.companyNumber = err;
       }
     }
 
@@ -363,10 +439,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     }
 
     try {
-      const cleanedPhone =
-        phoneCode === "+94"
-          ? phoneNumber.trim().replace(/^0+/, "")
-          : phoneNumber.trim();
+      const cleanedPhone = phoneNumber.trim().replace(/^0+/, "");
+      const cleanedCompanyPhone = companyNumber.trim().replace(/^0+/, "");
 
       const payload = {
         title,
@@ -383,7 +457,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         agreeToTerms: tab === "home" ? agreeToTerms : true,
         companyName: tab === "business" ? companyName.trim() : null,
         companyPhoneCode: tab === "business" ? companyPhoneCode : null,
-        companyPhoneNumber: tab === "business" ? companyNumber.trim() : null,
+        companyPhoneNumber: tab === "business" ? cleanedCompanyPhone : null,
         city: route.params?.nearestCity || null,
         cityId: route.params?.cityId || null,
         allowRestore: allowRestore ? true : undefined,
@@ -975,12 +1049,20 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     keyboardType="number-pad"
                     value={phoneNumber}
                     onChangeText={(text) => {
-                      const clean = text.replace(/[^0-9]/g, "").slice(0, 9);
+                      const clean = cleanPhoneInput(text, phoneCode);
                       setPhoneNumber(clean);
-                      if (errors.phoneNumber)
-                        setErrors((prev) => ({ ...prev, phoneNumber: "" }));
+                      setErrors((prev) => ({
+                        ...prev,
+                        phoneNumber: liveValidatePhone(phoneCode, clean),
+                      }));
                     }}
-                    maxLength={9}
+                    onBlur={() => {
+                      if (phoneNumber && phoneCode) {
+                        const err = validatePhone(phoneCode, phoneNumber);
+                        setErrors((prev) => ({ ...prev, phoneNumber: err }));
+                      }
+                    }}
+                    maxLength={getPhoneMaxLength(phoneCode)}
                     style={{
                       flex: 1,
                       paddingTop: 0,
@@ -1306,15 +1388,30 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         keyboardType="number-pad"
                         value={companyNumber}
                         onChangeText={(text) => {
-                          const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "").slice(0, 9);
+                          const clean = cleanPhoneInput(text, companyPhoneCode);
                           setCompanyNumber(clean);
-                          if (errors.companyNumber)
+                          setErrors((prev) => ({
+                            ...prev,
+                            companyNumber: liveValidatePhone(
+                              companyPhoneCode,
+                              clean,
+                            ),
+                          }));
+                        }}
+                        onBlur={() => {
+                          if (companyNumber && companyPhoneCode) {
+                            const err = validatePhone(
+                              companyPhoneCode,
+                              companyNumber,
+                              "Company number is required",
+                            );
                             setErrors((prev) => ({
                               ...prev,
-                              companyNumber: "",
+                              companyNumber: err,
                             }));
+                          }
                         }}
-                        maxLength={9}
+                        maxLength={getPhoneMaxLength(companyPhoneCode)}
                         style={{
                           flex: 1,
                           paddingTop: 0,
@@ -1617,9 +1714,15 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         selectedItems={phoneCode ? [phoneCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setPhoneCode(items[0]);
-            setPhoneNumber((prev) => prev.slice(0, 9));
-            setErrors((prev) => ({ ...prev, phoneCode: "" }));
+            const code = items[0];
+            const trimmed = phoneNumber.slice(0, getPhoneMaxLength(code));
+            setPhoneCode(code);
+            setPhoneNumber(trimmed);
+            setErrors((prev) => ({
+              ...prev,
+              phoneCode: "",
+              phoneNumber: liveValidatePhone(code, trimmed),
+            }));
           }
           setIsPhoneCodeModalOpen(false);
         }}
@@ -1645,9 +1748,15 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         selectedItems={companyPhoneCode ? [companyPhoneCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setCompanyPhoneCode(items[0]);
-            setCompanyNumber((prev) => prev.slice(0, 9));
-            setErrors((prev) => ({ ...prev, companyPhoneCode: "" }));
+            const code = items[0];
+            const trimmed = companyNumber.slice(0, getPhoneMaxLength(code));
+            setCompanyPhoneCode(code);
+            setCompanyNumber(trimmed);
+            setErrors((prev) => ({
+              ...prev,
+              companyPhoneCode: "",
+              companyNumber: liveValidatePhone(code, trimmed),
+            }));
           }
           setIsCompanyPhoneCodeModalOpen(false);
         }}
