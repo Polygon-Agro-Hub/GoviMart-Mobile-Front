@@ -68,16 +68,43 @@ const getFlagUrl = (countryCode: string): string => {
 };
 
 const NAME_ALLOWED_REGEX = /^[a-zA-Z'-]*$/;
+const LAST_NAME_ALLOWED_REGEX = /^[a-zA-Z' -]+$/;
 
 const capitalizeName = (text: string): string => {
   if (!text) return "";
   return text
     .trim()
+    .replace(/\s+/g, " ")
     .replace(/(?:^|\s|-)([a-z])/g, (_, c) => c.toUpperCase());
 };
 
 const sanitizeNameLive = (text: string, prevText: string = ""): string => {
   let cleaned = text.replace(/[^a-zA-Z'-]/g, "");
+
+  if (!cleaned) return "";
+
+  // If previous text was a single letter (e.g. "A" or "") and IME buffer sent duplicate (e.g. "Aas" or "Aa"), strip ghost duplicate
+  if (
+    prevText.length <= 1 &&
+    cleaned.length >= 2 &&
+    cleaned[0].toLowerCase() === cleaned[1].toLowerCase()
+  ) {
+    cleaned = cleaned[0] + cleaned.slice(2);
+  }
+
+  // Capitalize first character live
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const sanitizeLastNameLive = (text: string, prevText: string = ""): string => {
+  // Allow letters, apostrophes, hyphens, and spaces
+  let cleaned = text.replace(/[^a-zA-Z' -]/g, "");
+
+  // Prevent leading spaces
+  cleaned = cleaned.replace(/^\s+/, "");
+
+  // Prevent multiple consecutive spaces
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
 
   if (!cleaned) return "";
 
@@ -121,7 +148,7 @@ const isValidEmail = (emailStr: string): boolean => {
     return false;
   }
   const emailRegex =
-    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]\.)*[a-zA-Z0-9][a-zA-Z0-9-]{1,}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/;
   return emailRegex.test(trimmed);
 };
 
@@ -213,9 +240,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
     if (!lastName.trim()) {
       newErrors.lastName = "Last name is required";
-    } else if (/\s/.test(lastName)) {
-      newErrors.lastName = "Last name cannot contain spaces";
-    } else if (!NAME_ALLOWED_REGEX.test(lastName.trim())) {
+    } else if (!LAST_NAME_ALLOWED_REGEX.test(lastName.trim())) {
       newErrors.lastName = "Last name must contain only letters";
     }
 
@@ -261,8 +286,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     if (tab === "business") {
       if (!companyName.trim()) {
         newErrors.companyName = "Company name is required";
-      } else if (/\s/.test(companyName)) {
-        newErrors.companyName = "Company name cannot contain spaces";
       }
 
       // Company Mobile Phone Validate (Separated)
@@ -840,7 +863,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 placeholderTextColor="#000000"
                 value={lastName}
                 onChangeText={(text) => {
-                  setLastName((prev) => sanitizeNameLive(text, prev));
+                  setLastName((prev) => sanitizeLastNameLive(text, prev));
                   if (errors.lastName)
                     setErrors((prev) => ({ ...prev, lastName: "" }));
                 }}
@@ -1145,11 +1168,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     placeholderTextColor="#000000"
                     value={companyName}
                     onChangeText={(text) => {
-                      const clean = text.replace(/\s/g, "");
+                      const clean = text.replace(/^\s+/, "").replace(/\s{2,}/g, " ");
                       setCompanyName(clean);
                       if (errors.companyName)
                         setErrors((prev) => ({ ...prev, companyName: "" }));
                     }}
+                    onBlur={() => setCompanyName((prev) => prev.trim())}
                     style={{
                       flex: 1,
                       paddingTop: 0,

@@ -62,6 +62,7 @@ export const InputField = React.memo(({
 }) => {
     const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
     const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
+    const resolvedPlaceholder = placeholder !== undefined ? placeholder : label;
     const inputRef = useRef<TextInput>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -189,7 +190,7 @@ export const InputField = React.memo(({
                                             width: containerWidth > 0 ? containerWidth - 4 : "100%",
                                         }}
                                     >
-                                        {formatDisplayText(value, placeholder, containerWidth)}
+                                        {formatDisplayText(value, resolvedPlaceholder, containerWidth)}
                                     </Text>
                                 </TouchableOpacity>
                             ) : (
@@ -206,7 +207,7 @@ export const InputField = React.memo(({
                                         onFocus?.();
                                     }}
                                     keyboardType={keyboardType}
-                                    placeholder={placeholder}
+                                    placeholder={resolvedPlaceholder}
                                     placeholderTextColor="#9CA3AF"
                                     maxLength={maxLength}
                                     autoCapitalize={autoCapitalize}
