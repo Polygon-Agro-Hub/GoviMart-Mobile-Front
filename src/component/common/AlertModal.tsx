@@ -263,11 +263,26 @@ Alert.alert = (title, message, buttons, options) => {
       lowerTitle.includes("completed");
     const type: AlertType = isSuccess ? "success" : "error";
 
+    const lowerMsg = typeof message === "string" ? message.toLowerCase() : "";
+
     const onCloseCallback = () => {
       if (buttons && buttons.length === 1 && buttons[0].onPress) {
         buttons[0].onPress();
       }
     };
+
+    const isOtpAlert =
+      lowerTitle.includes("resent") ||
+      lowerTitle.includes("resend") ||
+      lowerTitle.includes("sent") ||
+      lowerTitle.includes("otp") ||
+      lowerMsg.includes("verification code") ||
+      lowerMsg.includes("otp");
+
+    // OTP resent and sent alerts stay open with an OK button.
+    // General success alerts (e.g. Login successful) auto-close without an OK button.
+    const autoClose = isOtpAlert ? false : isSuccess;
+    const showOkButton = isOtpAlert ? true : !isSuccess;
 
     if (globalAlertListener) {
       globalAlertListener(
@@ -275,8 +290,8 @@ Alert.alert = (title, message, buttons, options) => {
         message || "",
         type,
         onCloseCallback,
-        isSuccess,
-        !isSuccess,
+        autoClose,
+        showOkButton,
       );
     } else {
       originalAlert(title, message, buttons, options);
