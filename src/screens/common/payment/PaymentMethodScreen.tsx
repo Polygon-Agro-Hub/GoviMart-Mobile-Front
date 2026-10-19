@@ -2224,7 +2224,6 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       <OrderProcessingModal
         visible={submitting}
         currentStepIndex={processingStage}
-        steps={CHECKOUT_PROCESSING_STEPS}
         title="Processing Your Order"
         isReconciling={isReconciling}
         unconfirmedState={unconfirmedState}
