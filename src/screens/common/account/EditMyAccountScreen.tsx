@@ -91,6 +91,57 @@ const renderCountryItem = (
   </TouchableOpacity>
 );
 
+const capitalizeName = (text: string): string => {
+  if (!text) return "";
+  return text
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/(?:^|\s|-)([a-z])/g, (_, c) => c.toUpperCase());
+};
+
+const sanitizeFirstNameLive = (text: string): string => {
+  // Disallow ALL spaces, allow only letters, apostrophes, hyphens
+  let cleaned = text.replace(/\s/g, "").replace(/[^a-zA-Z'-]/g, "");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const sanitizeLastNameLive = (text: string): string => {
+  // Allow letters, apostrophes, hyphens, and spaces
+  let cleaned = text.replace(/[^a-zA-Z' -]/g, "");
+  // Prevent leading spaces
+  cleaned = cleaned.replace(/^\s+/, "");
+  // Prevent multiple consecutive spaces
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const sanitizeCompanyNameLive = (text: string): string => {
+  // Prevent leading spaces
+  let cleaned = text.replace(/^\s+/, "");
+  // Prevent multiple consecutive spaces
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const isValidEmail = (emailStr: string): boolean => {
+  if (!emailStr) return false;
+  const trimmed = emailStr.trim();
+  if (
+    trimmed.includes(" ") ||
+    trimmed.includes("..") ||
+    trimmed.startsWith(".") ||
+    trimmed.endsWith(".")
+  ) {
+    return false;
+  }
+  const emailRegex =
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]\.)*[a-zA-Z0-9][a-zA-Z0-9-]{1,}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/;
+  return emailRegex.test(trimmed);
+};
+
 type MyAccountNavigationProp = StackNavigationProp<
   RootStackParamList,
   "MyAccount"
@@ -214,8 +265,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             const data = response.data.data;
             if (data.buyerType) setBuyerType(data.buyerType);
             if (data.title) setTitle(data.title);
-            if (data.firstName) setFirstName(data.firstName);
-            if (data.lastName) setLastName(data.lastName);
+            if (data.firstName) {
+              const f = data.firstName.trim().replace(/\s/g, "");
+              setFirstName(f ? f.charAt(0).toUpperCase() + f.slice(1) : "");
+            }
+            if (data.lastName) setLastName(capitalizeName(data.lastName.trim()));
             const fetchedImage = (data.profileImage || data.image || "").trim();
             if (fetchedImage) {
               setProfileImage(fetchedImage);
@@ -225,7 +279,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
             if (data.email) setEmail(data.email);
-            if (data.companyName) setCompanyName(data.companyName);
+            if (data.companyName) {
+              const comp = data.companyName.trim();
+              setCompanyName(comp ? comp.charAt(0).toUpperCase() + comp.slice(1) : "");
+            }
             if (data.companyPhoneCode)
               setCompanyMobileCode(data.companyPhoneCode);
             if (data.companyPhone) setCompanyMobile(data.companyPhone);
@@ -312,7 +369,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     if (!firstName.trim()) {
       setFirstNameError("First name is required");
       hasError = true;
-    } else if (!/^[a-zA-Z\s]+$/.test(firstName.trim())) {
+    } else if (/\s/.test(firstName)) {
+      setFirstNameError("First name cannot contain spaces");
+      hasError = true;
+    } else if (!/^[a-zA-Z'-]+$/.test(firstName.trim())) {
       setFirstNameError("First name must contain only letters");
       hasError = true;
     }
@@ -320,7 +380,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     if (!lastName.trim()) {
       setLastNameError("Last name is required");
       hasError = true;
-    } else if (!/^[a-zA-Z\s]+$/.test(lastName.trim())) {
+    } else if (!/^[a-zA-Z' -]+$/.test(lastName.trim())) {
       setLastNameError("Last name must contain only letters");
       hasError = true;
     }
@@ -333,7 +393,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     if (!mobileNumber.trim()) {
       setMobileNumberError("Mobile number is required");
       hasError = true;
-    } else if (!/^\d{9}$/.test(mobileNumber)) {
+    } else if (!/^\d{9}$/.test(mobileNumber.trim())) {
       setMobileNumberError("Invalid phone number");
       hasError = true;
     }
@@ -341,12 +401,15 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     if (!email.trim()) {
       setEmailError("Email is required");
       hasError = true;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (/\s/.test(email)) {
+      setEmailError("Email cannot contain spaces");
+      hasError = true;
+    } else if (!isValidEmail(email)) {
       setEmailError("Invalid email address");
       hasError = true;
     }
 
-    if (isWholesale && compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile)) {
+    if (isWholesale && compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile.trim())) {
       setCompanyMobileError("Invalid phone number");
       hasError = true;
     }
@@ -389,10 +452,16 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       setUpdating(true);
 
       const finalImage = profileImage ? profileImage.trim() : null;
+      const formattedFirstName = capitalizeName(firstName.trim().replace(/\s/g, ""));
+      const formattedLastName = capitalizeName(lastName.trim());
+      const formattedCompanyName = companyName.trim()
+        ? companyName.trim().charAt(0).toUpperCase() + companyName.trim().slice(1)
+        : "";
+
       const payload: any = {
         title: (title || "Mr").trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         phoneCode: mobileCode.trim(),
         phoneNumber: mobileNumber.trim(),
         email: email.trim(),
@@ -400,9 +469,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       };
 
       if (isWholesale) {
-        payload.companyName = companyName;
+        payload.companyName = formattedCompanyName;
         payload.companyPhoneCode = companyMobileCode || mobileCode;
-        payload.companyPhone = compnayMobile;
+        payload.companyPhone = compnayMobile.trim();
       }
 
       const phoneChanged =
@@ -478,6 +547,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         const otpResponse = await customerService.sendPhoneChangeOtp({
           phoneCode: mobileCode,
           phoneNumber: mobileNumber,
+          email: email.trim(),
         });
 
         const otpData = otpResponse.data;
@@ -533,6 +603,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               "Too many verification attempts. Please try again after 15 minutes.",
             );
           } else {
+            if (msg.toLowerCase().includes("email")) {
+              setEmailError(msg);
+            }
             Alert.alert("Error", msg);
           }
         }
@@ -609,6 +682,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const errorMessage =
         error?.response?.data?.message ||
         "Failed to update account. Please try again.";
+      const lower = errorMessage.toLowerCase();
+      if (lower.includes("email")) {
+        setEmailError(errorMessage);
+      } else if (lower.includes("phone") || lower.includes("mobile")) {
+        setMobileNumberError(errorMessage);
+      }
       Alert.alert("Error", errorMessage);
     } finally {
       setUpdating(false);
@@ -1044,13 +1123,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                   <InputField
                     icon="user"
                     label="First Name"
+                    placeholder="First Name"
                     value={firstName}
+                    autoCapitalize="words"
                     onChangeText={(text) => {
-                      setFirstName(text.replace(/[^a-zA-Z\s]/g, ""));
-
-                      // Optional: remove error while typing
-                      if (firstNameError) {
+                      const sanitized = sanitizeFirstNameLive(text);
+                      setFirstName(sanitized);
+                      if (firstNameError && sanitized.trim()) {
                         setFirstNameError("");
+                      }
+                    }}
+                    onBlur={() => {
+                      const cap = capitalizeName(firstName);
+                      setFirstName(cap);
+                      if (!cap.trim()) {
+                        setFirstNameError("First name is required");
+                      } else if (!/^[a-zA-Z'-]+$/.test(cap.trim())) {
+                        setFirstNameError("First name must contain only letters");
                       }
                     }}
                     error={firstNameError}
@@ -1068,11 +1157,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 <InputField
                   icon="user"
                   label="Last Name"
+                  placeholder="Last Name"
                   value={lastName}
+                  autoCapitalize="words"
                   onChangeText={(text) => {
-                    setLastName(text.replace(/[^a-zA-Z\s]/g, ""));
-                    if (lastNameError) {
+                    const sanitized = sanitizeLastNameLive(text);
+                    setLastName(sanitized);
+                    if (lastNameError && sanitized.trim()) {
                       setLastNameError("");
+                    }
+                  }}
+                  onBlur={() => {
+                    const cap = capitalizeName(lastName);
+                    setLastName(cap);
+                    if (!cap.trim()) {
+                      setLastNameError("Last name is required");
+                    } else if (!/^[a-zA-Z' -]+$/.test(cap.trim())) {
+                      setLastNameError("Last name must contain only letters");
                     }
                   }}
                   error={lastNameError}
@@ -1117,11 +1218,20 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                   <InputField
                     icon="phone"
                     label="Mobile Number"
+                    placeholder="Mobile Number"
                     value={mobileNumber}
                     onChangeText={(text) => {
-                      setMobileNumber(text.replace(/[^0-9]/g, ""));
-                      if (mobileNumberError) {
+                      const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
+                      setMobileNumber(clean);
+                      if (mobileNumberError && clean.length === 9) {
                         setMobileNumberError("");
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!mobileNumber.trim()) {
+                        setMobileNumberError("Mobile number is required");
+                      } else if (!/^\d{9}$/.test(mobileNumber.trim())) {
+                        setMobileNumberError("Invalid phone number");
                       }
                     }}
                     keyboardType="phone-pad"
@@ -1136,11 +1246,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 <InputField
                   icon="house"
                   label="Email"
+                  placeholder="Email Address"
                   value={email}
+                  autoCapitalize="none"
                   onChangeText={(text) => {
-                    setEmail(text);
+                    const clean = text.replace(/\s/g, "");
+                    setEmail(clean);
                     if (emailError) {
-                      setEmailError("");
+                      if (isValidEmail(clean)) {
+                        setEmailError("");
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!email.trim()) {
+                      setEmailError("Email is required");
+                    } else if (!isValidEmail(email)) {
+                      setEmailError("Invalid email address");
                     }
                   }}
                   keyboardType="email-address"
@@ -1156,9 +1278,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     <InputField
                       icon="building"
                       label="Company Name"
+                      placeholder="Company Name"
                       value={companyName}
+                      autoCapitalize="words"
                       onChangeText={(text) => {
-                        setCompanyName(text);
+                        setCompanyName(sanitizeCompanyNameLive(text));
+                      }}
+                      onBlur={() => {
+                        setCompanyName((prev) => {
+                          const trimmed = prev.trim();
+                          return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+                        });
                       }}
                     />
                   </View>
@@ -1198,11 +1328,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                       <InputField
                         icon="phone"
                         label="Company"
+                        placeholder="Company Mobile"
                         value={compnayMobile}
                         onChangeText={(text) => {
-                          setCompanyMobile(text.replace(/[^0-9]/g, ""));
+                          const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
+                          setCompanyMobile(clean);
                           if (companyMobileError) {
                             setCompanyMobileError("");
+                          }
+                        }}
+                        onBlur={() => {
+                          if (compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile.trim())) {
+                            setCompanyMobileError("Invalid phone number");
                           }
                         }}
                         keyboardType="phone-pad"

@@ -79,10 +79,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           const storedPassword =
             await SecureStore.getItemAsync("rememberedPassword");
           if (storedIdentifier) {
-            setIdentifier(storedIdentifier);
+            setIdentifier(storedIdentifier.replace(/\s/g, ""));
           }
           if (storedPassword) {
-            setPassword(storedPassword);
+            setPassword(storedPassword.replace(/\s/g, ""));
           }
           setRememberMe(true);
           dispatch(
@@ -105,8 +105,8 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     setLoading(true);
     try {
       const response = await authService.login({
-        identifier: identifier.trim(),
-        password: password.trim(),
+        identifier: identifier.replace(/\s/g, "").trim(),
+        password: password.replace(/\s/g, ""),
       });
       if (response.data && response.data.success) {
         const {
@@ -345,11 +345,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 </View>
                 <TextInput
                   value={identifier}
-                  onChangeText={setIdentifier}
+                  onChangeText={(text) => setIdentifier(text.replace(/\s/g, ""))}
                   placeholder="Mobile Number / Email"
                   placeholderTextColor="black"
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                   style={{
                     flex: 1,
                     paddingTop: 0,
@@ -377,11 +379,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 </View>
                 <TextInput
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => setPassword(text.replace(/\s/g, ""))}
                   placeholder="Password"
                   placeholderTextColor="black"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                   style={{
                     flex: 1,
                     paddingTop: 0,

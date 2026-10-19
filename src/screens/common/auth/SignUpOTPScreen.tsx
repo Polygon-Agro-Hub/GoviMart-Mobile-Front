@@ -485,12 +485,12 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               : "ExcludeListAdd";
             const targetParams = !isWholesale
               ? {
-                  customerId: userData.id,
-                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
-                  title: userData.title,
-                  number: userData.phoneNumber,
-                  cusId: userData.cusId,
-                }
+                customerId: userData.id,
+                name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+                title: userData.title,
+                number: userData.phoneNumber,
+                cusId: userData.cusId,
+              }
               : undefined;
 
             Alert.alert(
@@ -670,7 +670,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(${remaining} resend attempts remaining)`,
             );
           }
         } else {
@@ -728,7 +728,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(${remaining} resend attempts remaining)`,
             );
           }
         } else {

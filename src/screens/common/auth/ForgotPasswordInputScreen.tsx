@@ -71,7 +71,7 @@ const isValidEmail = (emailStr: string): boolean => {
     return false;
   }
   const emailRegex =
-    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]\.)*[a-zA-Z0-9][a-zA-Z0-9-]{1,}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/;
   return emailRegex.test(trimmed);
 };
 
@@ -164,17 +164,39 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
   const [alertMessage, setAlertMessage] = useState("");
 
   const isEmail = currentMethod === "email";
+  const hasInput = isEmail
+    ? email.trim().length > 0
+    : phoneNumber.trim().length > 0;
   const isValid = isEmail
     ? isValidEmail(email)
     : phoneCode.trim() !== "" && phoneNumber.trim().length >= 7;
 
   const handleContinue = async () => {
-    if (!isEmail && phoneCode !== "+94") {
-      setOverseasModalVisible(true);
-      return;
-    }
+    if (loading) return;
 
-    if (!isValid) return;
+    if (isEmail) {
+      if (!email.trim()) {
+        setErrorText("Email address is required");
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setErrorText("Invalid email address");
+        return;
+      }
+    } else {
+      if (phoneCode !== "+94") {
+        setOverseasModalVisible(true);
+        return;
+      }
+      if (!phoneNumber.trim()) {
+        setErrorText("Mobile number is required");
+        return;
+      }
+      if (phoneNumber.trim().length < 7) {
+        setErrorText("Invalid mobile number");
+        return;
+      }
+    }
 
     const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
       currentMethod,
@@ -391,7 +413,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
             {isEmail ? (
               /* Email Input matching Update My Password design with #FF9114 border */
               <View>
-                <View className="border border-[#FF9114] px-4 rounded-full flex-row items-center justify-between bg-white">
+                <View
+                  className={`border ${
+                    errorText ? "border-red-500" : "border-[#FF9114]"
+                  } px-4 rounded-full flex-row items-center justify-between bg-white`}
+                >
                   <View className="flex-row items-center flex-1 gap-x-3 h-20">
                     <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
                       <Entypo name="mail" size={16} color="black" />
@@ -403,14 +429,25 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                       <TextInput
                         value={email}
                         onChangeText={(t) => {
-                          setEmail(t);
-                          if (errorText) setErrorText("");
+                          const clean = t.replace(/\s/g, "");
+                          setEmail(clean);
+                          if (errorText) {
+                            if (isValidEmail(clean)) {
+                              setErrorText("");
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          if (email.trim() && !isValidEmail(email)) {
+                            setErrorText("Invalid email address");
+                          }
                         }}
                         placeholder="Type Here"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
+                        spellCheck={false}
                         className="text-sm text-black font-semibold p-0 h-9"
                       />
                     </View>
@@ -454,7 +491,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
 
                   {/* Mobile Number Input matching Update My Password design with #FF9114 border */}
-                  <View className="border border-[#FF9114] px-4 rounded-full flex-row items-center justify-between bg-white flex-1">
+                  <View
+                    className={`border ${
+                      errorText ? "border-red-500" : "border-[#FF9114]"
+                    } px-4 rounded-full flex-row items-center justify-between bg-white flex-1`}
+                  >
                     <View className="flex-row items-center flex-1 gap-x-3 h-20">
                       <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
                         <FontAwesome5
@@ -470,8 +511,18 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                         <TextInput
                           value={phoneNumber}
                           onChangeText={(text) => {
-                            setPhoneNumber(text.replace(/[^0-9]/g, ""));
-                            if (errorText) setErrorText("");
+                            const clean = text.replace(/[^0-9]/g, "");
+                            setPhoneNumber(clean);
+                            if (errorText) {
+                              if (clean.length >= 7) {
+                                setErrorText("");
+                              }
+                            }
+                          }}
+                          onBlur={() => {
+                            if (phoneNumber.trim() && phoneNumber.trim().length < 7) {
+                              setErrorText("Invalid mobile number");
+                            }
                           }}
                           placeholder="Type Here"
                           placeholderTextColor="#9CA3AF"
@@ -499,11 +550,12 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           {/* Continue Button - positioned right after the input fields */}
           <View className="mt-16">
             <TouchableOpacity
-              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"
-                }`}
-              activeOpacity={isValid ? 0.8 : 1}
+              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${
+                isValid ? "bg-black" : hasInput ? "bg-black" : "bg-[#7F919C]"
+              }`}
+              activeOpacity={0.8}
               onPress={handleContinue}
-              disabled={loading || !isValid}
+              disabled={loading}
             >
               {loading && (
                 <ActivityIndicator
