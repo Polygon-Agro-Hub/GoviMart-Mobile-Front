@@ -28,7 +28,6 @@ import { DropdownField, InputField } from "@/component/common/CustomField";
 
 const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 import CustomHeader from "@/component/common/CustomHeader";
-import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
 import customerService from "@/services/customer/customer.service";
@@ -1019,9 +1018,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
       {isLoading ? (
         <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "transparent",
+          }}
         >
-          <LoadingPage message="Loading Account..." fullScreen={false} />
+          <ActivityIndicator size="large" color="#000000" />
+          <Text
+            style={{
+              marginTop: 14,
+              fontSize: 14,
+              fontWeight: "600",
+              color: "#000000",
+              textAlign: "center",
+            }}
+          >
+            Loading Account...
+          </Text>
         </View>
       ) : (
         <KeyboardAwareScrollView
@@ -1477,7 +1492,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             zIndex: 999,
           }}
         >
-          <LoadingPage message="Updating Account..." fullScreen={false} />
+          <ActivityIndicator size="large" color="#000000" />
+          <Text
+            style={{
+              marginTop: 14,
+              fontSize: 14,
+              fontWeight: "600",
+              color: "#000000",
+              textAlign: "center",
+            }}
+          >
+            Updating Account...
+          </Text>
         </View>
       )}
 
