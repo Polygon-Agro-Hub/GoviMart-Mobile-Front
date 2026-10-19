@@ -183,7 +183,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
-  const [profileImageError, setProfileImageError] = useState<string | null>(null);
+  const [profileImageError, setProfileImageError] = useState<string | null>(
+    null,
+  );
 
   // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
@@ -194,7 +196,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const showAlert = (
     title: string,
     message: string,
-    type: "success" | "error" = "error"
+    type: "success" | "error" = "error",
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -205,7 +207,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
   const checkImageSize = async (
-    asset: ImagePicker.ImagePickerAsset
+    asset: ImagePicker.ImagePickerAsset,
   ): Promise<boolean> => {
     let size = asset.fileSize || 0;
     if (!size) {
@@ -224,7 +226,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       showAlert(
         "Image Too Large",
         "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error"
+        "error",
       );
       return false;
     }
@@ -296,7 +298,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               mobileNumber: (data.phoneNumber || "").trim(),
               email: (data.email || "").trim(),
               companyName: (data.companyName || "").trim(),
-              companyMobileCode: (data.companyPhoneCode || data.phoneCode || "+94").trim(),
+              companyMobileCode: (
+                data.companyPhoneCode ||
+                data.phoneCode ||
+                "+94"
+              ).trim(),
               companyMobile: (data.companyPhone || "").trim(),
               image: fetchedImage,
             });
@@ -424,17 +430,19 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         lastName.trim() === originalAccountData.lastName &&
         mobileCode.trim() === originalAccountData.mobileCode &&
         mobileNumber.trim() === originalAccountData.mobileNumber &&
-        email.trim().toLowerCase() === originalAccountData.email.toLowerCase() &&
+        email.trim().toLowerCase() ===
+          originalAccountData.email.toLowerCase() &&
         (!isWholesale ||
           (companyName.trim() === originalAccountData.companyName &&
-            (companyMobileCode || mobileCode).trim() === originalAccountData.companyMobileCode &&
+            (companyMobileCode || mobileCode).trim() ===
+              originalAccountData.companyMobileCode &&
             compnayMobile.trim() === originalAccountData.companyMobile));
 
       if (isUnchanged) {
         Alert.alert(
           "No Changes Detected",
           "You haven't made any changes to your account details to update.",
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -509,11 +517,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (raw) {
               const timestamps: number[] = JSON.parse(raw);
               const now = Date.now();
-              const valid = timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+              const valid = timestamps.filter(
+                (ts) => now - ts < RATE_LIMIT_WINDOW_MS,
+              );
               if (valid.length >= 5) {
                 const oldest = valid[0];
-                const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-                const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+                const remainingMs =
+                  RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+                const remainingSec = Math.max(
+                  Math.ceil(remainingMs / 1000),
+                  900,
+                );
                 const lockoutUntil = Date.now() + remainingSec * 1000;
                 for (const lockKey of lockoutKeys) {
                   await AsyncStorage.setItem(lockKey, String(lockoutUntil));
@@ -543,7 +557,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           for (const key of attemptsKeys) {
             try {
               const raw = await AsyncStorage.getItem(key);
-              const existing = raw ? JSON.parse(raw).filter((ts: number) => now - ts < RATE_LIMIT_WINDOW_MS) : [];
+              const existing = raw
+                ? JSON.parse(raw).filter(
+                    (ts: number) => now - ts < RATE_LIMIT_WINDOW_MS,
+                  )
+                : [];
               const updated = [...existing, now];
               await AsyncStorage.setItem(key, JSON.stringify(updated));
             } catch (e) {
@@ -620,7 +638,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               phoneCode: mobileCode.trim(),
               image: updatedImageStr,
               companyName: isWholesale ? companyName.trim() : undefined,
-            })
+            }),
           );
 
           try {
@@ -636,7 +654,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 phoneNumber: mobileNumber.trim(),
                 phoneCode: mobileCode.trim(),
                 image: updatedImageStr,
-                companyName: isWholesale ? companyName.trim() : parsed.companyName,
+                companyName: isWholesale
+                  ? companyName.trim()
+                  : parsed.companyName,
               };
               await AsyncStorage.setItem("userProfile", JSON.stringify(merged));
             }
@@ -646,7 +666,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
           Alert.alert(
             "Success",
-            response.data.message || "Your account information has been updated.",
+            response.data.message ||
+              "Your account information has been updated.",
             [
               {
                 text: "OK",
@@ -681,15 +702,32 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const filename = uri.split("/").pop() || "profile.jpg";
       const match = /\.(\w+)$/.exec(filename);
       const ext = match ? match[1].toLowerCase() : "jpg";
-      const type = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-      const cleanName = filename.includes(".") ? filename : `${filename}.${ext}`;
+      const type =
+        ext === "png"
+          ? "image/png"
+          : ext === "webp"
+            ? "image/webp"
+            : "image/jpeg";
+      const cleanName = filename.includes(".")
+        ? filename
+        : `${filename}.${ext}`;
 
-      const response = await customerService.uploadProfileImage(uri, cleanName, type);
-      if (response.data && response.data.status && response.data.data?.imageUrl) {
+      const response = await customerService.uploadProfileImage(
+        uri,
+        cleanName,
+        type,
+      );
+      if (
+        response.data &&
+        response.data.status &&
+        response.data.data?.imageUrl
+      ) {
         const uploadedUrl = response.data.data.imageUrl;
         setProfileImage(uploadedUrl);
         setProfileImageError(null);
-        setOriginalAccountData((prev) => (prev ? { ...prev, image: uploadedUrl } : null));
+        setOriginalAccountData((prev) =>
+          prev ? { ...prev, image: uploadedUrl } : null,
+        );
         dispatch(updateUserProfileImage({ image: uploadedUrl }));
         dispatch(updateUserProfile({ image: uploadedUrl }));
         try {
@@ -698,7 +736,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             const parsed = JSON.parse(stored);
             await AsyncStorage.setItem(
               "userProfile",
-              JSON.stringify({ ...parsed, image: uploadedUrl })
+              JSON.stringify({ ...parsed, image: uploadedUrl }),
             );
           }
         } catch (e) {
@@ -780,7 +818,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             [
               { text: "Cancel", style: "cancel" },
               { text: "Open Settings", onPress: () => Linking.openSettings() },
-            ]
+            ],
           );
           return;
         }
@@ -821,99 +859,90 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   return (
     <View className="flex-1 bg-white">
       {/* HEADER */}
-      <View
-        style={{
-          height: 60,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-        }}
-      >
-        <CustomHeader
-          navigation={navigation}
-          title="My Account"
-          showBackButton={true}
-          onBackPress={() => navigation.navigate("Profile")}
-        />
 
-        {/* Delete ellipsis */}
+      <CustomHeader
+        navigation={navigation}
+        title="My Account"
+        showBackButton={true}
+        onBackPress={() => navigation.navigate("Profile")}
+      />
 
-        {!isWholesale && (
+      {/* Delete ellipsis */}
+
+      {!isWholesale && (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleMore}
+          style={{
+            position: "absolute",
+            right: 10,
+            top: 9,
+            width: 36,
+            height: 36,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Ionicons name="ellipsis-vertical" size={22} color="#000" />
+        </TouchableOpacity>
+      )}
+
+      {/* Dropdown */}
+
+      {moreMenuVisible && (
+        <View
+          style={{
+            position: "absolute",
+            top: 38,
+            right: 5,
+
+            width: 130,
+
+            backgroundColor: "#FFFFFF",
+            borderRadius: 12,
+
+            paddingVertical: 1,
+
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+
+            elevation: 8,
+
+            borderWidth: 1,
+            borderColor: "#EEEEEE",
+          }}
+        >
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={handleMore}
+            activeOpacity={0.7}
+            onPress={() => {
+              navigation.navigate("DeleteAccount");
+              setMoreMenuVisible(false);
+            }}
             style={{
-              position: "absolute",
-              right: 10,
-              top: 9,
-              width: 36,
-              height: 36,
-              justifyContent: "center",
+              height: 24,
+              paddingHorizontal: 5,
+              flexDirection: "row",
               alignItems: "center",
             }}
           >
-            <Ionicons name="ellipsis-vertical" size={22} color="#000" />
-          </TouchableOpacity>
-        )}
-
-        {/* Dropdown */}
-
-        {moreMenuVisible && (
-          <View
-            style={{
-              position: "absolute",
-              top: 38,
-              right: 5,
-
-              width: 130,
-
-              backgroundColor: "#FFFFFF",
-              borderRadius: 12,
-
-              paddingVertical: 1,
-
-              shadowColor: "#000",
-              shadowOffset: {
-                width: 0,
-                height: 3,
-              },
-              shadowOpacity: 0.15,
-              shadowRadius: 8,
-
-              elevation: 8,
-
-              borderWidth: 1,
-              borderColor: "#EEEEEE",
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                navigation.navigate("DeleteAccount");
-                setMoreMenuVisible(false);
-              }}
+            <Text
               style={{
-                height: 24,
-                paddingHorizontal: 5,
-                flexDirection: "row",
-                alignItems: "center",
+                marginLeft: 10,
+                fontSize: 13,
+                fontWeight: "500",
+                color: "#000000",
               }}
             >
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 13,
-                  fontWeight: "500",
-                  color: "#000000",
-                }}
-              >
-                Delete Account
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+              Delete Account
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {isLoading ? (
         <View
@@ -940,423 +969,423 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         >
           <View style={{ flex: 1 }}>
             {/* PROFILE IMAGE */}
-          <View
-            style={{
-              alignItems: "center",
-              marginTop: 5,
-              marginBottom: 40,
-            }}
-          >
             <View
               style={{
-                width: 93,
-                height: 93,
-                position: "relative",
+                alignItems: "center",
+                marginTop: 5,
+                marginBottom: 40,
               }}
             >
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={handleChangeProfileImage}
-                disabled={uploadingImage}
+              <View
                 style={{
                   width: 93,
                   height: 93,
-                  borderRadius: 999,
-                  backgroundColor: "#EAEFF5",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: "#F0F0F0",
+                  position: "relative",
                 }}
               >
-                {uploadingImage ? (
-                  <ActivityIndicator size="small" color="#000000" />
-                ) : profileImage && profileImage.trim() !== "" ? (
-                  <Image
-                    source={{ uri: profileImage }}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                    }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Image
-                    source={defaultUserIcon}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                    }}
-                    resizeMode="cover"
-                  />
-                )}
-              </TouchableOpacity>
-
-              {/* Edit Image */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={handleChangeProfileImage}
-                disabled={uploadingImage}
-                style={{
-                  position: "absolute",
-                  right: -4,
-                  bottom: -4,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#000000",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderWidth: 2,
-                  borderColor: "#FFFFFF",
-                  elevation: 4,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 3,
-                }}
-              >
-                <FontAwesome6 name="pen" size={13} color="#FFFFFF" solid />
-              </TouchableOpacity>
-            </View>
-
-            {profileImageError ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginTop: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
-                <Ionicons
-                  name="alert-circle"
-                  size={16}
-                  color="#FF3B30"
-                  style={{ marginRight: 5 }}
-                />
-                <Text
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={handleChangeProfileImage}
+                  disabled={uploadingImage}
                   style={{
-                    fontSize: 13,
-                    color: "#FF3B30",
-                    fontWeight: "500",
-                    textAlign: "center",
+                    width: 93,
+                    height: 93,
+                    borderRadius: 999,
+                    backgroundColor: "#EAEFF5",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    overflow: "hidden",
+                    borderWidth: 2,
+                    borderColor: "#F0F0F0",
                   }}
                 >
-                  {profileImageError}
-                </Text>
-              </View>
-            ) : null}
-          </View>
+                  {uploadingImage ? (
+                    <ActivityIndicator size="small" color="#000000" />
+                  ) : profileImage && profileImage.trim() !== "" ? (
+                    <Image
+                      source={{ uri: profileImage }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Image
+                      source={defaultUserIcon}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      resizeMode="cover"
+                    />
+                  )}
+                </TouchableOpacity>
 
-          {/* FORM */}
-          <View
-            style={{
-              width: "100%",
-            }}
-          >
-            {/* TITLE + FIRST NAME */}
-            <View
-              style={{
-                flexDirection: "row",
-                width: "100%",
-                marginBottom: 14,
-              }}
-            >
-              {/* Title */}
-
-              <View
-                style={{
-                  width: "40%",
-                  marginRight: 8,
-                }}
-              >
-                <DropdownField
-                  label="Title"
-                  value={title}
-                  open={false}
-                  setOpen={() => setTitleModalOpen(true)}
-                  options={[]}
-                  onSelect={() => {}}
-                  icon="user"
-                  error={titleError}
-                />
-              </View>
-
-              {/* First Name */}
-
-              <View
-                style={{
-                  flex: 1,
-                }}
-              >
-                <InputField
-                  icon="user"
-                  label="First Name"
-                  placeholder="First Name"
-                  value={firstName}
-                  autoCapitalize="words"
-                  onChangeText={(text) => {
-                    const sanitized = sanitizeFirstNameLive(text);
-                    setFirstName(sanitized);
-                    if (firstNameError && sanitized.trim()) {
-                      setFirstNameError("");
-                    }
+                {/* Edit Image */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleChangeProfileImage}
+                  disabled={uploadingImage}
+                  style={{
+                    position: "absolute",
+                    right: -4,
+                    bottom: -4,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: "#000000",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderWidth: 2,
+                    borderColor: "#FFFFFF",
+                    elevation: 4,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 3,
                   }}
-                  onBlur={() => {
-                    const cap = capitalizeName(firstName);
-                    setFirstName(cap);
-                    if (!cap.trim()) {
-                      setFirstNameError("First name is required");
-                    } else if (!/^[a-zA-Z'-]+$/.test(cap.trim())) {
-                      setFirstNameError("First name must contain only letters");
-                    }
-                  }}
-                  error={firstNameError}
-                />
-              </View>
-            </View>
-
-            {/* LAST NAME */}
-
-            <View
-              style={{
-                marginBottom: 14,
-              }}
-            >
-              <InputField
-                icon="user"
-                label="Last Name"
-                placeholder="Last Name"
-                value={lastName}
-                autoCapitalize="words"
-                onChangeText={(text) => {
-                  const sanitized = sanitizeLastNameLive(text);
-                  setLastName(sanitized);
-                  if (lastNameError && sanitized.trim()) {
-                    setLastNameError("");
-                  }
-                }}
-                onBlur={() => {
-                  const cap = capitalizeName(lastName);
-                  setLastName(cap);
-                  if (!cap.trim()) {
-                    setLastNameError("Last name is required");
-                  } else if (!/^[a-zA-Z' -]+$/.test(cap.trim())) {
-                    setLastNameError("Last name must contain only letters");
-                  }
-                }}
-                error={lastNameError}
-              />
-            </View>
-
-            {/* CODE + MOBILE */}
-            <View
-              style={{
-                flexDirection: "row",
-                width: "100%",
-                marginBottom: 14,
-              }}
-            >
-              {/* Code */}
-
-              <View
-                style={{
-                  width: "39%",
-                  marginRight: 8,
-                }}
-              >
-                <DropdownField
-                  label="Code"
-                  value={mobileCode}
-                  open={false}
-                  setOpen={() => setIsPhoneCodeModalOpen(true)}
-                  options={[]}
-                  onSelect={() => {}}
-                  icon="flag"
-                  error={codeError}
-                />
+                >
+                  <FontAwesome6 name="pen" size={13} color="#FFFFFF" solid />
+                </TouchableOpacity>
               </View>
 
-              {/* Mobile Number */}
-
-              <View
-                style={{
-                  flex: 1,
-                }}
-              >
-                <InputField
-                  icon="phone"
-                  label="Mobile Number"
-                  placeholder="Mobile Number"
-                  value={mobileNumber}
-                  onChangeText={(text) => {
-                    const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
-                    setMobileNumber(clean);
-                    if (mobileNumberError && clean.length === 9) {
-                      setMobileNumberError("");
-                    }
-                  }}
-                  onBlur={() => {
-                    if (!mobileNumber.trim()) {
-                      setMobileNumberError("Mobile number is required");
-                    } else if (!/^\d{9}$/.test(mobileNumber.trim())) {
-                      setMobileNumberError("Invalid phone number");
-                    }
-                  }}
-                  keyboardType="phone-pad"
-                  maxLength={mobileCode === "+94" ? 9 : 10}
-                  error={mobileNumberError}
-                />
-              </View>
-            </View>
-
-            {/* EMAIL */}
-            <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
-              <InputField
-                icon="house"
-                label="Email"
-                placeholder="Email Address"
-                value={email}
-                autoCapitalize="none"
-                onChangeText={(text) => {
-                  const clean = text.replace(/\s/g, "");
-                  setEmail(clean);
-                  if (emailError) {
-                    if (isValidEmail(clean)) {
-                      setEmailError("");
-                    }
-                  }
-                }}
-                onBlur={() => {
-                  if (!email.trim()) {
-                    setEmailError("Email is required");
-                  } else if (!isValidEmail(email)) {
-                    setEmailError("Invalid email address");
-                  }
-                }}
-                keyboardType="email-address"
-                error={emailError}
-              />
-            </View>
-
-            {/* WHOLESALE ONLY FIELDS */}
-            {isWholesale && (
-              <>
-                {/* Company name */}
-                <View style={{ marginBottom: 14 }}>
-                  <InputField
-                    icon="building"
-                    label="Company Name"
-                    placeholder="Company Name"
-                    value={companyName}
-                    autoCapitalize="words"
-                    onChangeText={(text) => {
-                      setCompanyName(sanitizeCompanyNameLive(text));
-                    }}
-                    onBlur={() => {
-                      setCompanyName((prev) => {
-                        const trimmed = prev.trim();
-                        return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
-                      });
-                    }}
-                  />
-                </View>
-
-                {/* COM CODE + Company MOBILE */}
+              {profileImageError ? (
                 <View
                   style={{
                     flexDirection: "row",
-                    width: "100%",
-                    marginBottom: 14,
+                    alignItems: "center",
+                    marginTop: 10,
+                    paddingHorizontal: 12,
                   }}
                 >
-                  {/* com Code */}
-                  <View
+                  <Ionicons
+                    name="alert-circle"
+                    size={16}
+                    color="#FF3B30"
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
                     style={{
-                      width: "39%",
-                      marginRight: 8,
+                      fontSize: 13,
+                      color: "#FF3B30",
+                      fontWeight: "500",
+                      textAlign: "center",
                     }}
                   >
-                    <DropdownField
-                      label="Code"
-                      value={companyMobileCode || "+94"}
-                      open={false}
-                      setOpen={() => setIsCompanyPhoneCodeModalOpen(true)}
-                      options={[]}
-                      onSelect={() => {}}
-                      icon="flag"
-                    />
-                  </View>
-
-                  {/* com Mobile Number */}
-                  <View
-                    style={{
-                      flex: 1,
-                    }}
-                  >
-                    <InputField
-                      icon="phone"
-                      label="Company"
-                      placeholder="Company Mobile"
-                      value={compnayMobile}
-                      onChangeText={(text) => {
-                        const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
-                        setCompanyMobile(clean);
-                        if (companyMobileError) {
-                          setCompanyMobileError("");
-                        }
-                      }}
-                      onBlur={() => {
-                        if (compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile.trim())) {
-                          setCompanyMobileError("Invalid phone number");
-                        }
-                      }}
-                      keyboardType="phone-pad"
-                      maxLength={companyMobileCode === "+94" ? 9 : 10}
-                      error={companyMobileError}
-                    />
-                  </View>
+                    {profileImageError}
+                  </Text>
                 </View>
-              </>
-            )}
-          </View>
-        </View>
+              ) : null}
+            </View>
 
-        {/* BOTTOM UPDATE BUTTON */}
-        <View
-          style={{
-            marginTop: 24,
-            marginBottom: Platform.OS === "ios" ? 16 : 8,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleUpdate}
-            disabled={updating}
-            style={{
-              width: "100%",
-              height: 52,
-              borderRadius: 27,
-              backgroundColor: updating ? "#8B9DA7" : "#000",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text
+            {/* FORM */}
+            <View
               style={{
-                color: "#FFFFFF",
-                fontSize: 14,
-                fontWeight: "700",
-                letterSpacing: 0.2,
+                width: "100%",
               }}
             >
-              {updating ? "Updating..." : "Update Account Info"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAwareScrollView>
+              {/* TITLE + FIRST NAME */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  width: "100%",
+                  marginBottom: 14,
+                }}
+              >
+                {/* Title */}
+
+                <View
+                  style={{
+                    width: "40%",
+                    marginRight: 8,
+                  }}
+                >
+                  <DropdownField
+                    label="Title"
+                    value={title}
+                    open={false}
+                    setOpen={() => setTitleModalOpen(true)}
+                    options={[]}
+                    onSelect={() => {}}
+                    icon="user"
+                    error={titleError}
+                  />
+                </View>
+
+                {/* First Name */}
+
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <InputField
+                    icon="user"
+                    label="First Name"
+                    placeholder="First Name"
+                    value={firstName}
+                    autoCapitalize="words"
+                    onChangeText={(text) => {
+                      const sanitized = sanitizeFirstNameLive(text);
+                      setFirstName(sanitized);
+                      if (firstNameError && sanitized.trim()) {
+                        setFirstNameError("");
+                      }
+                    }}
+                    onBlur={() => {
+                      const cap = capitalizeName(firstName);
+                      setFirstName(cap);
+                      if (!cap.trim()) {
+                        setFirstNameError("First name is required");
+                      } else if (!/^[a-zA-Z'-]+$/.test(cap.trim())) {
+                        setFirstNameError("First name must contain only letters");
+                      }
+                    }}
+                    error={firstNameError}
+                  />
+                </View>
+              </View>
+
+              {/* LAST NAME */}
+
+              <View
+                style={{
+                  marginBottom: 14,
+                }}
+              >
+                <InputField
+                  icon="user"
+                  label="Last Name"
+                  placeholder="Last Name"
+                  value={lastName}
+                  autoCapitalize="words"
+                  onChangeText={(text) => {
+                    const sanitized = sanitizeLastNameLive(text);
+                    setLastName(sanitized);
+                    if (lastNameError && sanitized.trim()) {
+                      setLastNameError("");
+                    }
+                  }}
+                  onBlur={() => {
+                    const cap = capitalizeName(lastName);
+                    setLastName(cap);
+                    if (!cap.trim()) {
+                      setLastNameError("Last name is required");
+                    } else if (!/^[a-zA-Z' -]+$/.test(cap.trim())) {
+                      setLastNameError("Last name must contain only letters");
+                    }
+                  }}
+                  error={lastNameError}
+                />
+              </View>
+
+              {/* CODE + MOBILE */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  width: "100%",
+                  marginBottom: 14,
+                }}
+              >
+                {/* Code */}
+
+                <View
+                  style={{
+                    width: "39%",
+                    marginRight: 8,
+                  }}
+                >
+                  <DropdownField
+                    label="Code"
+                    value={mobileCode}
+                    open={false}
+                    setOpen={() => setIsPhoneCodeModalOpen(true)}
+                    options={[]}
+                    onSelect={() => {}}
+                    icon="flag"
+                    error={codeError}
+                  />
+                </View>
+
+                {/* Mobile Number */}
+
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <InputField
+                    icon="phone"
+                    label="Mobile Number"
+                    placeholder="Mobile Number"
+                    value={mobileNumber}
+                    onChangeText={(text) => {
+                      const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
+                      setMobileNumber(clean);
+                      if (mobileNumberError && clean.length === 9) {
+                        setMobileNumberError("");
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!mobileNumber.trim()) {
+                        setMobileNumberError("Mobile number is required");
+                      } else if (!/^\d{9}$/.test(mobileNumber.trim())) {
+                        setMobileNumberError("Invalid phone number");
+                      }
+                    }}
+                    keyboardType="phone-pad"
+                    maxLength={mobileCode === "+94" ? 9 : 10}
+                    error={mobileNumberError}
+                  />
+                </View>
+              </View>
+
+              {/* EMAIL */}
+              <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
+                <InputField
+                  icon="house"
+                  label="Email"
+                  placeholder="Email Address"
+                  value={email}
+                  autoCapitalize="none"
+                  onChangeText={(text) => {
+                    const clean = text.replace(/\s/g, "");
+                    setEmail(clean);
+                    if (emailError) {
+                      if (isValidEmail(clean)) {
+                        setEmailError("");
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!email.trim()) {
+                      setEmailError("Email is required");
+                    } else if (!isValidEmail(email)) {
+                      setEmailError("Invalid email address");
+                    }
+                  }}
+                  keyboardType="email-address"
+                  error={emailError}
+                />
+              </View>
+
+              {/* WHOLESALE ONLY FIELDS */}
+              {isWholesale && (
+                <>
+                  {/* Company name */}
+                  <View style={{ marginBottom: 14 }}>
+                    <InputField
+                      icon="building"
+                      label="Company Name"
+                      placeholder="Company Name"
+                      value={companyName}
+                      autoCapitalize="words"
+                      onChangeText={(text) => {
+                        setCompanyName(sanitizeCompanyNameLive(text));
+                      }}
+                      onBlur={() => {
+                        setCompanyName((prev) => {
+                          const trimmed = prev.trim();
+                          return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+                        });
+                      }}
+                    />
+                  </View>
+
+                  {/* COM CODE + Company MOBILE */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      width: "100%",
+                      marginBottom: 14,
+                    }}
+                  >
+                    {/* com Code */}
+                    <View
+                      style={{
+                        width: "39%",
+                        marginRight: 8,
+                      }}
+                    >
+                      <DropdownField
+                        label="Code"
+                        value={companyMobileCode || "+94"}
+                        open={false}
+                        setOpen={() => setIsCompanyPhoneCodeModalOpen(true)}
+                        options={[]}
+                        onSelect={() => {}}
+                        icon="flag"
+                      />
+                    </View>
+
+                    {/* com Mobile Number */}
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
+                      <InputField
+                        icon="phone"
+                        label="Company"
+                        placeholder="Company Mobile"
+                        value={compnayMobile}
+                        onChangeText={(text) => {
+                          const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
+                          setCompanyMobile(clean);
+                          if (companyMobileError) {
+                            setCompanyMobileError("");
+                          }
+                        }}
+                        onBlur={() => {
+                          if (compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile.trim())) {
+                            setCompanyMobileError("Invalid phone number");
+                          }
+                        }}
+                        keyboardType="phone-pad"
+                        maxLength={companyMobileCode === "+94" ? 9 : 10}
+                        error={companyMobileError}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* BOTTOM UPDATE BUTTON */}
+          <View
+            style={{
+              marginTop: 24,
+              marginBottom: Platform.OS === "ios" ? 16 : 8,
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleUpdate}
+              disabled={updating}
+              style={{
+                width: "100%",
+                height: 52,
+                borderRadius: 27,
+                backgroundColor: updating ? "#8B9DA7" : "#000",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  letterSpacing: 0.2,
+                }}
+              >
+                {updating ? "Updating..." : "Update Account Info"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAwareScrollView>
       )}
 
       {updating && (
