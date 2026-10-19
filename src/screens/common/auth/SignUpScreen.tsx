@@ -280,7 +280,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       !/^[0-9]{9}[vV]$/.test(nic.trim()) &&
       !/^[0-9]{12}$/.test(nic.trim())
     ) {
-      newErrors.nic = "Invalid NIC format";
+      newErrors.nic = "Please enter a valid NIC (9 digits + V, or 12 digits)";
     }
 
     if (tab === "business") {
@@ -1096,7 +1096,19 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     setIsNicLinked(false);
                     setAllowRestore(false);
                   }
-                  if (errors.nic) setErrors((prev) => ({ ...prev, nic: "" }));
+                  if (!sanitized) {
+                    setErrors((prev) => ({ ...prev, nic: "" }));
+                  } else if (
+                    !/^[0-9]{9}[vV]$/.test(sanitized) &&
+                    !/^[0-9]{12}$/.test(sanitized)
+                  ) {
+                    setErrors((prev) => ({
+                      ...prev,
+                      nic: "Please enter a valid NIC (9 digits + V, or 12 digits)",
+                    }));
+                  } else {
+                    setErrors((prev) => ({ ...prev, nic: "" }));
+                  }
                 }}
                 maxLength={12}
                 style={{
@@ -1143,9 +1155,19 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               )}
             </View>
             {errors.nic && !isNicLinked && (
-              <View className="flex-row items-center gap-x-1 mt-1 ml-3">
-                <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs">{errors.nic}</Text>
+              <View className="flex-row items-center mt-1.5 px-4">
+                <MaterialIcons
+                  name="error"
+                  size={13}
+                  color="#E02424"
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  className="flex-1 text-red-500 text-xs font-semibold"
+                  style={{ lineHeight: 16 }}
+                >
+                  {errors.nic}
+                </Text>
               </View>
             )}
           </View>
