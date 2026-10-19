@@ -120,12 +120,12 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
       typeof amount === "number"
         ? amount
         : parseFloat(
-          String(amount || "")
-            .replace(/Rs\.?/gi, "")
-            .replace(/LKR/gi, "")
-            .replace(/,/g, "")
-            .trim(),
-        ) || 0;
+            String(amount || "")
+              .replace(/Rs\.?/gi, "")
+              .replace(/LKR/gi, "")
+              .replace(/,/g, "")
+              .trim(),
+          ) || 0;
     return num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -232,11 +232,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 : typeof p.productPrice === "number"
                   ? p.productPrice
                   : parseFloat(
-                    String(p.productPrice || "")
-                      .replace(/Rs\.?/i, "")
-                      .replace(/,/g, "")
-                      .trim(),
-                  ) || 0;
+                      String(p.productPrice || "")
+                        .replace(/Rs\.?/i, "")
+                        .replace(/,/g, "")
+                        .trim(),
+                    ) || 0;
             const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
 
             if (packageMap.has(key)) {
@@ -496,37 +496,37 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         active: boolean;
         description?: string;
       }> = [
-          {
-            title: "Ordered",
-            date: orderTime || "Just now",
-            icon: "cart-shopping",
-            active: true,
-          },
-          {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
-          {
-            title: "Out For Delivery",
-            date: outTime || updateTime,
-            icon: "dolly",
-            active: true,
-          },
-          {
-            title: "Collected",
-            date: collectedTime || updateTime,
-            icon: "truck",
-            active: true,
-          },
-          {
-            title: "On the way",
-            date: onTheWayTime || updateTime,
-            icon: "truck-fast",
-            active: true,
-          },
-        ];
+        {
+          title: "Ordered",
+          date: orderTime || "Just now",
+          icon: "cart-shopping",
+          active: true,
+        },
+        {
+          title: "Processing",
+          date: processingTime,
+          icon: "box-open",
+          active: true,
+        },
+        {
+          title: "Out For Delivery",
+          date: outTime || updateTime,
+          icon: "dolly",
+          active: true,
+        },
+        {
+          title: "Collected",
+          date: collectedTime || updateTime,
+          icon: "truck",
+          active: true,
+        },
+        {
+          title: "On the way",
+          date: onTheWayTime || updateTime,
+          icon: "truck-fast",
+          active: true,
+        },
+      ];
 
       // Add each hold event (and restarted "On the way" step)
       holdHistory.forEach((hld) => {
@@ -1349,9 +1349,9 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           const handlingFee = parseFloat(order?.returnHandlingFee || 350);
           const deliveryFeeDeduction = parseFloat(
             order?.curDlvrCharge ||
-            order?.delivaryCharge ||
-            order?.deliveryCharge ||
-            300,
+              order?.delivaryCharge ||
+              order?.deliveryCharge ||
+              300,
           );
           const restoredCredit =
             totalPaidByCustomer > 0
@@ -1535,7 +1535,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   {/* Paid with Card */}
                   {isCardOrder && cardRemainingAmount > 0 && (
                     <SummaryRow
-                      label="Paid with Card"
+                      label={isPaid ? "Paid with Card" : "Pay with Card"}
                       value={`Rs. ${formatAmount(cardRemainingAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"

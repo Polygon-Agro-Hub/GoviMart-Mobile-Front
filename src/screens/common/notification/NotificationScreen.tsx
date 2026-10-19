@@ -381,6 +381,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         !!item.orderStatus && item.orderStatus.toLowerCase() === "cancelled";
 
       // 1) Package finalization review
+      // 1) Package finalization review
       if (isRetail && isPackageReviewTitle(item.title)) {
         if (isCancelled) {
           showAlert(
@@ -391,19 +392,11 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
           return;
         }
 
+        // Only check isFinalized (0 = can review, 1 = already finalized)
         if (item.isFinalized) {
           showAlert(
             "Already Finalized!",
             "You have already reviewed and finalized your order. You cannot make any further changes.",
-            "warning",
-          );
-          return;
-        }
-
-        if (item.isConfirmed) {
-          showAlert(
-            "Already Confirmed!",
-            "You have already confirmed this order. You cannot make any further changes.",
             "warning",
           );
           return;
@@ -416,7 +409,6 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         });
         return;
       }
-
       // 2) Please Confirm Your Order -> Order Confirmation screen
       if (isOrderConfirmTitle(item.title)) {
         if (!targetId) return;

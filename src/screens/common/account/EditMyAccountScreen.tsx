@@ -53,6 +53,72 @@ const getFlagUrl = (countryCode: string): string => {
   return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
 };
 
+/* ------------------------------------------------------------------ */
+/* PHONE VALIDATION (per country)                                      */
+/* Numbers are entered WITHOUT the country code and WITHOUT leading 0  */
+/* ------------------------------------------------------------------ */
+interface PhoneRule {
+  regex: RegExp;
+  maxLength: number;
+  error: string;
+}
+
+const PHONE_RULES: Record<string, PhoneRule> = {
+  // Sri Lanka – 9 digits, starts with 7 (e.g. 712345678)
+  "+94": {
+    regex: /^7\d{8}$/,
+    maxLength: 9,
+    error: "Sri Lanka number must be 9 digits and start with 7",
+  },
+  // Vietnam – 9 digits, starts with 3, 5, 7, 8 or 9
+  "+84": {
+    regex: /^[35789]\d{8}$/,
+    maxLength: 9,
+    error: "Vietnam number must be 9 digits and start with 3, 5, 7, 8 or 9",
+  },
+  // Cambodia – exactly 8 digits, valid mobile prefix
+  "+855": {
+    regex:
+      /^(10|11|12|14|15|16|17|61|66|67|68|69|70|76|77|78|79|81|85|86|87|88|89|90|92|93|95|96|97|98|99)\d{6}$/,
+    maxLength: 8,
+    error: "Cambodia number must be 8 digits with a valid prefix (e.g. 12345678)",
+  },
+  // Bangladesh – 10 digits, starts with 13–19
+  "+880": {
+    regex: /^1[3-9]\d{8}$/,
+    maxLength: 10,
+    error: "Bangladesh number must be 10 digits and start with 13–19",
+  },
+  // India – 10 digits, starts with 6, 7, 8 or 9
+  "+91": {
+    regex: /^[6-9]\d{9}$/,
+    maxLength: 10,
+    error: "India number must be 10 digits and start with 6, 7, 8 or 9",
+  },
+  // Netherlands – 9 digits, starts with 6
+  "+31": {
+    regex: /^6\d{8}$/,
+    maxLength: 9,
+    error: "Netherlands number must be 9 digits and start with 6",
+  },
+};
+
+const getPhoneMaxLength = (dialCode: string): number =>
+  PHONE_RULES[dialCode]?.maxLength ?? 10;
+
+/** Returns "" when valid, otherwise an error message. */
+const validatePhone = (
+  dialCode: string,
+  number: string,
+  required = true,
+): string => {
+  const n = number.trim();
+  if (!n) return required ? "Mobile number is required" : "";
+  const rule = PHONE_RULES[dialCode];
+  if (!rule) return /^\d{7,12}$/.test(n) ? "" : "Invalid phone number";
+  return rule.regex.test(n) ? "" : rule.error;
+};
+
 const renderCountryItem = (
   item: any,
   isSelected: boolean,
@@ -390,11 +456,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
-    if (!mobileNumber.trim()) {
-      setMobileNumberError("Mobile number is required");
-      hasError = true;
-    } else if (!/^\d{9}$/.test(mobileNumber.trim())) {
-      setMobileNumberError("Invalid phone number");
+    // Personal mobile (retail + wholesale) – country specific
+    const mobileErr = validatePhone(mobileCode, mobileNumber);
+    if (mobileErr) {
+      setMobileNumberError(mobileErr);
       hasError = true;
     }
 
@@ -409,9 +474,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
-    if (isWholesale && compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile.trim())) {
-      setCompanyMobileError("Invalid phone number");
-      hasError = true;
+    // Company mobile (wholesale only, optional) – country specific
+    if (isWholesale) {
+      const companyErr = validatePhone(
+        companyMobileCode || mobileCode,
+        compnayMobile,
+        false,
+      );
+      if (companyErr) {
+        setCompanyMobileError(companyErr);
+        hasError = true;
+      }
     }
 
     if (hasError) {
@@ -956,13 +1029,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
           enableAutomaticScroll={true}
-          extraScrollHeight={120}
-          extraHeight={120}
           keyboardOpeningTime={0}
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: Platform.OS === "ios" ? 30 : 20,
+            paddingBottom: Platform.OS === "ios" ? 20 : 20,
             flexGrow: 1,
             justifyContent: "space-between",
           }}
@@ -1221,21 +1292,19 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     placeholder="Mobile Number"
                     value={mobileNumber}
                     onChangeText={(text) => {
-                      const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
+                      const clean = text.replace(/[^0-9]/g, "");
                       setMobileNumber(clean);
-                      if (mobileNumberError && clean.length === 9) {
+                      if (mobileNumberError && !validatePhone(mobileCode, clean)) {
                         setMobileNumberError("");
                       }
                     }}
-                    onBlur={() => {
-                      if (!mobileNumber.trim()) {
-                        setMobileNumberError("Mobile number is required");
-                      } else if (!/^\d{9}$/.test(mobileNumber.trim())) {
-                        setMobileNumberError("Invalid phone number");
-                      }
-                    }}
+                    onBlur={() =>
+                      setMobileNumberError(
+                        validatePhone(mobileCode, mobileNumber),
+                      )
+                    }
                     keyboardType="phone-pad"
-                    maxLength={mobileCode === "+94" ? 9 : 10}
+                    maxLength={getPhoneMaxLength(mobileCode)}
                     error={mobileNumberError}
                   />
                 </View>
@@ -1331,19 +1400,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         placeholder="Company Mobile"
                         value={compnayMobile}
                         onChangeText={(text) => {
-                          const clean = text.replace(/\s/g, "").replace(/[^0-9]/g, "");
+                          const clean = text.replace(/[^0-9]/g, "");
                           setCompanyMobile(clean);
                           if (companyMobileError) {
                             setCompanyMobileError("");
                           }
                         }}
-                        onBlur={() => {
-                          if (compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile.trim())) {
-                            setCompanyMobileError("Invalid phone number");
-                          }
-                        }}
+                        onBlur={() =>
+                          setCompanyMobileError(
+                            validatePhone(
+                              companyMobileCode || mobileCode,
+                              compnayMobile,
+                              false,
+                            ),
+                          )
+                        }
                         keyboardType="phone-pad"
-                        maxLength={companyMobileCode === "+94" ? 9 : 10}
+                        maxLength={getPhoneMaxLength(
+                          companyMobileCode || mobileCode,
+                        )}
                         error={companyMobileError}
                       />
                     </View>
@@ -1424,7 +1499,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         selectedItems={mobileCode ? [mobileCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setMobileCode(items[0]);
+            const code = items[0];
+            setMobileCode(code);
+            // trim to the new country's max length and clear stale error
+            setMobileNumber((prev) => prev.slice(0, getPhoneMaxLength(code)));
+            setMobileNumberError("");
             if (codeError) setCodeError("");
           }
           setIsPhoneCodeModalOpen(false);
@@ -1451,7 +1530,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         selectedItems={companyMobileCode ? [companyMobileCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setCompanyMobileCode(items[0]);
+            const code = items[0];
+            setCompanyMobileCode(code);
+            setCompanyMobile((prev) => prev.slice(0, getPhoneMaxLength(code)));
+            setCompanyMobileError("");
           }
           setIsCompanyPhoneCodeModalOpen(false);
         }}
