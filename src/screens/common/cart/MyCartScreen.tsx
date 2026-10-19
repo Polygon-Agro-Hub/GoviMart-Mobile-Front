@@ -400,6 +400,11 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
             maximumFractionDigits: 2,
         });
 
+    const hasOneTimePackage = packages.some((p) => {
+        const type = (p.packageType || "").trim().toLowerCase();
+        return type === "one time" || type === "one-time" || type.includes("one");
+    });
+
     const handleCheckout = async () => {
         if (!token) {
             setAuthModalVisible(true);
@@ -613,14 +618,16 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
                                 </View>
                             )}
 
-                            {/* Price Difference Notice Box */}
-                            <InfoNoticeCard
-                                message="Please note that the total amount on the delivery date may differ from the amount shown on the order date. If there is any price difference, the final amount applicable on the delivery date will be charged later."
-                                containerStyle={{
-                                    marginTop: 6,
-                                    marginBottom: 14,
-                                }}
-                            />
+                            {/* Price Difference Notice Box - hidden if cart contains a one-time package or if no ala carte products */}
+                            {!hasOneTimePackage && products.length > 0 && (
+                                <InfoNoticeCard
+                                    message="Please note that the total amount on the delivery date may differ from the amount shown on the order date. If there is any price difference, the final amount applicable on the delivery date will be charged later."
+                                    containerStyle={{
+                                        marginTop: 6,
+                                        marginBottom: 14,
+                                    }}
+                                />
+                            )}
                         </View>
 
                         {/* Order Summary */}

@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
+import productService from "@/services/product/product.service";
 
 interface PackageItem {
     id: number;
@@ -16,7 +17,60 @@ interface PackageItem {
     quantity: number;
     totalItems: number;
     isUnavailable?: boolean;
+    packageType?: string | null;
+    endDate?: string | null;
 }
+
+const getValidityText = (endDateStr?: string | null): string | null => {
+    if (!endDateStr) return null;
+    try {
+        let year: number;
+        let month: number;
+        let day: number;
+
+        const str = String(endDateStr).trim();
+        if (str.includes("-")) {
+            const parts = str.split("T")[0].split(" ")[0].split("-");
+            year = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10) - 1;
+            day = parseInt(parts[2], 10);
+        } else {
+            const d = new Date(str);
+            year = d.getFullYear();
+            month = d.getMonth();
+            day = d.getDate();
+        }
+
+        if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+
+        // Valid till [Expire Date] - 2 days
+        const cutoffDate = new Date(year, month, day);
+        cutoffDate.setDate(cutoffDate.getDate() - 2);
+
+        const monthNames = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+
+        const displayDay = cutoffDate.getDate();
+        const displayMonth = monthNames[cutoffDate.getMonth()];
+
+        return `Valid till ${displayDay}, ${displayMonth}`;
+    } catch (err) {
+        console.error("Error calculating validity date:", err);
+        return null;
+    }
+};
 
 interface Props {
     item: PackageItem;
@@ -34,6 +88,42 @@ const PackageCartCard: React.FC<Props> = ({
 }) => {
     const isMinimum = item.quantity <= 1;
     const isUnavailable = !!item.isUnavailable;
+
+    const [livePackageType, setLivePackageType] = React.useState<string | null>(item.packageType || null);
+    const [liveEndDate, setLiveEndDate] = React.useState<string | null>(item.endDate || null);
+
+    React.useEffect(() => {
+        if (item.packageType) setLivePackageType(item.packageType);
+        if (item.endDate) setLiveEndDate(item.endDate);
+
+        if (!item.packageType || !item.endDate) {
+            productService
+                .getPackageDetails(item.id)
+                .then((res) => {
+                    if (res?.data) {
+                        const returnedType =
+                            res.data.packageType || res.data.packageInfo?.packageType;
+                        const returnedEndDate =
+                            res.data.endDate || res.data.packageInfo?.endDate;
+                        if (returnedType && !item.packageType) setLivePackageType(returnedType);
+                        if (returnedEndDate && !item.endDate) setLiveEndDate(returnedEndDate);
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [item.id, item.packageType, item.endDate]);
+
+    const effectiveType = item.packageType || livePackageType;
+    const effectiveEndDate = item.endDate || liveEndDate;
+
+    const isOneTimePackage = (() => {
+        const type = (effectiveType || "").trim().toLowerCase();
+        return type === "one time" || type === "one-time" || type.includes("one");
+    })();
+
+    const validityText = React.useMemo(() => {
+        return getValidityText(effectiveEndDate);
+    }, [effectiveEndDate]);
 
     const formatPrice = (value: number) =>
         value.toLocaleString("en-US", {
@@ -124,12 +214,41 @@ const PackageCartCard: React.FC<Props> = ({
                 </TouchableOpacity>
             </View>
 
+            {/* VALIDITY PILL FOR ONE TIME PACKAGE */}
+            {!isUnavailable && isOneTimePackage && !!validityText && (
+                <View
+                    style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#E3FFEA",
+                        borderRadius: 20,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        marginTop: 12,
+                        alignSelf: "flex-start",
+                    }}
+                >
+                    <Ionicons name="time" size={15} color="#000" />
+                    <Text
+                        style={{
+                            fontSize: 13,
+                            fontWeight: "600",
+                            color: "#000",
+                            marginLeft: 6,
+                        }}
+                    >
+                        {validityText}
+                    </Text>
+                </View>
+            )}
+
             {/* DIVIDER */}
             <View
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    marginVertical: 16,
+                    marginTop: !isUnavailable && isOneTimePackage && !!validityText ? 14 : 16,
+                    marginBottom: 16,
                     marginHorizontal: -20,
                 }}
             >
