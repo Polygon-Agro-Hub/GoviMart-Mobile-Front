@@ -371,6 +371,7 @@ export interface AddressPayload {
 export interface PhoneChangeOtpPayload {
   phoneCode: string;
   phoneNumber: string;
+  email?: string;
 }
 
 export interface VerifyPhoneChangePayload {
