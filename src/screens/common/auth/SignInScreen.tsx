@@ -392,15 +392,21 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   return (
     <View className="flex-1 bg-white">
       <KeyboardAwareScrollView
-        innerRef={(ref) => (scrollViewRef.current = ref)}
-        className="flex-1 "
+        innerRef={(ref) => (scrollViewRef.current = ref as any)}
+        className="flex-1"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
+        enableAutomaticScroll={true}
         extraScrollHeight={0}
-        extraHeight={0}
-        keyboardOpeningTime={0}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        extraHeight={Platform.select({ ios: 40, android: 70 })}
+        keyboardOpeningTime={250}
+        enableResetScrollToCoords={false}
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={{
+          paddingBottom: 16,
+        }}
       >
         {/* Top image section: now scrolls with the rest of the content */}
         <View style={{ width: "100%", height: IMAGE_HEIGHT }}>
