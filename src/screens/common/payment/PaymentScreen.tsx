@@ -1007,6 +1007,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       alignItems: "center",
                       marginTop: 12,
                       paddingTop: 10,
+                      paddingRight:5,
                       borderTopWidth: 1,
                       borderColor: "#F1F5F9",
                       paddingLeft: 32,

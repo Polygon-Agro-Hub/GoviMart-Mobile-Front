@@ -128,9 +128,9 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const isFreeDeliveryCoupon = Boolean(
       order?.isCoupon &&
-        order?.couponType &&
-        (String(order.couponType).toLowerCase().includes("free") ||
-          String(order.couponType).toLowerCase().includes("delivery")),
+      order?.couponType &&
+      (String(order.couponType).toLowerCase().includes("free") ||
+        String(order.couponType).toLowerCase().includes("delivery")),
     );
 
     const packagesTotal = packages.reduce(
@@ -176,7 +176,9 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     // free-delivery-coupon waiver) and part of the total.
     const isPackageValue = order?.isPackage;
     const isDashServiceFee =
-      String(order?.orderApp || "").trim().toLowerCase() === "dash" &&
+      String(order?.orderApp || "")
+        .trim()
+        .toLowerCase() === "dash" &&
       isPackageValue != null &&
       String(isPackageValue).trim() !== "" &&
       Number(isPackageValue) === 0;
@@ -1804,17 +1806,13 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   {/* Paid with Card */}
                   {isCardOrder && cardRemainingAmount > 0 && (
                     <SummaryRow
-                      label="Paid with Card"
+                      label={isPaid ? "Paid with Card" : "Pay with Card"}
                       value={`Rs. ${formatAmount(cardRemainingAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"
                     />
                   )}
 
-                  {/* Cash Row:
-                      If returned: always show "Paid with Cash", "Rs. 0.00", in green.
-                      If not returned: "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
-                  */}
                   {isCashOrder &&
                     (isOrderReturned || cashRemainingAmount > 0) && (
                       <SummaryRow

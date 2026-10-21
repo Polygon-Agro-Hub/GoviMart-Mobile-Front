@@ -485,12 +485,12 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               : "ExcludeListAdd";
             const targetParams = !isWholesale
               ? {
-                  customerId: userData.id,
-                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
-                  title: userData.title,
-                  number: userData.phoneNumber,
-                  cusId: userData.cusId,
-                }
+                customerId: userData.id,
+                name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+                title: userData.title,
+                number: userData.phoneNumber,
+                cusId: userData.cusId,
+              }
               : undefined;
 
             Alert.alert(
@@ -670,7 +670,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(${remaining} resend attempts remaining)`,
             );
           }
         } else {
@@ -728,7 +728,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const remaining = MAX_OTP_ATTEMPTS - updatedLength;
             Alert.alert(
               "Code Resent",
-              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(5 OTP resend attempts limit · ${remaining} remaining)`,
+              `${response.data.message || "A new 5-digit verification code has been sent."}\n\n(${remaining} resend attempts remaining)`,
             );
           }
         } else {
@@ -890,7 +890,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                   Too Many Attempts!
                 </Text>
                 <Text className="text-xs text-black leading-relaxed">
-                  Too many login attempts. Please try again after 15 minutes.
+                  Too many verification attempts. Please try again after 15 minutes.
                 </Text>
               </View>
             </View>
@@ -951,6 +951,12 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                       : "Resend SMS"}
                 </Text>
               </TouchableOpacity>
+            )}
+
+            {!isRateLimited && remainingAttempts > 0 && (
+              <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
+                ({remainingAttempts} {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
+              </Text>
             )}
           </View>
         </View>
