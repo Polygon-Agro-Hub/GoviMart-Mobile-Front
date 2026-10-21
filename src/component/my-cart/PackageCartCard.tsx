@@ -65,7 +65,9 @@ const getValidityText = (endDateStr?: string | null): string | null => {
         const displayDay = cutoffDate.getDate();
         const displayMonth = monthNames[cutoffDate.getMonth()];
 
-        return `Valid till ${displayDay}, ${displayMonth}`;
+        const displayYear = cutoffDate.getFullYear();
+
+        return `Valid till ${displayDay}, ${displayMonth} ${displayYear}`;
     } catch (err) {
         console.error("Error calculating validity date:", err);
         return null;

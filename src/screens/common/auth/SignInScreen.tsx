@@ -288,65 +288,58 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           );
         }
 
-        Alert.alert("Success", "Login successful!", [
-          {
-            text: "OK",
-            onPress: async () => {
-              const isWholesale =
-                (buyerType || "").toLowerCase() === "wholesale";
+        const isWholesale =
+          (buyerType || "").toLowerCase() === "wholesale";
 
-              let targetScreen: keyof RootStackParamList = "Home";
-              let targetParams: any = undefined;
+        let targetScreen: keyof RootStackParamList = "Home";
+        let targetParams: any = undefined;
 
-              if (isDashUser === 1 && isPswUpdated === 0) {
-                targetScreen = "UpdatePassword";
-                targetParams = {
-                  customerId: response.data.data.id,
-                  name: `${firstName} ${lastName}`,
-                  title: title,
-                  number: phoneNumber,
-                  cusId: cusId,
-                  buyerType: buyerType,
-                  redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
-                };
-              } else if (firstTimeUser === 0 && !isWholesale) {
-                targetScreen = "ExcludeListAdd";
-                targetParams = {
-                  customerId: response.data.data.id,
-                  name: `${firstName} ${lastName}`,
-                  title: title,
-                  number: phoneNumber,
-                  cusId: cusId,
-                };
-              } else {
-                targetScreen = "Home";
-              }
+        if (isDashUser === 1 && isPswUpdated === 0) {
+          targetScreen = "UpdatePassword";
+          targetParams = {
+            customerId: response.data.data.id,
+            name: `${firstName} ${lastName}`,
+            title: title,
+            number: phoneNumber,
+            cusId: cusId,
+            buyerType: buyerType,
+            redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
+          };
+        } else if (firstTimeUser === 0 && !isWholesale) {
+          targetScreen = "ExcludeListAdd";
+          targetParams = {
+            customerId: response.data.data.id,
+            name: `${firstName} ${lastName}`,
+            title: title,
+            number: phoneNumber,
+            cusId: cusId,
+          };
+        } else {
+          targetScreen = "Home";
+        }
 
-              try {
-                const hasAsked = await AsyncStorage.getItem(
-                  "hasAskedNotificationPermission",
-                );
+        try {
+          const hasAsked = await AsyncStorage.getItem(
+            "hasAskedNotificationPermission",
+          );
 
-                if (hasAsked !== "true") {
-                  navigation.navigate("NotificationAccess", {
-                    returnScreen: targetScreen,
-                    returnParams: targetParams,
-                    blockBackNavigation: true,
-                  });
-                  return;
-                }
-              } catch (err) {
-                console.warn("Error reading notification permission flag:", err);
-              }
+          if (hasAsked !== "true") {
+            navigation.navigate("NotificationAccess", {
+              returnScreen: targetScreen,
+              returnParams: targetParams,
+              blockBackNavigation: true,
+            });
+            return;
+          }
+        } catch (err) {
+          console.warn("Error reading notification permission flag:", err);
+        }
 
-              if (targetParams) {
-                navigation.navigate(targetScreen as any, targetParams);
-              } else {
-                navigation.navigate(targetScreen as any);
-              }
-            },
-          },
-        ]);
+        if (targetParams) {
+          navigation.navigate(targetScreen as any, targetParams);
+        } else {
+          navigation.navigate(targetScreen as any);
+        }
       } else {
         const msg = response.data?.message || "An error occurred during login.";
         if (
