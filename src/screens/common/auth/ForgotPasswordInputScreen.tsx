@@ -71,8 +71,84 @@ const isValidEmail = (emailStr: string): boolean => {
     return false;
   }
   const emailRegex =
-    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]\.)*[a-zA-Z0-9][a-zA-Z0-9-]{1,}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/;
   return emailRegex.test(trimmed);
+};
+
+const validatePhoneNumberByCountry = (
+  phoneCode: string,
+  num: string,
+): { isValid: boolean; error?: string } => {
+  const clean = num.trim().replace(/^0+/, "");
+
+  if (!clean) {
+    return { isValid: false, error: "Mobile number is required" };
+  }
+
+  switch (phoneCode) {
+    case "+94":
+      if (!/^7[0-9]{8}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Enter a valid 9-digit mobile number starting with 7",
+        };
+      }
+      return { isValid: true };
+
+    case "+855":
+      if (!/^[0-9]{8,9}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Enter a valid 8 or 9-digit mobile number",
+        };
+      }
+      return { isValid: true };
+
+    case "+84":
+      if (!/^[0-9]{9}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Enter a valid 9-digit mobile number",
+        };
+      }
+      return { isValid: true };
+
+    case "+880":
+      if (!/^[0-9]{10}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Enter a valid 10-digit mobile number",
+        };
+      }
+      return { isValid: true };
+
+    case "+91":
+      if (!/^[0-9]{10}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Enter a valid 10-digit mobile number",
+        };
+      }
+      return { isValid: true };
+
+    case "+31":
+      if (!/^[0-9]{9}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Enter a valid 9-digit mobile number",
+        };
+      }
+      return { isValid: true };
+
+    default:
+      if (!/^[0-9]{8,10}$/.test(clean)) {
+        return {
+          isValid: false,
+          error: "Please enter a valid mobile number",
+        };
+      }
+      return { isValid: true };
+  }
 };
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
@@ -164,17 +240,37 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
   const [alertMessage, setAlertMessage] = useState("");
 
   const isEmail = currentMethod === "email";
+  const hasInput = isEmail
+    ? email.trim().length > 0
+    : phoneNumber.trim().length > 0;
   const isValid = isEmail
     ? isValidEmail(email)
-    : phoneCode.trim() !== "" && phoneNumber.trim().length >= 7;
+    : validatePhoneNumberByCountry(phoneCode, phoneNumber).isValid;
 
   const handleContinue = async () => {
-    if (!isEmail && phoneCode !== "+94") {
-      setOverseasModalVisible(true);
-      return;
-    }
+    if (loading) return;
 
-    if (!isValid) return;
+    if (isEmail) {
+      if (!email.trim()) {
+        setErrorText("Email address is required");
+        return;
+      }
+      if (!isValidEmail(email)) {
+        setErrorText("Invalid email address");
+        return;
+      }
+    } else {
+      const phoneValidation = validatePhoneNumberByCountry(
+        phoneCode,
+        phoneNumber,
+      );
+      if (!phoneValidation.isValid) {
+        setErrorText(
+          phoneValidation.error || "Please enter a valid mobile number",
+        );
+        return;
+      }
+    }
 
     const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
       currentMethod,
@@ -391,7 +487,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
             {isEmail ? (
               /* Email Input matching Update My Password design with #FF9114 border */
               <View>
-                <View className="border border-[#FF9114] px-4 rounded-full flex-row items-center justify-between bg-white">
+                <View
+                  className={`border ${
+                    errorText ? "border-red-500" : "border-[#FF9114]"
+                  } px-4 rounded-full flex-row items-center justify-between bg-white`}
+                >
                   <View className="flex-row items-center flex-1 gap-x-3 h-20">
                     <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
                       <Entypo name="mail" size={16} color="black" />
@@ -403,14 +503,25 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                       <TextInput
                         value={email}
                         onChangeText={(t) => {
-                          setEmail(t);
-                          if (errorText) setErrorText("");
+                          const clean = t.replace(/\s/g, "");
+                          setEmail(clean);
+                          if (errorText) {
+                            if (isValidEmail(clean)) {
+                              setErrorText("");
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          if (email.trim() && !isValidEmail(email)) {
+                            setErrorText("Invalid email address");
+                          }
                         }}
                         placeholder="Type Here"
                         placeholderTextColor="#9CA3AF"
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
+                        spellCheck={false}
                         className="text-sm text-black font-semibold p-0 h-9"
                       />
                     </View>
@@ -454,7 +565,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
 
                   {/* Mobile Number Input matching Update My Password design with #FF9114 border */}
-                  <View className="border border-[#FF9114] px-4 rounded-full flex-row items-center justify-between bg-white flex-1">
+                  <View
+                    className={`border ${
+                      errorText ? "border-red-500" : "border-[#FF9114]"
+                    } px-4 rounded-full flex-row items-center justify-between bg-white flex-1`}
+                  >
                     <View className="flex-row items-center flex-1 gap-x-3 h-20">
                       <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
                         <FontAwesome5
@@ -470,13 +585,41 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                         <TextInput
                           value={phoneNumber}
                           onChangeText={(text) => {
-                            setPhoneNumber(text.replace(/[^0-9]/g, ""));
-                            if (errorText) setErrorText("");
+                            const clean = text.replace(/[^0-9]/g, "");
+                            setPhoneNumber(clean);
+                            if (errorText) {
+                              const check = validatePhoneNumberByCountry(
+                                phoneCode,
+                                clean,
+                              );
+                              if (check.isValid || !clean) {
+                                setErrorText("");
+                              }
+                            }
+                          }}
+                          onBlur={() => {
+                            if (phoneNumber.trim()) {
+                              const check = validatePhoneNumberByCountry(
+                                phoneCode,
+                                phoneNumber,
+                              );
+                              if (!check.isValid) {
+                                setErrorText(
+                                  check.error || "Invalid mobile number",
+                                );
+                              } else {
+                                setErrorText("");
+                              }
+                            }
                           }}
                           placeholder="Type Here"
                           placeholderTextColor="#9CA3AF"
                           keyboardType="number-pad"
-                          maxLength={phoneCode === "+94" ? 9 : 10}
+                          maxLength={
+                            phoneCode === "+880" || phoneCode === "+91"
+                              ? 11
+                              : 10
+                          }
                           className="text-sm text-black font-semibold p-0 h-9"
                         />
                       </View>
@@ -487,9 +630,17 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
             )}
 
             {errorText ? (
-              <View className="flex-row items-center gap-x-1 mt-2 ml-4">
-                <MaterialIcons name="error" size={12} color="#E02424" />
-                <Text className="text-red-500 text-xs font-semibold">
+              <View className="flex-row items-center mt-1.5 px-4">
+                <MaterialIcons
+                  name="error"
+                  size={13}
+                  color="#E02424"
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  className="flex-1 text-red-500 text-xs font-semibold"
+                  style={{ lineHeight: 16 }}
+                >
                   {errorText}
                 </Text>
               </View>
@@ -499,11 +650,12 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           {/* Continue Button - positioned right after the input fields */}
           <View className="mt-16">
             <TouchableOpacity
-              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${isValid ? "bg-black" : "bg-[#7F919C]"
-                }`}
-              activeOpacity={isValid ? 0.8 : 1}
+              className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${
+                isValid ? "bg-black" : hasInput ? "bg-black" : "bg-[#7F919C]"
+              }`}
+              activeOpacity={0.8}
               onPress={handleContinue}
-              disabled={loading || !isValid}
+              disabled={loading}
             >
               {loading && (
                 <ActivityIndicator
@@ -536,7 +688,16 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         selectedItems={phoneCode ? [phoneCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setPhoneCode(items[0]);
+            const newCode = items[0];
+            setPhoneCode(newCode);
+            if (phoneNumber.trim()) {
+              const check = validatePhoneNumberByCountry(newCode, phoneNumber);
+              if (!check.isValid) {
+                setErrorText(check.error || "Please enter a valid mobile number");
+              } else {
+                setErrorText("");
+              }
+            }
           }
           setIsPhoneCodeModalOpen(false);
         }}

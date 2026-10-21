@@ -472,11 +472,10 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                 (method === "email"
                   ? "Verification code has been resent to your email address."
                   : "Verification code has been resent to your mobile number.")
-              }\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
+              }\n\n(${remaining} resend attempts remaining)`
             );
             setAlertVisible(true);
           }
-          refs[0].current?.focus();
         } else {
           const is429 = response.data?.isRateLimited;
           const msg =
@@ -730,9 +729,17 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         title={alertTitle}
         message={alertMessage}
         type={alertType}
-        onClose={() => setAlertVisible(false)}
+        onClose={() => {
+          setAlertVisible(false);
+          refs[0].current?.focus();
+        }}
         autoClose={false}
         showOkButton={true}
+        okButtonText="OK"
+        onOkPress={() => {
+          setAlertVisible(false);
+          refs[0].current?.focus();
+        }}
       />
     </View>
   );

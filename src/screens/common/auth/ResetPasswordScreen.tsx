@@ -257,9 +257,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                 </TouchableOpacity>
               </View>
               {errors.newPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.newPassword}
                   </Text>
                 </View>
@@ -316,9 +324,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                 </TouchableOpacity>
               </View>
               {errors.confirmNewPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.confirmNewPassword}
                   </Text>
                 </View>

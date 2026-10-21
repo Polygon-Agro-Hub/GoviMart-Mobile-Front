@@ -204,10 +204,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       newPassword === currentPassword.trim()
     ) {
       newErrors.newPassword =
-        "New password cannot be the same as your current password";
+        "New password cannot be the same as your current password. Please choose a different password.";
       showAlert(
         "Update Failed",
-        "New password cannot be the same as your current password.",
+        "New password cannot be the same as your current password. Please choose a different password.",
         "error",
       );
     } else {
@@ -307,7 +307,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
           setErrors((prev) => ({
             ...prev,
             newPassword:
-              "New password cannot be the same as your current password",
+              "New password cannot be the same as your current password. Please choose a different password.",
           }));
         }
         showAlert("Update Failed", msg, "error");
@@ -320,7 +320,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         setErrors((prev) => ({
           ...prev,
           newPassword:
-            "New password cannot be the same as your current password",
+            "New password cannot be the same as your current password. Please choose a different password.",
         }));
       }
       showAlert("Update Failed", msg, "error");
@@ -390,11 +390,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* Current Password Field */}
             <View ref={currentWrapRef} collapsable={false}>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.currentPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.currentPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -442,9 +441,17 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 </TouchableOpacity>
               </View>
               {errors.currentPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.currentPassword}
                   </Text>
                 </View>
@@ -454,11 +461,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* New Password Field */}
             <View ref={newWrapRef} collapsable={false}>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.newPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.newPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -503,9 +509,17 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 </TouchableOpacity>
               </View>
               {errors.newPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.newPassword}
                   </Text>
                 </View>
@@ -515,11 +529,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* Confirm New Password Field */}
             <View ref={confirmWrapRef} collapsable={false}>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.confirmNewPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.confirmNewPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -569,9 +582,17 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 </TouchableOpacity>
               </View>
               {errors.confirmNewPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.confirmNewPassword}
                   </Text>
                 </View>
@@ -605,9 +626,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             onPress={handleUpdatePassword}
             disabled={loading || !isValid}
             activeOpacity={isValid ? 0.8 : 1}
-            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
-              isValid ? "bg-black" : "bg-[#7F919C]"
-            }`}
+            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${isValid ? "bg-black" : "bg-[#7F919C]"
+              }`}
           >
             {loading ? (
               <ActivityIndicator color="white" size="small" />

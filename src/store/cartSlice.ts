@@ -232,7 +232,9 @@ const cartSlice = createSlice({
             pkg.quantity !== mergedPackages[i]?.quantity ||
             pkg.price !== mergedPackages[i]?.price ||
             pkg.totalItems !== mergedPackages[i]?.totalItems ||
-            pkg.isUnavailable !== mergedPackages[i]?.isUnavailable
+            pkg.isUnavailable !== mergedPackages[i]?.isUnavailable ||
+            pkg.packageType !== mergedPackages[i]?.packageType ||
+            pkg.endDate !== mergedPackages[i]?.endDate
         );
 
       if (productsChanged) {

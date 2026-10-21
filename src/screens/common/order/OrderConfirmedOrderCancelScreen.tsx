@@ -21,8 +21,16 @@ import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
 
-// NOTE: add  serviceFee?: number  to this route's params in RootStackParamList.
-type Props = StackScreenProps<RootStackParamList, "OrderConfirmedOrderCancelScreen">;
+/*
+  NOTE: add these to the "OrderConfirmedOrderCancelScreen" params in
+  RootStackParamList:
+    serviceFee?: number;
+    totalCardDue?: number;
+*/
+type Props = StackScreenProps<
+  RootStackParamList,
+  "OrderConfirmedOrderCancelScreen"
+>;
 
 /* ---------------------------------------------------------
    Types
@@ -69,7 +77,9 @@ const getPackageUnitPrice = (pkg: PackageItem): number =>
 const groupPackages = (list: PackageItem[]): PackageItem[] => {
   const map = new Map<string, PackageItem>();
   list.forEach((p) => {
-    const key = `${String(p.name || "").trim().toLowerCase()}|${getPackageUnitPrice(p)}`;
+    const key = `${String(p.name || "")
+      .trim()
+      .toLowerCase()}|${getPackageUnitPrice(p)}`;
     const qty = Number(p.qty) || 1;
     const existing = map.get(key);
     if (existing) {
@@ -79,6 +89,14 @@ const groupPackages = (list: PackageItem[]): PackageItem[] => {
     }
   });
   return Array.from(map.values());
+};
+
+// 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
+const formatPrice = (value: number | string | null | undefined): string => {
+  const num = Number(value ?? 0);
+  if (!isFinite(num)) return "0.00";
+  const [intPart, decPart] = num.toFixed(2).split(".");
+  return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decPart}`;
 };
 
 const ItemAvatar: React.FC<{ icon?: string; image?: string }> = ({
@@ -106,11 +124,34 @@ const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({
   </View>
 );
 
+// Flat summary row with a divider line underneath (matches the design)
+const SummaryRow: React.FC<{
+  label: string;
+  value: string;
+  bold?: boolean;
+}> = ({ label, value, bold }) => (
+  <View className="flex-row justify-between items-center py-3 border-b border-[#D9D9D9]">
+    <Text className={`text-[14px] text-black ${bold ? "font-bold" : ""}`}>
+      {label}
+    </Text>
+    <Text
+      className={`text-[14px] text-black ${
+        bold ? "font-bold" : "font-semibold"
+      }`}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
 /* ---------------------------------------------------------
    Screen
 --------------------------------------------------------- */
 
-const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route }) => {
+const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
+  navigation,
+  route,
+}) => {
   const {
     orderId,
     processOrderId,
@@ -120,6 +161,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     totalPaidCard: passedTotalPaidCard,
     totalPaidCredit: passedTotalPaidCredit,
     totalCashDue: passedTotalCashDue,
+    totalCardDue: passedTotalCardDue,
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
@@ -232,9 +274,11 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
      Payment breakdown
      An order can be split: Credit + Card, or Credit + Cash.
      Each part is shown on its own line.
-       - Credit: as passed (DB creditPaid).
-       - Card: as passed, else (card order) total - credit.
-       - Cash due: as passed, else (cash/COD order) total - credit.
+       - Credit:     as passed (DB creditPaid).
+       - Card PAID:  only when the caller says card was actually paid.
+       - Card DUE:   card order that is not paid yet (the card is only
+                     charged when the customer confirms the order).
+       - Cash DUE:   cash / COD amount, not paid yet.
   --------------------------------------------------------- */
 
   const method = (paymentMethod || "").toLowerCase();
@@ -252,14 +296,21 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
   const isFullyPaidByCredit =
     processOrderTotal > 0 && remainingAfterCredit === 0;
 
+  // Card PAID
   const totalPaidCard = isFullyPaidByCredit
     ? 0
-    : passedTotalPaidCard !== undefined
-      ? Math.min(Number(passedTotalPaidCard), remainingAfterCredit)
-      : method === "card"
+    : Math.min(Number(passedTotalPaidCard ?? 0), remainingAfterCredit);
+
+  // Card DUE (card order that is not paid yet)
+  const totalCardDue = isFullyPaidByCredit
+    ? 0
+    : passedTotalCardDue !== undefined
+      ? Math.min(Number(passedTotalCardDue), remainingAfterCredit)
+      : method === "card" && totalPaidCard === 0
         ? remainingAfterCredit
         : 0;
 
+  // Cash DUE
   const totalCashDue = isFullyPaidByCredit
     ? 0
     : passedTotalCashDue !== undefined
@@ -316,14 +367,6 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     }
   };
 
-  // 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
-  const formatPrice = (value: number | string | null | undefined): string => {
-    const num = Number(value ?? 0);
-    if (!isFinite(num)) return "0.00";
-    const [intPart, decPart] = num.toFixed(2).split(".");
-    return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decPart}`;
-  };
-
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
@@ -338,7 +381,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         </TouchableOpacity>
 
         <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
-          Order Cancel Confirmation
+          Order Cancel Confirmation  
         </Text>
       </View>
 
@@ -455,67 +498,49 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
               </SectionCard>
             )}
 
-            {/* Totals Summary */}
-            <View className="mx-5 mt-6 border border-[#EEEEEE] rounded-2xl p-4 bg-white">
-              <Text className="text-[14px] font-bold text-black mb-3">
-                Payment Summary
-              </Text>
-
-              {/* Total Paid with Card (if any) */}
+            {/* Totals Summary (flat rows with dividers) */}
+            <View className="mx-5 mt-6">
               {totalPaidCard > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#4A4A4A]">
-                    Total Paid with Card
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-black">
-                    Rs. {formatPrice(totalPaidCard)}
-                  </Text>
-                </View>
+                <SummaryRow
+                  label="Total Paid with Card"
+                  value={`Rs. ${formatPrice(totalPaidCard)}`}
+                />
               )}
 
-              {/* Total Paid with Credit (if any) */}
+              {totalCardDue > 0 && (
+                <SummaryRow
+                  label="Total Pay with Card (Due)"
+                  value={`Rs. ${formatPrice(totalCardDue)}`}
+                />
+              )}
+
               {totalPaidCredit > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#4A4A4A]">
-                    Total Paid with Credit
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-black">
-                    Rs. {formatPrice(totalPaidCredit)}
-                  </Text>
-                </View>
+                <SummaryRow
+                  label="Total Paid with Credit"
+                  value={`Rs. ${formatPrice(totalPaidCredit)}`}
+                />
               )}
 
-              {/* Total Cash Due (if any) */}
               {totalCashDue > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#000000]">
-                    Total Cash Due
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-[#000000]">
-                    Rs. {formatPrice(totalCashDue)}
-                  </Text>
-                </View>
+                <SummaryRow
+                  label="Total Cash (Due)"
+                  value={`Rs. ${formatPrice(totalCashDue)}`}
+                />
               )}
 
               {/* DASH: Service Fee (only for Dash orders) */}
               {serviceFee > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#4A4A4A]">Service Fee</Text>
-                  <Text className="text-[14px] font-semibold text-black">
-                    + Rs. {formatPrice(serviceFee)}
-                  </Text>
-                </View>
+                <SummaryRow
+                  label="Service Fee"
+                  value={`+ Rs. ${formatPrice(serviceFee)}`}
+                />
               )}
 
-              <View className="h-[1px] bg-[#ECECEC] my-1" />
-
-              {/* Grand Total */}
-              <View className="flex-row justify-between pt-2">
-                <Text className="text-[15px] font-bold text-black">Total</Text>
-                <Text className="text-[16px] font-bold text-black">
-                  Rs. {formatPrice(processOrderTotal)}
-                </Text>
-              </View>
+              <SummaryRow
+                label="Total"
+                value={`Rs. ${formatPrice(processOrderTotal)}`}
+                bold
+              />
             </View>
 
             {/* Credit info component (only the credit that was paid) */}
@@ -532,8 +557,8 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                   <Text className="font-bold text-[#15803D]">
                     Rs. {formatPrice(refundCreditAmount)}
                   </Text>{" "}
-                  will be added back to your credit balance. You can use it
-                  for your next purchase.
+                  will be added back to your credit balance. You can use it for
+                  your next purchase.
                 </Text>
               </View>
             )}

@@ -22,12 +22,15 @@ import { RootState } from "@/store";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
 import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
-import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import apiClient from "@/services/config-service/axio-config";
 import { ENDPOINTS } from "@/services/config-service/endpoints";
 import { getAuthHeader } from "@/services/config-service/auth-header";
 
 // NOTE: add  OrderConfirmation: { orderId: number }  to RootStackParamList
+// NOTE: add  totalCardDue?: number  to the "OrderConfirmedOrderCancelScreen" params
 type OrderConfirmationNavigationProp = StackNavigationProp<
   RootStackParamList,
   "OrderConfirmation"
@@ -44,8 +47,18 @@ interface Props {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const MONTHS_LONG = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 // "2026-08-04 05:30:00" -> "August 04, 2026" (reads digits literally, no TZ shift)
@@ -95,7 +108,9 @@ const DASH_SERVICE_FEE = 180;
 
 // Same rules as the backend (isCardPayment in package-review.dao.js)
 const detectPayment = (order: any) => {
-  const m = String(order?.paymentMethod || "").trim().toLowerCase();
+  const m = String(order?.paymentMethod || "")
+    .trim()
+    .toLowerCase();
   const paid =
     Number(order?.isPaid) === 1 ||
     order?.isPaid === true ||
@@ -417,9 +432,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const isFreeDeliveryCoupon = Boolean(
     isCouponApplied &&
-      order?.couponType &&
-      (String(order.couponType).toLowerCase().includes("free") ||
-        String(order.couponType).toLowerCase().includes("delivery")),
+    order?.couponType &&
+    (String(order.couponType).toLowerCase().includes("free") ||
+      String(order.couponType).toLowerCase().includes("delivery")),
   );
 
   const productDiscount = hasLiveItemPrices
@@ -440,7 +455,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   // Display condition only (no extra fetch): uses order.orderApp and order.isPackage.
   const isPackageValue = order?.isPackage;
   const isDashServiceFee =
-    String(order?.orderApp || "").trim().toLowerCase() === "dash" &&
+    String(order?.orderApp || "")
+      .trim()
+      .toLowerCase() === "dash" &&
     isPackageValue != null &&
     String(isPackageValue).trim() !== "" &&
     Number(isPackageValue) === 0;
@@ -715,17 +732,28 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     const moneyPaid = num(order?.moneyPaid);
     const creditPaidVal = num(order?.creditPaid);
 
-    const totalPaidCard = isCardOrOnline
-      ? moneyPaid > 0
-        ? moneyPaid
-        : initialPaidAmount
-      : 0;
     const totalPaidCredit = creditPaidVal || 0;
     const processOrderTotal = orderFullTotal;
-    const totalCashDue =
-      isCashMethod && !pay.paid
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
+    const remainingAfterCredit = Math.max(
+      0,
+      processOrderTotal - totalPaidCredit,
+    );
+
+    // Card PAID: only when the card payment was really completed (isPaid = 1)
+    const totalPaidCard =
+      isCardOrOnline && pay.paid
+        ? moneyPaid > 0
+          ? moneyPaid
+          : initialPaidAmount
         : 0;
+
+    // Card DUE: card order that is not paid yet (isPaid = 0)
+    const totalCardDue =
+      isCardOrOnline && !pay.paid ? remainingAfterCredit : 0;
+
+    // Cash DUE
+    const totalCashDue =
+      isCashMethod && !pay.paid ? remainingAfterCredit : 0;
 
     // Amount returned to the credit balance on cancel = the creditPaid column value
     // (same rule as the server).
@@ -739,13 +767,14 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       refundCreditAmount = totalPaidCredit > 0 ? totalPaidCredit : 0;
     }
 
-    navigation.navigate("OrderCancelConfirmation", {
+    navigation.navigate("OrderConfirmedOrderCancelScreen", {
       orderId: effectiveOrderId,
       processOrderId: processOrderId ? String(processOrderId) : undefined,
       packages: pkgs,
       alaCarteItems: alacarts,
       totalPaid: initialPaidAmount,
       totalPaidCard,
+      totalCardDue,
       totalPaidCredit,
       totalCashDue,
       processOrderTotal,
@@ -782,7 +811,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           }}
         >
           Here is the updated total for your order{" "}
-          <Text style={{ fontWeight: "700", color: "#111" }}>[{invoiceNo}]</Text>
+          <Text style={{ fontWeight: "700", color: "#111" }}>
+            [{invoiceNo}]
+          </Text>
           {placed.date ? ` placed at ${placed.time} on ${placed.date}.` : "."}
         </Text>
 
@@ -943,7 +974,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                     </>
                   ) : (
                     <>
-                      You will be redirected to the secure payment gateway to pay{" "}
+                      You will be redirected to the secure payment gateway to
+                      pay{" "}
                       <Text style={{ fontWeight: "700" }}>
                         Rs. {formatAmount(remaining)}
                       </Text>{" "}
@@ -1114,11 +1146,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
           {isCardOrder && remaining > 0 && (
             <SummaryRow
-              label="Pay with Card"
+              label={pay.paid ? "Paid with Card" : "Pay with Card"}
               value={`Rs. ${formatAmount(remaining)}`}
               icon="credit-card"
               iconColor="#0088FF"
-              valueColor="#FF9114"
             />
           )}
 

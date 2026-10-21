@@ -504,47 +504,54 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             activeOpacity={0.8}
             onPress={() => setCategoryModalVisible(true)}
             style={{
-              height: 60,
+              minHeight: 60,
 
               borderWidth: 1,
               borderColor: "#D9DEE4",
 
-              borderRadius: 30,
+              borderRadius: 26,
 
               paddingHorizontal: 21,
+              paddingVertical: 10,
 
-              justifyContent: "center",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
             }}
           >
-            <Text
+            <View
               style={{
-                fontSize: 13,
-                color: "#000000",
-                marginBottom: 3,
+                flex: 1,
+                marginRight: 12,
+                justifyContent: "center",
               }}
             >
-              Complaint Category
-            </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#000000",
+                  marginBottom: 3,
+                }}
+              >
+                Complaint Category
+              </Text>
 
-            <Text
-              style={{
-                fontSize: 14,
-                color: selectedCategoryName ? "#000000" : "#747990",
-                fontWeight: selectedCategoryName ? "bold" : "normal",
-              }}
-            >
-              {selectedCategoryName || "Select From Here"}
-            </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: selectedCategoryName ? "#000000" : "#747990",
+                  fontWeight: selectedCategoryName ? "bold" : "normal",
+                }}
+              >
+                {selectedCategoryName || "Select From Here"}
+              </Text>
+            </View>
 
             <Ionicons
               name="chevron-down"
               size={19}
               color="#000"
-              style={{
-                position: "absolute",
-                right: 18,
-                top: 21,
-              }}
             />
           </TouchableOpacity>
         </View>
