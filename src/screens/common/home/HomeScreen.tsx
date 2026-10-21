@@ -13,7 +13,9 @@ import {
   Platform,
   RefreshControl,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -288,6 +290,7 @@ const ProductGridSkeleton = () => {
 
 const Home: React.FC<HomeProps> = ({ navigation }) => {
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
   const userToken = useSelector(
     (state: RootState) => (state as RootState & { auth: any }).auth.token,
   );
@@ -325,6 +328,17 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---- Sticky search bar support ----
+  const scrollRef = useRef<ScrollView>(null);
+  const searchBarY = useRef(0);
+  const [searchStuck, setSearchStuck] = useState(false);
+
+  const handleScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const stuck = searchBarY.current > 0 && y >= searchBarY.current - 1;
+    setSearchStuck((prev) => (prev === stuck ? prev : stuck));
+  }, []);
 
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -364,175 +378,45 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     null,
   );
 
-  const formatRelativeTime = (dateStr?: string): string => {
-    if (!dateStr) return "Just now";
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return "Just now";
-
-    const diffMs = Date.now() - date.getTime();
-    if (diffMs < 0) return "Just now";
-    const diffSec = Math.floor(diffMs / 1000);
-    if (diffSec < 10) return "Just now";
-    if (diffSec < 60) return `${diffSec}s ago`;
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    const diffDays = Math.floor(diffHr / 24);
-    return `${diffDays}d ago`;
-  };
-
-  const isProcessingDateToday = (
-    scheduleDateStr?: string,
-    createdAtStr?: string,
-  ): boolean => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    if (scheduleDateStr) {
-      const sDate = new Date(scheduleDateStr);
-      if (!isNaN(sDate.getTime())) {
-        const schedDay = new Date(
-          sDate.getFullYear(),
-          sDate.getMonth(),
-          sDate.getDate(),
-        );
-        // Processing date is 2 days before schedule delivery date
-        const procDay = new Date(schedDay);
-        procDay.setDate(procDay.getDate() - 2);
-
-        if (
-          today.getTime() === procDay.getTime() ||
-          (today >= procDay && today < schedDay)
-        ) {
-          return true;
-        }
-      }
-    }
-
-    if (createdAtStr) {
-      const cDate = new Date(createdAtStr);
-      if (!isNaN(cDate.getTime())) {
-        const createdDay = new Date(
-          cDate.getFullYear(),
-          cDate.getMonth(),
-          cDate.getDate(),
-        );
-        if (createdDay.getTime() === today.getTime()) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  };
 
   const fetchReadyToConfirmOrder = useCallback(async () => {
-    if (!userTokenRef.current || !isWithinConfirmWindow()) {
-      setReadyOrder(null);
-      return;
+  if (!userTokenRef.current || !isWithinConfirmWindow()) {
+    setReadyOrder(null);
+    return;
+  }
+
+  try {
+    const scheduleRes = await orderService.getScheduleOrders();
+    console.log("schedule.....", scheduleRes.data);
+
+    const ord = scheduleRes.data?.order;
+
+    if (scheduleRes.data?.status && ord) {
+      const targetId = ord.processOrderId || ord.orderId;
+
+      if (targetId) {
+        setReadyOrder({
+          orderId: targetId,
+          invoiceNo: ord.invNo || ord.invoiceNo || String(targetId),
+          timeAgo: getTimeElapsedFrom8AM(),
+          createdAt: ord.createdAt,
+        });
+        return;
+      }
     }
 
-    try {
-      // 1. Call backend schedule orders endpoint (powered by getOrdersForSheduleDate)
-      try {
-        const scheduleRes = await orderService.getScheduleOrders();
-        if (scheduleRes.data?.status && scheduleRes.data?.order) {
-          const ord = scheduleRes.data.order;
-          const targetId = ord.processOrderId || ord.orderId;
-          if (targetId) {
-            setReadyOrder({
-              orderId: targetId,
-              invoiceNo:
-                ord.invNo || ord.invoiceNo || String(targetId),
-              timeAgo: getTimeElapsedFrom8AM(),
-              createdAt: ord.createdAt,
-            });
-            return;
-          }
-        }
-      } catch (scheduleErr) {
-        console.warn("[HomeScreen] getScheduleOrders error:", scheduleErr);
-      }
+    // No schedule order -> hide banner
+    setReadyOrder(null);
+  } catch (err) {
+    console.warn("[HomeScreen] getScheduleOrders error:", err);
+    setReadyOrder(null);
+  }
+}, []);
 
-      // 2. Check notifications fallback
-      const notifRes = await notificationService.getNotifications(20, 0);
-      if (
-        notifRes.data?.status &&
-        Array.isArray(notifRes.data?.notifications)
-      ) {
-        const notifs = notifRes.data.notifications;
-        const confirmNotif = notifs.find((n) => {
-          const title = (n.title || "").toLowerCase();
-          const isConfirm = title.includes("confirm your order");
-          const isNotCancelled = n.orderStatus?.toLowerCase() !== "cancelled";
-          const isNotFinalized = Number(n.isFinalized) !== 1;
-          return isConfirm && isNotCancelled && isNotFinalized;
-        });
-
-        if (confirmNotif) {
-          const targetId = confirmNotif.processOrderId || confirmNotif.orderId;
-          if (targetId) {
-            setReadyOrder({
-              orderId: targetId,
-              invoiceNo: confirmNotif.invNo || String(targetId),
-              timeAgo: getTimeElapsedFrom8AM(),
-              createdAt: confirmNotif.createdAt,
-            });
-            return;
-          }
-        }
-      }
-
-      // 2. Check user's order history
-      const historyRes = await orderService.getOrderHistory();
-      if (
-        historyRes.data?.status &&
-        Array.isArray(historyRes.data?.orderHistory)
-      ) {
-        const history = historyRes.data.orderHistory;
-        const pendingOrder = history.find((ord: any) => {
-          const status = (ord.processStatus || ord.status || "").toLowerCase();
-          if (
-            status === "cancelled" ||
-            status === "delivered" ||
-            status === "picked up" ||
-            status === "return" ||
-            status.includes("return")
-          ) {
-            return false;
-          }
-          if (Number(ord.isFinalized) === 1) {
-            return false;
-          }
-
-          const schedDate = ord.scheduleDate || ord.sheduleDate;
-          const createdDate = ord.createdAt;
-          return isProcessingDateToday(schedDate, createdDate);
-        });
-
-        if (pendingOrder) {
-          const targetId = pendingOrder.orderId || pendingOrder.id;
-          if (targetId) {
-            setReadyOrder({
-              orderId: targetId,
-              invoiceNo:
-                pendingOrder.invoiceNo ||
-                pendingOrder.invNo ||
-                String(targetId),
-              timeAgo: getTimeElapsedFrom8AM(),
-              createdAt: pendingOrder.createdAt,
-            });
-            return;
-          }
-        }
-      }
-
-      setReadyOrder(null);
-    } catch (err) {
-      console.warn("[HomeScreen] fetchReadyToConfirmOrder error:", err);
-    }
-  }, []);
+  // Children order inside the ScrollView:
+  // HomeHeader (0), ReadyBanner (optional), Banner/Skeleton, SearchBar
+  const showReadyBanner = !!readyOrder && isWithinConfirmWindow();
+  const searchStickyIndex = showReadyBanner ? 3 : 2;
 
   const backPressedOnce = useRef(false);
 
@@ -600,7 +484,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { });
+            .catch(() => {});
         }
       } else {
         // No token — clear any stale cart items from a previous session
@@ -690,6 +574,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
+    Keyboard.dismiss();
     getSelectedCategoryProducts(selectedCategoryId);
   }, [selectedCategoryId, buyerType]);
 
@@ -853,11 +738,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch { }
+              } catch {}
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => { });
+          .catch(() => {});
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -883,7 +768,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       unsubscribeCatalog();
       unsubscribeNotif?.();
     };
-  }, [selectedCategoryId, buyerType, isRetail, searchQuery, fetchReadyToConfirmOrder]);
+  }, [
+    selectedCategoryId,
+    buyerType,
+    isRetail,
+    searchQuery,
+    fetchReadyToConfirmOrder,
+  ]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -921,7 +812,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
 
         // Also refresh the cart from backend
@@ -941,7 +832,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
       }
 
@@ -975,11 +866,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch { }
+                } catch {}
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -1072,9 +963,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       dispatch(increaseProductWeight(productId));
       showToast("Cart Updated");
       if (userToken) {
-        const item = cartProducts.find(
-          (p: ProductCartItem) => p.id === productId,
-        );
         if (item) {
           const nextW =
             item.unit === "kg"
@@ -1090,6 +978,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 isCartSyncingRef.current = false;
               }, 1000);
             });
+        } else {
+          isCartSyncingRef.current = false;
         }
       } else {
         isCartSyncingRef.current = false;
@@ -1166,8 +1056,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawChangeBy =
         product.changeby != null &&
-          String(product.changeby).trim() !== "" &&
-          parseFloat(String(product.changeby)) > 0
+        String(product.changeby).trim() !== "" &&
+        parseFloat(String(product.changeby)) > 0
           ? parseFloat(String(product.changeby))
           : rawStartValue;
 
@@ -1180,8 +1070,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawMaxQuantity =
         product.maxQuantity != null &&
-          String(product.maxQuantity).trim() !== "" &&
-          parseFloat(String(product.maxQuantity)) > 0
+        String(product.maxQuantity).trim() !== "" &&
+        parseFloat(String(product.maxQuantity)) > 0
           ? parseFloat(String(product.maxQuantity))
           : null;
 
@@ -1388,9 +1278,16 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       <CartToast visible={toastVisible} message={toastMessage} />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
         className="flex-1"
+        stickyHeaderIndices={[searchStickyIndex]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onScrollBeginDrag={Keyboard.dismiss}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1404,10 +1301,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         <HomeHeader onPressProfile={handleProfileNavigation} />
 
         {/* Ready To Confirm Order Banner */}
-        {readyOrder && isWithinConfirmWindow() && (
+        {showReadyBanner && (
           <ReadyToConfirmBanner
-            order={readyOrder}
-            onPress={() => handleOpenOrderConfirmation(readyOrder.orderId)}
+            order={readyOrder!}
+            onPress={() => handleOpenOrderConfirmation(readyOrder!.orderId)}
           />
         )}
 
@@ -1418,34 +1315,54 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           <HomeBannerSlider bannerSlides={bannerSlides} />
         )}
 
-        {/* Search Bar */}
+        {/* Search Bar (sticky) */}
         <View
-          className="flex-row items-center bg-white border border-[#E5E5EA] rounded-full px-5 mx-6 mt-5 shadow-sm"
-          style={{ height: 50 }}
+          onLayout={(e) => {
+            searchBarY.current = e.nativeEvent.layout.y;
+          }}
+          style={{
+            backgroundColor: "#FFFFFF",
+            paddingTop: searchStuck ? insets.top + 8 : 20,
+            paddingBottom: 8,
+            zIndex: 20,
+            elevation: searchStuck ? 4 : 0,
+          }}
         >
-          <Ionicons
-            name="search-outline"
-            size={20}
-            color="#8E8E93"
-            style={{ marginRight: 10 }}
-          />
-          <TextInput
-            placeholder="Search Product..."
-            className="text-black text-sm flex-1 font-semibold p-0"
-            placeholderTextColor="#848484"
-            value={searchQuery}
-            onChangeText={handleSearchChange}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={20} color="#8E8E93" />
-            </TouchableOpacity>
-          )}
+          <View
+            className="flex-row items-center bg-white border border-[#E5E5EA] rounded-full px-5 mx-6 shadow-sm"
+            style={{ height: 50 }}
+          >
+            <Ionicons
+              name="search-outline"
+              size={20}
+              color="#8E8E93"
+              style={{ marginRight: 10 }}
+            />
+            <TextInput
+              placeholder="Search Product..."
+              className="text-black text-sm flex-1 font-semibold p-0"
+              placeholderTextColor="#848484"
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              returnKeyType="search"
+              onSubmitEditing={Keyboard.dismiss}
+              onFocus={() => {
+                scrollRef.current?.scrollTo({
+                  y: searchBarY.current,
+                  animated: true,
+                });
+              }}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={20} color="#8E8E93" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Shop By Categories */}
-        <View className="mt-6">
+        <View className="mt-4">
           <Text className="text-black text-lg font-black px-6 mb-4">
             Shop By Categories
           </Text>
@@ -1453,6 +1370,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingHorizontal: 24,
               paddingVertical: 6,
@@ -1466,7 +1384,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 <TouchableOpacity
                   key={category.id}
                   activeOpacity={0.9}
-                  onPress={() => getSelectedCategoryProducts(category.id)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    getSelectedCategoryProducts(category.id);
+                  }}
                   style={{
                     width: 76,
                     height: 98,
@@ -1501,12 +1422,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       justifyContent: "center",
                     }}
                   >
-                    {/*
-                      FIX: use the locally required image asset (resolved at
-                      build time) instead of `{ uri: category.image }`, which
-                      cannot resolve a relative bundler path and silently
-                      fails to render.
-                    */}
                     <Image
                       source={CATEGORY_IMAGES[category.id]}
                       style={{ width: 28, height: 28 }}
@@ -1517,7 +1432,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   <Text
                     numberOfLines={1}
                     style={{
-                      fontWeight: 500,
+                      fontWeight: "500",
                       color: isActive ? "#FFFFFF" : "#1E1E1E",
                       textAlign: "center",
                       marginTop: 6,
@@ -1579,13 +1494,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isPackage = product.type === "package";
                   const cartItem = isProduct
                     ? cartProducts.find(
-                      (p: ProductCartItem) => p.id === product.id,
-                    )
+                        (p: ProductCartItem) => p.id === product.id,
+                      )
                     : null;
                   const cartPackage = isPackage
                     ? cartPackages.find(
-                      (p: PackageCartItem) => p.id === product.id,
-                    )
+                        (p: PackageCartItem) => p.id === product.id,
+                      )
                     : null;
 
                   const isExpanded = product.id === expandedItemId;
@@ -1597,19 +1512,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const normUnit = isProduct
                     ? normalizeUnit(product.unitType)
                     : "g";
-                  const rawMaxQuantity =
-                    isProduct &&
-                      (product as any).maxQuantity != null &&
-                      String((product as any).maxQuantity).trim() !== "" &&
-                      parseFloat(String((product as any).maxQuantity)) > 0
-                      ? parseFloat(String((product as any).maxQuantity))
-                      : null;
-                  const displayMaxQuantityText =
-                    rawMaxQuantity != null && !isNaN(rawMaxQuantity)
-                      ? normUnit === "g"
-                        ? `${Math.round(rawMaxQuantity * 1000)} g`
-                        : `${rawMaxQuantity} kg`
-                      : null;
 
                   const displayWeightText = isProduct
                     ? normUnit === "g"
@@ -1632,9 +1534,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     discountedPerUnit < normalPerUnit;
 
                   // ---- Price display type (backend: marketplaceitems.displayType) ----
-                  // "AP&SP&D" -> actual price (struck) + sale price + discount% badge
-                  // "AP&SP"   -> actual price (struck) + sale price, no badge
-                  // "D&AP"    -> discount% badge + actual price (normal price), no struck price
                   // Falls back to showing everything if displayType is unset/unknown,
                   // matching the previous behavior for existing items.
                   const displayType = isProduct
@@ -1725,6 +1624,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       activeOpacity={0.9}
                       className="flex-1"
                       onPress={() => {
+                        Keyboard.dismiss();
                         if (product.type === "package") {
                           navigation.navigate("ViewPackage", {
                             packageId: product.id,
@@ -1980,8 +1880,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
-                                  }`}
+                                className={`w-6 h-6 rounded-full items-center justify-center ${
+                                  isItemAtMax ? "bg-gray-300" : "bg-black"
+                                }`}
                               >
                                 <Ionicons
                                   name="add"
@@ -2144,7 +2045,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                               )}
                             </Text>
 
-                            {/* Checkmark / Re-expand Button — tap to re-expand this card */}
+                            {/* Re-expand Button — tap to re-expand this card */}
                             <TouchableOpacity
                               activeOpacity={0.8}
                               disabled={addingItemId === product.id}

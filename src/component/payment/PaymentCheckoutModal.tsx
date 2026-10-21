@@ -6,12 +6,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   Platform,
+  StatusBar,
   Linking,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Props {
   visible: boolean;
@@ -32,6 +33,9 @@ interface Props {
   onClose: () => void;
 }
 
+// Extra breathing room above the header (increase for more space)
+const TOP_EXTRA_SPACE = 10;
+
 export const PaymentCheckoutModal: React.FC<Props> = ({
   visible,
   gatewayName = "payments_lk",
@@ -48,6 +52,13 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const isHandledRef = useRef(false);
+
+  // ─── SAFE AREA ──────────────────────────────────────────────────────────
+  const insets = useSafeAreaInsets();
+  const topInset =
+    Platform.OS === "android"
+      ? Math.max(insets.top, StatusBar.currentHeight || 0)
+      : insets.top;
 
   useEffect(() => {
     if (visible) {
@@ -122,12 +133,11 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
     }
 
     // 2. Check for explicit success callbacks
-    // Only return true success when the redirect is specifically to a return/success route
-    // AND has a success status or is the designated return scheme/path without error
     const isPaymentsLkSuccess =
       (lowerUrl.includes("polygon://payments-lk/return") ||
         lowerUrl.includes("/payments-lk/return")) &&
-      (lowerUrl.includes("status=success") || lowerUrl.includes("status=succeeded"));
+      (lowerUrl.includes("status=success") ||
+        lowerUrl.includes("status=succeeded"));
 
     const isPayHereSuccess =
       (lowerUrl.includes("polygon://payment/return") ||
@@ -138,7 +148,8 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
 
     const isDeepLinkSuccess =
       lowerUrl.startsWith("polygon://") &&
-      (lowerUrl.includes("status=success") || lowerUrl.includes("status=succeeded"));
+      (lowerUrl.includes("status=success") ||
+        lowerUrl.includes("status=succeeded"));
 
     if (isPaymentsLkSuccess || isPayHereSuccess || isDeepLinkSuccess) {
       isHandledRef.current = true;
@@ -184,9 +195,16 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
       visible={visible}
       animationType="slide"
       transparent={false}
+      statusBarTranslucent
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#FFFFFF",
+          paddingTop: topInset + TOP_EXTRA_SPACE,
+        }}
+      >
         {/* Modal Header */}
         <View
           style={{
@@ -201,7 +219,9 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
           }}
         >
           <View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
               <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
               <Text
                 style={{
@@ -260,50 +280,50 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
               lineHeight: 16,
             }}
           >
-            Please ensure "Keep my card on file" is checked below to securely save your card.
+            Please ensure "Keep my card on file" is checked below to securely
+            save your card.
           </Text>
         </View>
 
-        {/* Loading Indicator */}
-        {loading && (
-          <View
-            style={{
-              position: "absolute",
-              top: 110,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
-              zIndex: 10,
-            }}
-          >
-            <ActivityIndicator size="large" color="#FF8A00" />
-            <Text
-              style={{
-                marginTop: 12,
-                fontSize: 14,
-                color: "#64748B",
-                fontWeight: "500",
-              }}
-            >
-              Connecting to {displayGateway}...
-            </Text>
-            <Text
-              style={{
-                marginTop: 4,
-                fontSize: 11,
-                color: "#94A3B8",
-              }}
-            >
-              Please do not close this window
-            </Text>
-          </View>
-        )}
-
-        {/* WebView */}
+        {/* WebView container (loading overlay lives inside so it only covers the WebView) */}
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+          {loading && (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                zIndex: 10,
+              }}
+            >
+              <ActivityIndicator size="large" color="#FF8A00" />
+              <Text
+                style={{
+                  marginTop: 12,
+                  fontSize: 14,
+                  color: "#64748B",
+                  fontWeight: "500",
+                }}
+              >
+                Connecting to {displayGateway}...
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  fontSize: 11,
+                  color: "#94A3B8",
+                }}
+              >
+                Please do not close this window
+              </Text>
+            </View>
+          )}
+
           <WebView
             source={webViewSource}
             onLoadStart={() => setLoading(true)}
@@ -359,7 +379,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
                     }
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
-                    
+
                     // Native click fallback if state still un-toggled
                     if (!cb.checked) {
                       cb.click();
@@ -431,7 +451,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
             style={{ flex: 1 }}
           />
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 };

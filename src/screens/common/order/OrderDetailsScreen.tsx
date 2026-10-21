@@ -426,14 +426,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             active: true,
           },
           {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
-          {
             title: "Cancelled",
-            date: "",
+            date: formatStatusDate(order?.cancelTime || order?.updatedAt),
             icon: "xmark",
             active: true,
           },
@@ -660,14 +654,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           active: true,
         },
         {
-          title: "Processing",
-          date: processingTime,
-          icon: "box-open",
-          active: true,
-        },
-        {
           title: "Cancelled",
-          date: "",
+          date: formatStatusDate(order?.cancelTime || order?.updatedAt),
           icon: "xmark",
           active: true,
         },
