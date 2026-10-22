@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Image,
   Dimensions,
   BackHandler,
@@ -632,7 +631,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               Don't have an account?{" "}
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate("ChooseAuth")}
+              onPress={() => navigation.navigate("DeliveryLocation")}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
