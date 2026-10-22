@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ActivityIndicator,
   Image,
@@ -21,6 +19,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AlertModal } from "@/component/common/AlertModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {
+  sanitizePasswordInput,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/utils/passwordValidation";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -74,43 +77,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (/\s/.test(newPassword)) {
-      newErrors.newPassword = "Password cannot contain spaces";
-    } else {
-      const hasUppercase = /[A-Z]/.test(newPassword);
-      const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar =
-        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(newPassword);
+    const passwordError = validatePassword(
+      newPassword,
+      "New password is required"
+    );
+    if (passwordError) newErrors.newPassword = passwordError;
 
-      if (newPassword.length < 8) {
-        newErrors.newPassword = "Must be at least 8 characters";
-      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter, 1 number & 1 special character";
-      } else if (!hasUppercase && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 special character";
-      } else if (!hasUppercase && !hasNumber) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
-      } else if (!hasNumber && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 number & 1 special character";
-      } else if (!hasUppercase) {
-        newErrors.newPassword = "Must have 1 uppercase letter";
-      } else if (!hasNumber) {
-        newErrors.newPassword = "Must have 1 number";
-      } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 special character";
-      }
-    }
-
-    if (!confirmNewPassword) {
-      newErrors.confirmNewPassword = "Confirm password is required";
-    } else if (/\s/.test(confirmNewPassword)) {
-      newErrors.confirmNewPassword = "Password cannot contain spaces";
-    } else if (confirmNewPassword !== newPassword) {
-      newErrors.confirmNewPassword = "Passwords do not match";
-    }
+    const confirmError = validateConfirmPassword(
+      confirmNewPassword,
+      newPassword
+    );
+    if (confirmError) newErrors.confirmNewPassword = confirmError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -235,8 +212,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showNewPassword}
                       value={newPassword}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setNewPassword(clean);
+                        setNewPassword(sanitizePasswordInput(t));
                         if (errors.newPassword)
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
@@ -257,9 +233,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                 </TouchableOpacity>
               </View>
               {errors.newPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.newPassword}
                   </Text>
                 </View>
@@ -289,8 +273,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showConfirmNewPassword}
                       value={confirmNewPassword}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setConfirmNewPassword(clean);
+                        setConfirmNewPassword(sanitizePasswordInput(t));
                         if (errors.confirmNewPassword)
                           setErrors((prev) => ({
                             ...prev,
@@ -316,9 +299,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                 </TouchableOpacity>
               </View>
               {errors.confirmNewPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.confirmNewPassword}
                   </Text>
                 </View>

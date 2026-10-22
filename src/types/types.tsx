@@ -134,11 +134,22 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   SavedCards: undefined;
   SaveCardInfo: undefined;
+  Developer: undefined;
   Notification: undefined;
   CheckoutScreen: { orderContext: OrderContext };
   ScheduleOrder: { orderContext: OrderContext };
-  PaymentMethod: { total: number; orderContext?: OrderContext };
-  PaymentScreen: { amount?: number; title?: string; orderContext?: OrderContext } | undefined;
+  PaymentMethod: {
+    total?: number;
+    orderContext?: OrderContext;
+  } | undefined;
+  PaymentScreen: {
+    amount?: number;
+    title?: string;
+    orderContext?: OrderContext;
+    orderId?: string | number;
+    processOrderId?: string | number;
+    invoiceNo?: string;
+  } | undefined;
   OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
   OrderConfirmed: {
     orderId?: string | number;
@@ -195,6 +206,7 @@ export type RootStackParamList = {
     processOrderTotal?: number;
     paymentMethod?: string;
     refundCreditAmount?: number;
+    totalCardDue?: number; 
     serviceFee?: number; 
   } | undefined;
   OrderCancelConfirmation: {
@@ -225,6 +237,7 @@ export type RootStackParamList = {
     paymentMethod?: string;
     refundCreditAmount?: number;
     serviceFee?: number;
+    totalCardDue?: number;
   } | undefined;
  ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
 };
@@ -360,6 +373,7 @@ export interface AddressPayload {
 export interface PhoneChangeOtpPayload {
   phoneCode: string;
   phoneNumber: string;
+  email?: string;
 }
 
 export interface VerifyPhoneChangePayload {

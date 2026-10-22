@@ -44,10 +44,14 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   const initialAmount = route.params?.amount || 0;
   const headerTitle = route.params?.title || "Payment Summary";
   const orderContext = route.params?.orderContext;
-  const isClearBalanceFlow = !orderContext;
+  const orderIdParam = route.params?.orderId;
+  const processOrderIdParam = route.params?.processOrderId;
+  const invoiceNoParam = route.params?.invoiceNo;
+  const isExistingOrderPayFlow = Boolean(orderIdParam || processOrderIdParam);
+  const isClearBalanceFlow = !orderContext && !isExistingOrderPayFlow;
 
   const [subTotal, setSubTotal] = useState<number>(initialAmount);
-  const [loading, setLoading] = useState<boolean>(!initialAmount);
+  const [loading, setLoading] = useState<boolean>(isExistingOrderPayFlow ? true : !initialAmount);
   const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
 
   // ─── SAVED CARD & OPTION STATE ────────────────────────────────────────────
@@ -136,7 +140,50 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   useEffect(() => {
-    if (!initialAmount) {
+    if (isExistingOrderPayFlow && (orderIdParam || processOrderIdParam)) {
+      const fetchOrderDetails = async () => {
+        try {
+          setLoading(true);
+          const targetId = processOrderIdParam || orderIdParam;
+          const orderRes = await orderService.getOrderById(String(targetId));
+          if (orderRes.data && orderRes.data.status && (orderRes.data.order || orderRes.data.data)) {
+            const order = orderRes.data.order || orderRes.data.data;
+            const isPaid =
+              Number(order.isPaid) === 1 ||
+              order.isPaid === true ||
+              String(order.isPaid) === "1" ||
+              order.status === "Paid";
+
+            if (isPaid) {
+              showAlert(
+                "Already Paid!",
+                "You have already completed the payment for this order.",
+                "error"
+              );
+              return;
+            }
+
+            if (!initialAmount) {
+              const orderFullTotal = parseFloat(
+                order.fulltotal || order.fullTotal || 0,
+              );
+              const creditPaid = parseFloat(order.creditPaid || 0);
+              const moneyPaid = parseFloat(order.moneyPaid || 0);
+              const payable =
+                moneyPaid > 0
+                  ? moneyPaid
+                  : Math.max(0, orderFullTotal - creditPaid);
+              setSubTotal(payable);
+            }
+          }
+        } catch (error) {
+          console.log("Error fetching order in PaymentScreen: ", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchOrderDetails();
+    } else if (!initialAmount && isClearBalanceFlow) {
       const fetchBalance = async () => {
         try {
           setLoading(true);
@@ -153,7 +200,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
       };
       fetchBalance();
     }
-  }, [initialAmount]);
+  }, [initialAmount, isExistingOrderPayFlow, orderIdParam, processOrderIdParam, isClearBalanceFlow]);
 
   const fullTotal = subTotal;
 
@@ -177,79 +224,127 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         savedCard &&
         adapter.chargeSavedCard
       ) {
-        const orderPayload = {
-          cartId: orderContext?.cartId || 0,
-          paymentMethod: "card",
-          grandTotal: orderContext?.grandTotal || fullTotal,
-          discountAmount: orderContext?.discount || 0,
-          deliveryCharge: orderContext?.deliveryCharge || 0,
-          creditPaid: orderContext?.creditPaid || 0,
-          moneyPaid: orderContext?.moneyPaid || fullTotal,
-          isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
-          checkoutDetails: {
-            ...(orderContext?.checkoutDetails || {
-              deliveryMethod: orderContext?.deliveryMethod || "home",
-            }),
-          },
-        };
+        if (isExistingOrderPayFlow) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: fullTotal,
+              paymentType: "order",
+              orderId: String(processOrderIdParam || orderIdParam),
+              itemsDescription: `Polygon Order Payment - ${invoiceNoParam || orderIdParam}`,
+            });
 
-        try {
-          const chargeRes = await adapter.chargeSavedCard({
-            cardId: savedCard.id,
-            amount: fullTotal,
-            paymentType: isClearBalanceFlow ? "clear_balance" : "order",
-            itemsDescription: isClearBalanceFlow
-              ? "Clear Negative Credit Balance"
-              : "GoviMart Order Payment",
-          });
-
-          if (chargeRes.success) {
-            if (isClearBalanceFlow) {
+            if (chargeRes.success) {
               await handlePaymentSuccess(chargeRes.orderId || "COMPLETED");
               return;
             }
+          } catch (chargeErr: any) {
+            console.warn("[PaymentScreen] 1-Click charge failed:", chargeErr);
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
 
-            // Order flow: Payment succeeded! NOW create the order!
-            const orderResponse = await orderService.createOrder(orderPayload);
-            if (orderResponse.data && orderResponse.data.status && orderResponse.data.data) {
-              const orderData = orderResponse.data.data;
-              dispatch(clearCart());
-              navigation.navigate("OrderConfirmed", {
-                orderId: orderData.orderId,
-                processOrderId: orderData.processOrderId,
-                invoiceNumber: orderData.invoiceNumber,
-                total: orderData.total || fullTotal,
-                couponValue: orderContext?.couponValue,
-                orderContext,
-              });
-              return;
+            if (isInvalid) {
+              setSavedCard(null);
+              setSelectedPaymentOption("new_card");
+              showAlert(
+                "Saved Card Expired",
+                "Your saved card is invalid or expired. Opening payment sheet to complete your payment and save a new card."
+              );
+              // Will fall through to launch hosted sheet below!
             } else {
-              throw new Error(orderResponse.data?.message || "Failed to finalize order");
+              throw chargeErr;
             }
           }
-        } catch (chargeErr: any) {
-          console.warn("[PaymentScreen] 1-Click charge failed:", chargeErr);
-          const isInvalid =
-            chargeErr?.response?.data?.cardInvalid ||
-            chargeErr?.message?.includes("invalid") ||
-            chargeErr?.message?.includes("expired") ||
-            chargeErr?.message?.includes("No such object");
+        } else {
+          const orderPayload = {
+            cartId: orderContext?.cartId || 0,
+            paymentMethod: "card",
+            grandTotal: orderContext?.grandTotal || fullTotal,
+            discountAmount: orderContext?.discount || 0,
+            deliveryCharge: orderContext?.deliveryCharge || 0,
+            creditPaid: orderContext?.creditPaid || 0,
+            moneyPaid: orderContext?.moneyPaid || fullTotal,
+            isFinalizeImdt: orderContext?.isFinalizeImdt || 0,
+            checkoutDetails: {
+              ...(orderContext?.checkoutDetails || {
+                deliveryMethod: orderContext?.deliveryMethod || "home",
+              }),
+            },
+          };
 
-          if (isInvalid) {
-            setSavedCard(null);
-            setSelectedPaymentOption("new_card");
-            showAlert(
-              "Saved Card Expired",
-              "Your saved card is invalid or expired. Opening payment sheet to complete your payment and save a new card."
-            );
-            // Will fall through to launch hosted sheet below!
-          } else {
-            throw chargeErr;
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: fullTotal,
+              paymentType: isClearBalanceFlow ? "clear_balance" : "order",
+              itemsDescription: isClearBalanceFlow
+                ? "Clear Negative Credit Balance"
+                : "Polygon Order Payment",
+            });
+
+            if (chargeRes.success) {
+              if (isClearBalanceFlow) {
+                await handlePaymentSuccess(chargeRes.orderId || "COMPLETED");
+                return;
+              }
+
+              // Order flow: Payment succeeded! NOW create the order!
+              const orderResponse = await orderService.createOrder(orderPayload);
+              if (orderResponse.data && orderResponse.data.status && orderResponse.data.data) {
+                const orderData = orderResponse.data.data;
+                dispatch(clearCart());
+                navigation.navigate("OrderConfirmed", {
+                  orderId: orderData.orderId,
+                  processOrderId: orderData.processOrderId,
+                  invoiceNumber: orderData.invoiceNumber,
+                  total: orderData.total || fullTotal,
+                  couponValue: orderContext?.couponValue,
+                  orderContext,
+                });
+                return;
+              } else {
+                throw new Error(orderResponse.data?.message || "Failed to finalize order");
+              }
+            }
+          } catch (chargeErr: any) {
+            console.warn("[PaymentScreen] 1-Click charge failed:", chargeErr);
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+
+            if (isInvalid) {
+              setSavedCard(null);
+              setSelectedPaymentOption("new_card");
+              showAlert(
+                "Saved Card Expired",
+                "Your saved card is invalid or expired. Opening payment sheet to complete your payment and save a new card."
+              );
+              // Will fall through to launch hosted sheet below!
+            } else {
+              throw chargeErr;
+            }
           }
         }
       }
 
-      if (isClearBalanceFlow) {
+      if (isExistingOrderPayFlow) {
+        // Existing order payment via hosted checkout modal
+        const session = await adapter.initiatePayment({
+          amount: fullTotal,
+          paymentType: "order",
+          orderId: String(processOrderIdParam || orderIdParam),
+          itemsDescription: `Polygon Order Payment - ${invoiceNoParam || orderIdParam}`,
+          saveCard: saveCardForFuture,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+      } else if (isClearBalanceFlow) {
         // Clear negative balance flow with hosted checkout
         const session = await adapter.initiatePayment({
           amount: subTotal,
@@ -284,7 +379,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         const session = await adapter.initiatePayment({
           amount: fullTotal,
           paymentType: "order",
-          itemsDescription: "GoviMart Order Payment",
+          itemsDescription: "Polygon Order Payment",
           saveCard: saveCardForFuture,
         });
 
@@ -313,6 +408,48 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
   // ─── CHECKOUT MODAL HANDLERS ─────────────────────────────────────────────
   const handlePaymentSuccess = async (orderId: string) => {
     setCheckoutModalVisible(false);
+
+    if (isExistingOrderPayFlow) {
+      try {
+        setLoading(true);
+
+        if (checkoutSession?.sessionId) {
+          const paymentsLkAdapter = PaymentGatewayFactory.getGateway("payments_lk") as any;
+          if (paymentsLkAdapter?.syncCheckout) {
+            try {
+              await paymentsLkAdapter.syncCheckout(checkoutSession.sessionId);
+            } catch (err: any) {
+              console.log("[PaymentScreen] syncCheckout error:", err);
+            }
+          }
+        }
+
+        // Update order in backend: isPaid = 1, amount = fullTotal, moneyPaid = fullTotal
+        await orderService.confirmOrderWithLivePrices({
+          orderId: orderIdParam,
+          processOrderId: processOrderIdParam,
+          isPaid: 1,
+          amount: fullTotal,
+          moneyPaid: fullTotal,
+        });
+
+        showAlert(
+          "Payment Successful",
+          `Your payment of Rs. ${formatAmount(fullTotal)} for order #${invoiceNoParam || orderIdParam} was completed successfully!`,
+          "success"
+        );
+      } catch (err: any) {
+        console.error("[PaymentScreen] Order payment update error:", err);
+        showAlert(
+          "Payment Successful",
+          "Your payment was received successfully! Please check your order history for updates.",
+          "success"
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (isClearBalanceFlow) {
       try {
@@ -406,7 +543,9 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleAlertClose = () => {
     setAlertVisible(false);
-    if (alertType === "success" && isClearBalanceFlow) {
+    if (alertType === "success" && (isClearBalanceFlow || isExistingOrderPayFlow)) {
+      navigation.goBack();
+    } else if (alertTitle === "Already Paid!") {
       navigation.goBack();
     }
   };
@@ -477,6 +616,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                 >
                   {isClearBalanceFlow
                     ? "Total Negative Credit Balance"
+                    : isExistingOrderPayFlow
+                    ? "Payable Balance"
                     : "Order Total"}
                 </Text>
                 <Text
@@ -489,6 +630,35 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   {isClearBalanceFlow ? "- " : ""}Rs. {formatAmount(subTotal)}
                 </Text>
               </View>
+
+              {isExistingOrderPayFlow && invoiceNoParam ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13.5,
+                      color: "#64748B",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Invoice No
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "700",
+                      color: "#111827",
+                    }}
+                  >
+                    #{invoiceNoParam}
+                  </Text>
+                </View>
+              ) : null}
 
               {/* DIVIDER */}
               <View
@@ -837,6 +1007,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                       alignItems: "center",
                       marginTop: 12,
                       paddingTop: 10,
+                      paddingRight:5,
                       borderTopWidth: 1,
                       borderColor: "#F1F5F9",
                       paddingLeft: 32,
@@ -997,6 +1168,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         okButtonText={
           alertType === "success" && isClearBalanceFlow
             ? "Back to Profile"
+            : alertType === "success" && isExistingOrderPayFlow
+            ? "Back to Notifications"
             : "OK"
         }
       />

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Linking,
+  Keyboard,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -28,30 +29,18 @@ import { DropdownField, InputField } from "@/component/common/CustomField";
 
 const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 import CustomHeader from "@/component/common/CustomHeader";
-import LoadingPage from "@/component/common/LoadingPage";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
 import customerService from "@/services/customer/customer.service";
 import CameraAccess from "@/screens/common/permission/CameraAccess";
-
-interface PhoneCode {
-  code: string;
-  dialCode: string;
-  name: string;
-}
-
-const countries: PhoneCode[] = [
-  { code: "LK", dialCode: "+94", name: "Sri Lanka" },
-  { code: "VN", dialCode: "+84", name: "Vietnam" },
-  { code: "KH", dialCode: "+855", name: "Cambodia" },
-  { code: "BD", dialCode: "+880", name: "Bangladesh" },
-  { code: "IN", dialCode: "+91", name: "India" },
-  { code: "NL", dialCode: "+31", name: "Netherlands" },
-];
-
-const getFlagUrl = (countryCode: string): string => {
-  return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
-};
+import {
+  countries,
+  getFlagUrl,
+  getPhoneMaxLength,
+  cleanPhoneInput,
+  validatePhone,
+} from "@/utils/phoneValidation";
+import { TITLES } from "@/constants/titles";
 
 const renderCountryItem = (
   item: any,
@@ -91,6 +80,62 @@ const renderCountryItem = (
   </TouchableOpacity>
 );
 
+const capitalizeName = (text: string): string => {
+  if (!text) return "";
+  return text
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/(?:^|\s|-)([a-z])/g, (_, c) => c.toUpperCase());
+};
+
+const sanitizeFirstNameLive = (text: string): string => {
+  // Disallow ALL spaces, allow only letters, apostrophes, hyphens
+  let cleaned = text.replace(/\s/g, "").replace(/[^a-zA-Z'-]/g, "");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const sanitizeLastNameLive = (text: string): string => {
+  // Allow letters, apostrophes, hyphens, and spaces
+  let cleaned = text.replace(/[^a-zA-Z' -]/g, "");
+  // Prevent leading spaces
+  cleaned = cleaned.replace(/^\s+/, "");
+  // Prevent multiple consecutive spaces
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const sanitizeCompanyNameLive = (text: string): string => {
+  // Prevent leading spaces
+  let cleaned = text.replace(/^\s+/, "");
+  // Prevent multiple consecutive spaces
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
+  if (!cleaned) return "";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const capitalizeFirst = (text: string): string => {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+};
+
+const isValidEmail = (emailStr: string): boolean => {
+  if (!emailStr) return false;
+  const trimmed = emailStr.trim();
+  if (
+    trimmed.includes(" ") ||
+    trimmed.includes("..") ||
+    trimmed.startsWith(".") ||
+    trimmed.endsWith(".")
+  ) {
+    return false;
+  }
+  const emailRegex =
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]\.)*[a-zA-Z0-9][a-zA-Z0-9-]{1,}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/;
+  return emailRegex.test(trimmed);
+};
+
 type MyAccountNavigationProp = StackNavigationProp<
   RootStackParamList,
   "MyAccount"
@@ -102,6 +147,9 @@ interface MyAccountProps {
 
 const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const dispatch = useDispatch();
+  const scrollRef = useRef<any>(null);
+  const scrollToTop = () =>
+    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
   );
@@ -118,7 +166,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [compnayMobile, setCompanyMobile] = useState("");
+  const [companyMobile, setCompanyMobile] = useState("");
   const [companyMobileCode, setCompanyMobileCode] = useState("+94");
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [isPhoneCodeModalOpen, setIsPhoneCodeModalOpen] = useState(false);
@@ -132,7 +180,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
-  const [profileImageError, setProfileImageError] = useState<string | null>(null);
+  const [profileImageError, setProfileImageError] = useState<string | null>(
+    null,
+  );
 
   // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
@@ -143,7 +193,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const showAlert = (
     title: string,
     message: string,
-    type: "success" | "error" = "error"
+    type: "success" | "error" = "error",
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -154,7 +204,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
   const checkImageSize = async (
-    asset: ImagePicker.ImagePickerAsset
+    asset: ImagePicker.ImagePickerAsset,
   ): Promise<boolean> => {
     let size = asset.fileSize || 0;
     if (!size) {
@@ -173,7 +223,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       showAlert(
         "Image Too Large",
         "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error"
+        "error",
       );
       return false;
     }
@@ -204,7 +254,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
   useFocusEffect(
     React.useCallback(() => {
-      const fetchAcccountDetails = async () => {
+      const fetchAccountDetails = async () => {
         try {
           setIsLoading(true);
           const response = await customerService.getAccountDetails();
@@ -212,8 +262,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             const data = response.data.data;
             if (data.buyerType) setBuyerType(data.buyerType);
             if (data.title) setTitle(data.title);
-            if (data.firstName) setFirstName(data.firstName);
-            if (data.lastName) setLastName(data.lastName);
+            if (data.firstName) {
+              const f = data.firstName.trim().replace(/\s/g, "");
+              setFirstName(f ? f.charAt(0).toUpperCase() + f.slice(1) : "");
+            }
+            if (data.lastName)
+              setLastName(capitalizeName(data.lastName.trim()));
             const fetchedImage = (data.profileImage || data.image || "").trim();
             if (fetchedImage) {
               setProfileImage(fetchedImage);
@@ -223,7 +277,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
             if (data.email) setEmail(data.email);
-            if (data.companyName) setCompanyName(data.companyName);
+            if (data.companyName) {
+              setCompanyName(capitalizeFirst(data.companyName));
+            }
             if (data.companyPhoneCode)
               setCompanyMobileCode(data.companyPhoneCode);
             if (data.companyPhone) setCompanyMobile(data.companyPhone);
@@ -239,19 +295,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               mobileNumber: (data.phoneNumber || "").trim(),
               email: (data.email || "").trim(),
               companyName: (data.companyName || "").trim(),
-              companyMobileCode: (data.companyPhoneCode || data.phoneCode || "+94").trim(),
+              companyMobileCode: (
+                data.companyPhoneCode ||
+                data.phoneCode ||
+                "+94"
+              ).trim(),
               companyMobile: (data.companyPhone || "").trim(),
               image: fetchedImage,
             });
           }
-          console.log("acc details fetchihng success: ", response.data.data);
+          console.log("acc details fetching success: ", response.data.data);
         } catch (error) {
           console.log("error fetching acc details: ", error);
         } finally {
           setIsLoading(false);
         }
       };
-      fetchAcccountDetails();
+      fetchAccountDetails();
     }, []),
   );
 
@@ -271,8 +331,6 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }, [navigation]),
   );
 
-  const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
-
   const handleSelectTitle = (val: string) => {
     setTitle(val);
     setTitleModalOpen(false);
@@ -281,12 +339,41 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
   };
 
-  const mobilecodeOptions = ["+94", "+91", "+65"];
-  const companycodeOptions = ["+94", "+91", "+65"];
+  const countryModalData = countries.map((c) => ({
+    label: `${c.name} (${c.dialCode})`,
+    value: c.dialCode,
+    code: c.code,
+    dialCode: c.dialCode,
+    name: c.name,
+    flag: getFlagUrl(c.code),
+  }));
+
+  const delayedAlert = (...args: Parameters<typeof Alert.alert>) => {
+    setTimeout(() => Alert.alert(...args), Platform.OS === "ios" ? 400 : 0);
+  };
 
   // UPDATE ACCOUNT
   const handleUpdate = async () => {
     if (updating) return;
+
+    // Validate EXACTLY what the user typed (no truncation), then send the same
+    // value with leading zeros removed. Nothing is cut down to "look" valid.
+    const rawMobile = mobileNumber.trim();
+    const cleanedMobile = rawMobile.replace(/^0+/, "");
+    const effectiveCompanyCode = companyMobileCode || mobileCode;
+    const rawCompanyMobile = companyMobile.trim();
+    const cleanedCompanyMobile = rawCompanyMobile.replace(/^0+/, "");
+
+    // 1) Always close the keyboard first so it never swallows a tap
+    Keyboard.dismiss();
+
+    // 2) PHONE CHECK RUNS FIRST ON EVERY CLICK – stop here if invalid
+    const phoneGateErr = validatePhone(mobileCode, rawMobile);
+    if (phoneGateErr) {
+      setMobileNumberError(phoneGateErr);
+      scrollToTop(); // make sure the error is visible
+      return;
+    }
 
     setFirstNameError("");
     setLastNameError("");
@@ -306,7 +393,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     if (!firstName.trim()) {
       setFirstNameError("First name is required");
       hasError = true;
-    } else if (!/^[a-zA-Z\s]+$/.test(firstName.trim())) {
+    } else if (/\s/.test(firstName)) {
+      setFirstNameError("First name cannot contain spaces");
+      hasError = true;
+    } else if (!/^[a-zA-Z'-]+$/.test(firstName.trim())) {
       setFirstNameError("First name must contain only letters");
       hasError = true;
     }
@@ -314,7 +404,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     if (!lastName.trim()) {
       setLastNameError("Last name is required");
       hasError = true;
-    } else if (!/^[a-zA-Z\s]+$/.test(lastName.trim())) {
+    } else if (!/^[a-zA-Z' -]+$/.test(lastName.trim())) {
       setLastNameError("Last name must contain only letters");
       hasError = true;
     }
@@ -324,28 +414,37 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
-    if (!mobileNumber.trim()) {
-      setMobileNumberError("Mobile number is required");
-      hasError = true;
-    } else if (!/^\d{9}$/.test(mobileNumber)) {
-      setMobileNumberError("Invalid phone number");
+    // Personal mobile (retail + wholesale) – country specific
+    const mobileErr = validatePhone(mobileCode, rawMobile);
+    if (mobileErr) {
+      setMobileNumberError(mobileErr);
       hasError = true;
     }
 
     if (!email.trim()) {
       setEmailError("Email is required");
       hasError = true;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (/\s/.test(email)) {
+      setEmailError("Email cannot contain spaces");
+      hasError = true;
+    } else if (!isValidEmail(email)) {
       setEmailError("Invalid email address");
       hasError = true;
     }
 
-    if (isWholesale && compnayMobile.trim() && !/^\d{9}$/.test(compnayMobile)) {
-      setCompanyMobileError("Invalid phone number");
-      hasError = true;
+    // Company mobile (wholesale only, optional) – country specific
+    if (isWholesale) {
+      const companyErr = validatePhone(effectiveCompanyCode, rawCompanyMobile, {
+        required: false,
+      });
+      if (companyErr) {
+        setCompanyMobileError(companyErr);
+        hasError = true;
+      }
     }
 
     if (hasError) {
+      scrollToTop();
       return;
     }
 
@@ -360,18 +459,29 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         firstName.trim() === originalAccountData.firstName &&
         lastName.trim() === originalAccountData.lastName &&
         mobileCode.trim() === originalAccountData.mobileCode &&
-        mobileNumber.trim() === originalAccountData.mobileNumber &&
-        email.trim().toLowerCase() === originalAccountData.email.toLowerCase() &&
+        cleanedMobile ===
+          cleanPhoneInput(
+            originalAccountData.mobileNumber,
+            originalAccountData.mobileCode,
+          ) &&
+        email.trim().toLowerCase() ===
+          originalAccountData.email.toLowerCase() &&
         (!isWholesale ||
           (companyName.trim() === originalAccountData.companyName &&
-            (companyMobileCode || mobileCode).trim() === originalAccountData.companyMobileCode &&
-            compnayMobile.trim() === originalAccountData.companyMobile));
+            (companyMobileCode || mobileCode).trim() ===
+              originalAccountData.companyMobileCode &&
+            cleanedCompanyMobile ===
+              cleanPhoneInput(
+                originalAccountData.companyMobile,
+                originalAccountData.companyMobileCode,
+              )));
 
       if (isUnchanged) {
+        // Popup is not open yet here, so a normal Alert is fine
         Alert.alert(
           "No Changes Detected",
           "You haven't made any changes to your account details to update.",
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -381,31 +491,45 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       setUpdating(true);
 
       const finalImage = profileImage ? profileImage.trim() : null;
+      const formattedFirstName = capitalizeName(
+        firstName.trim().replace(/\s/g, ""),
+      );
+      const formattedLastName = capitalizeName(lastName.trim());
+      const formattedCompanyName = capitalizeFirst(companyName);
+
       const payload: any = {
         title: (title || "Mr").trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         phoneCode: mobileCode.trim(),
-        phoneNumber: mobileNumber.trim(),
+        phoneNumber: cleanedMobile,
         email: email.trim(),
         image: finalImage,
       };
 
       if (isWholesale) {
-        payload.companyName = companyName;
+        payload.companyName = formattedCompanyName;
         payload.companyPhoneCode = companyMobileCode || mobileCode;
-        payload.companyPhone = compnayMobile;
+        payload.companyPhone = cleanedCompanyMobile;
       }
 
       const phoneChanged =
-        mobileNumber.trim() !== originalMobileNumber.trim() ||
+        cleanedMobile !==
+          cleanPhoneInput(originalMobileNumber, originalMobileCode) ||
         mobileCode !== originalMobileCode;
 
       if (phoneChanged) {
+        // Last-line guard: never request an OTP for an invalid number
+        const guardErr = validatePhone(mobileCode, rawMobile);
+        if (guardErr) {
+          setMobileNumberError(guardErr);
+          return;
+        }
+
         const method = mobileCode === "+94" ? "sms" : "email";
         const { lockoutKeys, attemptsKeys } = getSignUpStorageKeys(
           mobileCode,
-          mobileNumber,
+          cleanedMobile,
           email,
           method,
         );
@@ -418,7 +542,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               const lockoutUntil = parseInt(storedLockout, 10);
               const remainingMs = lockoutUntil - Date.now();
               if (remainingMs > 0) {
-                Alert.alert(
+                delayedAlert(
                   "Too Many Attempts",
                   "Too many verification attempts. Please try again after 15 minutes.",
                 );
@@ -440,16 +564,22 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (raw) {
               const timestamps: number[] = JSON.parse(raw);
               const now = Date.now();
-              const valid = timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+              const valid = timestamps.filter(
+                (ts) => now - ts < RATE_LIMIT_WINDOW_MS,
+              );
               if (valid.length >= 5) {
                 const oldest = valid[0];
-                const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-                const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
+                const remainingMs =
+                  RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
+                const remainingSec = Math.max(
+                  Math.ceil(remainingMs / 1000),
+                  900,
+                );
                 const lockoutUntil = Date.now() + remainingSec * 1000;
                 for (const lockKey of lockoutKeys) {
                   await AsyncStorage.setItem(lockKey, String(lockoutUntil));
                 }
-                Alert.alert(
+                delayedAlert(
                   "Too Many Attempts",
                   "Too many verification attempts. Please try again after 15 minutes.",
                 );
@@ -463,7 +593,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
         const otpResponse = await customerService.sendPhoneChangeOtp({
           phoneCode: mobileCode,
-          phoneNumber: mobileNumber,
+          phoneNumber: cleanedMobile,
+          email: email.trim(),
         });
 
         const otpData = otpResponse.data;
@@ -473,7 +604,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           for (const key of attemptsKeys) {
             try {
               const raw = await AsyncStorage.getItem(key);
-              const existing = raw ? JSON.parse(raw).filter((ts: number) => now - ts < RATE_LIMIT_WINDOW_MS) : [];
+              const existing = raw
+                ? JSON.parse(raw).filter(
+                    (ts: number) => now - ts < RATE_LIMIT_WINDOW_MS,
+                  )
+                : [];
               const updated = [...existing, now];
               await AsyncStorage.setItem(key, JSON.stringify(updated));
             } catch (e) {
@@ -481,7 +616,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             }
           }
 
-          Alert.alert(
+          delayedAlert(
             "Verification Code Sent",
             `A 5-digit verification code has been sent to your ${otpData.method === "email" ? "email address" : "mobile number"}.\n\n(5 OTP resend attempts limit)`,
             [
@@ -490,7 +625,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 onPress: () => {
                   navigation.navigate("SignUpOTP", {
                     phoneCode: mobileCode,
-                    phoneNumber: mobileNumber,
+                    phoneNumber: cleanedMobile,
                     email: email,
                     method: otpData.method || "sms",
                     referenceId: otpData.referenceId,
@@ -510,29 +645,34 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             for (const lockKey of lockoutKeys) {
               await AsyncStorage.setItem(lockKey, String(lockoutUntil));
             }
-            Alert.alert(
+            delayedAlert(
               "Too Many Attempts",
               "Too many verification attempts. Please try again after 15 minutes.",
             );
           } else {
-            Alert.alert("Error", msg);
+            if (msg.toLowerCase().includes("email")) {
+              setEmailError(msg);
+            }
+            delayedAlert("Error", msg);
           }
         }
       } else {
         const response = await customerService.updateUserDetails(payload);
 
         if (response.data) {
+          setMobileNumber(cleanedMobile);
+          setCompanyMobile(cleanedCompanyMobile);
           const updatedImageStr = profileImage ? profileImage.trim() : "";
           setOriginalAccountData({
             title: title.trim(),
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             mobileCode: mobileCode.trim(),
-            mobileNumber: mobileNumber.trim(),
+            mobileNumber: cleanedMobile,
             email: email.trim(),
             companyName: companyName.trim(),
             companyMobileCode: (companyMobileCode || mobileCode).trim(),
-            companyMobile: compnayMobile.trim(),
+            companyMobile: cleanedCompanyMobile,
             image: updatedImageStr,
           });
 
@@ -543,11 +683,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               firstName: firstName.trim(),
               lastName: lastName.trim(),
               email: email.trim(),
-              phoneNumber: mobileNumber.trim(),
+              phoneNumber: cleanedMobile,
               phoneCode: mobileCode.trim(),
               image: updatedImageStr,
               companyName: isWholesale ? companyName.trim() : undefined,
-            })
+            }),
           );
 
           try {
@@ -560,10 +700,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
                 email: email.trim(),
-                phoneNumber: mobileNumber.trim(),
+                phoneNumber: cleanedMobile,
                 phoneCode: mobileCode.trim(),
                 image: updatedImageStr,
-                companyName: isWholesale ? companyName.trim() : parsed.companyName,
+                companyName: isWholesale
+                  ? companyName.trim()
+                  : parsed.companyName,
               };
               await AsyncStorage.setItem("userProfile", JSON.stringify(merged));
             }
@@ -571,9 +713,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             console.log("Error updating AsyncStorage userProfile:", e);
           }
 
-          Alert.alert(
+          delayedAlert(
             "Success",
-            response.data.message || "Your account information has been updated.",
+            response.data.message ||
+              "Your account information has been updated.",
             [
               {
                 text: "OK",
@@ -588,7 +731,13 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const errorMessage =
         error?.response?.data?.message ||
         "Failed to update account. Please try again.";
-      Alert.alert("Error", errorMessage);
+      const lower = errorMessage.toLowerCase();
+      if (lower.includes("email")) {
+        setEmailError(errorMessage);
+      } else if (lower.includes("phone") || lower.includes("mobile")) {
+        setMobileNumberError(errorMessage);
+      }
+      delayedAlert("Error", errorMessage);
     } finally {
       setUpdating(false);
     }
@@ -602,15 +751,32 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const filename = uri.split("/").pop() || "profile.jpg";
       const match = /\.(\w+)$/.exec(filename);
       const ext = match ? match[1].toLowerCase() : "jpg";
-      const type = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-      const cleanName = filename.includes(".") ? filename : `${filename}.${ext}`;
+      const type =
+        ext === "png"
+          ? "image/png"
+          : ext === "webp"
+            ? "image/webp"
+            : "image/jpeg";
+      const cleanName = filename.includes(".")
+        ? filename
+        : `${filename}.${ext}`;
 
-      const response = await customerService.uploadProfileImage(uri, cleanName, type);
-      if (response.data && response.data.status && response.data.data?.imageUrl) {
+      const response = await customerService.uploadProfileImage(
+        uri,
+        cleanName,
+        type,
+      );
+      if (
+        response.data &&
+        response.data.status &&
+        response.data.data?.imageUrl
+      ) {
         const uploadedUrl = response.data.data.imageUrl;
         setProfileImage(uploadedUrl);
         setProfileImageError(null);
-        setOriginalAccountData((prev) => (prev ? { ...prev, image: uploadedUrl } : null));
+        setOriginalAccountData((prev) =>
+          prev ? { ...prev, image: uploadedUrl } : null,
+        );
         dispatch(updateUserProfileImage({ image: uploadedUrl }));
         dispatch(updateUserProfile({ image: uploadedUrl }));
         try {
@@ -619,7 +785,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             const parsed = JSON.parse(stored);
             await AsyncStorage.setItem(
               "userProfile",
-              JSON.stringify({ ...parsed, image: uploadedUrl })
+              JSON.stringify({ ...parsed, image: uploadedUrl }),
             );
           }
         } catch (e) {
@@ -701,7 +867,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             [
               { text: "Cancel", style: "cancel" },
               { text: "Open Settings", onPress: () => Linking.openSettings() },
-            ]
+            ],
           );
           return;
         }
@@ -733,512 +899,560 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     setProfileImageError(null);
   };
 
-  // DELELE OPTION
+  // DELETE OPTION
   const handleMore = () => {
-    console.log("More options");
     setMoreMenuVisible(!moreMenuVisible);
   };
 
   return (
     <View className="flex-1 bg-white">
       {/* HEADER */}
-      <View
-        style={{
-          height: 60,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-        }}
-      >
-        <CustomHeader
-          navigation={navigation}
-          title="My Account"
-          showBackButton={true}
-          onBackPress={() => navigation.navigate("Profile")}
-        />
 
-        {/* Delete ellipsis */}
+      <CustomHeader
+        navigation={navigation}
+        title="My Account"
+        showBackButton={true}
+        onBackPress={() => navigation.navigate("Profile")}
+      />
 
-        {!isWholesale && (
+      {/* Delete ellipsis */}
+
+      {!isWholesale && (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleMore}
+          style={{
+            position: "absolute",
+            right: 10,
+            top: 9,
+            width: 36,
+            height: 36,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Ionicons name="ellipsis-vertical" size={22} color="#000" />
+        </TouchableOpacity>
+      )}
+
+      {/* Dropdown */}
+
+      {moreMenuVisible && (
+        <View
+          style={{
+            position: "absolute",
+            top: 38,
+            right: 5,
+            width: 130,
+            backgroundColor: "#FFFFFF",
+            borderRadius: 12,
+            paddingVertical: 1,
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 8,
+            borderWidth: 1,
+            borderColor: "#EEEEEE",
+          }}
+        >
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={handleMore}
+            activeOpacity={0.7}
+            onPress={() => {
+              navigation.navigate("DeleteAccount");
+              setMoreMenuVisible(false);
+            }}
             style={{
-              position: "absolute",
-              right: 10,
-              top: 9,
-              width: 36,
-              height: 36,
-              justifyContent: "center",
+              height: 24,
+              paddingHorizontal: 5,
+              flexDirection: "row",
               alignItems: "center",
             }}
           >
-            <Ionicons name="ellipsis-vertical" size={22} color="#000" />
-          </TouchableOpacity>
-        )}
-
-        {/* Dropdown */}
-
-        {moreMenuVisible && (
-          <View
-            style={{
-              position: "absolute",
-              top: 38,
-              right: 5,
-
-              width: 130,
-
-              backgroundColor: "#FFFFFF",
-              borderRadius: 12,
-
-              paddingVertical: 1,
-
-              shadowColor: "#000",
-              shadowOffset: {
-                width: 0,
-                height: 3,
-              },
-              shadowOpacity: 0.15,
-              shadowRadius: 8,
-
-              elevation: 8,
-
-              borderWidth: 1,
-              borderColor: "#EEEEEE",
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                navigation.navigate("DeleteAccount");
-                setMoreMenuVisible(false);
-              }}
+            <Text
               style={{
-                height: 24,
-                paddingHorizontal: 5,
-                flexDirection: "row",
-                alignItems: "center",
+                marginLeft: 10,
+                fontSize: 13,
+                fontWeight: "500",
+                color: "#000000",
               }}
             >
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 13,
-                  fontWeight: "500",
-                  color: "#000000",
-                }}
-              >
-                Delete Account
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+              Delete Account
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {isLoading ? (
         <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "transparent",
+          }}
         >
-          <LoadingPage message="Loading Account..." fullScreen={false} />
+          <ActivityIndicator size="large" color="#000000" />
+          <Text
+            style={{
+              marginTop: 14,
+              fontSize: 14,
+              fontWeight: "600",
+              color: "#000000",
+              textAlign: "center",
+            }}
+          >
+            Loading Account...
+          </Text>
         </View>
       ) : (
         <KeyboardAwareScrollView
+          innerRef={(ref) => (scrollRef.current = ref)}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           enableOnAndroid={true}
           enableAutomaticScroll={true}
-          extraScrollHeight={120}
-          extraHeight={120}
           keyboardOpeningTime={0}
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: Platform.OS === "ios" ? 30 : 20,
+            paddingBottom: 20,
             flexGrow: 1,
             justifyContent: "space-between",
           }}
         >
           <View style={{ flex: 1 }}>
             {/* PROFILE IMAGE */}
-          <View
-            style={{
-              alignItems: "center",
-              marginTop: 5,
-              marginBottom: 40,
-            }}
-          >
             <View
               style={{
-                width: 93,
-                height: 93,
-                position: "relative",
+                alignItems: "center",
+                marginTop: 5,
+                marginBottom: 40,
               }}
             >
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={handleChangeProfileImage}
-                disabled={uploadingImage}
+              <View
                 style={{
                   width: 93,
                   height: 93,
-                  borderRadius: 999,
-                  backgroundColor: "#EAEFF5",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: "#F0F0F0",
+                  position: "relative",
                 }}
               >
-                {uploadingImage ? (
-                  <ActivityIndicator size="small" color="#000000" />
-                ) : profileImage && profileImage.trim() !== "" ? (
-                  <Image
-                    source={{ uri: profileImage }}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                    }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Image
-                    source={defaultUserIcon}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                    }}
-                    resizeMode="cover"
-                  />
-                )}
-              </TouchableOpacity>
-
-              {/* Edit Image */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={handleChangeProfileImage}
-                disabled={uploadingImage}
-                style={{
-                  position: "absolute",
-                  right: -4,
-                  bottom: -4,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "#000000",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderWidth: 2,
-                  borderColor: "#FFFFFF",
-                  elevation: 4,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 3,
-                }}
-              >
-                <FontAwesome6 name="pen" size={13} color="#FFFFFF" solid />
-              </TouchableOpacity>
-            </View>
-
-            {profileImageError ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginTop: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
-                <Ionicons
-                  name="alert-circle"
-                  size={16}
-                  color="#FF3B30"
-                  style={{ marginRight: 5 }}
-                />
-                <Text
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={handleChangeProfileImage}
+                  disabled={uploadingImage}
                   style={{
-                    fontSize: 13,
-                    color: "#FF3B30",
-                    fontWeight: "500",
-                    textAlign: "center",
+                    width: 93,
+                    height: 93,
+                    borderRadius: 999,
+                    backgroundColor: "#EAEFF5",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    overflow: "hidden",
+                    borderWidth: 2,
+                    borderColor: "#F0F0F0",
                   }}
                 >
-                  {profileImageError}
-                </Text>
-              </View>
-            ) : null}
-          </View>
+                  {uploadingImage ? (
+                    <ActivityIndicator size="small" color="#000000" />
+                  ) : profileImage && profileImage.trim() !== "" ? (
+                    <Image
+                      source={{ uri: profileImage }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Image
+                      source={defaultUserIcon}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      resizeMode="cover"
+                    />
+                  )}
+                </TouchableOpacity>
 
-          {/* FORM */}
-          <View
-            style={{
-              width: "100%",
-            }}
-          >
-            {/* TITLE + FIRST NAME */}
-            <View
-              style={{
-                flexDirection: "row",
-                width: "100%",
-                marginBottom: 14,
-              }}
-            >
-              {/* Title */}
-
-              <View
-                style={{
-                  width: "40%",
-                  marginRight: 8,
-                }}
-              >
-                <DropdownField
-                  label="Title"
-                  value={title}
-                  open={false}
-                  setOpen={() => setTitleModalOpen(true)}
-                  options={[]}
-                  onSelect={() => {}}
-                  icon="user"
-                  error={titleError}
-                />
-              </View>
-
-              {/* First Name */}
-
-              <View
-                style={{
-                  flex: 1,
-                }}
-              >
-                <InputField
-                  icon="user"
-                  label="First Name"
-                  value={firstName}
-                  onChangeText={(text) => {
-                    setFirstName(text.replace(/[^a-zA-Z\s]/g, ""));
-
-                    // Optional: remove error while typing
-                    if (firstNameError) {
-                      setFirstNameError("");
-                    }
+                {/* Edit Image */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleChangeProfileImage}
+                  disabled={uploadingImage}
+                  style={{
+                    position: "absolute",
+                    right: -4,
+                    bottom: -4,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: "#000000",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderWidth: 2,
+                    borderColor: "#FFFFFF",
+                    elevation: 4,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 3,
                   }}
-                  error={firstNameError}
-                />
-              </View>
-            </View>
-
-            {/* LAST NAME */}
-
-            <View
-              style={{
-                marginBottom: 14,
-              }}
-            >
-              <InputField
-                icon="user"
-                label="Last Name"
-                value={lastName}
-                onChangeText={(text) => {
-                  setLastName(text.replace(/[^a-zA-Z\s]/g, ""));
-                  if (lastNameError) {
-                    setLastNameError("");
-                  }
-                }}
-                error={lastNameError}
-              />
-            </View>
-
-            {/* CODE + MOBILE */}
-            <View
-              style={{
-                flexDirection: "row",
-                width: "100%",
-                marginBottom: 14,
-              }}
-            >
-              {/* Code */}
-
-              <View
-                style={{
-                  width: "39%",
-                  marginRight: 8,
-                }}
-              >
-                <DropdownField
-                  label="Code"
-                  value={mobileCode}
-                  open={false}
-                  setOpen={() => setIsPhoneCodeModalOpen(true)}
-                  options={[]}
-                  onSelect={() => {}}
-                  icon="flag"
-                  error={codeError}
-                />
+                >
+                  <FontAwesome6 name="pen" size={13} color="#FFFFFF" solid />
+                </TouchableOpacity>
               </View>
 
-              {/* Mobile Number */}
-
-              <View
-                style={{
-                  flex: 1,
-                }}
-              >
-                <InputField
-                  icon="phone"
-                  label="Mobile Number"
-                  value={mobileNumber}
-                  onChangeText={(text) => {
-                    setMobileNumber(text.replace(/[^0-9]/g, ""));
-                    if (mobileNumberError) {
-                      setMobileNumberError("");
-                    }
-                  }}
-                  keyboardType="phone-pad"
-                  maxLength={mobileCode === "+94" ? 9 : 10}
-                  error={mobileNumberError}
-                />
-              </View>
-            </View>
-
-            {/* EMAIL */}
-            <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
-              <InputField
-                icon="house"
-                label="Email"
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  if (emailError) {
-                    setEmailError("");
-                  }
-                }}
-                keyboardType="email-address"
-                error={emailError}
-              />
-            </View>
-
-            {/* WHOLESALE ONLY FIELDS */}
-            {isWholesale && (
-              <>
-                {/* Company name */}
-                <View style={{ marginBottom: 14 }}>
-                  <InputField
-                    icon="building"
-                    label="Company Name"
-                    value={companyName}
-                    onChangeText={(text) => {
-                      setCompanyName(text);
-                    }}
-                  />
-                </View>
-
-                {/* COM CODE + Company MOBILE */}
+              {profileImageError ? (
                 <View
                   style={{
                     flexDirection: "row",
-                    width: "100%",
-                    marginBottom: 14,
+                    alignItems: "center",
+                    marginTop: 10,
+                    paddingHorizontal: 12,
                   }}
                 >
-                  {/* com Code */}
-                  <View
+                  <Ionicons
+                    name="alert-circle"
+                    size={16}
+                    color="#FF3B30"
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
                     style={{
-                      width: "39%",
-                      marginRight: 8,
+                      fontSize: 13,
+                      color: "#FF3B30",
+                      fontWeight: "500",
+                      textAlign: "center",
                     }}
                   >
-                    <DropdownField
-                      label="Code"
-                      value={companyMobileCode || "+94"}
-                      open={false}
-                      setOpen={() => setIsCompanyPhoneCodeModalOpen(true)}
-                      options={[]}
-                      onSelect={() => {}}
-                      icon="flag"
-                    />
-                  </View>
-
-                  {/* com Mobile Number */}
-                  <View
-                    style={{
-                      flex: 1,
-                    }}
-                  >
-                    <InputField
-                      icon="phone"
-                      label="Company"
-                      value={compnayMobile}
-                      onChangeText={(text) => {
-                        setCompanyMobile(text.replace(/[^0-9]/g, ""));
-                        if (companyMobileError) {
-                          setCompanyMobileError("");
-                        }
-                      }}
-                      keyboardType="phone-pad"
-                      maxLength={companyMobileCode === "+94" ? 9 : 10}
-                      error={companyMobileError}
-                    />
-                  </View>
+                    {profileImageError}
+                  </Text>
                 </View>
-              </>
-            )}
-          </View>
-        </View>
+              ) : null}
+            </View>
 
-        {/* BOTTOM UPDATE BUTTON */}
-        <View
-          style={{
-            marginTop: 24,
-            marginBottom: Platform.OS === "ios" ? 16 : 8,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleUpdate}
-            disabled={updating}
+            {/* FORM */}
+            <View style={{ width: "100%" }}>
+              {/* TITLE + FIRST NAME */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  width: "100%",
+                  marginBottom: 14,
+                }}
+              >
+                {/* Title */}
+                <View style={{ width: "40%", marginRight: 8 }}>
+                  <DropdownField
+                    label="Title"
+                    value={title}
+                    open={false}
+                    setOpen={() => setTitleModalOpen(true)}
+                    options={[]}
+                    onSelect={() => {}}
+                    icon="user"
+                    error={titleError}
+                  />
+                </View>
+
+                {/* First Name */}
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    icon="user"
+                    label="First Name"
+                    placeholder="First Name"
+                    value={firstName}
+                    autoCapitalize="words"
+                    onChangeText={(text) => {
+                      const sanitized = sanitizeFirstNameLive(text);
+                      setFirstName(sanitized);
+                      if (firstNameError && sanitized.trim()) {
+                        setFirstNameError("");
+                      }
+                    }}
+                    onBlur={() => {
+                      const cap = capitalizeName(firstName);
+                      setFirstName(cap);
+                      if (!cap.trim()) {
+                        setFirstNameError("First name is required");
+                      } else if (!/^[a-zA-Z'-]+$/.test(cap.trim())) {
+                        setFirstNameError(
+                          "First name must contain only letters",
+                        );
+                      }
+                    }}
+                    error={firstNameError}
+                  />
+                </View>
+              </View>
+
+              {/* LAST NAME */}
+              <View style={{ marginBottom: 14 }}>
+                <InputField
+                  icon="user"
+                  label="Last Name"
+                  placeholder="Last Name"
+                  value={lastName}
+                  autoCapitalize="words"
+                  onChangeText={(text) => {
+                    const sanitized = sanitizeLastNameLive(text);
+                    setLastName(sanitized);
+                    if (lastNameError && sanitized.trim()) {
+                      setLastNameError("");
+                    }
+                  }}
+                  onBlur={() => {
+                    const cap = capitalizeName(lastName);
+                    setLastName(cap);
+                    if (!cap.trim()) {
+                      setLastNameError("Last name is required");
+                    } else if (!/^[a-zA-Z' -]+$/.test(cap.trim())) {
+                      setLastNameError("Last name must contain only letters");
+                    }
+                  }}
+                  error={lastNameError}
+                />
+              </View>
+
+              {/* CODE + MOBILE */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  width: "100%",
+                  marginBottom: 14,
+                }}
+              >
+                {/* Code */}
+                <View style={{ width: "39%", marginRight: 8 }}>
+                  <DropdownField
+                    label="Code"
+                    value={mobileCode}
+                    open={false}
+                    setOpen={() => setIsPhoneCodeModalOpen(true)}
+                    options={[]}
+                    onSelect={() => {}}
+                    icon="flag"
+                    error={codeError}
+                  />
+                </View>
+
+                {/* Mobile Number */}
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    icon="phone"
+                    label="Mobile Number"
+                    placeholder="Mobile Number"
+                    value={mobileNumber}
+                    onChangeText={(text) => {
+                      const clean = cleanPhoneInput(text, mobileCode);
+                      setMobileNumber(clean);
+                      if (
+                        mobileNumberError &&
+                        !validatePhone(mobileCode, clean)
+                      ) {
+                        setMobileNumberError("");
+                      }
+                    }}
+                    onBlur={() =>
+                      setMobileNumberError(
+                        validatePhone(mobileCode, mobileNumber),
+                      )
+                    }
+                    keyboardType="phone-pad"
+                    maxLength={getPhoneMaxLength(mobileCode)}
+                    error={mobileNumberError}
+                  />
+                </View>
+              </View>
+
+              {/* EMAIL */}
+              <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
+                <InputField
+                  icon="house"
+                  label="Email"
+                  placeholder="Email Address"
+                  value={email}
+                  autoCapitalize="none"
+                  onChangeText={(text) => {
+                    const clean = text.replace(/\s/g, "");
+                    setEmail(clean);
+                    if (emailError && isValidEmail(clean)) {
+                      setEmailError("");
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!email.trim()) {
+                      setEmailError("Email is required");
+                    } else if (!isValidEmail(email)) {
+                      setEmailError("Invalid email address");
+                    }
+                  }}
+                  keyboardType="email-address"
+                  error={emailError}
+                />
+              </View>
+
+              {/* WHOLESALE ONLY FIELDS */}
+              {isWholesale && (
+                <>
+                  {/* Company name */}
+                  <View style={{ marginBottom: 14 }}>
+                    <InputField
+                      icon="building"
+                      label="Company Name"
+                      placeholder="Company Name"
+                      value={companyName}
+                      autoCapitalize="words"
+                      onChangeText={(text) => {
+                        setCompanyName(sanitizeCompanyNameLive(text));
+                      }}
+                      onBlur={() => {
+                        setCompanyName((prev) => capitalizeFirst(prev));
+                      }}
+                    />
+                  </View>
+
+                  {/* COM CODE + Company MOBILE */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      width: "100%",
+                      marginBottom: 14,
+                    }}
+                  >
+                    {/* Company Code */}
+                    <View style={{ width: "39%", marginRight: 8 }}>
+                      <DropdownField
+                        label="Code"
+                        value={companyMobileCode || "+94"}
+                        open={false}
+                        setOpen={() => setIsCompanyPhoneCodeModalOpen(true)}
+                        options={[]}
+                        onSelect={() => {}}
+                        icon="flag"
+                      />
+                    </View>
+
+                    {/* Company Mobile Number */}
+                    <View style={{ flex: 1 }}>
+                      <InputField
+                        icon="phone"
+                        label="Company"
+                        placeholder="Company Mobile"
+                        value={companyMobile}
+                        onChangeText={(text) => {
+                          const clean = cleanPhoneInput(
+                            text,
+                            companyMobileCode || mobileCode,
+                          );
+                          setCompanyMobile(clean);
+                          if (companyMobileError) {
+                            setCompanyMobileError("");
+                          }
+                        }}
+                        onBlur={() =>
+                          setCompanyMobileError(
+                            validatePhone(
+                              companyMobileCode || mobileCode,
+                              companyMobile,
+                              { required: false },
+                            ),
+                          )
+                        }
+                        keyboardType="phone-pad"
+                        maxLength={getPhoneMaxLength(
+                          companyMobileCode || mobileCode,
+                        )}
+                        error={companyMobileError}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* BOTTOM UPDATE BUTTON */}
+          <View
             style={{
-              width: "100%",
-              height: 52,
-              borderRadius: 27,
-              backgroundColor: updating ? "#8B9DA7" : "#000",
-              justifyContent: "center",
-              alignItems: "center",
+              marginTop: 24,
+              marginBottom: Platform.OS === "ios" ? 16 : 8,
             }}
           >
-            <Text
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleUpdate}
+              disabled={updating}
               style={{
-                color: "#FFFFFF",
-                fontSize: 14,
-                fontWeight: "700",
-                letterSpacing: 0.2,
+                width: "100%",
+                height: 52,
+                borderRadius: 27,
+                backgroundColor: updating ? "#8B9DA7" : "#000",
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              {updating ? "Updating..." : "Update Account Info"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAwareScrollView>
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 14,
+                  fontWeight: "700",
+                  letterSpacing: 0.2,
+                }}
+              >
+                {updating ? "Updating..." : "Update Account Info"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAwareScrollView>
       )}
 
-      {updating && (
+      {/* Updating popup: shown only while the account is being updated */}
+      <Modal
+        visible={updating}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {}} // block Android back button while updating
+      >
         <View
           style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            justifyContent: "center",
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
             alignItems: "center",
-            zIndex: 999,
+            justifyContent: "center",
           }}
         >
-          <LoadingPage message="Updating Account..." fullScreen={false} />
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Updating account...
+            </Text>
+          </View>
         </View>
-      )}
+      </Modal>
 
       {/* Phone Code GlobalSearchModal */}
       <GlobalSearchModal
@@ -1247,18 +1461,15 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         title="Select Country Code"
         searchPlaceholder="Search country..."
         noResultsText="No results found"
-        data={countries.map((c) => ({
-          label: `${c.name} (${c.dialCode})`,
-          value: c.dialCode,
-          code: c.code,
-          dialCode: c.dialCode,
-          name: c.name,
-          flag: getFlagUrl(c.code),
-        }))}
+        data={countryModalData}
         selectedItems={mobileCode ? [mobileCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setMobileCode(items[0]);
+            const code = items[0];
+            setMobileCode(code);
+            // trim to the new country's max length and clear stale error
+            setMobileNumber((prev) => prev.slice(0, getPhoneMaxLength(code)));
+            setMobileNumberError("");
             if (codeError) setCodeError("");
           }
           setIsPhoneCodeModalOpen(false);
@@ -1274,18 +1485,14 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         title="Select Company Country Code"
         searchPlaceholder="Search country..."
         noResultsText="No results found"
-        data={countries.map((c) => ({
-          label: `${c.name} (${c.dialCode})`,
-          value: c.dialCode,
-          code: c.code,
-          dialCode: c.dialCode,
-          name: c.name,
-          flag: getFlagUrl(c.code),
-        }))}
+        data={countryModalData}
         selectedItems={companyMobileCode ? [companyMobileCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            setCompanyMobileCode(items[0]);
+            const code = items[0];
+            setCompanyMobileCode(code);
+            setCompanyMobile((prev) => prev.slice(0, getPhoneMaxLength(code)));
+            setCompanyMobileError("");
           }
           setIsCompanyPhoneCodeModalOpen(false);
         }}
@@ -1298,7 +1505,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         visible={titleModalOpen}
         onClose={() => setTitleModalOpen(false)}
         title="Select Title"
-        data={titleOptions.map((t) => ({ label: t, value: t }))}
+        data={TITLES.map((t) => ({ label: t, value: t }))}
         selectedItems={title ? [title] : []}
         onSelect={(items) => {
           if (items && items[0]) {

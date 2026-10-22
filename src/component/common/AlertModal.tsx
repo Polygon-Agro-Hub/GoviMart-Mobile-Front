@@ -39,7 +39,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   onRescan,
   showOpenOngoingButton = false,
   onOpenOngoing,
-  duration = 4000,
+  duration = 3000,
   autoClose = true,
   showOkButton,
   okButtonText = "OK",
@@ -143,10 +143,21 @@ export const AlertModal: React.FC<AlertModalProps> = ({
           </TouchableOpacity>
 
           {/* Title */}
-          <Text className="font-bold text-lg mb-4 text-center">
+          {/* Title */}
+          <Text
+            style={{
+              width: "100%",
+              paddingHorizontal: 40,
+              fontWeight: "700",
+              fontSize: 18,
+              lineHeight: 28,
+              marginBottom: 16,
+              textAlign: "center",
+              includeFontPadding: false,
+            }}
+          >
             {getModalTitle()}
           </Text>
-
           {getContent()}
 
           {renderMessage()}
@@ -252,11 +263,26 @@ Alert.alert = (title, message, buttons, options) => {
       lowerTitle.includes("completed");
     const type: AlertType = isSuccess ? "success" : "error";
 
+    const lowerMsg = typeof message === "string" ? message.toLowerCase() : "";
+
     const onCloseCallback = () => {
       if (buttons && buttons.length === 1 && buttons[0].onPress) {
         buttons[0].onPress();
       }
     };
+
+    const isOtpAlert =
+      lowerTitle.includes("resent") ||
+      lowerTitle.includes("resend") ||
+      lowerTitle.includes("sent") ||
+      lowerTitle.includes("otp") ||
+      lowerMsg.includes("verification code") ||
+      lowerMsg.includes("otp");
+
+    // OTP resent and sent alerts stay open with an OK button.
+    // General success alerts (e.g. Login successful) auto-close without an OK button.
+    const autoClose = isOtpAlert ? false : isSuccess;
+    const showOkButton = isOtpAlert ? true : !isSuccess;
 
     if (globalAlertListener) {
       globalAlertListener(
@@ -264,8 +290,8 @@ Alert.alert = (title, message, buttons, options) => {
         message || "",
         type,
         onCloseCallback,
-        isSuccess,
-        !isSuccess,
+        autoClose,
+        showOkButton,
       );
     } else {
       originalAlert(title, message, buttons, options);

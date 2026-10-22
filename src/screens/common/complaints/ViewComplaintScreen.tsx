@@ -4,10 +4,8 @@ import {
   Text,
   ScrollView,
   Image,
-  ActivityIndicator,
   Alert,
   TouchableOpacity,
-  StyleSheet,
   BackHandler,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
@@ -43,11 +41,7 @@ interface ComplaintDetail {
   images?: { id: number; image: string }[];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  Pending: "#FF9518",
-  Resolved: "#16A34A",
-  Rejected: "#DC2626",
-};
+
 
 const formatDateTime = (dateString?: string | null) => {
   if (!dateString) return "";

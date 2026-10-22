@@ -116,6 +116,7 @@ class OrderService {
         additionalAmount?: number;
         newScheduleDate?: string;
         paymentMethod?: string;
+        isPaid?: number | boolean;
         newTotal?: number;
         creditToAdd?: number;
         replacements?: Array<{
@@ -167,6 +168,9 @@ class OrderService {
         orderId?: number | string;
         processOrderId?: number | string;
         newTotal?: number;
+        isPaid?: number | boolean;
+        amount?: number;
+        moneyPaid?: number;
     }) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_ORDER, payload, { headers });

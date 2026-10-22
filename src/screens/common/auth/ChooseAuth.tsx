@@ -10,7 +10,6 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome6 } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 
 type ChooseAuthNavigationProp = StackNavigationProp<
   RootStackParamList,

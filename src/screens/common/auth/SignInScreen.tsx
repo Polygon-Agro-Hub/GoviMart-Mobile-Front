@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Image,
   Dimensions,
   BackHandler,
@@ -15,7 +14,7 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome6, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import { useDispatch } from "react-redux";
@@ -39,10 +38,87 @@ interface LoginProps {
   navigation: LoginNavigationProp;
 }
 
+const isValidEmail = (emailStr: string): boolean => {
+  if (!emailStr) return false;
+  const trimmed = emailStr.trim();
+  if (
+    trimmed.includes(" ") ||
+    trimmed.includes("..") ||
+    trimmed.startsWith(".") ||
+    trimmed.endsWith(".")
+  ) {
+    return false;
+  }
+  const emailRegex =
+    /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]\.)*[a-zA-Z0-9][a-zA-Z0-9-]{1,}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?$/;
+  return emailRegex.test(trimmed);
+};
+
+const validateIdentifier = (
+  val: string,
+): { isValid: boolean; error?: string } => {
+  const trimmed = val.trim();
+  if (!trimmed) {
+    return { isValid: false, error: "Mobile number or email is required" };
+  }
+
+  // If input contains '@' or alphabetical letters
+  if (trimmed.includes("@") || /[a-zA-Z]/.test(trimmed)) {
+    if (!isValidEmail(trimmed)) {
+      return { isValid: false, error: "Please enter a valid email address" };
+    }
+    return { isValid: true };
+  }
+
+  // Clean phone number (strip all spaces and hyphens)
+  const cleanPhone = trimmed.replace(/[\s-]/g, "");
+
+  // Supported countries:
+  // 1. Sri Lanka (+94 / 94): 9 digits starting with 7, or local 07... (10 digits), or 7... (9 digits)
+  if (/^(\+94|94)7[0-9]{8}$/.test(cleanPhone)) return { isValid: true };
+  if (/^07[0-9]{8}$/.test(cleanPhone) || /^7[0-9]{8}$/.test(cleanPhone)) return { isValid: true };
+
+  // 2. Cambodia (+855 / 855): 8 to 9 digits, or local 0 + 8-9 digits
+  if (/^(\+855|855)[0-9]{8,9}$/.test(cleanPhone)) return { isValid: true };
+
+  // 3. Vietnam (+84 / 84): 9 digits, or local 0 + 9 digits (10 digits)
+  if (/^(\+84|84)[0-9]{9}$/.test(cleanPhone)) return { isValid: true };
+
+  // 4. Bangladesh (+880 / 880): 10 digits (often starts with 1), or local 01 + 9 digits (11 digits)
+  if (/^(\+880|880)[0-9]{10}$/.test(cleanPhone)) return { isValid: true };
+
+  // 5. India (+91 / 91): 10 digits, or local 0 + 10 digits (11 digits)
+  if (/^(\+91|91)[0-9]{10}$/.test(cleanPhone)) return { isValid: true };
+
+  // 6. Netherlands (+31 / 31): 9 digits (mobile starts with 6), or local 06 + 8 digits (10 digits)
+  if (/^(\+31|31)[0-9]{9}$/.test(cleanPhone)) return { isValid: true };
+
+  // Local numbers with leading 0 (8 to 11 digits)
+  if (/^0[0-9]{8,10}$/.test(cleanPhone)) return { isValid: true };
+
+  // Generic 9 or 10 digit number without country code
+  if (/^[0-9]{9,10}$/.test(cleanPhone)) return { isValid: true };
+
+  // If user entered '+' followed by an unsupported country code or wrong length
+  if (cleanPhone.startsWith("+")) {
+    return {
+      isValid: false,
+      error: "Please enter a valid mobile number for a supported country",
+    };
+  }
+
+  return {
+    isValid: false,
+    error: "Please enter a valid mobile number or email address",
+  };
+};
+
 const Login: React.FC<LoginProps> = ({ navigation }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [identifierError, setIdentifierError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -79,10 +155,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           const storedPassword =
             await SecureStore.getItemAsync("rememberedPassword");
           if (storedIdentifier) {
-            setIdentifier(storedIdentifier);
+            setIdentifier(storedIdentifier.replace(/\s/g, ""));
           }
           if (storedPassword) {
-            setPassword(storedPassword);
+            setPassword(storedPassword.replace(/\s/g, ""));
           }
           setRememberMe(true);
           dispatch(
@@ -100,13 +176,32 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   }, [dispatch]);
 
   const handleSignIn = async () => {
-    if (!isValid) return;
+    let hasError = false;
+
+    const idRes = validateIdentifier(identifier);
+    if (!idRes.isValid) {
+      setIdentifierError(
+        idRes.error || "Please enter a valid mobile number or email address",
+      );
+      hasError = true;
+    } else {
+      setIdentifierError("");
+    }
+
+    if (!password.trim()) {
+      setPasswordError("Password is required");
+      hasError = true;
+    } else {
+      setPasswordError("");
+    }
+
+    if (hasError) return;
 
     setLoading(true);
     try {
       const response = await authService.login({
-        identifier: identifier.trim(),
-        password: password.trim(),
+        identifier: identifier.replace(/\s/g, "").trim(),
+        password: password.replace(/\s/g, ""),
       });
       if (response.data && response.data.success) {
         const {
@@ -192,65 +287,58 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           );
         }
 
-        Alert.alert("Success", "Login successful!", [
-          {
-            text: "OK",
-            onPress: async () => {
-              const isWholesale =
-                (buyerType || "").toLowerCase() === "wholesale";
+        const isWholesale =
+          (buyerType || "").toLowerCase() === "wholesale";
 
-              let targetScreen: keyof RootStackParamList = "Home";
-              let targetParams: any = undefined;
+        let targetScreen: keyof RootStackParamList = "Home";
+        let targetParams: any = undefined;
 
-              if (isDashUser === 1 && isPswUpdated === 0) {
-                targetScreen = "UpdatePassword";
-                targetParams = {
-                  customerId: response.data.data.id,
-                  name: `${firstName} ${lastName}`,
-                  title: title,
-                  number: phoneNumber,
-                  cusId: cusId,
-                  buyerType: buyerType,
-                  redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
-                };
-              } else if (firstTimeUser === 0 && !isWholesale) {
-                targetScreen = "ExcludeListAdd";
-                targetParams = {
-                  customerId: response.data.data.id,
-                  name: `${firstName} ${lastName}`,
-                  title: title,
-                  number: phoneNumber,
-                  cusId: cusId,
-                };
-              } else {
-                targetScreen = "Home";
-              }
+        if (isDashUser === 1 && isPswUpdated === 0) {
+          targetScreen = "UpdatePassword";
+          targetParams = {
+            customerId: response.data.data.id,
+            name: `${firstName} ${lastName}`,
+            title: title,
+            number: phoneNumber,
+            cusId: cusId,
+            buyerType: buyerType,
+            redirectTo: isWholesale ? "Home" : "ExcludeListAdd",
+          };
+        } else if (firstTimeUser === 0 && !isWholesale) {
+          targetScreen = "ExcludeListAdd";
+          targetParams = {
+            customerId: response.data.data.id,
+            name: `${firstName} ${lastName}`,
+            title: title,
+            number: phoneNumber,
+            cusId: cusId,
+          };
+        } else {
+          targetScreen = "Home";
+        }
 
-              try {
-                const hasAsked = await AsyncStorage.getItem(
-                  "hasAskedNotificationPermission",
-                );
+        try {
+          const hasAsked = await AsyncStorage.getItem(
+            "hasAskedNotificationPermission",
+          );
 
-                if (hasAsked !== "true") {
-                  navigation.navigate("NotificationAccess", {
-                    returnScreen: targetScreen,
-                    returnParams: targetParams,
-                    blockBackNavigation: true,
-                  });
-                  return;
-                }
-              } catch (err) {
-                console.warn("Error reading notification permission flag:", err);
-              }
+          if (hasAsked !== "true") {
+            navigation.navigate("NotificationAccess", {
+              returnScreen: targetScreen,
+              returnParams: targetParams,
+              blockBackNavigation: true,
+            });
+            return;
+          }
+        } catch (err) {
+          console.warn("Error reading notification permission flag:", err);
+        }
 
-              if (targetParams) {
-                navigation.navigate(targetScreen as any, targetParams);
-              } else {
-                navigation.navigate(targetScreen as any);
-              }
-            },
-          },
-        ]);
+        if (targetParams) {
+          navigation.navigate(targetScreen as any, targetParams);
+        } else {
+          navigation.navigate(targetScreen as any);
+        }
       } else {
         const msg = response.data?.message || "An error occurred during login.";
         if (
@@ -296,15 +384,21 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   return (
     <View className="flex-1 bg-white">
       <KeyboardAwareScrollView
-        innerRef={(ref) => (scrollViewRef.current = ref)}
-        className="flex-1 "
+        innerRef={(ref) => (scrollViewRef.current = ref as any)}
+        className="flex-1"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
+        enableAutomaticScroll={true}
         extraScrollHeight={0}
-        extraHeight={0}
-        keyboardOpeningTime={0}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        extraHeight={Platform.select({ ios: 40, android: 70 })}
+        keyboardOpeningTime={250}
+        enableResetScrollToCoords={false}
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={{
+          paddingBottom: 16,
+        }}
       >
         {/* Top image section: now scrolls with the rest of the content */}
         <View style={{ width: "100%", height: IMAGE_HEIGHT }}>
@@ -338,18 +432,50 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             <View>
               <View
                 style={{ height: 50 }}
-                className="w-full bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5"
+                className={`w-full bg-white border rounded-full flex-row items-center px-5 ${
+                  identifierError
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-[#E4EBF2]"
+                }`}
               >
                 <View className="mr-3">
-                  <FontAwesome5 name="user-alt" size={20} color="black" />
+                  <FontAwesome5
+                    name="user-alt"
+                    size={20}
+                    color="black"
+                  />
                 </View>
                 <TextInput
                   value={identifier}
-                  onChangeText={setIdentifier}
+                  onChangeText={(text) => {
+                    const clean = text.replace(/\s/g, "");
+                    setIdentifier(clean);
+                    if (identifierError) {
+                      const res = validateIdentifier(clean);
+                      if (res.isValid || !clean) {
+                        setIdentifierError("");
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    if (identifier.trim()) {
+                      const res = validateIdentifier(identifier);
+                      if (!res.isValid) {
+                        setIdentifierError(
+                          res.error ||
+                            "Please enter a valid mobile number or email address",
+                        );
+                      } else {
+                        setIdentifierError("");
+                      }
+                    }
+                  }}
                   placeholder="Mobile Number / Email"
                   placeholderTextColor="black"
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                   style={{
                     flex: 1,
                     paddingTop: 0,
@@ -358,30 +484,63 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                     fontSize: 14,
                     color: "#000000",
                     ...(Platform.OS === "android"
-                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      ? {
+                          height: 50,
+                          textAlignVertical: "center",
+                          includeFontPadding: false,
+                        }
                       : { alignSelf: "center" }),
                   }}
                   className="flex-1 text-[14px] text-black"
                 />
               </View>
+              {identifierError ? (
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs"
+                    style={{ lineHeight: 16 }}
+                  >
+                    {identifierError}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Input 2: Password */}
             <View className="mt-4">
               <View
                 style={{ height: 50 }}
-                className="w-full bg-white border border-[#E4EBF2] rounded-full flex-row items-center px-5"
+                className={`w-full bg-white border rounded-full flex-row items-center px-5 ${
+                  passwordError
+                    ? "border-red-500 bg-red-50/10"
+                    : "border-[#E4EBF2]"
+                }`}
               >
                 <View className="mr-3 ml-1">
-                  <FontAwesome6 name="lock" size={18} color="black" />
+                  <FontAwesome6
+                    name="lock"
+                    size={18}
+                    color="black"
+                  />
                 </View>
                 <TextInput
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text.replace(/\s/g, ""));
+                    if (passwordError) setPasswordError("");
+                  }}
                   placeholder="Password"
                   placeholderTextColor="black"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
                   style={{
                     flex: 1,
                     paddingTop: 0,
@@ -390,7 +549,11 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                     fontSize: 14,
                     color: "#000000",
                     ...(Platform.OS === "android"
-                      ? { height: 50, textAlignVertical: "center", includeFontPadding: false }
+                      ? {
+                          height: 50,
+                          textAlignVertical: "center",
+                          includeFontPadding: false,
+                        }
                       : { alignSelf: "center" }),
                   }}
                   className="flex-1 text-[14px] text-black"
@@ -406,6 +569,22 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   />
                 </TouchableOpacity>
               </View>
+              {passwordError ? (
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs"
+                    style={{ lineHeight: 16 }}
+                  >
+                    {passwordError}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -452,7 +631,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               Don't have an account?{" "}
             </Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate("ChooseAuth")}
+              onPress={() => navigation.navigate("DeliveryLocation")}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >

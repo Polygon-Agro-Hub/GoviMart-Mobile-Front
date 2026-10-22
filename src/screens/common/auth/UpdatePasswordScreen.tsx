@@ -25,6 +25,11 @@ import { clearCart } from "@/store/cartSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tokenStorage } from "@/utils/tokenStorage";
 import LottieView from "lottie-react-native";
+import {
+  sanitizePasswordInput,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/utils/passwordValidation";
 
 type UpdatePasswordNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -38,6 +43,9 @@ interface UpdatePasswordProps {
 }
 
 type FieldName = "current" | "new" | "confirm";
+
+const SAME_PASSWORD_ERROR =
+  "New password cannot be the same as your current password. Please choose a different password.";
 
 // Space (px) to keep between the focused field and the keyboard,
 // so the fields / Update button below it stay visible.
@@ -195,57 +203,30 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       newErrors.currentPassword = "Password cannot contain spaces";
     }
 
-    if (!newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (/\s/.test(newPassword)) {
-      newErrors.newPassword = "Password cannot contain spaces";
-    } else if (
+    // New password (shared util). The "same as current" check sits between
+    // the empty/space checks and the strength checks.
+    const isEmptyOrHasSpace = !newPassword || /\s/.test(newPassword);
+
+    if (
+      !isEmptyOrHasSpace &&
       currentPassword.trim() &&
       newPassword === currentPassword.trim()
     ) {
-      newErrors.newPassword =
-        "New password cannot be the same as your current password";
-      showAlert(
-        "Update Failed",
-        "New password cannot be the same as your current password.",
-        "error",
-      );
+      newErrors.newPassword = SAME_PASSWORD_ERROR;
+      showAlert("Update Failed", SAME_PASSWORD_ERROR, "error");
     } else {
-      const hasUppercase = /[A-Z]/.test(newPassword);
-      const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar =
-        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(
-          newPassword,
-        );
-
-      if (newPassword.length < 8) {
-        newErrors.newPassword = "Must be at least 8 characters";
-      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter, 1 number & 1 special character";
-      } else if (!hasUppercase && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter & 1 special character";
-      } else if (!hasUppercase && !hasNumber) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
-      } else if (!hasNumber && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 number & 1 special character";
-      } else if (!hasUppercase) {
-        newErrors.newPassword = "Must have 1 uppercase letter";
-      } else if (!hasNumber) {
-        newErrors.newPassword = "Must have 1 number";
-      } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 special character";
-      }
+      const passwordError = validatePassword(
+        newPassword,
+        "New password is required",
+      );
+      if (passwordError) newErrors.newPassword = passwordError;
     }
 
-    if (!confirmNewPassword) {
-      newErrors.confirmNewPassword = "Confirm password is required";
-    } else if (/\s/.test(confirmNewPassword)) {
-      newErrors.confirmNewPassword = "Password cannot contain spaces";
-    } else if (confirmNewPassword !== newPassword) {
-      newErrors.confirmNewPassword = "Passwords do not match";
-    }
+    const confirmError = validateConfirmPassword(
+      confirmNewPassword,
+      newPassword,
+    );
+    if (confirmError) newErrors.confirmNewPassword = confirmError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -306,8 +287,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         if (msg.toLowerCase().includes("same as")) {
           setErrors((prev) => ({
             ...prev,
-            newPassword:
-              "New password cannot be the same as your current password",
+            newPassword: SAME_PASSWORD_ERROR,
           }));
         }
         showAlert("Update Failed", msg, "error");
@@ -319,8 +299,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       if (msg.toLowerCase().includes("same as")) {
         setErrors((prev) => ({
           ...prev,
-          newPassword:
-            "New password cannot be the same as your current password",
+          newPassword: SAME_PASSWORD_ERROR,
         }));
       }
       showAlert("Update Failed", msg, "error");
@@ -390,11 +369,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* Current Password Field */}
             <View ref={currentWrapRef} collapsable={false}>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.currentPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.currentPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -411,8 +389,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       value={currentPassword}
                       onFocus={() => handleFocus("current")}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setCurrentPassword(clean);
+                        setCurrentPassword(sanitizePasswordInput(t));
                         if (errors.currentPassword)
                           setErrors((prev) => ({
                             ...prev,
@@ -442,9 +419,17 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 </TouchableOpacity>
               </View>
               {errors.currentPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.currentPassword}
                   </Text>
                 </View>
@@ -454,11 +439,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* New Password Field */}
             <View ref={newWrapRef} collapsable={false}>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.newPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.newPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -475,8 +459,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       value={newPassword}
                       onFocus={() => handleFocus("new")}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setNewPassword(clean);
+                        setNewPassword(sanitizePasswordInput(t));
                         if (errors.newPassword)
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
@@ -503,9 +486,17 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 </TouchableOpacity>
               </View>
               {errors.newPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.newPassword}
                   </Text>
                 </View>
@@ -515,11 +506,10 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             {/* Confirm New Password Field */}
             <View ref={confirmWrapRef} collapsable={false}>
               <View
-                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                  errors.confirmNewPassword
+                className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.confirmNewPassword
                     ? "border-red-500 bg-red-50/10"
                     : "border-[#C5D2DB]"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
                   <View className="w-10 h-10 rounded-full bg-[#E4EBF2] items-center justify-center">
@@ -536,8 +526,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       value={confirmNewPassword}
                       onFocus={() => handleFocus("confirm")}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setConfirmNewPassword(clean);
+                        setConfirmNewPassword(sanitizePasswordInput(t));
                         if (errors.confirmNewPassword)
                           setErrors((prev) => ({
                             ...prev,
@@ -569,9 +558,17 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                 </TouchableOpacity>
               </View>
               {errors.confirmNewPassword && (
-                <View className="flex-row items-center gap-x-1 mt-1 ml-4">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs font-semibold">
+                <View className="flex-row items-center mt-1.5 px-4">
+                  <MaterialIcons
+                    name="error"
+                    size={13}
+                    color="#E02424"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    className="flex-1 text-red-500 text-xs font-semibold"
+                    style={{ lineHeight: 16 }}
+                  >
                     {errors.confirmNewPassword}
                   </Text>
                 </View>
@@ -605,9 +602,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             onPress={handleUpdatePassword}
             disabled={loading || !isValid}
             activeOpacity={isValid ? 0.8 : 1}
-            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
-              isValid ? "bg-black" : "bg-[#7F919C]"
-            }`}
+            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${isValid ? "bg-black" : "bg-[#7F919C]"
+              }`}
           >
             {loading ? (
               <ActivityIndicator color="white" size="small" />

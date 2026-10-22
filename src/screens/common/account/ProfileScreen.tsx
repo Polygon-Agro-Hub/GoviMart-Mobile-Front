@@ -4,7 +4,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  Alert,
   ScrollView,
   BackHandler,
 } from "react-native";
@@ -24,6 +23,7 @@ import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
 import BottomNavigation from "@/component/common/BottomNavigationBar";
 import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
+import { environment } from "@/environment/environment";
 
 const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
 
@@ -186,7 +186,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           <View
             style={{
               alignItems: "center",
-              paddingHorizontal: 24, 
+              paddingHorizontal: 24,
             }}
           >
             <View
@@ -196,7 +196,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 shadowOpacity: 0.15,
                 shadowRadius: 5,
                 elevation: 3,
-                marginTop:6
+                marginTop: 6,
               }}
             >
               <Image
@@ -222,11 +222,11 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 fontSize: 23,
                 fontWeight: "800",
                 marginTop: 12,
-                textAlign: "center", 
-                maxWidth: "90%", 
+                textAlign: "center",
+                maxWidth: "90%",
                 paddingHorizontal: 4,
               }}
-              numberOfLines={2} 
+              numberOfLines={2}
             >
               {fullName}
             </Text>
@@ -466,6 +466,17 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             danger={true}
             onPress={handleLogoutPress}
           />
+
+          {/* Developer Mode (Shown only when environment.isDeveloper is true) */}
+          {environment.isDeveloper && (
+            <ProfileMenuItem
+              icon="code-working"
+              title="DEVELOPER MODE"
+              onPress={() => {
+                navigation.navigate("Developer");
+              }}
+            />
+          )}
         </View>
       </ScrollView>
 

@@ -59,6 +59,7 @@ import ReportComplaint from "@/screens/common/complaints/ReportComplaintScreen";
 import ComplaintHistory from "@/screens/common/complaints/ComplaintHistoryScreen";
 import ViewComplaint from "@/screens/common/complaints/ViewComplaintScreen";
 import Notifications from "@/screens/common/notification/NotificationScreen";
+import Developer from "@/screens/common/developer/DeveloperScreen";
 
 // ============================================================================
 // --- Retail-Only Screens (Package Review & Customization) ---
@@ -223,6 +224,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ComplaintHistory", component: ComplaintHistory, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ViewComplaint", component: ViewComplaint, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "Notification", component: Notifications, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "Developer", component: Developer, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
 ];
 
 // ============================================================================

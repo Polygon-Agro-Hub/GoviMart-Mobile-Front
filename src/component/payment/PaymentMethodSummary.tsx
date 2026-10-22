@@ -6,6 +6,7 @@ import {
     Platform,
     StyleProp,
     ViewStyle,
+    ActivityIndicator,
 } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 
@@ -16,6 +17,8 @@ export interface PaymentMethodSummaryProps {
     paymentMethod: "cash" | "card";
     totalAmount: number;
     submitting?: boolean;
+    loading?: boolean;
+    disabled?: boolean;
     onConfirm: () => void;
     containerStyle?: StyleProp<ViewStyle>;
 }
@@ -27,9 +30,13 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
     paymentMethod,
     totalAmount,
     submitting = false,
+    loading = false,
+    disabled = false,
     onConfirm,
     containerStyle,
 }) => {
+    const isButtonLoading = Boolean(submitting || loading);
+    const isButtonDisabled = Boolean(disabled || isButtonLoading);
     const formatPrice = (value: number) =>
         value.toLocaleString("en-US", {
             minimumFractionDigits: 2,
@@ -205,13 +212,14 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
 
             {/* Confirm Payment Method Button */}
             <TouchableOpacity
-                activeOpacity={submitting ? 1 : 0.85}
-                disabled={submitting}
+                activeOpacity={isButtonDisabled ? 1 : 0.85}
+                disabled={isButtonDisabled}
                 onPress={onConfirm}
                 style={{
                     height: 52,
-                    backgroundColor: "#000000",
+                    backgroundColor: isButtonDisabled ? "#9CA3AF" : "#000000",
                     borderRadius: 26,
+                    flexDirection: "row",
                     justifyContent: "center",
                     alignItems: "center",
                     marginTop: 16,
@@ -222,18 +230,43 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                         width: 0,
                         height: 3,
                     },
-                    elevation: 4,
+                    elevation: isButtonDisabled ? 0 : 4,
                 }}
             >
-                <Text
-                    style={{
-                        color: "#FFFFFF",
-                        fontSize: 16,
-                        fontWeight: "700",
-                    }}
-                >
-                    Confirm Payment Method
-                </Text>
+                {isButtonLoading ? (
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                    >
+                        <ActivityIndicator
+                            size="small"
+                            color="#FFFFFF"
+                            style={{ marginRight: 8 }}
+                        />
+                        <Text
+                            style={{
+                                color: "#FFFFFF",
+                                fontSize: 16,
+                                fontWeight: "700",
+                            }}
+                        >
+                            Processing...
+                        </Text>
+                    </View>
+                ) : (
+                    <Text
+                        style={{
+                            color: "#FFFFFF",
+                            fontSize: 16,
+                            fontWeight: "700",
+                        }}
+                    >
+                        Confirm Payment Method
+                    </Text>
+                )}
             </TouchableOpacity>
         </View>
     );
