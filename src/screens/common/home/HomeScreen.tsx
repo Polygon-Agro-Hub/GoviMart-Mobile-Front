@@ -1439,8 +1439,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       fontSize: 12,
                     }}
                   >
-                    {category.name && category.name.length > 8
-                      ? `${category.name.slice(0, 8)}.`
+                    {category.name && category.name.length > 7
+                      ? `${category.name.slice(0, 7)}...`
                       : category.name}
                   </Text>
                 </TouchableOpacity>
