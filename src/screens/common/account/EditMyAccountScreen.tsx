@@ -180,6 +180,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
+  const [companyNameError, setCompanyNameError] = useState("");
   const [profileImageError, setProfileImageError] = useState<string | null>(
     null,
   );
@@ -250,7 +251,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   } | null>(null);
 
   const isWholesale =
-    (buyerType || reduxBuyerType || "").toLowerCase() === "wholesale";
+    (buyerType || reduxBuyerType || "").toString().trim().toLowerCase() ===
+    "wholesale";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -260,7 +262,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           const response = await customerService.getAccountDetails();
           if (response.data && response.data.data) {
             const data = response.data.data;
-            if (data.buyerType) setBuyerType(data.buyerType);
+            if (data.buyerType || (data as any).buyer_type) {
+              setBuyerType(data.buyerType || (data as any).buyer_type);
+            }
             if (data.title) setTitle(data.title);
             if (data.firstName) {
               const f = data.firstName.trim().replace(/\s/g, "");
@@ -382,6 +386,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     setTitleError("");
     setCodeError("");
     setCompanyMobileError("");
+    setCompanyNameError("");
 
     let hasError = false;
 
@@ -432,10 +437,16 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
-    // Company mobile (wholesale only, optional) – country specific
+    // Company name & number (wholesale only, required) – country specific
     if (isWholesale) {
+      if (!companyName.trim()) {
+        setCompanyNameError("Company name is required");
+        hasError = true;
+      }
+
       const companyErr = validatePhone(effectiveCompanyCode, rawCompanyMobile, {
-        required: false,
+        required: true,
+        emptyMessage: "Company number is required",
       });
       if (companyErr) {
         setCompanyMobileError(companyErr);
@@ -1228,7 +1239,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 }}
               >
                 {/* Code */}
-                <View style={{ width: "39%", marginRight: 8 }}>
+                <View style={{ width: "32%", marginRight: 8 }}>
                   <DropdownField
                     label="Code"
                     value={mobileCode}
@@ -1237,16 +1248,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     options={[]}
                     onSelect={() => {}}
                     icon="flag"
+                    circleSize={30}
+                    iconSize={14}
+                    paddingHorizontal={8}
+                    marginLeft={6}
+                    arrowSize={16}
                     error={codeError}
                   />
                 </View>
 
                 {/* Mobile Number */}
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <InputField
                     icon="phone"
                     label="Mobile Number"
                     placeholder="Mobile Number"
+                    circleSize={30}
+                    iconSize={14}
+                    paddingHorizontal={8}
+                    marginLeft={6}
                     value={mobileNumber}
                     onChangeText={(text) => {
                       const clean = cleanPhoneInput(text, mobileCode);
@@ -1309,11 +1329,20 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                       value={companyName}
                       autoCapitalize="words"
                       onChangeText={(text) => {
-                        setCompanyName(sanitizeCompanyNameLive(text));
+                        const sanitized = sanitizeCompanyNameLive(text);
+                        setCompanyName(sanitized);
+                        if (companyNameError && sanitized.trim()) {
+                          setCompanyNameError("");
+                        }
                       }}
                       onBlur={() => {
-                        setCompanyName((prev) => capitalizeFirst(prev));
+                        const cap = capitalizeFirst(companyName);
+                        setCompanyName(cap);
+                        if (!cap.trim()) {
+                          setCompanyNameError("Company name is required");
+                        }
                       }}
+                      error={companyNameError}
                     />
                   </View>
 
@@ -1326,7 +1355,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     }}
                   >
                     {/* Company Code */}
-                    <View style={{ width: "39%", marginRight: 8 }}>
+                    <View style={{ width: "32%", marginRight: 8 }}>
                       <DropdownField
                         label="Code"
                         value={companyMobileCode || "+94"}
@@ -1335,15 +1364,24 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         options={[]}
                         onSelect={() => {}}
                         icon="flag"
+                        circleSize={30}
+                        iconSize={14}
+                        paddingHorizontal={8}
+                        marginLeft={6}
+                        arrowSize={16}
                       />
                     </View>
 
                     {/* Company Mobile Number */}
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <InputField
                         icon="phone"
-                        label="Company"
+                        label="Company Mobile"
                         placeholder="Company Mobile"
+                        circleSize={30}
+                        iconSize={14}
+                        paddingHorizontal={8}
+                        marginLeft={6}
                         value={companyMobile}
                         onChangeText={(text) => {
                           const clean = cleanPhoneInput(
@@ -1351,7 +1389,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                             companyMobileCode || mobileCode,
                           );
                           setCompanyMobile(clean);
-                          if (companyMobileError) {
+                          if (
+                            companyMobileError &&
+                            !validatePhone(
+                              companyMobileCode || mobileCode,
+                              clean,
+                              {
+                                required: true,
+                                emptyMessage: "Company number is required",
+                              },
+                            )
+                          ) {
                             setCompanyMobileError("");
                           }
                         }}
@@ -1360,7 +1408,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                             validatePhone(
                               companyMobileCode || mobileCode,
                               companyMobile,
-                              { required: false },
+                              {
+                                required: true,
+                                emptyMessage: "Company number is required",
+                              },
                             ),
                           )
                         }
