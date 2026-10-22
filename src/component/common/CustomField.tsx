@@ -38,6 +38,8 @@ export const InputField = React.memo(({
     iconColor,
     circleSize = 36,
     iconSize = 17,
+    paddingHorizontal = 11,
+    marginLeft = 10,
     autoCapitalize,
     secureTextEntry,
 }: {
@@ -47,6 +49,8 @@ export const InputField = React.memo(({
     iconColor?: string;
     circleSize?: number;
     iconSize?: number;
+    paddingHorizontal?: number;
+    marginLeft?: number;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
@@ -87,7 +91,7 @@ export const InputField = React.memo(({
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-                    paddingHorizontal: 11,
+                    paddingHorizontal: paddingHorizontal,
                     backgroundColor: "#FFFFFF",
                     overflow: "hidden",
                 }}
@@ -118,7 +122,7 @@ export const InputField = React.memo(({
                     style={{
                         flex: 1,
                         minWidth: 0,
-                        marginLeft: 10,
+                        marginLeft: marginLeft,
                         justifyContent: "center",
                         overflow: "hidden",
                     }}
@@ -182,6 +186,8 @@ export const InputField = React.memo(({
                                     <Text
                                         numberOfLines={1}
                                         ellipsizeMode="tail"
+                                        adjustsFontSizeToFit={true}
+                                        minimumFontScale={0.8}
                                         style={{
                                             fontSize: 14,
                                             color: value ? "#111111" : "#9CA3AF",
@@ -258,6 +264,11 @@ export const DropdownField = ({
     highlighted = false,
     error,
     placeholder = "Select From Here",
+    circleSize = 36,
+    iconSize = 17,
+    paddingHorizontal = 11,
+    marginLeft = 10,
+    arrowSize = 19,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -269,6 +280,11 @@ export const DropdownField = ({
     highlighted?: boolean;
     error?: string;
     placeholder?: string;
+    circleSize?: number;
+    iconSize?: number;
+    paddingHorizontal?: number;
+    marginLeft?: number;
+    arrowSize?: number;
 }) => {
     return (
         <View
@@ -287,7 +303,7 @@ export const DropdownField = ({
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-                    paddingHorizontal: 11,
+                    paddingHorizontal: paddingHorizontal,
                     backgroundColor: "#FFFFFF",
                 }}
             >
@@ -295,9 +311,9 @@ export const DropdownField = ({
 
                 <View
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
                         backgroundColor: "#F2F2F6",
                         justifyContent: "center",
                         alignItems: "center",
@@ -306,7 +322,7 @@ export const DropdownField = ({
                     <FontAwesome6
                         name={icon}
                         solid
-                        size={17}
+                        size={iconSize}
                         color="#000000"
                     />
                 </View>
@@ -316,7 +332,7 @@ export const DropdownField = ({
                 <View
                     style={{
                         flex: 1,
-                        marginLeft: 10,
+                        marginLeft: marginLeft,
                         justifyContent: "center",
                     }}
                 >
@@ -332,6 +348,9 @@ export const DropdownField = ({
                     </Text>
 
                     <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.85}
                         style={{
                             fontSize: 14,
                             lineHeight: 18,
@@ -351,7 +370,7 @@ export const DropdownField = ({
                             ? "chevron-up"
                             : "chevron-down"
                     }
-                    size={19}
+                    size={arrowSize}
                     color="#111"
                 />
             </TouchableOpacity>

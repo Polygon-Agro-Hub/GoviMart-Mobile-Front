@@ -345,6 +345,13 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
             className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
               isValid ? "bg-black" : "bg-[#7F919C]"
             }`}
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 5,
+            }}
           >
             {loading ? (
               <ActivityIndicator color="white" size="small" />
