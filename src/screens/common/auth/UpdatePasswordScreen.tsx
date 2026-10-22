@@ -25,6 +25,11 @@ import { clearCart } from "@/store/cartSlice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tokenStorage } from "@/utils/tokenStorage";
 import LottieView from "lottie-react-native";
+import {
+  sanitizePasswordInput,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/utils/passwordValidation";
 
 type UpdatePasswordNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -38,6 +43,9 @@ interface UpdatePasswordProps {
 }
 
 type FieldName = "current" | "new" | "confirm";
+
+const SAME_PASSWORD_ERROR =
+  "New password cannot be the same as your current password. Please choose a different password.";
 
 // Space (px) to keep between the focused field and the keyboard,
 // so the fields / Update button below it stay visible.
@@ -195,57 +203,30 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       newErrors.currentPassword = "Password cannot contain spaces";
     }
 
-    if (!newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (/\s/.test(newPassword)) {
-      newErrors.newPassword = "Password cannot contain spaces";
-    } else if (
+    // New password (shared util). The "same as current" check sits between
+    // the empty/space checks and the strength checks.
+    const isEmptyOrHasSpace = !newPassword || /\s/.test(newPassword);
+
+    if (
+      !isEmptyOrHasSpace &&
       currentPassword.trim() &&
       newPassword === currentPassword.trim()
     ) {
-      newErrors.newPassword =
-        "New password cannot be the same as your current password. Please choose a different password.";
-      showAlert(
-        "Update Failed",
-        "New password cannot be the same as your current password. Please choose a different password.",
-        "error",
-      );
+      newErrors.newPassword = SAME_PASSWORD_ERROR;
+      showAlert("Update Failed", SAME_PASSWORD_ERROR, "error");
     } else {
-      const hasUppercase = /[A-Z]/.test(newPassword);
-      const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar =
-        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(
-          newPassword,
-        );
-
-      if (newPassword.length < 8) {
-        newErrors.newPassword = "Must be at least 8 characters";
-      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter, 1 number & 1 special character";
-      } else if (!hasUppercase && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter & 1 special character";
-      } else if (!hasUppercase && !hasNumber) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
-      } else if (!hasNumber && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 number & 1 special character";
-      } else if (!hasUppercase) {
-        newErrors.newPassword = "Must have 1 uppercase letter";
-      } else if (!hasNumber) {
-        newErrors.newPassword = "Must have 1 number";
-      } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 special character";
-      }
+      const passwordError = validatePassword(
+        newPassword,
+        "New password is required",
+      );
+      if (passwordError) newErrors.newPassword = passwordError;
     }
 
-    if (!confirmNewPassword) {
-      newErrors.confirmNewPassword = "Confirm password is required";
-    } else if (/\s/.test(confirmNewPassword)) {
-      newErrors.confirmNewPassword = "Password cannot contain spaces";
-    } else if (confirmNewPassword !== newPassword) {
-      newErrors.confirmNewPassword = "Passwords do not match";
-    }
+    const confirmError = validateConfirmPassword(
+      confirmNewPassword,
+      newPassword,
+    );
+    if (confirmError) newErrors.confirmNewPassword = confirmError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -306,8 +287,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
         if (msg.toLowerCase().includes("same as")) {
           setErrors((prev) => ({
             ...prev,
-            newPassword:
-              "New password cannot be the same as your current password. Please choose a different password.",
+            newPassword: SAME_PASSWORD_ERROR,
           }));
         }
         showAlert("Update Failed", msg, "error");
@@ -319,8 +299,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
       if (msg.toLowerCase().includes("same as")) {
         setErrors((prev) => ({
           ...prev,
-          newPassword:
-            "New password cannot be the same as your current password. Please choose a different password.",
+          newPassword: SAME_PASSWORD_ERROR,
         }));
       }
       showAlert("Update Failed", msg, "error");
@@ -410,8 +389,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       value={currentPassword}
                       onFocus={() => handleFocus("current")}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setCurrentPassword(clean);
+                        setCurrentPassword(sanitizePasswordInput(t));
                         if (errors.currentPassword)
                           setErrors((prev) => ({
                             ...prev,
@@ -481,8 +459,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       value={newPassword}
                       onFocus={() => handleFocus("new")}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setNewPassword(clean);
+                        setNewPassword(sanitizePasswordInput(t));
                         if (errors.newPassword)
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
@@ -549,8 +526,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       value={confirmNewPassword}
                       onFocus={() => handleFocus("confirm")}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setConfirmNewPassword(clean);
+                        setConfirmNewPassword(sanitizePasswordInput(t));
                         if (errors.confirmNewPassword)
                           setErrors((prev) => ({
                             ...prev,

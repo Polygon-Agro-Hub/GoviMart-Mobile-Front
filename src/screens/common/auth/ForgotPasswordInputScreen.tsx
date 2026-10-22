@@ -6,11 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
   Image,
   ActivityIndicator,
-  Modal,
+  Keyboard,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -28,6 +26,13 @@ import { AlertModal } from "@/component/common/AlertModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import authService from "@/services/auth/auth.service";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {
+  countries,
+  getFlagUrl,
+  getPhoneMaxLength,
+  cleanPhoneInput,
+  validatePhone,
+} from "@/utils/phoneValidation";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -39,25 +44,6 @@ interface Props {
   navigation: NavigationProp;
   route: ScreenRouteProp;
 }
-
-interface PhoneCode {
-  code: string;
-  dialCode: string;
-  name: string;
-}
-
-const countries: PhoneCode[] = [
-  { code: "LK", dialCode: "+94", name: "Sri Lanka" },
-  { code: "VN", dialCode: "+84", name: "Vietnam" },
-  { code: "KH", dialCode: "+855", name: "Cambodia" },
-  { code: "BD", dialCode: "+880", name: "Bangladesh" },
-  { code: "IN", dialCode: "+91", name: "India" },
-  { code: "NL", dialCode: "+31", name: "Netherlands" },
-];
-
-const getFlagUrl = (countryCode: string): string => {
-  return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
-};
 
 const isValidEmail = (emailStr: string): boolean => {
   if (!emailStr) return false;
@@ -75,84 +61,8 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
-const validatePhoneNumberByCountry = (
-  phoneCode: string,
-  num: string,
-): { isValid: boolean; error?: string } => {
-  const clean = num.trim().replace(/^0+/, "");
-
-  if (!clean) {
-    return { isValid: false, error: "Mobile number is required" };
-  }
-
-  switch (phoneCode) {
-    case "+94":
-      if (!/^7[0-9]{8}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Enter a valid 9-digit mobile number starting with 7",
-        };
-      }
-      return { isValid: true };
-
-    case "+855":
-      if (!/^[0-9]{8,9}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Enter a valid 8 or 9-digit mobile number",
-        };
-      }
-      return { isValid: true };
-
-    case "+84":
-      if (!/^[0-9]{9}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Enter a valid 9-digit mobile number",
-        };
-      }
-      return { isValid: true };
-
-    case "+880":
-      if (!/^[0-9]{10}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Enter a valid 10-digit mobile number",
-        };
-      }
-      return { isValid: true };
-
-    case "+91":
-      if (!/^[0-9]{10}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Enter a valid 10-digit mobile number",
-        };
-      }
-      return { isValid: true };
-
-    case "+31":
-      if (!/^[0-9]{9}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Enter a valid 9-digit mobile number",
-        };
-      }
-      return { isValid: true };
-
-    default:
-      if (!/^[0-9]{8,10}$/.test(clean)) {
-        return {
-          isValid: false,
-          error: "Please enter a valid mobile number",
-        };
-      }
-      return { isValid: true };
-  }
-};
-
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout duration
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
 export const getForgotPwdStorageKeys = (
@@ -165,17 +75,24 @@ export const getForgotPwdStorageKeys = (
   const identifiers: string[] = [];
 
   if (identifier && String(identifier).trim()) {
-    const clean = String(identifier).replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const clean = String(identifier)
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toLowerCase();
     if (clean) identifiers.push(clean);
   }
 
   if (email && String(email).trim()) {
-    const cleanEmail = String(email).trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
+    const cleanEmail = String(email)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9]/g, "");
     if (cleanEmail) identifiers.push(cleanEmail);
   }
 
   if (phoneNumber && String(phoneNumber).trim()) {
-    const rawDigits = String(phoneNumber).trim().replace(/[^0-9]/g, "");
+    const rawDigits = String(phoneNumber)
+      .trim()
+      .replace(/[^0-9]/g, "");
     const noZero = rawDigits.replace(/^0+/, "");
     const codeDigits = String(phoneCode || "94").replace(/[^0-9]/g, "");
 
@@ -245,11 +162,15 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
     : phoneNumber.trim().length > 0;
   const isValid = isEmail
     ? isValidEmail(email)
-    : validatePhoneNumberByCountry(phoneCode, phoneNumber).isValid;
+    : validatePhone(phoneCode, phoneNumber) === "";
 
   const handleContinue = async () => {
     if (loading) return;
 
+    // Close the keyboard first so it never swallows a tap
+    Keyboard.dismiss();
+
+    // Validation always runs first – nothing is sent to the backend if invalid
     if (isEmail) {
       if (!email.trim()) {
         setErrorText("Email address is required");
@@ -260,23 +181,21 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         return;
       }
     } else {
-      const phoneValidation = validatePhoneNumberByCountry(
-        phoneCode,
-        phoneNumber,
-      );
-      if (!phoneValidation.isValid) {
-        setErrorText(
-          phoneValidation.error || "Please enter a valid mobile number",
-        );
+      const phoneErr = validatePhone(phoneCode, phoneNumber.trim());
+      if (phoneErr) {
+        setErrorText(phoneErr);
         return;
       }
     }
+
+    // Send the same value that was validated (leading zeros removed)
+    const cleanedPhone = phoneNumber.trim().replace(/^0+/, "");
 
     const { lockoutKeys, attemptsKeys } = getForgotPwdStorageKeys(
       currentMethod,
       isEmail ? email.trim() : undefined,
       !isEmail ? phoneCode : undefined,
-      !isEmail ? phoneNumber.trim() : undefined,
+      !isEmail ? cleanedPhone : undefined,
     );
 
     // 1. Check if any key is currently locked out in AsyncStorage
@@ -289,7 +208,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           if (remainingMs > 0) {
             setAlertTitle("Too Many Attempts");
             setAlertMessage(
-              "Too many verification attempts. Please try again after 15 minutes."
+              "Too many verification attempts. Please try again after 15 minutes.",
             );
             setAlertVisible(true);
             return;
@@ -315,7 +234,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         }
         setAlertTitle("Too Many Attempts");
         setAlertMessage(
-          "Too many verification attempts. Please try again after 15 minutes."
+          "Too many verification attempts. Please try again after 15 minutes.",
         );
         setAlertVisible(true);
         return;
@@ -330,7 +249,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         type: currentMethod,
         email: isEmail ? email.trim() : undefined,
         phoneCode: !isEmail ? phoneCode : undefined,
-        phoneNumber: !isEmail ? phoneNumber.trim() : undefined,
+        phoneNumber: !isEmail ? cleanedPhone : undefined,
       });
 
       if (response.data && response.data.status) {
@@ -347,7 +266,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           identifier: response.data.identifier,
           email: isEmail ? email.trim() : undefined,
           phoneCode: !isEmail ? phoneCode : undefined,
-          phoneNumber: !isEmail ? phoneNumber.trim() : undefined,
+          phoneNumber: !isEmail ? cleanedPhone : undefined,
           referenceId: response.data.referenceId,
           resetToken: response.data.resetToken,
         });
@@ -359,13 +278,13 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           response.data?.isRateLimited ||
           msg.toLowerCase().includes("too many")
         ) {
-          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
           for (const lockKey of lockoutKeys) {
             await AsyncStorage.setItem(lockKey, String(lockoutUntil));
           }
           setAlertTitle("Too Many Attempts");
           setAlertMessage(
-            "Too many verification attempts. Please try again after 15 minutes."
+            "Too many verification attempts. Please try again after 15 minutes.",
           );
         } else {
           setAlertTitle("Request Failed");
@@ -380,13 +299,13 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         err.response?.data?.message ||
         "An unexpected error occurred. Please try again.";
       if (is429 || msg.toLowerCase().includes("too many")) {
-        const lockoutUntil = Date.now() + 15 * 60 * 1000;
+        const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
         for (const lockKey of lockoutKeys) {
           await AsyncStorage.setItem(lockKey, String(lockoutUntil));
         }
         setAlertTitle("Too Many Attempts");
         setAlertMessage(
-          "Too many verification attempts. Please try again after 15 minutes."
+          "Too many verification attempts. Please try again after 15 minutes.",
         );
       } else {
         setAlertTitle("Error");
@@ -408,8 +327,9 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
     <TouchableOpacity
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
-      className={`px-5 py-3.5 flex-row justify-between items-center ${!isLast ? "border-b border-gray-100" : ""
-        }`}
+      className={`px-5 py-3.5 flex-row justify-between items-center ${
+        !isLast ? "border-b border-gray-100" : ""
+      }`}
     >
       <View className="flex-row items-center gap-x-3">
         <Image
@@ -444,7 +364,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         innerRef={(ref) => (scrollViewRef.current = ref as any)}
         className="flex-1 px-5"
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
         enableOnAndroid={true}
         extraScrollHeight={0}
         extraHeight={0}
@@ -485,7 +405,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
           {/* Form Fields Section */}
           <View className="mt-8">
             {isEmail ? (
-              /* Email Input matching Update My Password design with #FF9114 border */
+              /* Email Input */
               <View>
                 <View
                   className={`border ${
@@ -505,10 +425,8 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                         onChangeText={(t) => {
                           const clean = t.replace(/\s/g, "");
                           setEmail(clean);
-                          if (errorText) {
-                            if (isValidEmail(clean)) {
-                              setErrorText("");
-                            }
+                          if (errorText && isValidEmail(clean)) {
+                            setErrorText("");
                           }
                         }}
                         onBlur={() => {
@@ -564,7 +482,7 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Mobile Number Input matching Update My Password design with #FF9114 border */}
+                  {/* Mobile Number Input */}
                   <View
                     className={`border ${
                       errorText ? "border-red-500" : "border-[#FF9114]"
@@ -585,41 +503,27 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                         <TextInput
                           value={phoneNumber}
                           onChangeText={(text) => {
-                            const clean = text.replace(/[^0-9]/g, "");
+                            // digits only, no leading 0, max length per country
+                            const clean = cleanPhoneInput(text, phoneCode);
                             setPhoneNumber(clean);
-                            if (errorText) {
-                              const check = validatePhoneNumberByCountry(
-                                phoneCode,
-                                clean,
-                              );
-                              if (check.isValid || !clean) {
-                                setErrorText("");
-                              }
+                            if (
+                              errorText &&
+                              (!clean || !validatePhone(phoneCode, clean))
+                            ) {
+                              setErrorText("");
                             }
                           }}
                           onBlur={() => {
                             if (phoneNumber.trim()) {
-                              const check = validatePhoneNumberByCountry(
-                                phoneCode,
-                                phoneNumber,
+                              setErrorText(
+                                validatePhone(phoneCode, phoneNumber),
                               );
-                              if (!check.isValid) {
-                                setErrorText(
-                                  check.error || "Invalid mobile number",
-                                );
-                              } else {
-                                setErrorText("");
-                              }
                             }
                           }}
                           placeholder="Type Here"
                           placeholderTextColor="#9CA3AF"
                           keyboardType="number-pad"
-                          maxLength={
-                            phoneCode === "+880" || phoneCode === "+91"
-                              ? 11
-                              : 10
-                          }
+                          maxLength={getPhoneMaxLength(phoneCode)}
                           className="text-sm text-black font-semibold p-0 h-9"
                         />
                       </View>
@@ -689,15 +593,11 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         onSelect={(items) => {
           if (items.length > 0) {
             const newCode = items[0];
+            // trim to the new country's max length, then re-check
+            const trimmed = phoneNumber.slice(0, getPhoneMaxLength(newCode));
             setPhoneCode(newCode);
-            if (phoneNumber.trim()) {
-              const check = validatePhoneNumberByCountry(newCode, phoneNumber);
-              if (!check.isValid) {
-                setErrorText(check.error || "Please enter a valid mobile number");
-              } else {
-                setErrorText("");
-              }
-            }
+            setPhoneNumber(trimmed);
+            setErrorText(trimmed ? validatePhone(newCode, trimmed) : "");
           }
           setIsPhoneCodeModalOpen(false);
         }}

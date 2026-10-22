@@ -43,11 +43,6 @@ interface Complaint {
   userId: number;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  Pending: "#FF9518",
-  Resolved: "#16A34A",
-  Rejected: "#DC2626",
-};
 
 const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);

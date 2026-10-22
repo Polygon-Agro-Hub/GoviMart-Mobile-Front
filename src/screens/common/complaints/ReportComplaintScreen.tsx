@@ -78,13 +78,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const [submitting, setSubmitting] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"success" | "error">("error");
 
-  // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
   const rootRef = useRef<View>(null);
   const descWrapRef = useRef<View>(null);
@@ -108,7 +106,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   }, []);
 
   const handleDescFocus = () => {
-    // if keyboard is already open, adjust now
     if (keyboardOpenRef.current) {
       setTimeout(ensureVisible, 150);
     }
@@ -119,9 +116,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       keyboardOpenRef.current = true;
       keyboardTopRef.current = e.endCoordinates.screenY;
 
-      // Measure how much the keyboard REALLY covers the screen. If the OS
-      // already resized the window, the overlap is 0 and no extra padding
-      // is added.
       const kbTop = e.endCoordinates.screenY;
       setTimeout(() => {
         rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
@@ -149,7 +143,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const showAlert = (
     title: string,
     message: string,
-    type: "success" | "error" = "error"
+    type: "success" | "error" = "error",
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -196,7 +190,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
   const pickImage = async () => {
     if (Platform.OS === "ios") {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
@@ -204,7 +199,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           [
             { text: "Cancel", style: "cancel" },
             { text: "Open Settings", onPress: () => Linking.openSettings() },
-          ]
+          ],
         );
         return;
       }
@@ -226,7 +221,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       showAlert(
         "Limit Reached",
         `You can attach up to ${MAX_IMAGES} images.`,
-        "error"
+        "error",
       );
       return;
     }
@@ -293,7 +288,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       showAlert(
         "Image Too Large",
         "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error"
+        "error",
       );
     } else {
       setImageError(null);
@@ -363,11 +358,14 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         Alert.alert(
           "Error",
           response.data?.message ||
-          "Failed to submit complaint. Please try again.",
+            "Failed to submit complaint. Please try again.",
         );
       }
     } catch (error: any) {
-      console.log("failed to create complaint response data: ", error?.response?.data);
+      console.log(
+        "failed to create complaint response data: ",
+        error?.response?.data,
+      );
       console.log("failed to create complaint: ", error);
       const errorDetails = error?.response?.data?.errors;
       const errorMessage =
@@ -389,11 +387,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        onHardwareBack
+        onHardwareBack,
       );
 
       return () => subscription.remove();
-    }, [navigation])
+    }, [navigation]),
   );
 
   if (loadingCategories) {
@@ -445,14 +443,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 12,
-          // Manually lift content above the keyboard (works on iOS and
-          // Android, including edge-to-edge production builds).
+
           paddingBottom: (Platform.OS === "ios" ? 30 : 20) + keyboardHeight,
         }}
       >
-        {/* ================================================= */}
         {/* COMPLAINT ICON */}
-        {/* ================================================= */}
 
         <View
           style={{
@@ -548,11 +543,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
               </Text>
             </View>
 
-            <Ionicons
-              name="chevron-down"
-              size={19}
-              color="#000"
-            />
+            <Ionicons name="chevron-down" size={19} color="#000" />
           </TouchableOpacity>
         </View>
 
@@ -620,9 +611,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* ================================================= */}
         {/* PHOTOS TITLE */}
-        {/* ================================================= */}
 
         <Text
           style={{
@@ -645,9 +634,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           Limit : Up to 6 photos (JPG, PNG, HEIC - Max 5MB each)
         </Text>
 
-        {/* ================================================= */}
         {/* PHOTO LIST */}
-        {/* ================================================= */}
 
         <View
           style={{
@@ -755,9 +742,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           </View>
         ) : null}
 
-        {/* ================================================= */}
         {/* SUBMIT BUTTON */}
-        {/* ================================================= */}
 
         <View
           style={{

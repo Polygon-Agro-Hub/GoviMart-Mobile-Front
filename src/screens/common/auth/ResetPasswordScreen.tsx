@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ActivityIndicator,
   Image,
@@ -21,6 +19,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AlertModal } from "@/component/common/AlertModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {
+  sanitizePasswordInput,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/utils/passwordValidation";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -74,43 +77,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (/\s/.test(newPassword)) {
-      newErrors.newPassword = "Password cannot contain spaces";
-    } else {
-      const hasUppercase = /[A-Z]/.test(newPassword);
-      const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar =
-        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(newPassword);
+    const passwordError = validatePassword(
+      newPassword,
+      "New password is required"
+    );
+    if (passwordError) newErrors.newPassword = passwordError;
 
-      if (newPassword.length < 8) {
-        newErrors.newPassword = "Must be at least 8 characters";
-      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter, 1 number & 1 special character";
-      } else if (!hasUppercase && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 special character";
-      } else if (!hasUppercase && !hasNumber) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
-      } else if (!hasNumber && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 number & 1 special character";
-      } else if (!hasUppercase) {
-        newErrors.newPassword = "Must have 1 uppercase letter";
-      } else if (!hasNumber) {
-        newErrors.newPassword = "Must have 1 number";
-      } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 special character";
-      }
-    }
-
-    if (!confirmNewPassword) {
-      newErrors.confirmNewPassword = "Confirm password is required";
-    } else if (/\s/.test(confirmNewPassword)) {
-      newErrors.confirmNewPassword = "Password cannot contain spaces";
-    } else if (confirmNewPassword !== newPassword) {
-      newErrors.confirmNewPassword = "Passwords do not match";
-    }
+    const confirmError = validateConfirmPassword(
+      confirmNewPassword,
+      newPassword
+    );
+    if (confirmError) newErrors.confirmNewPassword = confirmError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -235,8 +212,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showNewPassword}
                       value={newPassword}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setNewPassword(clean);
+                        setNewPassword(sanitizePasswordInput(t));
                         if (errors.newPassword)
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
@@ -297,8 +273,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showConfirmNewPassword}
                       value={confirmNewPassword}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setConfirmNewPassword(clean);
+                        setConfirmNewPassword(sanitizePasswordInput(t));
                         if (errors.confirmNewPassword)
                           setErrors((prev) => ({
                             ...prev,

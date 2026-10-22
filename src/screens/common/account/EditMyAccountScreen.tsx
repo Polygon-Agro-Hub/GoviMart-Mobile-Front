@@ -40,6 +40,7 @@ import {
   cleanPhoneInput,
   validatePhone,
 } from "@/utils/phoneValidation";
+import { TITLES } from "@/constants/titles";
 
 const renderCountryItem = (
   item: any,
@@ -328,8 +329,6 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       return () => subscription.remove();
     }, [navigation]),
   );
-
-  const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
 
   const handleSelectTitle = (val: string) => {
     setTitle(val);
@@ -1489,7 +1488,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         visible={titleModalOpen}
         onClose={() => setTitleModalOpen(false)}
         title="Select Title"
-        data={titleOptions.map((t) => ({ label: t, value: t }))}
+        data={TITLES.map((t) => ({ label: t, value: t }))}
         selectedItems={title ? [title] : []}
         onSelect={(items) => {
           if (items && items[0]) {

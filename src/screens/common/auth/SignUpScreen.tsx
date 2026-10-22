@@ -43,6 +43,12 @@ import {
   validatePhone,
   liveValidatePhone,
 } from "@/utils/phoneValidation";
+import {
+  sanitizePasswordInput,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/utils/passwordValidation";
+import { TITLES } from "@/constants/titles";
 
 type SignUpNavigationProp = StackNavigationProp<RootStackParamList, "SignUp">;
 type SignUpRouteProp = RouteProp<RootStackParamList, "SignUp">;
@@ -277,8 +283,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   // Errors state
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const titles = ["Mr", "Mrs", "Ms", "Rev"];
-
   // Validate fields helper
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -349,45 +353,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       }
     }
 
-    // Password validations
-    if (!password) {
-      newErrors.password = "Password is required";
-    } else if (/\s/.test(password)) {
-      newErrors.password = "Password cannot contain spaces";
-    } else {
-      const hasUppercase = /[A-Z]/.test(password);
-      const hasNumber = /[0-9]/.test(password);
-      const hasSpecialChar =
-        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(password);
+    // Password validations (shared util)
+    const passwordError = validatePassword(password);
+    if (passwordError) newErrors.password = passwordError;
 
-      if (password.length < 8) {
-        newErrors.password = "Must be at least 8 characters";
-      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
-        newErrors.password =
-          "Must have 1 uppercase letter, 1 number & 1 special character";
-      } else if (!hasUppercase && !hasSpecialChar) {
-        newErrors.password =
-          "Must have 1 uppercase letter & 1 special character";
-      } else if (!hasUppercase && !hasNumber) {
-        newErrors.password = "Must have 1 uppercase letter & 1 number";
-      } else if (!hasNumber && !hasSpecialChar) {
-        newErrors.password = "Must have 1 number & 1 special character";
-      } else if (!hasUppercase) {
-        newErrors.password = "Must have 1 uppercase letter";
-      } else if (!hasNumber) {
-        newErrors.password = "Must have 1 number";
-      } else if (!hasSpecialChar) {
-        newErrors.password = "Must have 1 special character";
-      }
-    }
-
-    if (!confirmPassword) {
-      newErrors.confirmPassword = "Confirm password is required";
-    } else if (/\s/.test(confirmPassword)) {
-      newErrors.confirmPassword = "Confirm password cannot contain spaces";
-    } else if (confirmPassword !== password) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
+    const confirmError = validateConfirmPassword(confirmPassword, password);
+    if (confirmError) newErrors.confirmPassword = confirmError;
 
     if (tab === "home" && !agreeToTerms) {
       newErrors.agreeToTerms = "You must agree to the Terms & Conditions";
@@ -1240,8 +1211,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={(text) => {
-                  const clean = text.replace(/\s/g, "");
-                  setPassword(clean);
+                  setPassword(sanitizePasswordInput(text));
                   if (errors.password)
                     setErrors((prev) => ({ ...prev, password: "" }));
                 }}
@@ -1300,8 +1270,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={(text) => {
-                  const clean = text.replace(/\s/g, "");
-                  setConfirmPassword(clean);
+                  setConfirmPassword(sanitizePasswordInput(text));
                   if (errors.confirmPassword)
                     setErrors((prev) => ({ ...prev, confirmPassword: "" }));
                 }}
@@ -1435,7 +1404,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         showSearch={false}
         searchPlaceholder="Search title..."
         noResultsText="No results found"
-        data={titles.map((t) => ({ label: t, value: t }))}
+        data={TITLES.map((t) => ({ label: t, value: t }))}
         selectedItems={title ? [title] : []}
         onSelect={(items) => {
           if (items.length > 0) {
