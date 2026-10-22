@@ -65,6 +65,10 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
+// SMS OTP is only available for Sri Lankan numbers
+const SRI_LANKA_DIAL_CODE = "+94";
+const isSriLankanCode = (code: string) => code.trim() === SRI_LANKA_DIAL_CODE;
+
 export const getForgotPwdStorageKeys = (
   method: "email" | "sms",
   email?: string,
@@ -148,15 +152,14 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
 
-  // Overseas SMS Error Modal
-  const [overseasModalVisible, setOverseasModalVisible] = useState(false);
-
   // Alert Modal
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
 
   const isEmail = currentMethod === "email";
+  // SMS selected + a non Sri Lankan country code
+  const isOverseasSms = !isEmail && !isSriLankanCode(phoneCode);
   const hasInput = isEmail
     ? email.trim().length > 0
     : phoneNumber.trim().length > 0;
@@ -164,11 +167,21 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
     ? isValidEmail(email)
     : validatePhone(phoneCode, phoneNumber) === "";
 
+  const switchToEmail = () => {
+    setErrorText("");
+    setPhoneCode("+94");
+    setPhoneNumber("");
+    setCurrentMethod("email");
+  };
+
   const handleContinue = async () => {
     if (loading) return;
 
     // Close the keyboard first so it never swallows a tap
     Keyboard.dismiss();
+
+    // SMS OTP is only available for Sri Lankan numbers (+94)
+    if (isOverseasSms) return;
 
     // Validation always runs first – nothing is sent to the backend if invalid
     if (isEmail) {
@@ -485,7 +498,9 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
                   {/* Mobile Number Input */}
                   <View
                     className={`border ${
-                      errorText ? "border-red-500" : "border-[#FF9114]"
+                      errorText && !isOverseasSms
+                        ? "border-red-500"
+                        : "border-[#FF9114]"
                     } px-4 rounded-full flex-row items-center justify-between bg-white flex-1`}
                   >
                     <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -533,7 +548,8 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             )}
 
-            {errorText ? (
+            {/* Field validation error (hidden when the overseas message is shown) */}
+            {errorText && !isOverseasSms ? (
               <View className="flex-row items-center mt-1.5 px-4">
                 <MaterialIcons
                   name="error"
@@ -551,15 +567,19 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
             ) : null}
           </View>
 
-          {/* Continue Button - positioned right after the input fields */}
+          {/* Continue Button */}
           <View className="mt-16">
             <TouchableOpacity
               className={`w-full h-[50px] rounded-full items-center justify-center flex-row ${
-                isValid ? "bg-black" : hasInput ? "bg-black" : "bg-[#7F919C]"
+                isOverseasSms
+                  ? "bg-[#7F919C]"
+                  : isValid || hasInput
+                    ? "bg-black"
+                    : "bg-[#7F919C]"
               }`}
               activeOpacity={0.8}
               onPress={handleContinue}
-              disabled={loading}
+              disabled={loading || isOverseasSms}
             >
               {loading && (
                 <ActivityIndicator
@@ -570,6 +590,29 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
               )}
               <Text className="text-white text-base font-bold">Continue</Text>
             </TouchableOpacity>
+
+            {/* Overseas SMS message under the Continue button */}
+            {isOverseasSms && (
+              <View className="flex-row items-start mt-4 px-2">
+                <MaterialIcons
+                  name="error"
+                  size={14}
+                  color="#E02424"
+                  style={{ marginRight: 6, marginTop: 2 }}
+                />
+                <Text
+                  className="flex-1 text-red-500 text-xs font-semibold"
+                  style={{ lineHeight: 18 }}
+                >
+                  SMS OTP is available only for Sri Lankan phone numbers (+94).
+                  For overseas phone numbers, please use the{" "}
+                  <Text className="underline font-bold" onPress={switchToEmail}>
+                    "Reset via Email"
+                  </Text>{" "}
+                  option to receive your OTP.
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </KeyboardAwareScrollView>
@@ -603,22 +646,6 @@ const ForgotPasswordInputScreen: React.FC<Props> = ({ navigation, route }) => {
         }}
         searchKeys={["name", "dialCode"]}
         renderItem={renderCountryItem}
-      />
-
-      {/* Overseas SMS Restriction Alert Modal */}
-      <AlertModal
-        visible={overseasModalVisible}
-        title="SMS OTP Unavailable!"
-        message="Since you are an overseas customer, we are unable to send you the OTP code via SMS. Please use the email option to reset your password."
-        type="error"
-        onClose={() => setOverseasModalVisible(false)}
-        autoClose={false}
-        showOkButton={true}
-        okButtonText="Enter My Email"
-        onOkPress={() => {
-          setOverseasModalVisible(false);
-          setCurrentMethod("email");
-        }}
       />
 
       {/* General Alert Modal */}

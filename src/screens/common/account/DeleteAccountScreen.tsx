@@ -7,6 +7,8 @@ import {
   ScrollView,
   Alert,
   Keyboard,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -143,6 +145,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
           style: "destructive",
           onPress: async () => {
             try {
+              Keyboard.dismiss();
               setDeleting(true);
               await customerService.deleteAccount();
 
@@ -163,7 +166,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               const msg =
                 error.response?.data?.message ||
                 "Failed to delete account. Please try again.";
-              Alert.alert("Error", msg);
+              // Small delay so iOS can finish closing the Modal before the Alert shows
+              setTimeout(() => Alert.alert("Error", msg), 300);
             }
           },
         },
@@ -312,55 +316,24 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               </Text>
 
               <View>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#494A65",
-                    lineHeight: isKeyboardVisible ? 18 : 22,
-                  }}
-                >
-                  • Your personal information and profile.
-                </Text>
-
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#494A65",
-                    lineHeight: isKeyboardVisible ? 18 : 22,
-                  }}
-                >
-                  • All order history and transaction details.
-                </Text>
-
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#494A65",
-                    lineHeight: isKeyboardVisible ? 18 : 22,
-                  }}
-                >
-                  • Saved addresses and payment methods.
-                </Text>
-
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#494A65",
-                    lineHeight: isKeyboardVisible ? 18 : 22,
-                  }}
-                >
-                  • Account preferences and settings.
-                </Text>
-
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#494A65",
-                    lineHeight: isKeyboardVisible ? 18 : 22,
-                  }}
-                >
-                  • Any remaining positive credit balance.
-                </Text>
+                {[
+                  "• Your personal information and profile.",
+                  "• All order history and transaction details.",
+                  "• Saved addresses and payment methods.",
+                  "• Account preferences and settings.",
+                  "• Any remaining positive credit balance.",
+                ].map((item) => (
+                  <Text
+                    key={item}
+                    style={{
+                      fontSize: 12,
+                      color: "#494A65",
+                      lineHeight: isKeyboardVisible ? 18 : 22,
+                    }}
+                  >
+                    {item}
+                  </Text>
+                ))}
               </View>
             </View>
 
@@ -546,24 +519,6 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
             )}
           </ScrollView>
 
-          {deleting && (
-            <View
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: 0,
-                right: 0,
-                backgroundColor: "rgba(255, 255, 255, 0.85)",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 999,
-              }}
-            >
-              <LoadingPage message="Deleting Account..." fullScreen={false} />
-            </View>
-          )}
-
           {/* BOTTOM BUTTON (lifted above the keyboard by keyboardHeight) */}
           {(!hasProcessingOrders || hasNegativeCredit) && (
             <View
@@ -646,6 +601,48 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
           )}
         </>
       )}
+
+      {/* Deleting popup: shown only while the account is being deleted */}
+      <Modal
+        visible={deleting}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {}} // block Android back button while deleting
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Deleting account...
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

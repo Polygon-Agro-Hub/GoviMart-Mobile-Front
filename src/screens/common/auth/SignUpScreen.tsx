@@ -11,6 +11,8 @@ import {
   Image,
   Modal,
   Linking,
+  Keyboard,
+  Pressable,
   TextStyle,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -238,6 +240,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     message: string,
     type: "success" | "error" = "error",
   ) => {
+    Keyboard.dismiss();
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
@@ -282,6 +285,15 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
   // Errors state
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // True while any overlay is visible; used to lock the page behind it
+  const isAnyModalOpen =
+    showDeletedAccountModal ||
+    isHelpModalOpen ||
+    isTitleModalOpen ||
+    isPhoneCodeModalOpen ||
+    isCompanyPhoneCodeModalOpen ||
+    alertVisible;
 
   // Validate fields helper
   const validate = () => {
@@ -369,6 +381,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   };
 
   const openDeletedAccountModal = (data: any) => {
+    // Drop focus so the keyboard-aware scroll view stops auto-scrolling
+    Keyboard.dismiss();
     setIsNicLinked(true);
     setDeletedAccountData(
       data || {
@@ -378,7 +392,9 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         deletedOn: "N/A",
       },
     );
-    setShowDeletedAccountModal(true);
+    // Popup is NOT opened here. The NIC field shows a tappable "Linked" badge
+    // and the popup opens when the user taps it.
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   /** Applies field errors (if any) or falls back to an alert */
@@ -397,6 +413,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   };
 
   const handleSignUp = async () => {
+    Keyboard.dismiss();
+
     if (!validate()) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
@@ -718,6 +736,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         extraScrollHeight={0}
         extraHeight={0}
         keyboardOpeningTime={0}
+        scrollEnabled={!isAnyModalOpen}
         contentContainerStyle={{ paddingBottom: 20 }}
       >
         <View className="gap-y-4 flex-1">
@@ -726,7 +745,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             {/* Title Selection */}
             <View className="w-[35%]">
               <TouchableOpacity
-                onPress={() => setIsTitleModalOpen(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setIsTitleModalOpen(true);
+                }}
                 activeOpacity={0.8}
                 style={{ height: 50 }}
                 className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
@@ -837,7 +859,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {/* Country Code Picker */}
               <View className="w-[35%]">
                 <TouchableOpacity
-                  onPress={() => setIsPhoneCodeModalOpen(true)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setIsPhoneCodeModalOpen(true);
+                  }}
                   activeOpacity={0.8}
                   style={{ height: 50 }}
                   className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
@@ -998,7 +1023,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 className="flex-1 text-[14px] text-black"
               />
               {isNicLinked && (
-                <View
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowDeletedAccountModal(true);
+                  }}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -1022,11 +1053,12 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                       fontWeight: "600",
                     }}
                   >
-                    Linked
+                    {allowRestore ? "Restoring" : "Linked"}
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
             </View>
+           
             {errors.nic && !isNicLinked && (
               <View className="flex-row items-center mt-1.5 px-4">
                 <MaterialIcons
@@ -1092,7 +1124,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   {/* Company Phone Code Picker */}
                   <View className="w-[35%]">
                     <TouchableOpacity
-                      onPress={() => setIsCompanyPhoneCodeModalOpen(true)}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setIsCompanyPhoneCodeModalOpen(true);
+                      }}
                       activeOpacity={0.8}
                       style={{ height: 50 }}
                       className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
@@ -1484,16 +1519,28 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       <Modal
         visible={showDeletedAccountModal}
         transparent={true}
+        statusBarTranslucent={true}
         animationType="slide"
         onRequestClose={() => setShowDeletedAccountModal(false)}
       >
         <View
           style={{
             flex: 1,
-            backgroundColor: "transparent",
+        
             justifyContent: "flex-end",
           }}
         >
+          {/* Tap the dimmed background to close (NIC stays linked) */}
+          <Pressable
+            onPress={() => setShowDeletedAccountModal(false)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
           <View
             style={{
               backgroundColor: "#FFFFFF",
@@ -1680,7 +1727,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               >
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: "600",
                     color: "#000000",
                   }}
@@ -1712,7 +1759,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               >
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: "600",
                     color: "#FFFFFF",
                   }}
@@ -1741,6 +1788,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => {
+                  Keyboard.dismiss();
                   setShowDeletedAccountModal(false);
                   setIsHelpModalOpen(true);
                 }}
@@ -1765,6 +1813,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       <Modal
         visible={isHelpModalOpen}
         transparent={true}
+        statusBarTranslucent={true}
         animationType="fade"
         onRequestClose={() => setIsHelpModalOpen(false)}
       >

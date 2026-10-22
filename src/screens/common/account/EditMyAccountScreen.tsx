@@ -266,7 +266,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               const f = data.firstName.trim().replace(/\s/g, "");
               setFirstName(f ? f.charAt(0).toUpperCase() + f.slice(1) : "");
             }
-            if (data.lastName) setLastName(capitalizeName(data.lastName.trim()));
+            if (data.lastName)
+              setLastName(capitalizeName(data.lastName.trim()));
             const fetchedImage = (data.profileImage || data.image || "").trim();
             if (fetchedImage) {
               setProfileImage(fetchedImage);
@@ -346,6 +347,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     name: c.name,
     flag: getFlagUrl(c.code),
   }));
+
+  const delayedAlert = (...args: Parameters<typeof Alert.alert>) => {
+    setTimeout(() => Alert.alert(...args), Platform.OS === "ios" ? 400 : 0);
+  };
 
   // UPDATE ACCOUNT
   const handleUpdate = async () => {
@@ -429,11 +434,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
     // Company mobile (wholesale only, optional) – country specific
     if (isWholesale) {
-      const companyErr = validatePhone(
-        effectiveCompanyCode,
-        rawCompanyMobile,
-        { required: false },
-      );
+      const companyErr = validatePhone(effectiveCompanyCode, rawCompanyMobile, {
+        required: false,
+      });
       if (companyErr) {
         setCompanyMobileError(companyErr);
         hasError = true;
@@ -474,6 +477,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               )));
 
       if (isUnchanged) {
+        // Popup is not open yet here, so a normal Alert is fine
         Alert.alert(
           "No Changes Detected",
           "You haven't made any changes to your account details to update.",
@@ -538,7 +542,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               const lockoutUntil = parseInt(storedLockout, 10);
               const remainingMs = lockoutUntil - Date.now();
               if (remainingMs > 0) {
-                Alert.alert(
+                delayedAlert(
                   "Too Many Attempts",
                   "Too many verification attempts. Please try again after 15 minutes.",
                 );
@@ -575,7 +579,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 for (const lockKey of lockoutKeys) {
                   await AsyncStorage.setItem(lockKey, String(lockoutUntil));
                 }
-                Alert.alert(
+                delayedAlert(
                   "Too Many Attempts",
                   "Too many verification attempts. Please try again after 15 minutes.",
                 );
@@ -612,7 +616,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             }
           }
 
-          Alert.alert(
+          delayedAlert(
             "Verification Code Sent",
             `A 5-digit verification code has been sent to your ${otpData.method === "email" ? "email address" : "mobile number"}.\n\n(5 OTP resend attempts limit)`,
             [
@@ -641,7 +645,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             for (const lockKey of lockoutKeys) {
               await AsyncStorage.setItem(lockKey, String(lockoutUntil));
             }
-            Alert.alert(
+            delayedAlert(
               "Too Many Attempts",
               "Too many verification attempts. Please try again after 15 minutes.",
             );
@@ -649,7 +653,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (msg.toLowerCase().includes("email")) {
               setEmailError(msg);
             }
-            Alert.alert("Error", msg);
+            delayedAlert("Error", msg);
           }
         }
       } else {
@@ -709,7 +713,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             console.log("Error updating AsyncStorage userProfile:", e);
           }
 
-          Alert.alert(
+          delayedAlert(
             "Success",
             response.data.message ||
               "Your account information has been updated.",
@@ -733,7 +737,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       } else if (lower.includes("phone") || lower.includes("mobile")) {
         setMobileNumberError(errorMessage);
       }
-      Alert.alert("Error", errorMessage);
+      delayedAlert("Error", errorMessage);
     } finally {
       setUpdating(false);
     }
@@ -1408,34 +1412,47 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         </KeyboardAwareScrollView>
       )}
 
-      {updating && (
+      {/* Updating popup: shown only while the account is being updated */}
+      <Modal
+        visible={updating}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {}} // block Android back button while updating
+      >
         <View
           style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            justifyContent: "center",
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
             alignItems: "center",
-            zIndex: 999,
+            justifyContent: "center",
           }}
         >
-          <ActivityIndicator size="large" color="#000000" />
-          <Text
+          <View
             style={{
-              marginTop: 14,
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#000000",
-              textAlign: "center",
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
             }}
           >
-            Updating Account...
-          </Text>
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Updating account...
+            </Text>
+          </View>
         </View>
-      )}
+      </Modal>
 
       {/* Phone Code GlobalSearchModal */}
       <GlobalSearchModal

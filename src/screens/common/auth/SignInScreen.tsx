@@ -442,7 +442,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   <FontAwesome5
                     name="user-alt"
                     size={20}
-                    color={identifierError ? "#EF4444" : "black"}
+                    color="black"
                   />
                 </View>
                 <TextInput
@@ -503,7 +503,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                     style={{ marginRight: 6 }}
                   />
                   <Text
-                    className="flex-1 text-red-500 text-xs font-semibold"
+                    className="flex-1 text-red-500 text-xs"
                     style={{ lineHeight: 16 }}
                   >
                     {identifierError}
@@ -526,7 +526,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   <FontAwesome6
                     name="lock"
                     size={18}
-                    color={passwordError ? "#EF4444" : "black"}
+                    color="black"
                   />
                 </View>
                 <TextInput
@@ -578,7 +578,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                     style={{ marginRight: 6 }}
                   />
                   <Text
-                    className="flex-1 text-red-500 text-xs font-semibold"
+                    className="flex-1 text-red-500 text-xs"
                     style={{ lineHeight: 16 }}
                   >
                     {passwordError}
