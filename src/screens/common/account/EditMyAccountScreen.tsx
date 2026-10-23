@@ -321,6 +321,23 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
   useFocusEffect(
     React.useCallback(() => {
+      const clearStoredPhoneAttempts = async () => {
+        try {
+          const allKeys = await AsyncStorage.getAllKeys();
+          const otpKeys = allKeys.filter(
+            (k) =>
+              k.startsWith("@otp_attempts_") ||
+              k.startsWith("@signup_lockout_"),
+          );
+          if (otpKeys.length > 0) {
+            await AsyncStorage.multiRemove(otpKeys);
+          }
+        } catch (e) {
+          console.log("Error clearing stored OTP attempts in EditMyAccountScreen:", e);
+        }
+      };
+      clearStoredPhoneAttempts();
+
       const onBackPress = () => {
         navigation.navigate("Profile");
         return true;
@@ -647,6 +664,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 },
               },
             ],
+            { cancelable: false },
           );
         } else {
           const is429 = otpData?.isRateLimited;

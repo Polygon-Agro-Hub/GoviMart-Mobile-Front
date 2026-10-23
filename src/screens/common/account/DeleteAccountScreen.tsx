@@ -45,7 +45,6 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
   const [hasNegativeCredit, setHasNegativeCredit] = useState(false);
   const [hasProcessingOrders, setHasProcessingOrders] = useState(false);
   const [creditBalance, setCreditBalance] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Keyboard / scroll refs
@@ -56,7 +55,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
   const confirmWrapRef = useRef<View>(null);
 
   // Scroll only as much as needed so the confirmation box sits just above
-  // the fixed bottom button (not at the top of the screen).
+  // the fixed bottom button.
   const ensureVisible = useCallback(() => {
     confirmWrapRef.current?.measureInWindow((_x, y, _w, h) => {
       const limit = keyboardTopRef.current - EXTRA_SPACE;
@@ -70,12 +69,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
     });
   }, []);
 
-  // Track keyboard visibility + how much it really covers the screen
+  // Track keyboard so we can add scroll room + lift the bottom button.
+  // The visible layout (sizes, margins, fonts) never changes with the keyboard.
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
       keyboardOpenRef.current = true;
       keyboardTopRef.current = e.endCoordinates.screenY;
-      setIsKeyboardVisible(true);
 
       // Measure the real overlap. If Android already resized the window,
       // the overlap is 0 and no extra space is added (no white gap).
@@ -92,7 +91,6 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
 
     const hideSub = Keyboard.addListener("keyboardDidHide", () => {
       keyboardOpenRef.current = false;
-      setIsKeyboardVisible(false);
       setKeyboardHeight(0);
     });
 
@@ -224,13 +222,11 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
             contentContainerStyle={{
               flexGrow: 1,
               paddingHorizontal: 14,
-              // keyboardHeight lifts the content above the keyboard
-              // (works in production builds even with edge-to-edge enabled)
-              paddingBottom: isKeyboardVisible
-                ? 120 + keyboardHeight
-                : !hasProcessingOrders || hasNegativeCredit
-                  ? 80
-                  : 24,
+              // Only adds invisible scroll room for the keyboard so the input
+              // can scroll above it. The visible layout stays the same.
+              paddingBottom:
+                keyboardHeight +
+                (!hasProcessingOrders || hasNegativeCredit ? 80 : 24),
             }}
           >
             {/* Delete Icon */}
@@ -238,24 +234,20 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               style={{
                 alignItems: "center",
                 marginTop: 0,
-                marginBottom: isKeyboardVisible ? 8 : 25,
+                marginBottom: 25,
               }}
             >
               <View
                 style={{
-                  width: isKeyboardVisible ? 46 : 57,
-                  height: isKeyboardVisible ? 46 : 57,
+                  width: 57,
+                  height: 57,
                   borderRadius: 999,
                   backgroundColor: "#FFE8E8",
                   justifyContent: "center",
                   alignItems: "center",
                 }}
               >
-                <FontAwesome6
-                  name="trash"
-                  size={isKeyboardVisible ? 18 : 22}
-                  color="#FF383C"
-                />
+                <FontAwesome6 name="trash" size={22} color="#FF383C" />
               </View>
             </View>
 
@@ -266,7 +258,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 fontSize: 16,
                 fontWeight: "600",
                 color: "#000000",
-                marginBottom: isKeyboardVisible ? 4 : 7,
+                marginBottom: 7,
               }}
             >
               Delete Your Account?
@@ -276,12 +268,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
             <Text
               style={{
                 textAlign: "center",
-                fontSize: isKeyboardVisible ? 13 : 14,
-                lineHeight: isKeyboardVisible ? 17 : 20,
+                fontSize: 14,
+                lineHeight: 20,
                 fontWeight: "400",
                 color: "#494A65",
                 paddingHorizontal: 8,
-                marginBottom: isKeyboardVisible ? 6 : 18,
+                marginBottom: 18,
               }}
             >
               <Text style={{ color: "#FF383C" }}>This action is permanent.</Text>
@@ -298,7 +290,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 borderColor: "#DDE2E7",
                 borderRadius: 17,
                 paddingHorizontal: 14,
-                paddingVertical: isKeyboardVisible ? 8 : 12,
+                paddingVertical: 12,
                 marginHorizontal: 3,
               }}
             >
@@ -309,7 +301,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                   fontWeight: "700",
                   color: "#000000",
                   marginLeft: 10,
-                  marginBottom: isKeyboardVisible ? 4 : 9,
+                  marginBottom: 9,
                 }}
               >
                 What will be deleted?
@@ -328,7 +320,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     style={{
                       fontSize: 12,
                       color: "#494A65",
-                      lineHeight: isKeyboardVisible ? 18 : 22,
+                      lineHeight: 22,
                     }}
                   >
                     {item}
@@ -337,13 +329,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Flexible spacer to push bottom components close to bottom */}
-            <View
-              style={{
-                flex: isKeyboardVisible ? 0 : 1,
-                minHeight: isKeyboardVisible ? 0 : 20,
-              }}
-            />
+            {/* Flexible spacer (constant, never changes with the keyboard) */}
+            <View style={{ flex: 1, minHeight: 20 }} />
 
             {hasNegativeCredit ? (
               <View
@@ -409,8 +396,8 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                 <View
                   style={{
                     alignItems: "center",
-                    marginTop: isKeyboardVisible ? 4 : 12,
-                    marginBottom: isKeyboardVisible ? 4 : 14,
+                    marginTop: 12,
+                    marginBottom: 14,
                   }}
                 >
                   <Text
@@ -419,7 +406,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                       fontWeight: "500",
                       color: "#111111",
                       textAlign: "center",
-                      lineHeight: isKeyboardVisible ? 17 : 19,
+                      lineHeight: 19,
                     }}
                   >
                     To confirm account deletion,
@@ -431,18 +418,12 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                       fontWeight: "500",
                       color: "#111111",
                       textAlign: "center",
-                      lineHeight: isKeyboardVisible ? 17 : 19,
+                      lineHeight: 19,
                     }}
                   >
                     please type{" "}
-                    <Text
-                      style={{
-                        color: "#FF383C",
-                      }}
-                    >
-                      DELETE
-                    </Text>{" "}
-                    in the box below.
+                    <Text style={{ color: "#FF383C" }}>DELETE</Text> in the box
+                    below.
                   </Text>
                 </View>
 
@@ -459,7 +440,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     alignItems: "center",
                     paddingHorizontal: 7,
                     marginHorizontal: 0,
-                    marginBottom: isKeyboardVisible ? 4 : 8,
+                    marginBottom: 8,
                   }}
                 >
                   {/* Lock Icon */}

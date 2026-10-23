@@ -10,9 +10,10 @@ import {
   Image,
   Alert,
   Keyboard,
+  BackHandler,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
@@ -299,30 +300,86 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     Alert.alert("Invalid Code", msg || "Incorrect verification code.");
   };
 
-  // Check rate limit on initial mount and record first signup OTP attempt
-  useEffect(() => {
-    const checkInitialRateLimit = async () => {
-      // 1. Persistent lockout
-      if (await checkStoredLockout()) return;
-
-      // 2. OTP send limit
-      if (await checkSendLimit()) return;
-
-      // Sync send attempts count
-      const attempts = await getRecentAttempts(primaryAttemptKey);
-      if (attempts.length === 0) {
-        let currentCount = 1;
-        for (const attKey of attemptsKeys) {
-          const updated = await saveAttempt(attKey);
-          currentCount = updated.length;
-        }
-        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
-      } else {
-        setAttemptsCount(Math.min(attempts.length, MAX_OTP_ATTEMPTS));
+  const handleBackPress = useCallback(async () => {
+    for (const key of attemptsKeys) {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (e) {
+        console.log("Error clearing attempt key:", e);
       }
-    };
-    checkInitialRateLimit();
-  }, [phoneCode, phoneNumber, email, method]);
+    }
+    for (const key of lockoutKeys) {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (e) {
+        console.log("Error clearing lockout key:", e);
+      }
+    }
+    if (flow === "changePhone") {
+      navigation.navigate("MyAccount");
+    } else {
+      navigation.goBack();
+    }
+  }, [flow, attemptsKeys, lockoutKeys, navigation]);
+
+  // Sync route params when updated from previous screen
+  useEffect(() => {
+    if (route.params?.referenceId) {
+      setReferenceId(route.params.referenceId);
+    }
+    if (route.params?.signupToken) {
+      setSignupToken(route.params.signupToken);
+    }
+    if (route.params?.referenceId || route.params?.signupToken) {
+      setOtp(["", "", "", "", ""]);
+      setTimeLeft(240);
+      setIsExpired(false);
+      setIsRateLimited(false);
+      setAttemptsCount(1);
+    }
+  }, [route.params?.referenceId, route.params?.signupToken]);
+
+  // Focus effect: listen to back handler, sync attempts count, and reset on back/exit
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        handleBackPress();
+        return true;
+      };
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack,
+      );
+
+      const checkFocusRateLimit = async () => {
+        if (await checkStoredLockout()) return;
+        if (await checkSendLimit()) return;
+        const attempts = await getRecentAttempts(primaryAttemptKey);
+        if (attempts.length === 0) {
+          let currentCount = 1;
+          for (const attKey of attemptsKeys) {
+            const updated = await saveAttempt(attKey);
+            currentCount = updated.length;
+          }
+          setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
+        } else {
+          setAttemptsCount(Math.min(attempts.length, MAX_OTP_ATTEMPTS));
+        }
+      };
+      checkFocusRateLimit();
+
+      return () => {
+        sub.remove();
+        // Reset attempts count when navigating back or leaving this screen
+        for (const key of attemptsKeys) {
+          AsyncStorage.removeItem(key).catch(() => {});
+        }
+        for (const key of lockoutKeys) {
+          AsyncStorage.removeItem(key).catch(() => {});
+        }
+      };
+    }, [handleBackPress, primaryAttemptKey, attemptsKeys, lockoutKeys]),
+  );
 
   // Countdown timer logic
   useEffect(() => {
@@ -716,6 +773,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         showLogo={true}
         showBackButton={true}
         navigation={navigation}
+        onBackPress={handleBackPress}
       />
 
       <ScrollView
