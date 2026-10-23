@@ -385,12 +385,33 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
+  const handleSessionExpired = () => {
+    Alert.alert(
+      "Session Expired",
+      "Your registration session has expired. Please sign up again to continue.",
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            if (flow === "changePhone") {
+              navigation.navigate("MyAccount");
+            } else {
+              navigation.navigate("SignUp");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleFailedVerifyResponse = async (data: any) => {
     const is429 = data?.isRateLimited;
     const msg = data?.message || "Incorrect verification code.";
     if (is429 || /too many|15 minutes/i.test(msg)) {
       await applyLockout(data?.retryAfter || 900);
       showLockoutAlert();
+    } else if (/session.*expired|expired.*invalid/i.test(msg)) {
+      handleSessionExpired();
     } else {
       await handleWrongCode(msg);
     }
@@ -576,6 +597,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       if (is429 || /too many|15 minutes/i.test(msg)) {
         await applyLockout(retryAfter);
         showLockoutAlert();
+      } else if (/session.*expired|expired.*invalid/i.test(msg)) {
+        handleSessionExpired();
       } else if (status && [400, 401, 403, 422].includes(status)) {
         await handleWrongCode(msg);
       } else {
@@ -621,6 +644,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     if (is429 || msg.toLowerCase().includes("too many")) {
       await applyLockout(900);
       showLockoutAlert();
+    } else if (/session.*expired|expired.*invalid/i.test(msg)) {
+      handleSessionExpired();
     } else {
       Alert.alert("Resend Failed", msg);
     }
@@ -672,6 +697,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       ) {
         await applyLockout(900);
         showLockoutAlert();
+      } else if (/session.*expired|expired.*invalid/i.test(msg)) {
+        handleSessionExpired();
       } else {
         Alert.alert("Resend Error", msg);
       }
