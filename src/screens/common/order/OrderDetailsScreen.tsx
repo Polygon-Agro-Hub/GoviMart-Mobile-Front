@@ -417,7 +417,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         ];
       }
 
-      if (status === "Cancelled") {
+      if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
+        const isConfirmed = Number(order?.isConfirmed) === 1;
         return [
           {
             title: "Ordered",
@@ -425,12 +426,16 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             icon: "cart-shopping",
             active: true,
           },
-          {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
+          ...(isConfirmed
+            ? [
+                {
+                  title: "Processing",
+                  date: processingTime,
+                  icon: "box-open",
+                  active: true,
+                },
+              ]
+            : []),
           {
             title: "Cancelled",
             date: "",
@@ -651,7 +656,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
       ];
     }
 
-    if (status === "Cancelled") {
+    if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
+      const isConfirmed = Number(order?.isConfirmed) === 1;
       return [
         {
           title: "Ordered",
@@ -659,12 +665,16 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           icon: "cart-shopping",
           active: true,
         },
-        {
-          title: "Processing",
-          date: processingTime,
-          icon: "box-open",
-          active: true,
-        },
+        ...(isConfirmed
+          ? [
+              {
+                title: "Processing",
+                date: processingTime,
+                icon: "box-open",
+                active: true,
+              },
+            ]
+          : []),
         {
           title: "Cancelled",
           date: "",

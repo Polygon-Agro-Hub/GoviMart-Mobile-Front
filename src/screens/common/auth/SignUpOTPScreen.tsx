@@ -244,6 +244,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     setTimeLeft(seconds);
     setIsRateLimited(true);
     setIsExpired(false);
+    setAttemptsCount(MAX_OTP_ATTEMPTS);
   };
 
   // Returns true if a persistent lockout is still active.
@@ -258,10 +259,14 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             setTimeLeft(Math.ceil(remainingMs / 1000));
             setIsRateLimited(true);
             setIsExpired(false);
+            setAttemptsCount(MAX_OTP_ATTEMPTS);
             showLockoutAlert();
             return true;
           } else {
             await AsyncStorage.removeItem(key);
+            for (const attKey of attemptsKeys) {
+              await AsyncStorage.removeItem(attKey);
+            }
           }
         }
       } catch (e) {
@@ -287,19 +292,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     return false;
   };
 
-  // Wrong code: the server tracks wrong entries, so just show its message.
+  // Wrong code: the server tracks wrong entries, so show its message.
   const handleWrongCode = async (msg: string) => {
     setOtp(["", "", "", "", ""]);
     refs[0].current?.focus();
-    // Remove the server's "N attempts remaining" text so it isn't confused
-    // with the resend counter (which only changes when Resend is pressed).
-    let cleanMsg =
-      msg.replace(/\s*\(?\d+\s+attempts?\s+remaining\.?\)?/gi, "").trim() ||
-      "Incorrect verification code.";
-    if (/too many|15 minutes/i.test(cleanMsg)) {
-      cleanMsg = "Incorrect verification code.";
-    }
-    Alert.alert("Invalid Code", cleanMsg);
+    Alert.alert("Invalid Code", msg || "Incorrect verification code.");
   };
 
   // Check rate limit on initial mount and record first signup OTP attempt
@@ -332,6 +329,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     if (timeLeft <= 0) {
       if (isRateLimited) {
         setIsRateLimited(false);
+        (async () => {
+          for (const key of attemptsKeys) {
+            await clearAttempts(key);
+          }
+          for (const key of lockoutKeys) {
+            await AsyncStorage.removeItem(key);
+          }
+          setAttemptsCount(0);
+        })();
       }
       setIsExpired(true);
       return;
@@ -379,10 +385,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
-  // Handles a "failed" response body (status:false). Wrong codes never lock
-  // the screen; only the resend limit does.
   const handleFailedVerifyResponse = async (data: any) => {
-    await handleWrongCode(data?.message || "Incorrect verification code.");
+    const is429 = data?.isRateLimited;
+    const msg = data?.message || "Incorrect verification code.";
+    if (is429 || /too many|15 minutes/i.test(msg)) {
+      await applyLockout(data?.retryAfter || 900);
+      showLockoutAlert();
+    } else {
+      await handleWrongCode(msg);
+    }
   };
 
   const handleVerify = async () => {
@@ -557,14 +568,16 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     } catch (err: any) {
       console.error("Verification error:", err);
       const status = err.response?.status;
+      const is429 = status === 429 || err.response?.data?.isRateLimited;
       const msg =
         err.response?.data?.message || "An unexpected error occurred.";
-      if (status && [400, 401, 403, 422, 429].includes(status)) {
-        // Wrong code (or server-side wrong-code limit): never lock the
-        // screen, just let the user try again or resend.
-        await handleWrongCode(
-          status === 429 ? "Incorrect verification code." : msg,
-        );
+      const retryAfter = err.response?.data?.retryAfter || 900;
+
+      if (is429 || /too many|15 minutes/i.test(msg)) {
+        await applyLockout(retryAfter);
+        showLockoutAlert();
+      } else if (status && [400, 401, 403, 422].includes(status)) {
+        await handleWrongCode(msg);
       } else {
         // Network / 5xx errors
         Alert.alert("Verification Error", msg);
@@ -847,7 +860,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             {!isRateLimited && remainingAttempts > 0 && (
               <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
                 ({remainingAttempts}{" "}
-                {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
+                {remainingAttempts === 1
+                  ? "resend attempt"
+                  : "resend attempts"}{" "}
+                remaining)
               </Text>
             )}
           </View>
