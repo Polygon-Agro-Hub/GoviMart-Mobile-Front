@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Platform,
   Alert,
   Modal,
   Dimensions,
@@ -24,6 +23,15 @@ import CustomHeader from "@/component/common/CustomHeader";
 import OrderSummary from "@/component/common/OrderSummary";
 import { AlertModal } from "@/component/common/AlertModal";
 import productService from "@/services/product/product.service";
+import {
+  SCHEDULE_TYPE_OPTIONS,
+  TIME_SLOT_OPTIONS,
+  WEEK_OPTIONS,
+  DAYS_OF_WEEK,
+  MONTH_SHORT,
+  MONTH_LONG,
+  ScheduleType,
+} from "@/constants/schedule";
 
 type ScheduleOrderNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -36,30 +44,6 @@ interface Props {
   navigation: ScheduleOrderNavigationProp;
   route: ScheduleOrderRouteProp;
 }
-
-const timeSlotOptions = [
-  "08:00 AM - 12:00 PM",
-  "12:00 PM - 04:00 PM",
-  "04:00 PM - 09:00 PM",
-];
-
-const scheduleTypeOptions = ["One Time", "Once a Week", "Twice a Week"];
-
-const weekOptions = [
-  { label: "02 Weeks", value: "02" },
-  { label: "03 Weeks", value: "03" },
-  { label: "04 Weeks", value: "04" },
-];
-
-const DAYS_OF_WEEK = [
-  { id: "Mo", label: "Mo", dayIndex: 1, name: "Monday" },
-  { id: "Tu", label: "Tu", dayIndex: 2, name: "Tuesday" },
-  { id: "We", label: "We", dayIndex: 3, name: "Wednesday" },
-  { id: "Th", label: "Th", dayIndex: 4, name: "Thursday" },
-  { id: "Fr", label: "Fr", dayIndex: 5, name: "Friday" },
-  { id: "Sa", label: "Sa", dayIndex: 6, name: "Saturday" },
-  { id: "Su", label: "Su", dayIndex: 0, name: "Sunday" },
-];
 
 const getEarliestDayId = (date: Date): string => {
   const dayIdx = date.getDay();
@@ -78,9 +62,7 @@ const getTwiceWeekDayIds = (date: Date): string[] => {
 const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
   const orderContext = route.params?.orderContext;
 
-  const [scheduleType, setScheduleType] = useState<
-    "One Time" | "Once a Week" | "Twice a Week"
-  >("One Time");
+  const [scheduleType, setScheduleType] = useState<ScheduleType>("One Time");
 
   // One Time
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -285,36 +267,6 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       sorryExpiryDate = new Date(cutoffDate.getTime());
     }
 
-    const MONTH_SHORT = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    const MONTH_LONG = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-
     const getOrdinal = (n: number) => {
       const s = ["th", "st", "nd", "rd"];
       const v = n % 100;
@@ -447,21 +399,6 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       allDates = allDates.filter((d) => d <= cutoff);
     }
 
-    const ALL_MONTHS = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-
     const getOrdinal = (n: number) => {
       const s = ["th", "st", "nd", "rd"];
       const v = n % 100;
@@ -471,7 +408,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
     const formattedOrders = allDates.map((date, idx) => {
-      const month = ALL_MONTHS[date.getMonth()];
+      const month = MONTH_LONG[date.getMonth()];
       const day = pad(date.getDate());
       const year = date.getFullYear();
       const formatted = `${month} ${day}, ${year}`;
@@ -825,20 +762,6 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                   seasonalInfo?.startDateFormatted ||
                   (() => {
                     const minDate = getMinDeliveryDate();
-                    const MONTH_SHORT = [
-                      "Jan",
-                      "Feb",
-                      "Mar",
-                      "Apr",
-                      "May",
-                      "Jun",
-                      "Jul",
-                      "Aug",
-                      "Sep",
-                      "Oct",
-                      "Nov",
-                      "Dec",
-                    ];
                     return `${MONTH_SHORT[minDate.getMonth()]} ${minDate.getDate()}`;
                   })();
 
@@ -1141,7 +1064,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                       marginTop: 2,
                     }}
                   >
-                    {weekOptions.find((w) => w.value === selectedWeeks)
+                    {WEEK_OPTIONS.find((w) => w.value === selectedWeeks)
                       ?.label || `${selectedWeeks} Weeks`}
                   </Text>
                 </View>
@@ -1252,17 +1175,14 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         onClose={() => setTypeModalVisible(false)}
         title="Select Schedule Type"
         searchPlaceholder="Search schedule type..."
-        data={scheduleTypeOptions.map((type) => ({
+        data={SCHEDULE_TYPE_OPTIONS.map((type) => ({
           label: type,
           value: type,
         }))}
         selectedItems={[scheduleType]}
         onSelect={(selectedValues) => {
           if (selectedValues.length > 0) {
-            const newType = selectedValues[0] as
-              | "One Time"
-              | "Once a Week"
-              | "Twice a Week";
+            const newType = selectedValues[0] as ScheduleType;
             setScheduleType(newType);
             const earliestDate =
               seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
@@ -1300,7 +1220,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         onClose={() => setWeeksModalVisible(false)}
         title="Select Validity Period"
         searchPlaceholder="Search weeks..."
-        data={weekOptions}
+        data={WEEK_OPTIONS}
         selectedItems={[selectedWeeks]}
         onSelect={(selectedValues) => {
           if (selectedValues.length > 0) {
@@ -1314,7 +1234,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         visible={slotModalVisible}
         onClose={() => setSlotModalVisible(false)}
         title="Select Time Slot"
-        data={timeSlotOptions.map((slot) => ({
+        data={TIME_SLOT_OPTIONS.map((slot) => ({
           label: slot,
           value: slot,
         }))}
@@ -1478,20 +1398,6 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                       seasonalInfo?.startDateFormatted ||
                       (() => {
                         const minDate = getMinDeliveryDate();
-                        const MONTH_SHORT = [
-                          "Jan",
-                          "Feb",
-                          "Mar",
-                          "Apr",
-                          "May",
-                          "Jun",
-                          "Jul",
-                          "Aug",
-                          "Sep",
-                          "Oct",
-                          "Nov",
-                          "Dec",
-                        ];
                         return `${MONTH_SHORT[minDate.getMonth()]} ${minDate.getDate()}`;
                       })();
 

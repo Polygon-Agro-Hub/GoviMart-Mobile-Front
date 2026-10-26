@@ -121,7 +121,10 @@
           "enableBackgroundRemoteNotifications": true
         }
       ],
-      "./plugins/withCustomAndroidPermissions"
+      "./plugins/withCustomAndroidPermissions",
+      "expo-asset",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

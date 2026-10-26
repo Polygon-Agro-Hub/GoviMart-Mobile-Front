@@ -4,7 +4,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  Alert,
   ScrollView,
   BackHandler,
 } from "react-native";
@@ -187,7 +186,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           <View
             style={{
               alignItems: "center",
-              paddingHorizontal: 24, 
+              paddingHorizontal: 24,
             }}
           >
             <View
@@ -197,7 +196,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 shadowOpacity: 0.15,
                 shadowRadius: 5,
                 elevation: 3,
-                marginTop:6
+                marginTop: 6,
               }}
             >
               <Image
@@ -223,11 +222,11 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 fontSize: 23,
                 fontWeight: "800",
                 marginTop: 12,
-                textAlign: "center", 
-                maxWidth: "90%", 
+                textAlign: "center",
+                maxWidth: "90%",
                 paddingHorizontal: 4,
               }}
-              numberOfLines={2} 
+              numberOfLines={2}
             >
               {fullName}
             </Text>

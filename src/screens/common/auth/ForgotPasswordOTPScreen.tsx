@@ -173,7 +173,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const clearAttempts = async (key: string) => {
     try {
       await AsyncStorage.removeItem(key);
-    } catch {}
+    } catch { }
   };
 
   const showRateLimitAlert = () => {
@@ -413,7 +413,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               }
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 2. Check attempts count BEFORE sending
@@ -453,10 +453,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             setAlertType("error");
             setAlertTitle("Code Resent");
             setAlertMessage(
-              `${
-                method === "email"
-                  ? "A new 5-digit verification code has been sent to your email address."
-                  : "A new 5-digit verification code has been sent to your mobile number."
+              `${method === "email"
+                ? "A new 5-digit verification code has been sent to your email address."
+                : "A new 5-digit verification code has been sent to your mobile number."
               } You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.`
             );
             setAlertVisible(true);
@@ -467,11 +466,10 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             setAlertType("success");
             setAlertTitle("Code Resent");
             setAlertMessage(
-              `${
-                response.data.message ||
-                (method === "email"
-                  ? "Verification code has been resent to your email address."
-                  : "Verification code has been resent to your mobile number.")
+              `${response.data.message ||
+              (method === "email"
+                ? "Verification code has been resent to your email address."
+                : "Verification code has been resent to your mobile number.")
               }\n\n(${remaining} resend attempts remaining)`
             );
             setAlertVisible(true);
@@ -704,6 +702,13 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               disabled={isVerifying || isResending}
               activeOpacity={0.8}
               className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 6,
+                elevation: 5,
+              }}
             >
               <Text className="text-white text-base font-bold">
                 {isVerifying ? "Verifying..." : "Verify"}

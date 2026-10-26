@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Linking,
+  Keyboard,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -32,91 +33,14 @@ import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
 import customerService from "@/services/customer/customer.service";
 import CameraAccess from "@/screens/common/permission/CameraAccess";
-
-interface PhoneCode {
-  code: string;
-  dialCode: string;
-  name: string;
-}
-
-const countries: PhoneCode[] = [
-  { code: "LK", dialCode: "+94", name: "Sri Lanka" },
-  { code: "VN", dialCode: "+84", name: "Vietnam" },
-  { code: "KH", dialCode: "+855", name: "Cambodia" },
-  { code: "BD", dialCode: "+880", name: "Bangladesh" },
-  { code: "IN", dialCode: "+91", name: "India" },
-  { code: "NL", dialCode: "+31", name: "Netherlands" },
-];
-
-const getFlagUrl = (countryCode: string): string => {
-  return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
-};
-
-/* ------------------------------------------------------------------ */
-/* PHONE VALIDATION (per country)                                      */
-/* Numbers are entered WITHOUT the country code and WITHOUT leading 0  */
-/* ------------------------------------------------------------------ */
-interface PhoneRule {
-  regex: RegExp;
-  maxLength: number;
-  error: string;
-}
-
-const PHONE_RULES: Record<string, PhoneRule> = {
-  // Sri Lanka – 9 digits, starts with 7 (e.g. 712345678)
-  "+94": {
-    regex: /^7\d{8}$/,
-    maxLength: 9,
-    error: "Sri Lanka number must be 9 digits and start with 7",
-  },
-  // Vietnam – 9 digits, starts with 3, 5, 7, 8 or 9
-  "+84": {
-    regex: /^[35789]\d{8}$/,
-    maxLength: 9,
-    error: "Vietnam number must be 9 digits and start with 3, 5, 7, 8 or 9",
-  },
-  // Cambodia – exactly 8 digits, valid mobile prefix
-  "+855": {
-    regex:
-      /^(10|11|12|14|15|16|17|61|66|67|68|69|70|76|77|78|79|81|85|86|87|88|89|90|92|93|95|96|97|98|99)\d{6}$/,
-    maxLength: 8,
-    error: "Cambodia number must be 8 digits with a valid prefix (e.g. 12345678)",
-  },
-  // Bangladesh – 10 digits, starts with 13–19
-  "+880": {
-    regex: /^1[3-9]\d{8}$/,
-    maxLength: 10,
-    error: "Bangladesh number must be 10 digits and start with 13–19",
-  },
-  // India – 10 digits, starts with 6, 7, 8 or 9
-  "+91": {
-    regex: /^[6-9]\d{9}$/,
-    maxLength: 10,
-    error: "India number must be 10 digits and start with 6, 7, 8 or 9",
-  },
-  // Netherlands – 9 digits, starts with 6
-  "+31": {
-    regex: /^6\d{8}$/,
-    maxLength: 9,
-    error: "Netherlands number must be 9 digits and start with 6",
-  },
-};
-
-const getPhoneMaxLength = (dialCode: string): number =>
-  PHONE_RULES[dialCode]?.maxLength ?? 10;
-
-/** Returns "" when valid, otherwise an error message. */
-const validatePhone = (
-  dialCode: string,
-  number: string,
-  required = true,
-): string => {
-  const n = number.trim();
-  if (!n) return required ? "Mobile number is required" : "";
-  const rule = PHONE_RULES[dialCode];
-  if (!rule) return /^\d{7,12}$/.test(n) ? "" : "Invalid phone number";
-  return rule.regex.test(n) ? "" : rule.error;
-};
+import {
+  countries,
+  getFlagUrl,
+  getPhoneMaxLength,
+  cleanPhoneInput,
+  validatePhone,
+} from "@/utils/phoneValidation";
+import { TITLES } from "@/constants/titles";
 
 const renderCountryItem = (
   item: any,
@@ -191,6 +115,11 @@ const sanitizeCompanyNameLive = (text: string): string => {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
+const capitalizeFirst = (text: string): string => {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
+};
+
 const isValidEmail = (emailStr: string): boolean => {
   if (!emailStr) return false;
   const trimmed = emailStr.trim();
@@ -218,6 +147,9 @@ interface MyAccountProps {
 
 const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const dispatch = useDispatch();
+  const scrollRef = useRef<any>(null);
+  const scrollToTop = () =>
+    scrollRef.current?.scrollTo?.({ y: 0, animated: true });
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
   );
@@ -234,7 +166,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumber, setMobileNumber] = useState("");
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [compnayMobile, setCompanyMobile] = useState("");
+  const [companyMobile, setCompanyMobile] = useState("");
   const [companyMobileCode, setCompanyMobileCode] = useState("+94");
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [isPhoneCodeModalOpen, setIsPhoneCodeModalOpen] = useState(false);
@@ -248,6 +180,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
+  const [companyNameError, setCompanyNameError] = useState("");
   const [profileImageError, setProfileImageError] = useState<string | null>(
     null,
   );
@@ -318,23 +251,27 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   } | null>(null);
 
   const isWholesale =
-    (buyerType || reduxBuyerType || "").toLowerCase() === "wholesale";
+    (buyerType || reduxBuyerType || "").toString().trim().toLowerCase() ===
+    "wholesale";
 
   useFocusEffect(
     React.useCallback(() => {
-      const fetchAcccountDetails = async () => {
+      const fetchAccountDetails = async () => {
         try {
           setIsLoading(true);
           const response = await customerService.getAccountDetails();
           if (response.data && response.data.data) {
             const data = response.data.data;
-            if (data.buyerType) setBuyerType(data.buyerType);
+            if (data.buyerType || (data as any).buyer_type) {
+              setBuyerType(data.buyerType || (data as any).buyer_type);
+            }
             if (data.title) setTitle(data.title);
             if (data.firstName) {
               const f = data.firstName.trim().replace(/\s/g, "");
               setFirstName(f ? f.charAt(0).toUpperCase() + f.slice(1) : "");
             }
-            if (data.lastName) setLastName(capitalizeName(data.lastName.trim()));
+            if (data.lastName)
+              setLastName(capitalizeName(data.lastName.trim()));
             const fetchedImage = (data.profileImage || data.image || "").trim();
             if (fetchedImage) {
               setProfileImage(fetchedImage);
@@ -345,8 +282,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
             if (data.email) setEmail(data.email);
             if (data.companyName) {
-              const comp = data.companyName.trim();
-              setCompanyName(comp ? comp.charAt(0).toUpperCase() + comp.slice(1) : "");
+              setCompanyName(capitalizeFirst(data.companyName));
             }
             if (data.companyPhoneCode)
               setCompanyMobileCode(data.companyPhoneCode);
@@ -372,19 +308,36 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               image: fetchedImage,
             });
           }
-          console.log("acc details fetchihng success: ", response.data.data);
+          console.log("acc details fetching success: ", response.data.data);
         } catch (error) {
           console.log("error fetching acc details: ", error);
         } finally {
           setIsLoading(false);
         }
       };
-      fetchAcccountDetails();
+      fetchAccountDetails();
     }, []),
   );
 
   useFocusEffect(
     React.useCallback(() => {
+      const clearStoredPhoneAttempts = async () => {
+        try {
+          const allKeys = await AsyncStorage.getAllKeys();
+          const otpKeys = allKeys.filter(
+            (k) =>
+              k.startsWith("@otp_attempts_") ||
+              k.startsWith("@signup_lockout_"),
+          );
+          if (otpKeys.length > 0) {
+            await AsyncStorage.multiRemove(otpKeys);
+          }
+        } catch (e) {
+          console.log("Error clearing stored OTP attempts in EditMyAccountScreen:", e);
+        }
+      };
+      clearStoredPhoneAttempts();
+
       const onBackPress = () => {
         navigation.navigate("Profile");
         return true;
@@ -399,8 +352,6 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }, [navigation]),
   );
 
-  const titleOptions = ["Mr", "Mrs", "Ms", "Rev"];
-
   const handleSelectTitle = (val: string) => {
     setTitle(val);
     setTitleModalOpen(false);
@@ -409,12 +360,41 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
   };
 
-  const mobilecodeOptions = ["+94", "+91", "+65"];
-  const companycodeOptions = ["+94", "+91", "+65"];
+  const countryModalData = countries.map((c) => ({
+    label: `${c.name} (${c.dialCode})`,
+    value: c.dialCode,
+    code: c.code,
+    dialCode: c.dialCode,
+    name: c.name,
+    flag: getFlagUrl(c.code),
+  }));
+
+  const delayedAlert = (...args: Parameters<typeof Alert.alert>) => {
+    setTimeout(() => Alert.alert(...args), Platform.OS === "ios" ? 400 : 0);
+  };
 
   // UPDATE ACCOUNT
   const handleUpdate = async () => {
     if (updating) return;
+
+    // Validate EXACTLY what the user typed (no truncation), then send the same
+    // value with leading zeros removed. Nothing is cut down to "look" valid.
+    const rawMobile = mobileNumber.trim();
+    const cleanedMobile = rawMobile.replace(/^0+/, "");
+    const effectiveCompanyCode = companyMobileCode || mobileCode;
+    const rawCompanyMobile = companyMobile.trim();
+    const cleanedCompanyMobile = rawCompanyMobile.replace(/^0+/, "");
+
+    // 1) Always close the keyboard first so it never swallows a tap
+    Keyboard.dismiss();
+
+    // 2) PHONE CHECK RUNS FIRST ON EVERY CLICK – stop here if invalid
+    const phoneGateErr = validatePhone(mobileCode, rawMobile);
+    if (phoneGateErr) {
+      setMobileNumberError(phoneGateErr);
+      scrollToTop(); // make sure the error is visible
+      return;
+    }
 
     setFirstNameError("");
     setLastNameError("");
@@ -423,6 +403,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     setTitleError("");
     setCodeError("");
     setCompanyMobileError("");
+    setCompanyNameError("");
 
     let hasError = false;
 
@@ -456,7 +437,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
 
     // Personal mobile (retail + wholesale) – country specific
-    const mobileErr = validatePhone(mobileCode, mobileNumber);
+    const mobileErr = validatePhone(mobileCode, rawMobile);
     if (mobileErr) {
       setMobileNumberError(mobileErr);
       hasError = true;
@@ -473,13 +454,17 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
-    // Company mobile (wholesale only, optional) – country specific
+    // Company name & number (wholesale only, required) – country specific
     if (isWholesale) {
-      const companyErr = validatePhone(
-        companyMobileCode || mobileCode,
-        compnayMobile,
-        false,
-      );
+      if (!companyName.trim()) {
+        setCompanyNameError("Company name is required");
+        hasError = true;
+      }
+
+      const companyErr = validatePhone(effectiveCompanyCode, rawCompanyMobile, {
+        required: true,
+        emptyMessage: "Company number is required",
+      });
       if (companyErr) {
         setCompanyMobileError(companyErr);
         hasError = true;
@@ -487,6 +472,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     }
 
     if (hasError) {
+      scrollToTop();
       return;
     }
 
@@ -501,16 +487,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         firstName.trim() === originalAccountData.firstName &&
         lastName.trim() === originalAccountData.lastName &&
         mobileCode.trim() === originalAccountData.mobileCode &&
-        mobileNumber.trim() === originalAccountData.mobileNumber &&
+        cleanedMobile ===
+          cleanPhoneInput(
+            originalAccountData.mobileNumber,
+            originalAccountData.mobileCode,
+          ) &&
         email.trim().toLowerCase() ===
           originalAccountData.email.toLowerCase() &&
         (!isWholesale ||
           (companyName.trim() === originalAccountData.companyName &&
             (companyMobileCode || mobileCode).trim() ===
               originalAccountData.companyMobileCode &&
-            compnayMobile.trim() === originalAccountData.companyMobile));
+            cleanedCompanyMobile ===
+              cleanPhoneInput(
+                originalAccountData.companyMobile,
+                originalAccountData.companyMobileCode,
+              )));
 
       if (isUnchanged) {
+        // Popup is not open yet here, so a normal Alert is fine
         Alert.alert(
           "No Changes Detected",
           "You haven't made any changes to your account details to update.",
@@ -524,18 +519,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       setUpdating(true);
 
       const finalImage = profileImage ? profileImage.trim() : null;
-      const formattedFirstName = capitalizeName(firstName.trim().replace(/\s/g, ""));
+      const formattedFirstName = capitalizeName(
+        firstName.trim().replace(/\s/g, ""),
+      );
       const formattedLastName = capitalizeName(lastName.trim());
-      const formattedCompanyName = companyName.trim()
-        ? companyName.trim().charAt(0).toUpperCase() + companyName.trim().slice(1)
-        : "";
+      const formattedCompanyName = capitalizeFirst(companyName);
 
       const payload: any = {
         title: (title || "Mr").trim(),
         firstName: formattedFirstName,
         lastName: formattedLastName,
         phoneCode: mobileCode.trim(),
-        phoneNumber: mobileNumber.trim(),
+        phoneNumber: cleanedMobile,
         email: email.trim(),
         image: finalImage,
       };
@@ -543,18 +538,26 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       if (isWholesale) {
         payload.companyName = formattedCompanyName;
         payload.companyPhoneCode = companyMobileCode || mobileCode;
-        payload.companyPhone = compnayMobile.trim();
+        payload.companyPhone = cleanedCompanyMobile;
       }
 
       const phoneChanged =
-        mobileNumber.trim() !== originalMobileNumber.trim() ||
+        cleanedMobile !==
+          cleanPhoneInput(originalMobileNumber, originalMobileCode) ||
         mobileCode !== originalMobileCode;
 
       if (phoneChanged) {
+        // Last-line guard: never request an OTP for an invalid number
+        const guardErr = validatePhone(mobileCode, rawMobile);
+        if (guardErr) {
+          setMobileNumberError(guardErr);
+          return;
+        }
+
         const method = mobileCode === "+94" ? "sms" : "email";
         const { lockoutKeys, attemptsKeys } = getSignUpStorageKeys(
           mobileCode,
-          mobileNumber,
+          cleanedMobile,
           email,
           method,
         );
@@ -567,7 +570,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               const lockoutUntil = parseInt(storedLockout, 10);
               const remainingMs = lockoutUntil - Date.now();
               if (remainingMs > 0) {
-                Alert.alert(
+                delayedAlert(
                   "Too Many Attempts",
                   "Too many verification attempts. Please try again after 15 minutes.",
                 );
@@ -604,7 +607,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 for (const lockKey of lockoutKeys) {
                   await AsyncStorage.setItem(lockKey, String(lockoutUntil));
                 }
-                Alert.alert(
+                delayedAlert(
                   "Too Many Attempts",
                   "Too many verification attempts. Please try again after 15 minutes.",
                 );
@@ -618,7 +621,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
         const otpResponse = await customerService.sendPhoneChangeOtp({
           phoneCode: mobileCode,
-          phoneNumber: mobileNumber,
+          phoneNumber: cleanedMobile,
           email: email.trim(),
         });
 
@@ -641,7 +644,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             }
           }
 
-          Alert.alert(
+          delayedAlert(
             "Verification Code Sent",
             `A 5-digit verification code has been sent to your ${otpData.method === "email" ? "email address" : "mobile number"}.\n\n(5 OTP resend attempts limit)`,
             [
@@ -650,7 +653,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 onPress: () => {
                   navigation.navigate("SignUpOTP", {
                     phoneCode: mobileCode,
-                    phoneNumber: mobileNumber,
+                    phoneNumber: cleanedMobile,
                     email: email,
                     method: otpData.method || "sms",
                     referenceId: otpData.referenceId,
@@ -661,6 +664,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 },
               },
             ],
+            { cancelable: false },
           );
         } else {
           const is429 = otpData?.isRateLimited;
@@ -670,7 +674,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             for (const lockKey of lockoutKeys) {
               await AsyncStorage.setItem(lockKey, String(lockoutUntil));
             }
-            Alert.alert(
+            delayedAlert(
               "Too Many Attempts",
               "Too many verification attempts. Please try again after 15 minutes.",
             );
@@ -678,24 +682,26 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (msg.toLowerCase().includes("email")) {
               setEmailError(msg);
             }
-            Alert.alert("Error", msg);
+            delayedAlert("Error", msg);
           }
         }
       } else {
         const response = await customerService.updateUserDetails(payload);
 
         if (response.data) {
+          setMobileNumber(cleanedMobile);
+          setCompanyMobile(cleanedCompanyMobile);
           const updatedImageStr = profileImage ? profileImage.trim() : "";
           setOriginalAccountData({
             title: title.trim(),
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             mobileCode: mobileCode.trim(),
-            mobileNumber: mobileNumber.trim(),
+            mobileNumber: cleanedMobile,
             email: email.trim(),
             companyName: companyName.trim(),
             companyMobileCode: (companyMobileCode || mobileCode).trim(),
-            companyMobile: compnayMobile.trim(),
+            companyMobile: cleanedCompanyMobile,
             image: updatedImageStr,
           });
 
@@ -706,7 +712,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               firstName: firstName.trim(),
               lastName: lastName.trim(),
               email: email.trim(),
-              phoneNumber: mobileNumber.trim(),
+              phoneNumber: cleanedMobile,
               phoneCode: mobileCode.trim(),
               image: updatedImageStr,
               companyName: isWholesale ? companyName.trim() : undefined,
@@ -723,7 +729,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
                 email: email.trim(),
-                phoneNumber: mobileNumber.trim(),
+                phoneNumber: cleanedMobile,
                 phoneCode: mobileCode.trim(),
                 image: updatedImageStr,
                 companyName: isWholesale
@@ -736,7 +742,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             console.log("Error updating AsyncStorage userProfile:", e);
           }
 
-          Alert.alert(
+          delayedAlert(
             "Success",
             response.data.message ||
               "Your account information has been updated.",
@@ -760,7 +766,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       } else if (lower.includes("phone") || lower.includes("mobile")) {
         setMobileNumberError(errorMessage);
       }
-      Alert.alert("Error", errorMessage);
+      delayedAlert("Error", errorMessage);
     } finally {
       setUpdating(false);
     }
@@ -922,9 +928,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     setProfileImageError(null);
   };
 
-  // DELELE OPTION
+  // DELETE OPTION
   const handleMore = () => {
-    console.log("More options");
     setMoreMenuVisible(!moreMenuVisible);
   };
 
@@ -967,14 +972,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             position: "absolute",
             top: 38,
             right: 5,
-
             width: 130,
-
             backgroundColor: "#FFFFFF",
             borderRadius: 12,
-
             paddingVertical: 1,
-
             shadowColor: "#000",
             shadowOffset: {
               width: 0,
@@ -982,9 +983,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             },
             shadowOpacity: 0.15,
             shadowRadius: 8,
-
             elevation: 8,
-
             borderWidth: 1,
             borderColor: "#EEEEEE",
           }}
@@ -1040,15 +1039,16 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         </View>
       ) : (
         <KeyboardAwareScrollView
+          innerRef={(ref) => (scrollRef.current = ref)}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           enableOnAndroid={true}
           enableAutomaticScroll={true}
           keyboardOpeningTime={0}
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: Platform.OS === "ios" ? 20 : 20,
+            paddingBottom: 20,
             flexGrow: 1,
             justifyContent: "space-between",
           }}
@@ -1166,11 +1166,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             </View>
 
             {/* FORM */}
-            <View
-              style={{
-                width: "100%",
-              }}
-            >
+            <View style={{ width: "100%" }}>
               {/* TITLE + FIRST NAME */}
               <View
                 style={{
@@ -1180,13 +1176,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 }}
               >
                 {/* Title */}
-
-                <View
-                  style={{
-                    width: "40%",
-                    marginRight: 8,
-                  }}
-                >
+                <View style={{ width: "40%", marginRight: 8 }}>
                   <DropdownField
                     label="Title"
                     value={title}
@@ -1200,12 +1190,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 </View>
 
                 {/* First Name */}
-
-                <View
-                  style={{
-                    flex: 1,
-                  }}
-                >
+                <View style={{ flex: 1 }}>
                   <InputField
                     icon="user"
                     label="First Name"
@@ -1225,7 +1210,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                       if (!cap.trim()) {
                         setFirstNameError("First name is required");
                       } else if (!/^[a-zA-Z'-]+$/.test(cap.trim())) {
-                        setFirstNameError("First name must contain only letters");
+                        setFirstNameError(
+                          "First name must contain only letters",
+                        );
                       }
                     }}
                     error={firstNameError}
@@ -1234,12 +1221,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               </View>
 
               {/* LAST NAME */}
-
-              <View
-                style={{
-                  marginBottom: 14,
-                }}
-              >
+              <View style={{ marginBottom: 14 }}>
                 <InputField
                   icon="user"
                   label="Last Name"
@@ -1275,13 +1257,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 }}
               >
                 {/* Code */}
-
-                <View
-                  style={{
-                    width: "39%",
-                    marginRight: 8,
-                  }}
-                >
+                <View style={{ width: "32%", marginRight: 8 }}>
                   <DropdownField
                     label="Code"
                     value={mobileCode}
@@ -1290,26 +1266,33 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     options={[]}
                     onSelect={() => {}}
                     icon="flag"
+                    circleSize={30}
+                    iconSize={14}
+                    paddingHorizontal={8}
+                    marginLeft={6}
+                    arrowSize={16}
                     error={codeError}
                   />
                 </View>
 
                 {/* Mobile Number */}
-
-                <View
-                  style={{
-                    flex: 1,
-                  }}
-                >
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <InputField
                     icon="phone"
                     label="Mobile Number"
                     placeholder="Mobile Number"
+                    circleSize={30}
+                    iconSize={14}
+                    paddingHorizontal={8}
+                    marginLeft={6}
                     value={mobileNumber}
                     onChangeText={(text) => {
-                      const clean = text.replace(/[^0-9]/g, "");
+                      const clean = cleanPhoneInput(text, mobileCode);
                       setMobileNumber(clean);
-                      if (mobileNumberError && !validatePhone(mobileCode, clean)) {
+                      if (
+                        mobileNumberError &&
+                        !validatePhone(mobileCode, clean)
+                      ) {
                         setMobileNumberError("");
                       }
                     }}
@@ -1336,10 +1319,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                   onChangeText={(text) => {
                     const clean = text.replace(/\s/g, "");
                     setEmail(clean);
-                    if (emailError) {
-                      if (isValidEmail(clean)) {
-                        setEmailError("");
-                      }
+                    if (emailError && isValidEmail(clean)) {
+                      setEmailError("");
                     }
                   }}
                   onBlur={() => {
@@ -1366,14 +1347,20 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                       value={companyName}
                       autoCapitalize="words"
                       onChangeText={(text) => {
-                        setCompanyName(sanitizeCompanyNameLive(text));
+                        const sanitized = sanitizeCompanyNameLive(text);
+                        setCompanyName(sanitized);
+                        if (companyNameError && sanitized.trim()) {
+                          setCompanyNameError("");
+                        }
                       }}
                       onBlur={() => {
-                        setCompanyName((prev) => {
-                          const trimmed = prev.trim();
-                          return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : "";
-                        });
+                        const cap = capitalizeFirst(companyName);
+                        setCompanyName(cap);
+                        if (!cap.trim()) {
+                          setCompanyNameError("Company name is required");
+                        }
                       }}
+                      error={companyNameError}
                     />
                   </View>
 
@@ -1385,13 +1372,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                       marginBottom: 14,
                     }}
                   >
-                    {/* com Code */}
-                    <View
-                      style={{
-                        width: "39%",
-                        marginRight: 8,
-                      }}
-                    >
+                    {/* Company Code */}
+                    <View style={{ width: "32%", marginRight: 8 }}>
                       <DropdownField
                         label="Code"
                         value={companyMobileCode || "+94"}
@@ -1400,24 +1382,42 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         options={[]}
                         onSelect={() => {}}
                         icon="flag"
+                        circleSize={30}
+                        iconSize={14}
+                        paddingHorizontal={8}
+                        marginLeft={6}
+                        arrowSize={16}
                       />
                     </View>
 
-                    {/* com Mobile Number */}
-                    <View
-                      style={{
-                        flex: 1,
-                      }}
-                    >
+                    {/* Company Mobile Number */}
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <InputField
                         icon="phone"
-                        label="Company"
+                        label="Company Mobile"
                         placeholder="Company Mobile"
-                        value={compnayMobile}
+                        circleSize={30}
+                        iconSize={14}
+                        paddingHorizontal={8}
+                        marginLeft={6}
+                        value={companyMobile}
                         onChangeText={(text) => {
-                          const clean = text.replace(/[^0-9]/g, "");
+                          const clean = cleanPhoneInput(
+                            text,
+                            companyMobileCode || mobileCode,
+                          );
                           setCompanyMobile(clean);
-                          if (companyMobileError) {
+                          if (
+                            companyMobileError &&
+                            !validatePhone(
+                              companyMobileCode || mobileCode,
+                              clean,
+                              {
+                                required: true,
+                                emptyMessage: "Company number is required",
+                              },
+                            )
+                          ) {
                             setCompanyMobileError("");
                           }
                         }}
@@ -1425,8 +1425,11 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                           setCompanyMobileError(
                             validatePhone(
                               companyMobileCode || mobileCode,
-                              compnayMobile,
-                              false,
+                              companyMobile,
+                              {
+                                required: true,
+                                emptyMessage: "Company number is required",
+                              },
                             ),
                           )
                         }
@@ -1478,34 +1481,47 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         </KeyboardAwareScrollView>
       )}
 
-      {updating && (
+      {/* Updating popup: shown only while the account is being updated */}
+      <Modal
+        visible={updating}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {}} // block Android back button while updating
+      >
         <View
           style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            justifyContent: "center",
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
             alignItems: "center",
-            zIndex: 999,
+            justifyContent: "center",
           }}
         >
-          <ActivityIndicator size="large" color="#000000" />
-          <Text
+          <View
             style={{
-              marginTop: 14,
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#000000",
-              textAlign: "center",
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 36,
+              paddingHorizontal: 40,
+              alignItems: "center",
+              minWidth: 220,
             }}
           >
-            Updating Account...
-          </Text>
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              Updating account...
+            </Text>
+          </View>
         </View>
-      )}
+      </Modal>
 
       {/* Phone Code GlobalSearchModal */}
       <GlobalSearchModal
@@ -1514,14 +1530,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         title="Select Country Code"
         searchPlaceholder="Search country..."
         noResultsText="No results found"
-        data={countries.map((c) => ({
-          label: `${c.name} (${c.dialCode})`,
-          value: c.dialCode,
-          code: c.code,
-          dialCode: c.dialCode,
-          name: c.name,
-          flag: getFlagUrl(c.code),
-        }))}
+        data={countryModalData}
         selectedItems={mobileCode ? [mobileCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
@@ -1545,14 +1554,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         title="Select Company Country Code"
         searchPlaceholder="Search country..."
         noResultsText="No results found"
-        data={countries.map((c) => ({
-          label: `${c.name} (${c.dialCode})`,
-          value: c.dialCode,
-          code: c.code,
-          dialCode: c.dialCode,
-          name: c.name,
-          flag: getFlagUrl(c.code),
-        }))}
+        data={countryModalData}
         selectedItems={companyMobileCode ? [companyMobileCode] : []}
         onSelect={(items) => {
           if (items.length > 0) {
@@ -1572,7 +1574,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         visible={titleModalOpen}
         onClose={() => setTitleModalOpen(false)}
         title="Select Title"
-        data={titleOptions.map((t) => ({ label: t, value: t }))}
+        data={TITLES.map((t) => ({ label: t, value: t }))}
         selectedItems={title ? [title] : []}
         onSelect={(items) => {
           if (items && items[0]) {
