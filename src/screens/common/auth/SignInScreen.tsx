@@ -28,6 +28,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import socketService from "@/services/socket/socket.service";
 import pushNotificationService from "@/services/notification/pushNotification.service";
 import { AlertModal } from "@/component/common/AlertModal";
+import { PHONE_RULES } from "@/utils/phoneValidation";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.4;
@@ -54,6 +55,15 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
+const COUNTRY_DIAL_CODES = [
+  { dial: "855", code: "+855", name: "Cambodia", example: "855XXXXXXXX" },
+  { dial: "880", code: "+880", name: "Bangladesh", example: "880XXXXXXXXXX" },
+  { dial: "94", code: "+94", name: "Sri Lanka", example: "947XXXXXXXX" },
+  { dial: "84", code: "+84", name: "Vietnam", example: "84XXXXXXXXX" },
+  { dial: "91", code: "+91", name: "India", example: "91XXXXXXXXXX" },
+  { dial: "31", code: "+31", name: "Netherlands", example: "316XXXXXXXX" },
+];
+
 const validateIdentifier = (
   val: string,
 ): { isValid: boolean; error?: string } => {
@@ -62,7 +72,7 @@ const validateIdentifier = (
     return { isValid: false, error: "Mobile number or email is required" };
   }
 
-  // If input contains '@' or alphabetical letters
+  // If input contains '@' or alphabetical letters, validate as email
   if (trimmed.includes("@") || /[a-zA-Z]/.test(trimmed)) {
     if (!isValidEmail(trimmed)) {
       return { isValid: false, error: "Please enter a valid email address" };
@@ -70,47 +80,91 @@ const validateIdentifier = (
     return { isValid: true };
   }
 
-  // Clean phone number (strip all spaces and hyphens)
+  // Clean phone number (strip spaces and hyphens)
   const cleanPhone = trimmed.replace(/[\s-]/g, "");
+  const numWithoutPlus = cleanPhone.startsWith("+")
+    ? cleanPhone.slice(1)
+    : cleanPhone;
 
-  // Supported countries:
-  // 1. Sri Lanka (+94 / 94): 9 digits starting with 7, or local 07... (10 digits), or 7... (9 digits)
-  if (/^(\+94|94)7[0-9]{8}$/.test(cleanPhone)) return { isValid: true };
-  if (/^07[0-9]{8}$/.test(cleanPhone) || /^7[0-9]{8}$/.test(cleanPhone)) return { isValid: true };
-
-  // 2. Cambodia (+855 / 855): 8 to 9 digits, or local 0 + 8-9 digits
-  if (/^(\+855|855)[0-9]{8,9}$/.test(cleanPhone)) return { isValid: true };
-
-  // 3. Vietnam (+84 / 84): 9 digits, or local 0 + 9 digits (10 digits)
-  if (/^(\+84|84)[0-9]{9}$/.test(cleanPhone)) return { isValid: true };
-
-  // 4. Bangladesh (+880 / 880): 10 digits (often starts with 1), or local 01 + 9 digits (11 digits)
-  if (/^(\+880|880)[0-9]{10}$/.test(cleanPhone)) return { isValid: true };
-
-  // 5. India (+91 / 91): 10 digits, or local 0 + 10 digits (11 digits)
-  if (/^(\+91|91)[0-9]{10}$/.test(cleanPhone)) return { isValid: true };
-
-  // 6. Netherlands (+31 / 31): 9 digits (mobile starts with 6), or local 06 + 8 digits (10 digits)
-  if (/^(\+31|31)[0-9]{9}$/.test(cleanPhone)) return { isValid: true };
-
-  // Local numbers with leading 0 (8 to 11 digits)
-  if (/^0[0-9]{8,10}$/.test(cleanPhone)) return { isValid: true };
-
-  // Generic 9 or 10 digit number without country code
-  if (/^[0-9]{9,10}$/.test(cleanPhone)) return { isValid: true };
-
-  // If user entered '+' followed by an unsupported country code or wrong length
-  if (cleanPhone.startsWith("+")) {
+  // Must contain only digits
+  if (!/^\d+$/.test(numWithoutPlus)) {
     return {
       isValid: false,
-      error: "Please enter a valid mobile number for a supported country",
+      error: "Please enter a valid mobile number or email address",
     };
   }
 
-  return {
-    isValid: false,
-    error: "Please enter a valid mobile number or email address",
-  };
+  // If user entered a local number (starting with 0 or 7 without country code)
+  if (numWithoutPlus.startsWith("0")) {
+    return {
+      isValid: false,
+      error: "Please enter mobile number with country code without + (e.g. 947XXXXXXXX)",
+    };
+  }
+  if (numWithoutPlus.startsWith("7") && numWithoutPlus.length === 9) {
+    return {
+      isValid: false,
+      error: "Please enter mobile number with country code without + (e.g. 947XXXXXXXX)",
+    };
+  }
+
+  // Match supported country dial code
+  const matched = COUNTRY_DIAL_CODES.find((c) =>
+    numWithoutPlus.startsWith(c.dial),
+  );
+
+  if (!matched) {
+    return {
+      isValid: false,
+      error: "Please enter mobile number with valid country code without + (e.g. 947XXXXXXXX)",
+    };
+  }
+
+  const nationalNumber = numWithoutPlus.slice(matched.dial.length);
+  const rule = PHONE_RULES[matched.code];
+
+  if (!nationalNumber) {
+    return {
+      isValid: false,
+      error: `Please enter mobile number after country code ${matched.dial} (e.g. ${matched.example})`,
+    };
+  }
+
+  // Specific check for Sri Lanka (starts with 7 and 9 digits)
+  if (matched.dial === "94") {
+    if (!nationalNumber.startsWith("7")) {
+      return {
+        isValid: false,
+        error: "Sri Lanka mobile number must start with 7 (e.g. 947XXXXXXXX)",
+      };
+    }
+    if (nationalNumber.length !== 9) {
+      return {
+        isValid: false,
+        error: "Sri Lanka mobile number must be 9 digits after 94 (e.g. 947XXXXXXXX)",
+      };
+    }
+    return { isValid: true };
+  }
+
+  // Validate against country rule
+  if (rule) {
+    if (nationalNumber.length !== rule.maxLength) {
+      return {
+        isValid: false,
+        error: `${matched.name} mobile number must be ${rule.maxLength} digits after ${matched.dial} (e.g. ${matched.example})`,
+      };
+    }
+    if (!rule.regex.test(nationalNumber)) {
+      return {
+        isValid: false,
+        error: rule.error,
+      };
+    }
+    return { isValid: true };
+  }
+
+  return { isValid: true };
 };
 
 const Login: React.FC<LoginProps> = ({ navigation }) => {
@@ -470,7 +524,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                       }
                     }
                   }}
-                  placeholder="Mobile Number / Email"
+                  placeholder="947XXXXXXXX / youremail@gmail.com"
                   placeholderTextColor="black"
                   keyboardType="email-address"
                   autoCapitalize="none"
