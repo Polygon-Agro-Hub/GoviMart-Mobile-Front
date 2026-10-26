@@ -370,13 +370,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
       return () => {
         sub.remove();
-        // Reset attempts count when navigating back or leaving this screen
-        for (const key of attemptsKeys) {
-          AsyncStorage.removeItem(key).catch(() => {});
-        }
-        for (const key of lockoutKeys) {
-          AsyncStorage.removeItem(key).catch(() => {});
-        }
+        // NOTE: Do NOT clear attempt/lockout keys here. This cleanup fires on
+        // any screen blur (e.g. opening an Alert), which would reset the counter
+        // on every popup. Keys are cleared only inside handleBackPress().
       };
     }, [handleBackPress, primaryAttemptKey, attemptsKeys, lockoutKeys]),
   );
@@ -672,7 +668,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     let updatedLength = 0;
     for (const key of attemptsKeys) {
       const updated = await saveAttempt(key);
-      updatedLength = updated.length;
+      updatedLength = Math.max(updatedLength, updated.length);
     }
     setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
     setReferenceId(data.referenceId);
