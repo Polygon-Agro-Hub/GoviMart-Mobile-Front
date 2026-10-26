@@ -93,7 +93,6 @@ const SavedAddresses: React.FC<SavedAddressesProps> = ({
                 try {
                     setLoading(true);
                     const response = await customerService.getSavedAddresses();
-                    console.log("fetched saved addresses message: ", response.data.message);
                     if (!response.data.hasAddress || !response.data.result) {
                         setAddresses([]);
                     } else {
