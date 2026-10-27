@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   Keyboard,
+  BackHandler,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RouteProp } from "@react-navigation/native";
@@ -37,8 +38,11 @@ interface SignUpOTPProps {
   navigation: SignUpOTPNavigationProp;
 }
 
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_OTP_ATTEMPTS = 5; // OTP sends (initial + resends)
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout duration
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_TIMER_SECONDS = 240; // 4 minutes
+const LOCKOUT_SECONDS = LOCKOUT_DURATION_MS / 1000; // 900 seconds (15 minutes)
 
 // Space (px) to keep between the Verify button and the top of the keyboard.
 const VERIFY_EXTRA_SPACE = 16;
@@ -154,7 +158,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // State Management
   const [otp, setOtp] = useState(["", "", "", "", ""]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(240); // 4:00 countdown for both SMS and Email
+  const [timeLeft, setTimeLeft] = useState<number>(OTP_TIMER_SECONDS);
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -172,6 +176,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const ref_5 = useRef<TextInput>(null);
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
+
+  // Synchronous lock to block double-tap on Resend
+  const resendLockRef = useRef(false);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -235,62 +242,73 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     );
   };
 
-  // Lock the screen for the given number of seconds (persisted in storage).
-  const applyLockout = async (seconds: number = 900) => {
-    const lockoutUntil = Date.now() + seconds * 1000;
+  const applyRateLimitLockout = async () => {
+    const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
     for (const key of lockoutKeys) {
       await AsyncStorage.setItem(key, String(lockoutUntil));
     }
-    setTimeLeft(seconds);
+    setTimeLeft(LOCKOUT_SECONDS);
     setIsRateLimited(true);
     setIsExpired(false);
     setAttemptsCount(MAX_OTP_ATTEMPTS);
+    showLockoutAlert();
   };
 
-  // Returns true if a persistent lockout is still active.
-  const checkStoredLockout = async (): Promise<boolean> => {
-    for (const key of lockoutKeys) {
-      try {
-        const storedLockout = await AsyncStorage.getItem(key);
-        if (storedLockout) {
-          const lockoutUntil = parseInt(storedLockout, 10);
-          const remainingMs = lockoutUntil - Date.now();
-          if (remainingMs > 0) {
-            setTimeLeft(Math.ceil(remainingMs / 1000));
-            setIsRateLimited(true);
-            setIsExpired(false);
-            setAttemptsCount(MAX_OTP_ATTEMPTS);
-            showLockoutAlert();
-            return true;
-          } else {
-            await AsyncStorage.removeItem(key);
-            for (const attKey of attemptsKeys) {
-              await AsyncStorage.removeItem(attKey);
+  // Check rate limit on initial mount
+  useEffect(() => {
+    const checkInitialRateLimit = async () => {
+      // 1. Check persistent lockout
+      for (const key of lockoutKeys) {
+        try {
+          const storedLockout = await AsyncStorage.getItem(key);
+          if (storedLockout) {
+            const lockoutUntil = parseInt(storedLockout, 10);
+            const remainingMs = lockoutUntil - Date.now();
+            if (remainingMs > 0) {
+              const remainingSec = Math.ceil(remainingMs / 1000);
+              setTimeLeft(remainingSec);
+              setIsRateLimited(true);
+              setIsExpired(false);
+              setAttemptsCount(MAX_OTP_ATTEMPTS);
+              showLockoutAlert();
+              return;
+            } else {
+              await AsyncStorage.removeItem(key);
+              for (const attKey of attemptsKeys) {
+                await AsyncStorage.removeItem(attKey);
+              }
             }
           }
+        } catch (e) {
+          console.log("Error checking stored lockout:", e);
         }
-      } catch (e) {
-        console.log("Error checking stored lockout:", e);
       }
-    }
-    return false;
-  };
 
-  // Returns true if the OTP send limit (5 per 15 min) has been reached.
-  const checkSendLimit = async (): Promise<boolean> => {
-    for (const key of attemptsKeys) {
-      const attempts = await getRecentAttempts(key);
-      if (attempts.length >= MAX_OTP_ATTEMPTS) {
-        const oldest = attempts[0];
-        const remainingMs = RATE_LIMIT_WINDOW_MS - (Date.now() - oldest);
-        const remainingSec = Math.max(Math.ceil(remainingMs / 1000), 900);
-        await applyLockout(remainingSec);
-        showLockoutAlert();
-        return true;
+      // 2. Check recent attempts count
+      for (const key of attemptsKeys) {
+        const attempts = await getRecentAttempts(key);
+        if (attempts.length >= MAX_OTP_ATTEMPTS) {
+          await applyRateLimitLockout();
+          return;
+        }
       }
-    }
-    return false;
-  };
+
+      // 3. Count the initial OTP send as an attempt (once per 30s window)
+      const attempts = await getRecentAttempts(primaryAttemptKey);
+      const lastAttempt = attempts[attempts.length - 1];
+      if (!lastAttempt || Date.now() - lastAttempt > 30000) {
+        let currentCount = 1;
+        for (const attKey of attemptsKeys) {
+          const updated = await saveAttempt(attKey);
+          currentCount = Math.max(currentCount, updated.length);
+        }
+        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
+      } else {
+        setAttemptsCount(Math.min(attempts.length || 1, MAX_OTP_ATTEMPTS));
+      }
+    };
+    checkInitialRateLimit();
+  }, [phoneCode, phoneNumber, email, method]);
 
   // Wrong code: the server tracks wrong entries, so show its message.
   const handleWrongCode = async (msg: string) => {
@@ -299,30 +317,25 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     Alert.alert("Invalid Code", msg || "Incorrect verification code.");
   };
 
-  // Check rate limit on initial mount and record first signup OTP attempt
+  const handleBackPress = useCallback(() => {
+    if (flow === "changePhone") {
+      navigation.navigate("MyAccount");
+    } else {
+      navigation.goBack();
+    }
+  }, [flow, navigation]);
+
   useEffect(() => {
-    const checkInitialRateLimit = async () => {
-      // 1. Persistent lockout
-      if (await checkStoredLockout()) return;
-
-      // 2. OTP send limit
-      if (await checkSendLimit()) return;
-
-      // Sync send attempts count
-      const attempts = await getRecentAttempts(primaryAttemptKey);
-      if (attempts.length === 0) {
-        let currentCount = 1;
-        for (const attKey of attemptsKeys) {
-          const updated = await saveAttempt(attKey);
-          currentCount = updated.length;
-        }
-        setAttemptsCount(Math.min(currentCount, MAX_OTP_ATTEMPTS));
-      } else {
-        setAttemptsCount(Math.min(attempts.length, MAX_OTP_ATTEMPTS));
-      }
+    const onHardwareBack = () => {
+      handleBackPress();
+      return true;
     };
-    checkInitialRateLimit();
-  }, [phoneCode, phoneNumber, email, method]);
+    const sub = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onHardwareBack,
+    );
+    return () => sub.remove();
+  }, [handleBackPress]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -343,7 +356,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       return;
     }
     const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prev: number) => prev - 1);
     }, 1000);
     return () => clearInterval(timer);
   }, [timeLeft, isRateLimited]);
@@ -408,7 +421,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     const is429 = data?.isRateLimited;
     const msg = data?.message || "Incorrect verification code.";
     if (is429 || /too many|15 minutes/i.test(msg)) {
-      await applyLockout(data?.retryAfter || 900);
+      await applyRateLimitLockout();
       showLockoutAlert();
     } else if (/session.*expired|expired.*invalid/i.test(msg)) {
       handleSessionExpired();
@@ -419,7 +432,15 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   const handleVerify = async () => {
     // Check persistent lockout before verifying
-    if (await checkStoredLockout()) return;
+    for (const key of lockoutKeys) {
+      try {
+        const storedLockout = await AsyncStorage.getItem(key);
+        if (storedLockout && parseInt(storedLockout, 10) > Date.now()) {
+          showLockoutAlert();
+          return;
+        }
+      } catch (e) {}
+    }
 
     const code = otp.join("");
     if (code.length < 5) {
@@ -595,7 +616,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       const retryAfter = err.response?.data?.retryAfter || 900;
 
       if (is429 || /too many|15 minutes/i.test(msg)) {
-        await applyLockout(retryAfter);
+        await applyRateLimitLockout();
         showLockoutAlert();
       } else if (/session.*expired|expired.*invalid/i.test(msg)) {
         handleSessionExpired();
@@ -610,100 +631,128 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
-  // Shared success handling for both resend flows
-  const handleResendSuccess = async (data: any) => {
-    let updatedLength = 0;
-    for (const key of attemptsKeys) {
-      const updated = await saveAttempt(key);
-      updatedLength = updated.length;
-    }
-    setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
-    setReferenceId(data.referenceId);
-    setSignupToken(data.signupToken);
-
-    if (updatedLength >= MAX_OTP_ATTEMPTS) {
-      await applyLockout(900);
-      Alert.alert(
-        "Code Resent",
-        "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
-      );
-    } else {
-      setTimeLeft(240);
-      setIsExpired(false);
-      const remaining = MAX_OTP_ATTEMPTS - updatedLength;
-      Alert.alert(
-        "Code Resent",
-        `${data.message || "A new 5-digit verification code has been sent."}\n\n(${remaining} resend attempts remaining)`,
-      );
-    }
-  };
-
-  const handleFailedResendResponse = async (data: any) => {
-    const is429 = data?.isRateLimited;
-    const msg = data?.message || "Failed to resend the code.";
-    if (is429 || msg.toLowerCase().includes("too many")) {
-      await applyLockout(900);
-      showLockoutAlert();
-    } else if (/session.*expired|expired.*invalid/i.test(msg)) {
-      handleSessionExpired();
-    } else {
-      Alert.alert("Resend Failed", msg);
-    }
-  };
-
   const handleResend = async () => {
-    // 1. Persistent lockout
-    if (await checkStoredLockout()) return;
+    // Block double taps (ref updates synchronously, state does not)
+    if (resendLockRef.current) return;
+    resendLockRef.current = true;
 
-    // 2. OTP send limit: 5 per 15 minutes
-    if (await checkSendLimit()) return;
-
-    setOtp(["", "", "", "", ""]);
-    setIsResending(true);
     try {
-      if (flow === "changePhone") {
-        const response = await customerService.resendPhoneChangeOtp({
-          signupToken,
-        });
+      // 1. Persistent lockout
+      for (const key of lockoutKeys) {
+        try {
+          const storedLockout = await AsyncStorage.getItem(key);
+          if (storedLockout) {
+            const lockoutUntil = parseInt(storedLockout, 10);
+            const remainingMs = lockoutUntil - Date.now();
+            if (remainingMs > 0) {
+              const remainingSec = Math.ceil(remainingMs / 1000);
+              setTimeLeft(remainingSec);
+              setIsRateLimited(true);
+              setIsExpired(false);
+              setAttemptsCount(MAX_OTP_ATTEMPTS);
+              showLockoutAlert();
+              return;
+            } else {
+              await AsyncStorage.removeItem(key);
+              for (const attKey of attemptsKeys) {
+                await AsyncStorage.removeItem(attKey);
+              }
+            }
+          }
+        } catch (e) {}
+      }
 
-        if (response.data && response.data.status) {
-          await handleResendSuccess(response.data);
-        } else {
-          await handleFailedResendResponse(response.data);
-        }
-      } else {
-        const response = await axios.post(
-          `${environment.API_BASE_URL}api/auth/resend-signup-otp`,
-          {
-            signupToken,
-          },
-        );
-
-        if (response.data && response.data.status) {
-          await handleResendSuccess(response.data);
-        } else {
-          await handleFailedResendResponse(response.data);
+      // 2. Check attempts count BEFORE sending
+      for (const key of attemptsKeys) {
+        const attempts = await getRecentAttempts(key);
+        if (attempts.length >= MAX_OTP_ATTEMPTS) {
+          await applyRateLimitLockout();
+          return;
         }
       }
-    } catch (err: any) {
-      console.error("Resend error:", err);
-      const is429 = err.response?.status === 429;
-      const msg =
-        err.response?.data?.message || "An unexpected error occurred.";
-      if (
-        is429 ||
-        msg.toLowerCase().includes("too many") ||
-        msg.toLowerCase().includes("15 minutes")
-      ) {
-        await applyLockout(900);
-        showLockoutAlert();
-      } else if (/session.*expired|expired.*invalid/i.test(msg)) {
-        handleSessionExpired();
-      } else {
-        Alert.alert("Resend Error", msg);
+
+      setOtp(["", "", "", "", ""]);
+      setIsResending(true);
+      try {
+        let response: any;
+        if (flow === "changePhone") {
+          response = await customerService.resendPhoneChangeOtp({
+            signupToken,
+          });
+        } else {
+          response = await axios.post(
+            `${environment.API_BASE_URL}api/auth/resend-signup-otp`,
+            {
+              signupToken,
+            },
+          );
+        }
+
+        if (response.data && response.data.status) {
+          let updatedLength = 0;
+          for (const key of attemptsKeys) {
+            const updated = await saveAttempt(key);
+            updatedLength = Math.max(updatedLength, updated.length);
+          }
+          setAttemptsCount(Math.min(updatedLength, MAX_OTP_ATTEMPTS));
+          setReferenceId(response.data.referenceId);
+          setSignupToken(response.data.signupToken);
+
+          if (updatedLength >= MAX_OTP_ATTEMPTS) {
+            await applyRateLimitLockout();
+            Alert.alert(
+              "Code Resent",
+              "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
+            );
+          } else {
+            setTimeLeft(OTP_TIMER_SECONDS);
+            setIsExpired(false);
+            const remaining = Math.max(0, MAX_OTP_ATTEMPTS - updatedLength);
+            Alert.alert(
+              "Code Resent",
+              `${
+                response.data.message ||
+                (method === "email"
+                  ? "Verification code has been resent to your email address."
+                  : "Verification code has been resent to your mobile number.")
+              }\n\n(${remaining} resend ${
+                remaining === 1 ? "attempt" : "attempts"
+              } remaining)`,
+            );
+          }
+          refs[0].current?.focus();
+        } else {
+          const is429 = response.data?.isRateLimited;
+          const msg = response.data?.message || "Failed to resend the code.";
+          if (is429 || msg.toLowerCase().includes("too many")) {
+            await applyRateLimitLockout();
+          } else if (/session.*expired|expired.*invalid/i.test(msg)) {
+            handleSessionExpired();
+          } else {
+            Alert.alert("Resend Failed", msg);
+          }
+        }
+      } catch (err: any) {
+        console.error("Resend error:", err);
+        const is429 = err.response?.status === 429;
+        const msg =
+          err.response?.data?.message || "An unexpected error occurred.";
+        if (
+          is429 ||
+          msg.toLowerCase().includes("too many") ||
+          msg.toLowerCase().includes("15 minutes")
+        ) {
+          await applyRateLimitLockout();
+        } else if (/session.*expired|expired.*invalid/i.test(msg)) {
+          handleSessionExpired();
+        } else {
+          Alert.alert("Resend Error", msg);
+        }
+      } finally {
+        setIsResending(false);
       }
     } finally {
-      setIsResending(false);
+      resendLockRef.current = false;
     }
   };
 
@@ -716,6 +765,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         showLogo={true}
         showBackButton={true}
         navigation={navigation}
+        onBackPress={handleBackPress}
       />
 
       <ScrollView
@@ -887,9 +937,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             {!isRateLimited && remainingAttempts > 0 && (
               <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
                 ({remainingAttempts}{" "}
-                {remainingAttempts === 1
-                  ? "resend attempt"
-                  : "resend attempts"}{" "}
+                {remainingAttempts === 1 ? "attempt" : "attempts"} 
                 remaining)
               </Text>
             )}

@@ -307,7 +307,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   try {
     const scheduleRes = await orderService.getScheduleOrders();
-    console.log("schedule.....", scheduleRes.data);
 
     const ord = scheduleRes.data?.order;
 

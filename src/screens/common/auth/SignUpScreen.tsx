@@ -30,6 +30,7 @@ import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import { AlertModal } from "@/component/common/AlertModal";
 import authService from "@/services/auth/auth.service";
+import { getSignUpStorageKeys } from "./SignUpOTPScreen";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
@@ -424,6 +425,72 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       const cleanedPhone = phoneNumber.trim().replace(/^0+/, "");
       const cleanedCompanyPhone = companyNumber.trim().replace(/^0+/, "");
 
+      const method = phoneCode === "+94" ? "sms" : "email";
+      const { lockoutKeys, attemptsKeys } = getSignUpStorageKeys(
+        phoneCode,
+        cleanedPhone,
+        email,
+        method,
+      );
+
+      // 1. Check persistent lockout
+      for (const key of lockoutKeys) {
+        try {
+          const storedLockout = await AsyncStorage.getItem(key);
+          if (storedLockout) {
+            const lockoutUntil = parseInt(storedLockout, 10);
+            const remainingMs = lockoutUntil - Date.now();
+            if (remainingMs > 0) {
+              setAlertType("error");
+              setAlertTitle("Too Many Attempts");
+              setAlertMessage(
+                "Too many verification attempts. Please try again after 15 minutes.",
+              );
+              setAlertVisible(true);
+              return;
+            } else {
+              await AsyncStorage.removeItem(key);
+              for (const aKey of attemptsKeys) {
+                await AsyncStorage.removeItem(aKey);
+              }
+            }
+          }
+        } catch (e) {
+          console.log("Error checking stored lockout:", e);
+        }
+      }
+
+      // 2. Check recent attempts count
+      const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+      const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+      for (const key of attemptsKeys) {
+        try {
+          const raw = await AsyncStorage.getItem(key);
+          if (raw) {
+            const timestamps: number[] = JSON.parse(raw);
+            const now = Date.now();
+            const valid = timestamps.filter(
+              (ts: number) => now - ts < RATE_LIMIT_WINDOW_MS,
+            );
+            if (valid.length >= 5) {
+              const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
+              for (const lockKey of lockoutKeys) {
+                await AsyncStorage.setItem(lockKey, String(lockoutUntil));
+              }
+              setAlertType("error");
+              setAlertTitle("Too Many Attempts");
+              setAlertMessage(
+                "Too many verification attempts. Please try again after 15 minutes.",
+              );
+              setAlertVisible(true);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log("Error checking attempts:", e);
+        }
+      }
+
       const payload = {
         title,
         firstName: capitalizeName(firstName.trim()),
@@ -455,6 +522,24 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
 
       if (response.data && response.data.status) {
         if (response.data.verificationRequired) {
+          const primaryAttemptsKey = attemptsKeys[0];
+          if (primaryAttemptsKey) {
+            try {
+              const raw = await AsyncStorage.getItem(primaryAttemptsKey);
+              const existing = raw
+                ? JSON.parse(raw).filter(
+                    (ts: number) => Date.now() - ts < 60 * 60 * 1000,
+                  )
+                : [];
+              const updated = [...existing, Date.now()];
+              for (const aKey of attemptsKeys) {
+                await AsyncStorage.setItem(aKey, JSON.stringify(updated));
+              }
+            } catch (e) {
+              console.log("Error saving initial signup attempt:", e);
+            }
+          }
+
           navigation.navigate("SignUpOTP", {
             phoneCode,
             phoneNumber: cleanedPhone,

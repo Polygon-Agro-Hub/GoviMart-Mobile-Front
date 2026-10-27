@@ -39,6 +39,29 @@ interface Props {
   route: ScreenRouteProp;
 }
 
+const SAME_PASSWORD_MESSAGE =
+  "New password cannot be the same as your current password. Please choose a different password.";
+
+// Adjust the codes/keywords to match what backend returns
+const isSamePasswordError = (message?: string, code?: string): boolean => {
+  if (
+    code &&
+    ["SAME_PASSWORD", "PASSWORD_SAME_AS_OLD", "PASSWORD_REUSED"].includes(code)
+  ) {
+    return true;
+  }
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("same as") ||
+    m.includes("same password") ||
+    m.includes("current password") ||
+    m.includes("old password") ||
+    m.includes("previous password") ||
+    m.includes("reuse")
+  );
+};
+
 const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const verifiedResetToken = route.params?.verifiedResetToken || "";
@@ -132,16 +155,29 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
           { cancelable: false }
         );
       } else {
-        showAlert(
-          "Reset Failed",
-          response.data?.message || "Failed to reset password."
-        );
+        const message = response.data?.message;
+        if (isSamePasswordError(message, response.data?.code)) {
+          setErrors((prev) => ({
+            ...prev,
+            newPassword: SAME_PASSWORD_MESSAGE,
+          }));
+          showAlert("Reset Failed", SAME_PASSWORD_MESSAGE, "error");
+        } else {
+          showAlert("Reset Failed", message || "Failed to reset password.", "error");
+        }
       }
     } catch (err: any) {
       console.error("Password reset error:", err);
-      const msg =
-        err.response?.data?.message || "An unexpected error occurred.";
-      showAlert("Error", msg);
+      const data = err.response?.data;
+      if (isSamePasswordError(data?.message, data?.code)) {
+        setErrors((prev) => ({
+          ...prev,
+          newPassword: SAME_PASSWORD_MESSAGE,
+        }));
+        showAlert("Reset Failed", SAME_PASSWORD_MESSAGE, "error");
+      } else {
+        showAlert("Error", data?.message || "An unexpected error occurred.", "error");
+      }
     } finally {
       setLoading(false);
     }
