@@ -22,10 +22,10 @@ LogBox.ignoreLogs([
 
 // Disable console logs in production to improve JS thread performance (Sales Dash pattern)
 if (!__DEV__) {
-  console.log = () => {};
-  console.warn = () => {};
-  console.info = () => {};
-  console.debug = () => {};
+  console.log = () => { };
+  console.warn = () => { };
+  console.info = () => { };
+  console.debug = () => { };
 }
 
 function AppContent() {
@@ -41,7 +41,7 @@ function AppContent() {
     pushNotificationService.init().then(async () => {
       const alreadyGranted = await pushNotificationService.requestPermissions();
       if (alreadyGranted) {
-        pushNotificationService.registerPushToken().catch(() => {});
+        pushNotificationService.registerPushToken().catch(() => { });
       }
     });
 
