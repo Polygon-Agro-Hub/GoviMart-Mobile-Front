@@ -162,6 +162,42 @@ const formatPrice = (value: number | string) =>
     maximumFractionDigits: 2,
   });
 
+/* ---------------------------------------------------------
+   Date helpers (schedule date shifting)
+--------------------------------------------------------- */
+
+const getOrdinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+// "YYYY-MM-DD" -> local Date (avoids timezone drift)
+const parseDateOnly = (raw?: string | null): Date | null => {
+  if (!raw) return null;
+  const [y, m, d] = raw.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const r = new Date(date);
+  r.setDate(r.getDate() + days);
+  return r;
+};
+
+// "16th August"
+const formatScheduleLabel = (d: Date) =>
+  `${getOrdinal(d.getDate())} ${d.toLocaleDateString("en-US", {
+    month: "long",
+  })}`;
+
+// Local YYYY-MM-DD (no UTC conversion)
+const toLocalDateOnly = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 // Parse a DB value exactly. A real 0 stays 0 (no `|| 50` style fallbacks).
 const num = (v: any): number => {
   const n = parseFloat(v);
@@ -319,7 +355,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     alacartSelection,
     deletedAdditionalItemIds,
     invoiceNo: reduxInvoiceNo,
-    scheduleDateStr,
+    // renamed: the screen shows its own reminder-shifted `scheduleDateStr` (see below)
+    scheduleDateStr: reduxScheduleDateStr,
     rawScheduleDate,
     initialPaidAmount,
     moneyPaid,
@@ -351,6 +388,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [successInvoiceNo, setSuccessInvoiceNo] = useState<string>("");
+
+  // How many "Package Finalization Review" reminders were sent for this order
+  // (comes from the backend as packingSlots.reminderCount)
+  const [reminderCount, setReminderCount] = useState<number>(1);
 
   // orderadditionalitems.normalPrice (line price BEFORE discount) per saved row.
   // key = redux ala carte item id (e.g. "prev-7073")
@@ -409,24 +450,46 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return currentHour >= 18 || currentHour < 8;
   }, []);
   // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
+
+ const reminderShiftDays = Math.min(Math.max(reminderCount - 1, 0), 2);
+
+// 3rd (last) reminder already sent → there is NO "send reminder tomorrow" anymore
+const isFinalReminderDay = reminderCount >= 3 || unreadReminderDays >= 3;
+
+// Final state: last reminder day AND (after 6 PM OR packing slots full)
+const showFinalCancelScreen =
+  isFinalReminderDay &&
+  (isTimeRanOut || isLimitReached || availableSlots <= 0);
+
+  // Current (shifted) schedule date as a Date
+  const scheduleDateObj = useMemo(() => {
+    const base = parseDateOnly(rawScheduleDate);
+    return base ? addDays(base, reminderShiftDays) : null;
+  }, [rawScheduleDate, reminderShiftDays]);
+
+  // "Schedule to : 25th October" (shown on every step)
+  const scheduleDateStr = useMemo(
+    () =>
+      scheduleDateObj
+        ? formatScheduleLabel(scheduleDateObj)
+        : reduxScheduleDateStr,
+    [scheduleDateObj, reduxScheduleDateStr],
+  );
+
+  // "Send me the reminder tomorrow" card + "Reminder Scheduled" popup:
+  // the NEXT day after the current schedule date.
+  //   1 row  -> schedule date 25th, reminder date 26th
+  //   2 rows -> schedule date 26th, reminder date 27th
   const nextScheduleDateStr = useMemo(() => {
     try {
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const getOrdinal = (n: number) => {
-        const s = ["th", "st", "nd", "rd"];
-        const v = n % 100;
-        return n + (s[(v - 20) % 10] || s[v] || s[0]);
-      };
-      const dayOrdinal = getOrdinal(tomorrow.getDate());
-      const monthName = tomorrow.toLocaleDateString("en-US", { month: "long" });
-      return `${dayOrdinal} ${monthName}`;
+      const next = scheduleDateObj
+        ? addDays(scheduleDateObj, 1)
+        : addDays(new Date(), 1);
+      return formatScheduleLabel(next);
     } catch {
       return "Schedule Date";
     }
-  }, [scheduleDateStr]);
+  }, [scheduleDateObj]);
 
   const onSendReminderTomorrow = () => {
     Alert.alert(
@@ -547,6 +610,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     setOriginalAlacartTotal(0);
     setOriginalAlacartMap({});
     setAlacartNormalPriceMap({});
+    setReminderCount(1);
     loadedOrderIdRef.current = null;
     // NOTE: Redux is NOT cleared here. clearReviewData() runs only after the
     // final confirm step succeeds (see goToNextStep).
@@ -673,7 +737,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 orderInfo.sheduleDate || orderInfo.processScheduleDate;
               const d = new Date(rawDateVal);
               if (!isNaN(d.getTime())) {
-                resolvedRawDate = d.toISOString().split("T")[0];
+                // Local date parts (not toISOString, which is UTC and can be 1 day off)
+                resolvedRawDate = toLocalDateOnly(d);
                 resolvedDateStr = d.toLocaleDateString("en-US", {
                   day: "numeric",
                   month: "long",
@@ -984,6 +1049,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             }),
           );
 
+          // Reminder rows count -> schedule date shift (1 = +0, 2 = +1, 3 = +2 days)
+          const rc = Number(packingSlots?.reminderCount);
+          setReminderCount(
+            Number.isFinite(rc) && rc > 0
+              ? rc
+              : Math.max(1, Number(packingSlots?.unreadReminderDays) || 1),
+          );
+
           // Redux now holds data for THIS order (stored as a string key)
           loadedOrderIdRef.current = orderKey;
         }
@@ -1048,6 +1121,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 unreadReminderDays: slotData.unreadReminderDays,
               }),
             );
+            // Keep reminder count in sync (drives the schedule date shift)
+            const rc = Number(slotData.reminderCount);
+            if (Number.isFinite(rc) && rc > 0) setReminderCount(rc);
           }
         } catch (err) {
           console.warn(
@@ -2235,8 +2311,16 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   const isPickup =
     dMethodLower.includes("pickup") || pMethodLower.includes("pickup");
   const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
-  const isCashOnDelivery =
+   const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
+
+  const paidMoney = Number(moneyPaid) || 0;
+  const paidCredit = Number(creditPaid) || 0;
+  const refundableAmount = isCashPayment
+    ? paidCredit
+    : paidMoney + paidCredit > 0
+      ? paidMoney + paidCredit
+      : Number(initialPaidAmount) || 0;
 
   const deliveryCharge = Number(reduxDeliveryCharge || 0);
   const isCouponApplied = Number(isCoupon) === 1;
@@ -2301,7 +2385,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         <View className="flex-1 justify-center items-center">
           <LoadingPage message="Loading package details..." fullScreen={true} />
         </View>
-      ) : mode === "overview" && unreadReminderDays >= 3 ? (
+      ) : mode === "overview" && showFinalCancelScreen ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
           className="flex-1"
@@ -2327,7 +2411,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           <View className="h-[1px] bg-[#ECECEC] mb-6" />
 
           {/* Top Notice Banner: Green (if slot full) or Red (if time expired) */}
-          {availableSlots <= 0 ? (
+         {!isTimeRanOut && (isLimitReached || availableSlots <= 0) ? (
             <View className="mx-5 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-5 flex-row items-start">
               <View className="w-6 h-6 rounded-full bg-black items-center justify-center mr-3 mt-0.5">
                 <Ionicons name="time" size={14} color="#FFF" />
@@ -2359,8 +2443,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             </View>
           )}
 
-          {/* Credit Refund Card (If Paid) */}
-          {initialPaidAmount > 0 && (
+                  {/* Credit Refund Card (card paid OR credit balance paid) */}
+          {refundableAmount > 0 && (
             <View className="mx-5 mt-6 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-6 items-center">
               <View className="w-10 h-10 rounded-full bg-[#16B364] items-center justify-center mb-3">
                 <Ionicons name="wallet" size={20} color="#FFFFFF" />
@@ -2371,7 +2455,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               <Text className="text-[13px] text-[#475467] text-center mt-2 leading-5">
                 After canceling, the full amount of{" "}
                 <Text className="font-bold text-black">
-                  Rs. {formatPrice(initialPaidAmount)}
+                  Rs. {formatPrice(refundableAmount)}
                 </Text>{" "}
                 will be added to your credit balance. You can use it for your
                 next purchase.
@@ -3156,7 +3240,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       )}
 
       {/* Step: final confirm order details with dedicated ScrollView */}
-      {/* Step: final confirm order details with dedicated ScrollView */}
       {mode === "flow" && currentStep.type === "confirm" && (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -3287,6 +3370,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                         </Text>
                       </View>
                     ) : (
+                       <TouchableOpacity
+                          onPress={() => setCurrentStepIndex(item.stepIndex)}
+                          activeOpacity={0.8}
+                          
+                        >
                       <View className="flex-row items-center justify-between">
                         <Text className="text-[14px] text-black">
                           Current Price :{" "}
@@ -3295,19 +3383,21 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                             {item.pkg.qty > 1 ? ` X ${item.pkg.qty}` : ""}
                           </Text>
                         </Text>
-                        <TouchableOpacity
-                          onPress={() => setCurrentStepIndex(item.stepIndex)}
-                          activeOpacity={0.8}
+                       
+                          <View 
                           className="w-7 h-7 rounded-full bg-black items-center justify-center"
-                        >
+                          >
                           <Ionicons
                             name="arrow-forward"
                             size={15}
                             color="#FFFFFF"
                           />
-                        </TouchableOpacity>
+                          </View>
+                      
                       </View>
+                        </TouchableOpacity>
                     )}
+                    
                   </View>
                 );
               })}

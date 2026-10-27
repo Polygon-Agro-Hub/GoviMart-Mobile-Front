@@ -12,7 +12,6 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
-import InfoNoticeCard from "@/component/common/InfoNoticeCard";
 import { SummaryRow } from "@/component/order/SummaryRow";
 import { PackageModal } from "@/component/order/PackageModal";
 import LoadingPage from "@/component/common/LoadingPage";
@@ -61,16 +60,15 @@ interface CartItem {
   todayPrice?: number;
   /** Today's normal (undiscounted) price for this line (from marketplaceitems) */
   todayNormalPrice?: number;
+  rawDiscount?: number;
 }
 
 // Fixed service fee for orderApp = "Dash" AND isPackage = 0
 // (must match DASH_SERVICE_FEE on the server). Added on top of the delivery fee.
 const DASH_SERVICE_FEE = 180;
 
-// ─── PICKUP SCHEDULE HELPER ──────────────────────────────────────────────────
-// The DB column `sheduleDate` only stores the date (e.g. 2026-10-21 05:30:00),
-// while pickup orders are shown with a fixed pickup time of 09:30 PM.
-const PICKUP_TIME_LABEL = "09:30 PM";
+// ─── SCHEDULE HELPERS ────────────────────────────────────────────────────────
+// Used for ALL orders (delivery + pickup). The time comes from the order data.
 const MONTHS = [
   "Jan",
   "Feb",
@@ -86,19 +84,29 @@ const MONTHS = [
   "Dec",
 ];
 
-// "2026-10-21 05:30:00" -> { date: "Oct 21, 2026", time: "09:30 PM" }
+// "2026-10-24" or "2026-10-24 05:30:00" -> "Oct 24, 2026"
 // Reads the date digits literally, so a timezone can never shift the day.
-const formatPickupSchedule = (
-  raw: any,
-): { date: string; time: string } | null => {
+const formatScheduleDate = (raw: any): string | null => {
   if (!raw) return null;
   const str = raw instanceof Date ? raw.toISOString() : String(raw);
   const m = str.match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
   if (!m) return null;
-  return {
-    date: `${MONTHS[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}, ${m[1]}`,
-    time: PICKUP_TIME_LABEL,
-  };
+  return `${MONTHS[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}, ${m[1]}`;
+};
+
+// "21:30:00" -> "09:30 PM"; "09:30 PM" / "09:00 AM - 12:00 PM" -> unchanged
+const formatScheduleTime = (raw: any): string | null => {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  if (/\b(AM|PM)\b/i.test(str)) return str.toUpperCase();
+  const m = str.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const hh = h % 12 || 12;
+  return `${String(hh).padStart(2, "0")}:${String(min).padStart(2, "0")} ${
+    h >= 12 ? "PM" : "AM"
+  }`;
 };
 
 const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
@@ -211,142 +219,16 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
     };
   };
 
-  const handleConfirm = async () => {
-    if (!orderId) return;
-    if (order?.isConfirmed || Number(order?.isConfirmed) === 1) {
-      Alert.alert(
-        "Already Confirmed!",
-        "You have already confirmed this order. You cannot make any further changes.",
-        [{ text: "OK", onPress: () => navigation.goBack() }],
-      );
-      return;
-    }
-    try {
-      setSubmitting("confirm");
 
-      const t = computeTotals();
-      const liveTotal = t.hasData ? t.total : null;
 
-      await orderService.confirmOrderWithLivePrices({
-        orderId,
-        ...(liveTotal != null ? { newTotal: liveTotal } : {}),
-      });
+  // ─── SCHEDULE DATE + TIME (all orders) ─────────────────────────────────────
+  const scheduleDateRaw = order?.sheduleDate || order?.scheduleDate;
 
-      Alert.alert(
-        "Order Confirmed",
-        "Your order has been confirmed successfully.",
-        [{ text: "OK", onPress: () => navigation.goBack() }],
-      );
-    } catch (err) {
-      console.error("Confirm order failed:", err);
-      Alert.alert("Could not confirm", "Please try again.");
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const handleCancel = () => {
-    const effectiveOrderId = orderId ? String(orderId) : "";
-    const processOrderId =
-      order?.processOrderId || order?.proOrderId || order?.id || orderId;
-
-    const pkgs = packages.map((p) => ({
-      id: String(p.id || p.name),
-      name: p.name || "Package",
-      image: p.packageImage || p.image,
-      qty: p.quantity || 1,
-      unitPrice: p.price || 0,
-      serviceFee: 0,
-      packingFee: 0,
-    }));
-
-    const alacarts = cartItems.map((it) => ({
-      id: String(it.id),
-      name: it.name || "Item",
-      image: it.image,
-      weight: it.quantity,
-      price: it.todayPrice ?? it.price,
-      originalPrice:
-        it.todayPrice != null &&
-        it.todayNormalPrice != null &&
-        it.todayNormalPrice - it.todayPrice > 0.01
-          ? it.todayNormalPrice
-          : it.todayPrice == null
-            ? it.oldPrice
-            : undefined,
-    }));
-
-    const pMethod = (order?.paymentMethod || "").trim().toLowerCase();
-    const isPaidVal =
-      Number(order?.isPaid) === 1 ||
-      order?.isPaid === true ||
-      String(order?.isPaid) === "1";
-    const isCardOrOnline =
-      pMethod.includes("card") ||
-      pMethod.includes("payhere") ||
-      pMethod.includes("online") ||
-      (isPaidVal && !pMethod.includes("cash") && !pMethod.includes("cod"));
-    const isCashMethod = pMethod.includes("cash") || pMethod.includes("cod");
-
-    const totalsNow = computeTotals();
-    const orderFullTotal = totalsNow.total;
-    const initialPaidAmount =
-      parseFloat(order?.amount || 0) > 0
-        ? parseFloat(order?.amount)
-        : orderFullTotal;
-    const moneyPaid = parseFloat(order?.moneyPaid || 0);
-    const creditPaidVal = parseFloat(order?.creditPaid || 0);
-
-    const totalPaidCard = isCardOrOnline
-      ? moneyPaid > 0
-        ? moneyPaid
-        : initialPaidAmount
-      : 0;
-    const totalPaidCredit = creditPaidVal || 0;
-    const processOrderTotal = orderFullTotal;
-    const totalCashDue =
-      isCashMethod && !isPaidVal
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
-        : 0;
-
-    let refundCreditAmount = 0;
-    if (isCardOrOnline) {
-      refundCreditAmount = totalPaidCard + totalPaidCredit;
-    } else if (pMethod.includes("credit")) {
-      refundCreditAmount =
-        totalPaidCredit > 0 ? totalPaidCredit : processOrderTotal;
-    } else {
-      refundCreditAmount = totalPaidCredit > 0 ? totalPaidCredit : 0;
-    }
-
-    navigation.navigate("OrderConfirmedOrderCancelScreen", {
-      orderId: effectiveOrderId,
-      processOrderId: processOrderId ? String(processOrderId) : undefined,
-      packages: pkgs,
-      alaCarteItems: alacarts,
-      totalPaid: initialPaidAmount,
-      totalPaidCard,
-      totalPaidCredit,
-      totalCashDue,
-      processOrderTotal,
-      paymentMethod: order?.paymentMethod || "cash",
-      refundCreditAmount,
-      serviceFee: totalsNow.serviceFee, // DASH: 0 when not a Dash order
-    });
-  };
-
-  // Pickup orders show the scheduled date + fixed pickup time in the header
-  const isPickupOrder =
-    (
-      order?.delivaryMethod ||
-      order?.deliveryMethod ||
-      order?.deliveryType ||
-      ""
-    ).toUpperCase() === "PICKUP";
-
-  const pickupSchedule = isPickupOrder
-    ? formatPickupSchedule(order?.sheduleDate || order?.scheduleDate)
-    : null;
+  const scheduleDateLabel = formatScheduleDate(scheduleDateRaw) ?? "N/A";
+  const scheduleTimeLabel =
+    formatScheduleTime(order?.sheduleTime || order?.scheduleTime) ??
+    formatScheduleTime(scheduleDateRaw) ?? // fallback if the time is inside the date
+    "N/A";
 
   const formatAmount = (amount: number | string) => {
     const n =
@@ -378,17 +260,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         .trim(),
     );
     return isNaN(parsed) ? null : parsed;
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
   };
 
   const formatStatusDate = (dateString?: string | Date | null) => {
@@ -637,14 +508,12 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           order?.returnNote ||
           order?.returnReason ||
           "Customer did not picked up the order during the day.";
-        const pickupSched =
-          pickupSchedule ||
-          formatPickupSchedule(
-            order?.sheduleDate || order?.scheduleDate || order?.deliveryDate,
-          );
-        const pickupReturnTime = pickupSched
-          ? `${pickupSched.date}, ${pickupSched.time}`
-          : returnTime || updateTime;
+
+        // Scheduled pickup date + time from the order itself
+        const pickupReturnTime =
+          scheduleDateLabel !== "N/A"
+            ? `${scheduleDateLabel}, ${scheduleTimeLabel}`
+            : returnTime || updateTime;
 
         return [
           {
@@ -675,7 +544,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
         ];
       }
 
-      if (status === "Cancelled") {
+      if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
+        const isConfirmed = Number(order?.isConfirmed) === 1;
         return [
           {
             title: "Ordered",
@@ -683,12 +553,16 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             icon: "cart-shopping",
             active: true,
           },
-          {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
+          ...(isConfirmed
+            ? [
+                {
+                  title: "Processing",
+                  date: processingTime,
+                  icon: "box-open",
+                  active: true,
+                },
+              ]
+            : []),
           {
             title: "Cancelled",
             date: "",
@@ -907,7 +781,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       ];
     }
 
-    if (status === "Cancelled") {
+    if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
+      const isConfirmed = Number(order?.isConfirmed) === 1;
       return [
         {
           title: "Ordered",
@@ -915,12 +790,16 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           icon: "cart-shopping",
           active: true,
         },
-        {
-          title: "Processing",
-          date: processingTime,
-          icon: "box-open",
-          active: true,
-        },
+        ...(isConfirmed
+          ? [
+              {
+                title: "Processing",
+                date: processingTime,
+                icon: "box-open",
+                active: true,
+              },
+            ]
+          : []),
         {
           title: "Cancelled",
           date: "",
@@ -1069,7 +948,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               marginTop: 8,
             }}
           >
-            {/* Delivery / Pickup Date */}
+            {/* Schedule Date (all orders) */}
             <View
               style={{
                 flexDirection: "row",
@@ -1086,8 +965,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   marginLeft: 3,
                 }}
               >
-                {pickupSchedule?.date ??
-                  formatDate(order?.sheduleDate || order?.scheduleDate)}
+                {scheduleDateLabel}
               </Text>
             </View>
 
@@ -1099,7 +977,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               }}
             />
 
-            {/* Time Slot / Pickup Time */}
+            {/* Schedule Time (all orders) */}
             <View
               style={{
                 flexDirection: "row",
@@ -1116,8 +994,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   marginLeft: 3,
                 }}
               >
-                {pickupSchedule?.time ??
-                  (order?.sheduleTime || order?.scheduleTime || "N/A")}
+                {scheduleTimeLabel}
               </Text>
             </View>
 

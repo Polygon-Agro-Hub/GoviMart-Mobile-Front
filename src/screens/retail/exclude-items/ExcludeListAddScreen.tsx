@@ -201,13 +201,17 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate("ExcludeListSummery", {
-        customerId: Number(customerId),
-        fromAccount: route.params?.fromAccount,
-      });
+      if (isFromAccount) {
+        navigation.navigate("Profile");
+      } else {
+        navigation.navigate("ExcludeListSummery", {
+          customerId: Number(customerId),
+          fromAccount: route.params?.fromAccount,
+        });
+      }
     }
     return true;
-  }, [navigation, customerId, route.params?.fromAccount]);
+  }, [navigation, customerId, route.params?.fromAccount, isFromAccount]);
 
   const fetchCropsAndPreferences = useCallback(async () => {
     try {
@@ -353,16 +357,20 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         }
       }
 
-      const currentData = getCurrentCustomerData();
-      navigation.navigate("ExcludeListSummery", {
-        customerId: Number(customerId),
-        name: currentData.name,
-        title: currentData.title,
-        phoneNumber: currentData.number,
-        cusId: currentData.customerId,
-        id: Number(currentData.id) || undefined,
-        fromAccount: route.params?.fromAccount,
-      });
+      if (isFromAccount) {
+        navigation.navigate("Profile");
+      } else {
+        const currentData = getCurrentCustomerData();
+        navigation.navigate("ExcludeListSummery", {
+          customerId: Number(customerId),
+          name: currentData.name,
+          title: currentData.title,
+          phoneNumber: currentData.number,
+          cusId: currentData.customerId,
+          id: Number(currentData.id) || undefined,
+          fromAccount: route.params?.fromAccount,
+        });
+      }
     } catch (err: any) {
       console.error("Failed to submit excludelist changes:", err);
       Alert.alert("Submission Error", "Failed to save excludelist preferences to backend.");

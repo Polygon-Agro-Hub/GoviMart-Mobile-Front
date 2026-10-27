@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ActivityIndicator,
   Image,
@@ -21,6 +19,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AlertModal } from "@/component/common/AlertModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {
+  sanitizePasswordInput,
+  validatePassword,
+  validateConfirmPassword,
+} from "@/utils/passwordValidation";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -35,6 +38,29 @@ interface Props {
   navigation: NavigationProp;
   route: ScreenRouteProp;
 }
+
+const SAME_PASSWORD_MESSAGE =
+  "New password cannot be the same as your current password. Please choose a different password.";
+
+// Adjust the codes/keywords to match what backend returns
+const isSamePasswordError = (message?: string, code?: string): boolean => {
+  if (
+    code &&
+    ["SAME_PASSWORD", "PASSWORD_SAME_AS_OLD", "PASSWORD_REUSED"].includes(code)
+  ) {
+    return true;
+  }
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes("same as") ||
+    m.includes("same password") ||
+    m.includes("current password") ||
+    m.includes("old password") ||
+    m.includes("previous password") ||
+    m.includes("reuse")
+  );
+};
 
 const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -74,43 +100,17 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (/\s/.test(newPassword)) {
-      newErrors.newPassword = "Password cannot contain spaces";
-    } else {
-      const hasUppercase = /[A-Z]/.test(newPassword);
-      const hasNumber = /[0-9]/.test(newPassword);
-      const hasSpecialChar =
-        /[@#$%&*\-=()?\/;:'"!~±×÷•°`´{}\]\[+_¥®\^€£©¡<>¢|\\¿,.]/.test(newPassword);
+    const passwordError = validatePassword(
+      newPassword,
+      "New password is required"
+    );
+    if (passwordError) newErrors.newPassword = passwordError;
 
-      if (newPassword.length < 8) {
-        newErrors.newPassword = "Must be at least 8 characters";
-      } else if (!hasUppercase && !hasNumber && !hasSpecialChar) {
-        newErrors.newPassword =
-          "Must have 1 uppercase letter, 1 number & 1 special character";
-      } else if (!hasUppercase && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 special character";
-      } else if (!hasUppercase && !hasNumber) {
-        newErrors.newPassword = "Must have 1 uppercase letter & 1 number";
-      } else if (!hasNumber && !hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 number & 1 special character";
-      } else if (!hasUppercase) {
-        newErrors.newPassword = "Must have 1 uppercase letter";
-      } else if (!hasNumber) {
-        newErrors.newPassword = "Must have 1 number";
-      } else if (!hasSpecialChar) {
-        newErrors.newPassword = "Must have 1 special character";
-      }
-    }
-
-    if (!confirmNewPassword) {
-      newErrors.confirmNewPassword = "Confirm password is required";
-    } else if (/\s/.test(confirmNewPassword)) {
-      newErrors.confirmNewPassword = "Password cannot contain spaces";
-    } else if (confirmNewPassword !== newPassword) {
-      newErrors.confirmNewPassword = "Passwords do not match";
-    }
+    const confirmError = validateConfirmPassword(
+      confirmNewPassword,
+      newPassword
+    );
+    if (confirmError) newErrors.confirmNewPassword = confirmError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -155,16 +155,29 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
           { cancelable: false }
         );
       } else {
-        showAlert(
-          "Reset Failed",
-          response.data?.message || "Failed to reset password."
-        );
+        const message = response.data?.message;
+        if (isSamePasswordError(message, response.data?.code)) {
+          setErrors((prev) => ({
+            ...prev,
+            newPassword: SAME_PASSWORD_MESSAGE,
+          }));
+          showAlert("Reset Failed", SAME_PASSWORD_MESSAGE, "error");
+        } else {
+          showAlert("Reset Failed", message || "Failed to reset password.", "error");
+        }
       }
     } catch (err: any) {
       console.error("Password reset error:", err);
-      const msg =
-        err.response?.data?.message || "An unexpected error occurred.";
-      showAlert("Error", msg);
+      const data = err.response?.data;
+      if (isSamePasswordError(data?.message, data?.code)) {
+        setErrors((prev) => ({
+          ...prev,
+          newPassword: SAME_PASSWORD_MESSAGE,
+        }));
+        showAlert("Reset Failed", SAME_PASSWORD_MESSAGE, "error");
+      } else {
+        showAlert("Error", data?.message || "An unexpected error occurred.", "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -235,8 +248,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showNewPassword}
                       value={newPassword}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setNewPassword(clean);
+                        setNewPassword(sanitizePasswordInput(t));
                         if (errors.newPassword)
                           setErrors((prev) => ({ ...prev, newPassword: "" }));
                       }}
@@ -297,8 +309,7 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
                       secureTextEntry={!showConfirmNewPassword}
                       value={confirmNewPassword}
                       onChangeText={(t) => {
-                        const clean = t.replace(/\s/g, "");
-                        setConfirmNewPassword(clean);
+                        setConfirmNewPassword(sanitizePasswordInput(t));
                         if (errors.confirmNewPassword)
                           setErrors((prev) => ({
                             ...prev,
@@ -370,6 +381,13 @@ const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
             className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
               isValid ? "bg-black" : "bg-[#7F919C]"
             }`}
+            style={{
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 5,
+            }}
           >
             {loading ? (
               <ActivityIndicator color="white" size="small" />
