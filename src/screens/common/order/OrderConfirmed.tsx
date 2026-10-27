@@ -570,6 +570,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         isPaid: 1,
       });
 
+      console.log(apiPayload)
+
       // 2nd call (only for an already-paid order whose price increased):
       // the order is now confirmed, so the backend's "already confirmed +
       // isPaid = 1" branch sets amount = newTotal and
