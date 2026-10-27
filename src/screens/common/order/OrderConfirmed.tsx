@@ -272,6 +272,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     processOrderId?: string | number;
     newTotal?: number;
     isPaid?: number;
+    syncMoneyPaid?: boolean; // paid order + price increase: sync moneyPaid after confirm
   } | null>(null);
 
   // Fetch active payment gateway
@@ -490,6 +491,38 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const remaining = Math.max(0, orderFullTotal - creditApplied);
 
   const isUnpaidCardOrder = isCardOrder && !pay.paid;
+
+  // ── PRICE INCREASE ON AN ALREADY-PAID ORDER ──────────────────────────────
+  // Example: order fully paid with credit (isPaid = 1), then today's price is
+  // Rs. 100 higher. That Rs. 100 must go straight to the payment gateway.
+  // Amount the customer already paid before today's price change (credit + card).
+  // Cash orders are never "pre-paid".
+  const alreadyPaid =
+    pay.paid && !isCashOrder
+      ? num(order?.amount) > 0
+        ? num(order?.amount)
+        : creditPaid + num(order?.moneyPaid)
+      : creditPaid;
+
+  const extraDue =
+    pay.paid && !isCashOrder
+      ? Math.round(Math.max(0, orderFullTotal - alreadyPaid) * 100) / 100
+      : 0;
+  const hasExtraDue = extraDue >= 0.01;
+
+  // Single amount that must be collected through the gateway on confirm
+  const gatewayAmount = isUnpaidCardOrder
+    ? remaining
+    : hasExtraDue
+      ? extraDue
+      : 0;
+  const needsGateway = gatewayAmount >= 0.01;
+
+  // Card row in Payment Summary: don't count the price difference twice
+  const cardRowAmount = hasExtraDue
+    ? Math.max(0, remaining - extraDue)
+    : remaining;
+
   const cardBrand: string =
     savedCard?.scheme || order?.cardBrand || order?.cardType || "Master";
   const cardLast4: string =
@@ -528,15 +561,46 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     }
 
     try {
+      // syncMoneyPaid is a frontend-only flag, never sent to the API
+      const { syncMoneyPaid, ...apiPayload } = payload;
+
+      // 1st call: confirm the order with live prices (unchanged backend flow)
       await orderService.confirmOrderWithLivePrices({
-        ...payload,
+        ...apiPayload,
         isPaid: 1,
       });
+
+      // 2nd call (only for an already-paid order whose price increased):
+      // the order is now confirmed, so the backend's "already confirmed +
+      // isPaid = 1" branch sets amount = newTotal and
+      // moneyPaid = newTotal - creditPaid (the Rs. 100 paid via gateway).
+      if (syncMoneyPaid) {
+        // Best-effort: the payment and the 1st confirm already succeeded, so a
+        // failure of this moneyPaid sync must NOT show the error alert.
+        try {
+          await orderService.confirmOrderWithLivePrices({
+            orderId: apiPayload.orderId,
+            processOrderId: apiPayload.processOrderId,
+            ...(apiPayload.newTotal != null
+              ? { newTotal: apiPayload.newTotal }
+              : {}),
+            isPaid: 1,
+          });
+        } catch (syncErr: any) {
+          console.warn(
+            "moneyPaid sync call returned an error (ignored):",
+            syncErr?.response?.data || syncErr,
+          );
+        }
+      }
 
       setPendingConfirmPayload(null);
       showSuccess();
     } catch (err: any) {
-      console.error("Post-payment confirm order failed:", err);
+      console.error(
+        "Post-payment confirm order failed:",
+        err?.response?.data || err,
+      );
       Alert.alert(
         "Confirmation Error",
         "Your payment was received but the order could not be confirmed. Please contact support.",
@@ -576,16 +640,21 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     const processOrderId =
       order?.processOrderId || order?.proOrderId || order?.id || orderId;
 
-    // ── If paymentMethod == "card" and isPaid == 0 -> settle total from gateway ──
-    if (isUnpaidCardOrder && remaining > 0) {
+    // ── Unpaid card order OR paid order whose total increased -> gateway ──
+    if (needsGateway) {
       const confirmPayload = {
         orderId: effectiveOrderId,
         processOrderId: processOrderId || undefined,
         ...(liveTotal != null ? { newTotal: liveTotal } : {}),
         isPaid: 1,
+        ...(hasExtraDue ? { syncMoneyPaid: true } : {}),
       };
       setPendingConfirmPayload(confirmPayload);
       setSubmitting("confirm");
+
+      const description = hasExtraDue
+        ? `Polygon Order Price Difference - ${invoiceNo}`
+        : `Polygon Order Payment - ${invoiceNo}`;
 
       try {
         const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
@@ -595,10 +664,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           try {
             const chargeRes = await adapter.chargeSavedCard({
               cardId: savedCard.id,
-              amount: remaining,
+              amount: gatewayAmount,
               paymentType: "order",
               orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `Polygon Order Payment - ${invoiceNo}`,
+              itemsDescription: description,
             });
             if (chargeRes.success) {
               await handlePaymentSuccess(confirmPayload);
@@ -627,9 +696,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         // Hosted Checkout Modal
         const session = await adapter.initiatePayment({
           orderId: String(processOrderId || effectiveOrderId),
-          amount: remaining,
+          amount: gatewayAmount,
           paymentType: "order",
-          itemsDescription: `Polygon Order Payment - ${invoiceNo}`,
+          itemsDescription: description,
         });
 
         setCheckoutSession(session);
@@ -646,7 +715,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
-    // Direct confirm (Cash, already paid card order, or 100% credit covered)
+    // Direct confirm (Cash, already paid order with no price increase, or 100% credit covered)
     try {
       setSubmitting("confirm");
       if (orderId) {
@@ -952,7 +1021,64 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         </View>
 
         {/* PAYMENT NOTICE */}
-        {isCardOrder ? (
+        {hasExtraDue ? (
+          // Already-paid order (credit / card) whose total went up today
+          <View
+            style={{
+              backgroundColor: "#EEF3FF",
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ fontSize: 11, color: "#111", lineHeight: 16 }}>
+              Prices changed since you placed this order. The extra{" "}
+              <Text style={{ fontWeight: "700" }}>
+                Rs. {formatAmount(extraDue)}
+              </Text>{" "}
+              will be{" "}
+              {savedCard
+                ? "charged to your saved card"
+                : "paid via the secure payment gateway"}{" "}
+              when you confirm.
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "#FFF",
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                marginTop: 8,
+              }}
+            >
+              {savedCard ? (
+                <>
+                  <CardBrand brand={cardBrand} />
+                  <Text style={{ fontSize: 11, color: "#111" }}>
+                    {/visa/i.test(cardBrand) ? "Visa" : "Master"} ●●●●{" "}
+                    {String(cardLast4).slice(-4)}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons
+                    name="card-outline"
+                    size={16}
+                    color="#0066FF"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={{ fontSize: 11, fontWeight: "600", color: "#111" }}
+                  >
+                    Pay via Payment Gateway (Card)
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        ) : isCardOrder ? (
           isUnpaidCardOrder ? (
             remaining > 0 ? (
               <View
@@ -1081,6 +1207,35 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               </Text>
             </View>
           )
+        ) : pay.paid && !isCashOrder ? (
+          // Paid with credit, no price increase
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#E8F9EC",
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 14,
+            }}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={16}
+              color="#1F7A3A"
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 11,
+                color: "#1F7A3A",
+                lineHeight: 16,
+              }}
+            >
+              Your order is fully covered by your credit balance.
+            </Text>
+          </View>
         ) : (
           <View
             style={{
@@ -1144,12 +1299,22 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             />
           )}
 
-          {isCardOrder && remaining > 0 && (
+          {isCardOrder && cardRowAmount > 0 && (
             <SummaryRow
               label={pay.paid ? "Paid with Card" : "Pay with Card"}
-              value={`Rs. ${formatAmount(remaining)}`}
+              value={`Rs. ${formatAmount(cardRowAmount)}`}
               icon="credit-card"
               iconColor="#0088FF"
+            />
+          )}
+
+          {hasExtraDue && (
+            <SummaryRow
+              label="Pay by Card"
+              value={`Rs. ${formatAmount(extraDue)}`}
+              icon="credit-card"
+              iconColor="#0088FF"
+              valueColor="#FF9114"
             />
           )}
 
@@ -1215,8 +1380,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFF" }}>
-              {isUnpaidCardOrder && remaining > 0
-                ? `Pay Rs. ${formatAmount(remaining)} & Confirm Order`
+              {needsGateway
+                ? `Pay Rs. ${formatAmount(gatewayAmount)} & Confirm Order`
                 : "Confirm & Accept My Order"}
             </Text>
           )}
