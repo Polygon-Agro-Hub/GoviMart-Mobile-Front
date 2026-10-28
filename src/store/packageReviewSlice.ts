@@ -103,6 +103,44 @@ const initialState: PackageReviewState = {
   unreadReminderDays: 1,
 };
 
+/* ---------------------------------------------------------
+   Helpers (package scoping)
+--------------------------------------------------------- */
+
+// Does this line match the given product / item id?
+// Checks the line itself and the original product it replaced.
+const matchesProduct = (prod: ReviewProduct, id: string): boolean =>
+  String(prod.id) === id ||
+  (prod.itemId != null && String(prod.itemId) === id) ||
+  (prod.productId != null && String(prod.productId) === id) ||
+  (!!prod.originalProduct &&
+    (String(prod.originalProduct.id) === id ||
+      (prod.originalProduct.itemId != null &&
+        String(prod.originalProduct.itemId) === id) ||
+      (prod.originalProduct.productId != null &&
+        String(prod.originalProduct.productId) === id)));
+
+// Resolve which package key the action is meant for.
+// Only returns keys that were explicitly identified (packageId, or the
+// orderPackageId DB id). It never returns "all packages".
+const resolveTargetKeys = (
+  state: PackageReviewState,
+  packageId?: string | number,
+  orderPackageId?: string | number,
+): string[] =>
+  Object.keys(state.packageProducts).filter((pkgKey) => {
+    const dbId = state.orderPackageDbIds[pkgKey];
+    return (
+      (packageId != null && pkgKey === String(packageId)) ||
+      (packageId != null &&
+        dbId != null &&
+        String(dbId) === String(packageId)) ||
+      (orderPackageId != null &&
+        dbId != null &&
+        String(dbId) === String(orderPackageId))
+    );
+  });
+
 export const packageReviewSlice = createSlice({
   name: "packageReview",
   initialState,
@@ -237,6 +275,8 @@ export const packageReviewSlice = createSlice({
       };
 
       if (isSameOrder) {
+        // Matching is done strictly INSIDE each package (pkgKey), so a
+        // replacement in one package can never be applied to another.
         Object.entries(state.packageProducts).forEach(([pkgKey, items]) => {
           if (mergedProducts[pkgKey]) {
             const replacedItems = items.filter((p) => p.isReplaced);
@@ -244,17 +284,16 @@ export const packageReviewSlice = createSlice({
               mergedProducts[pkgKey] = mergedProducts[pkgKey].map((prod) => {
                 const matchedReplaced = replacedItems.find(
                   (r) =>
+                    (r.itemId != null &&
+                      prod.itemId != null &&
+                      String(r.itemId) === String(prod.itemId)) ||
+                    (r.originalProduct?.itemId != null &&
+                      prod.itemId != null &&
+                      String(r.originalProduct.itemId) ===
+                        String(prod.itemId)) ||
                     String(r.id) === String(prod.id) ||
-                    (r.itemId && String(r.itemId) === String(prod.itemId)) ||
                     (r.originalProduct &&
-                      (String(r.originalProduct.id) === String(prod.id) ||
-                        (r.originalProduct.itemId &&
-                          String(r.originalProduct.itemId) ===
-                            String(prod.itemId)))) ||
-                    (r.name &&
-                      prod.name &&
-                      r.name.trim().toLowerCase() ===
-                        prod.name.trim().toLowerCase()),
+                      String(r.originalProduct.id) === String(prod.id)),
                 );
                 return matchedReplaced || prod;
               });
@@ -269,6 +308,8 @@ export const packageReviewSlice = createSlice({
         : {};
       state.deletedAdditionalItemIds = [];
     },
+
+    // Replaces ONE product in ONE package.
     replacePackageProduct: (
       state,
       action: PayloadAction<{
@@ -280,63 +321,47 @@ export const packageReviewSlice = createSlice({
     ) => {
       const { packageId, orderPackageId, originalProductId, newProduct } =
         action.payload;
+      const origId = String(originalProductId);
 
-      let replaced = false;
-      const nextProducts: Record<string, ReviewProduct[]> = {};
+      let targetKeys = resolveTargetKeys(state, packageId, orderPackageId);
 
-      Object.entries(state.packageProducts).forEach(([pkgKey, list]) => {
-        const isTargetPkg =
-          !packageId ||
-          pkgKey === String(packageId) ||
-          String(state.orderPackageDbIds[pkgKey]) === String(packageId) ||
-          (orderPackageId &&
-            String(state.orderPackageDbIds[pkgKey]) === String(orderPackageId));
+      // Fallback if the caller sent no package info: only act when exactly
+      // ONE package contains this product. If several do, it is ambiguous,
+      // so do nothing rather than replace the product in every package.
+      if (targetKeys.length === 0) {
+        const candidates = Object.keys(state.packageProducts).filter((k) =>
+          state.packageProducts[k].some((p) => matchesProduct(p, origId)),
+        );
+        if (candidates.length !== 1) return;
+        targetKeys = candidates;
+      }
 
-        nextProducts[pkgKey] = list.map((prod) => {
-          if (replaced && !isTargetPkg) return prod;
+      const list = state.packageProducts[targetKeys[0]];
+      if (!list) return;
 
-          const isMatch =
-            String(prod.id) === String(originalProductId) ||
-            (prod.itemId && String(prod.itemId) === String(originalProductId)) ||
-            (prod.productId &&
-              String(prod.productId) === String(originalProductId)) ||
-            (prod.originalProduct &&
-              (String(prod.originalProduct.id) === String(originalProductId) ||
-                (prod.originalProduct.itemId &&
-                  String(prod.originalProduct.itemId) ===
-                    String(originalProductId)) ||
-                (prod.originalProduct.productId &&
-                  String(prod.originalProduct.productId) ===
-                    String(originalProductId)))) ||
-            (prod.name &&
-              newProduct?.originalProduct?.name &&
-              prod.name.trim().toLowerCase() ===
-                newProduct.originalProduct.name.trim().toLowerCase());
+      const idx = list.findIndex((p) => matchesProduct(p, origId));
+      if (idx === -1) return;
 
-          if (isMatch) {
-            replaced = true;
-            const preservedOriginal = prod.originalProduct || {
-              ...prod,
-              isReplaced: false,
-            };
-            return {
-              ...newProduct,
-              id: String(newProduct.productId || newProduct.id),
-              itemId: prod.itemId || prod.originalProduct?.itemId,
-              productId: newProduct.productId
-                ? Number(newProduct.productId)
-                : parseInt(newProduct.id) || undefined,
-              minQuantity: newProduct.minQuantity ?? newProduct.step ?? 0.5,
-              isReplaced: true,
-              originalProduct: preservedOriginal,
-            };
-          }
-          return prod;
-        });
-      });
+      const prod = list[idx];
+      const preservedOriginal = prod.originalProduct || {
+        ...prod,
+        isReplaced: false,
+      };
 
-      state.packageProducts = nextProducts;
+      list[idx] = {
+        ...newProduct,
+        id: String(newProduct.productId || newProduct.id),
+        itemId: prod.itemId || prod.originalProduct?.itemId,
+        productId: newProduct.productId
+          ? Number(newProduct.productId)
+          : parseInt(newProduct.id) || undefined,
+        minQuantity: newProduct.minQuantity ?? newProduct.step ?? 0.5,
+        isReplaced: true,
+        originalProduct: preservedOriginal,
+      };
     },
+
+    // Resets ONE product in ONE package back to its original.
     resetPackageProduct: (
       state,
       action: PayloadAction<{
@@ -345,47 +370,34 @@ export const packageReviewSlice = createSlice({
       }>,
     ) => {
       const { packageId, productId } = action.payload;
-      const nextProducts: Record<string, ReviewProduct[]> = {};
+      const list = state.packageProducts[packageId];
+      if (!list) return;
 
-      Object.entries(state.packageProducts).forEach(([pkgKey, list]) => {
-        const templateList = state.productTemplatesState[pkgKey] || [];
-        nextProducts[pkgKey] = list.map((prod) => {
-          const isMatch =
-            String(prod.id) === String(productId) ||
-            (prod.itemId && String(prod.itemId) === String(productId)) ||
-            (prod.productId && String(prod.productId) === String(productId)) ||
-            (prod.originalProduct &&
-              (String(prod.originalProduct.id) === String(productId) ||
-                (prod.originalProduct.itemId &&
-                  String(prod.originalProduct.itemId) === String(productId)) ||
-                (prod.originalProduct.productId &&
-                  String(prod.originalProduct.productId) ===
-                    String(productId))));
+      const pid = String(productId);
+      const idx = list.findIndex((p) => matchesProduct(p, pid));
+      if (idx === -1) return;
 
-          if (isMatch) {
-            if (prod.originalProduct) {
-              return { ...prod.originalProduct, isReplaced: false };
-            }
-            const defaultProd = templateList.find(
-              (t) =>
-                String(t.id) === String(productId) ||
-                (t.itemId && String(t.itemId) === String(productId)) ||
-                (t.name &&
-                  prod.name &&
-                  t.name.trim().toLowerCase() ===
-                    prod.name.trim().toLowerCase()),
-            );
-            if (defaultProd) {
-              return { ...defaultProd, isReplaced: false };
-            }
-            return { ...prod, isReplaced: false };
-          }
-          return prod;
-        });
-      });
+      const prod = list[idx];
 
-      state.packageProducts = nextProducts;
+      if (prod.originalProduct) {
+        list[idx] = { ...prod.originalProduct, isReplaced: false };
+        return;
+      }
+
+      const templateList = state.productTemplatesState[packageId] || [];
+      const defaultProd = templateList.find(
+        (t) =>
+          String(t.id) === pid ||
+          (t.itemId != null && String(t.itemId) === pid) ||
+          (prod.itemId != null &&
+            t.itemId != null &&
+            String(t.itemId) === String(prod.itemId)),
+      );
+
+      list[idx] = { ...(defaultProd ?? prod), isReplaced: false };
     },
+
+    // Changes quantity of ONE product in ONE package.
     updateProductQuantity: (
       state,
       action: PayloadAction<{
@@ -395,27 +407,27 @@ export const packageReviewSlice = createSlice({
       }>,
     ) => {
       const { packageId, productId, delta } = action.payload;
-      if (state.packageProducts[packageId]) {
-        state.packageProducts[packageId] = state.packageProducts[packageId].map(
-          (prod) => {
-            if (prod.id === productId) {
-              const stepVal = prod.step && prod.step > 0 ? prod.step : 0.5;
-              const minAllowed =
-                prod.minQuantity ?? prod.originalProduct?.quantity ?? stepVal;
-              const nextQty =
-                prod.unit === "kg"
-                  ? parseFloat((prod.quantity + delta * stepVal).toFixed(3))
-                  : Math.round(prod.quantity + delta * stepVal);
-              return {
-                ...prod,
-                quantity: Math.max(minAllowed, nextQty),
-              };
-            }
-            return prod;
-          },
-        );
-      }
+      const list = state.packageProducts[packageId];
+      if (!list) return;
+
+      state.packageProducts[packageId] = list.map((prod) => {
+        if (String(prod.id) === String(productId)) {
+          const stepVal = prod.step && prod.step > 0 ? prod.step : 0.5;
+          const minAllowed =
+            prod.minQuantity ?? prod.originalProduct?.quantity ?? stepVal;
+          const nextQty =
+            prod.unit === "kg"
+              ? parseFloat((prod.quantity + delta * stepVal).toFixed(3))
+              : Math.round(prod.quantity + delta * stepVal);
+          return {
+            ...prod,
+            quantity: Math.max(minAllowed, nextQty),
+          };
+        }
+        return prod;
+      });
     },
+
     toggleAlacartProduct: (state, action: PayloadAction<ProductType>) => {
       const product = action.payload;
 

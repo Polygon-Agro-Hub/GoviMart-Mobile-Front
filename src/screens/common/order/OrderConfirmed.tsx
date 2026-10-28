@@ -838,9 +838,18 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       refundCreditAmount = totalPaidCredit > 0 ? totalPaidCredit : 0;
     }
 
+    const isPkgVal = order?.isPackage;
+    const isAlaCarteOnlyOrder =
+      isPkgVal != null &&
+      String(isPkgVal).trim() !== "" &&
+      Number(isPkgVal) === 0;
+    const hasOrderAlacart = alacarts.length > 0 || rawItemsData.length > 0 || isAlaCarteOnlyOrder;
+
     navigation.navigate("OrderConfirmedOrderCancelScreen", {
       orderId: effectiveOrderId,
       processOrderId: processOrderId ? String(processOrderId) : undefined,
+      hasAlaCarte: hasOrderAlacart,
+      hasAlacart: hasOrderAlacart,
       packages: pkgs,
       alaCarteItems: alacarts,
       totalPaid: initialPaidAmount,

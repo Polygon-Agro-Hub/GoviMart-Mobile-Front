@@ -121,7 +121,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState<"confirm" | "cancel" | null>(
     null,
   );
-
+const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
   // ─── SHARED TOTALS (same formula as OrderConfirmation screen) ──────────────
   // Everything is calculated from today's marketplace prices.
   // The stored order.fullTotal / order.discount are only fallbacks.
@@ -1230,7 +1230,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   marginBottom: 6,
                 }}
               >
-                Packages ({packages.length})
+                Packages ({packagesCount})
               </Text>
 
               <TouchableOpacity

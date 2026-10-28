@@ -155,6 +155,8 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   const {
     orderId,
     processOrderId,
+    hasAlaCarte: passedHasAlaCarte,
+    hasAlacart: passedHasAlacart,
     packages: passedPackages,
     alaCarteItems: passedAlaCarte,
     totalPaid: passedTotalPaid,
@@ -166,7 +168,14 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
     serviceFee: passedServiceFee, // DASH: 0 / undefined when not a Dash order
-  } = route.params || {};
+  } = (route.params || {}) as any;
+
+  // Order has ala carte items check
+  const hasAlaCarte = Boolean(
+    passedHasAlaCarte ||
+    passedHasAlacart ||
+    (passedAlaCarte && passedAlaCarte.length > 0)
+  );
 
   // DASH service fee (only passed for orderApp = "Dash")
   const serviceFee = Number(passedServiceFee ?? 0);
@@ -179,8 +188,50 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
         : [],
     [passedPackages],
   );
-  const alaCarteItems: AlaCarteItem[] =
-    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [];
+
+  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>(
+    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [],
+  );
+
+  // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
+  useEffect(() => {
+    if (!hasAlaCarte || !orderId) return;
+
+    let isMounted = true;
+    const fetchCancelAlaCarte = async () => {
+      try {
+        const res = await orderService.getCancelOrderAdditionalItems(
+          orderId,
+          processOrderId,
+        );
+        if (isMounted && res.data?.status && Array.isArray(res.data.data)) {
+          const items: AlaCarteItem[] = res.data.data.map((it: any) => {
+            const linePrice = parseFloat(it.price) || 0;
+            const lineNormal = parseFloat(it.normalPrice) || 0;
+            return {
+              id: String(it.id || it.productId || "item"),
+              name: it.displayName || it.name || "Item",
+              icon: it.icon,
+              image: it.image,
+              weight: `${it.qty} ${it.unit || "kg"}`,
+              price: linePrice,
+              originalPrice:
+                lineNormal > linePrice + 0.01 ? lineNormal : undefined,
+            };
+          });
+          setAlaCarteItems(items);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cancel order additional items:", err);
+      }
+    };
+
+    fetchCancelAlaCarte();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasAlaCarte, orderId, processOrderId]);
 
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
