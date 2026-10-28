@@ -451,15 +451,15 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   }, []);
   // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
 
- const reminderShiftDays = Math.min(Math.max(reminderCount - 1, 0), 2);
+  const reminderShiftDays = Math.min(Math.max(reminderCount - 1, 0), 2);
 
-// 3rd (last) reminder already sent → there is NO "send reminder tomorrow" anymore
-const isFinalReminderDay = reminderCount >= 3 || unreadReminderDays >= 3;
+  // 3rd (last) reminder already sent → there is NO "send reminder tomorrow" anymore
+  const isFinalReminderDay = reminderCount >= 3 || unreadReminderDays >= 3;
 
-// Final state: last reminder day AND (after 6 PM OR packing slots full)
-const showFinalCancelScreen =
-  isFinalReminderDay &&
-  (isTimeRanOut || isLimitReached || availableSlots <= 0);
+  // Final state: last reminder day AND (after 6 PM OR packing slots full)
+  const showFinalCancelScreen =
+    isFinalReminderDay &&
+    (isTimeRanOut || isLimitReached || availableSlots <= 0);
 
   // Current (shifted) schedule date as a Date
   const scheduleDateObj = useMemo(() => {
@@ -1553,7 +1553,9 @@ const showFinalCancelScreen =
 
     const netDiff = totalDiff;
     const netRefundSavings =
-      Boolean(isPaid) && netDiff < 0 ? Number(Math.abs(netDiff).toFixed(2)) : 0;
+      Boolean(isPaid) && netDiff < 0 && additionalDue < 0.01
+        ? Number(Math.abs(netDiff).toFixed(2))
+        : 0;
 
     const resolvedIsPaidPayload =
       overrideIsPaid !== undefined ? (overrideIsPaid ? 1 : 0) : isPaid ? 1 : 0;
@@ -1562,7 +1564,7 @@ const showFinalCancelScreen =
       orderId: actualOrderId || effectiveOrderId,
       processOrderId: processOrderId || undefined,
       lockNow: true,
-      additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+      additionalAmount: additionalDue > 0 ? additionalDue : 0,
       newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
       paymentMethod: paymentMethod || undefined,
       isPaid: resolvedIsPaidPayload,
@@ -1684,7 +1686,7 @@ const showFinalCancelScreen =
     setIsSubmitting(true);
 
     // ── Path 1: Card order already paid, but additional payment required ───────
-    if (isPaidCardOrder && additionalPayAmount > 0) {
+    if (isPaidCardOrder && additionalDue >= 0.01) {
       const confirmPayload = buildConfirmPayload(1);
       setPendingConfirmPayload(confirmPayload);
       try {
@@ -1695,7 +1697,7 @@ const showFinalCancelScreen =
           try {
             const chargeRes = await adapter.chargeSavedCard({
               cardId: savedCard.id,
-              amount: additionalPayAmount,
+              amount: additionalDue,
               paymentType: "order",
               orderId: String(processOrderId || effectiveOrderId),
               itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
@@ -1727,7 +1729,7 @@ const showFinalCancelScreen =
         // Hosted checkout (no saved card, or saved card was invalid/expired)
         const session = await adapter.initiatePayment({
           orderId: String(processOrderId || effectiveOrderId),
-          amount: additionalPayAmount,
+          amount: additionalDue,
           paymentType: "order",
           itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
         });
@@ -2116,6 +2118,7 @@ const showFinalCancelScreen =
       stepIndex: currentStepIndex,
       paymentMethod: paymentMethod, // Redux value, e.g. "Cash on Delivery"
       deliveryMethod: deliveryMethod as "home" | "pickup" | undefined, // Redux value, e.g. "Pickup" / "Delivery"
+      isPaid: isPaid,
     });
   };
 
@@ -2311,7 +2314,7 @@ const showFinalCancelScreen =
   const isPickup =
     dMethodLower.includes("pickup") || pMethodLower.includes("pickup");
   const cashLabel = isPickup ? "Cash on Pickup" : "Cash on Delivery";
-   const isCashOnDelivery =
+  const isCashOnDelivery =
     pMethodLower.includes("cash") || pMethodLower === "cod";
 
   const paidMoney = Number(moneyPaid) || 0;
@@ -2359,6 +2362,38 @@ const showFinalCancelScreen =
   const additionalPayAmount = Math.max(0, totalDiff);
   const totalSavingsAmount = Math.max(0, -totalDiff);
 
+  // What the customer has actually paid so far (credit + card)
+  const paidSoFar =
+    Number(moneyPaid || 0) + Number(creditPaid || 0) > 0
+      ? Number(moneyPaid || 0) + Number(creditPaid || 0)
+      : Number(initialPaidAmount) || 0;
+
+  // New payable total (same value the backend stores as fullTotal)
+  const livePayableTotal = Math.max(
+    0,
+    Number((finalOrderTotalWithDelivery - couponDiscount).toFixed(2)),
+  );
+
+  // Paid order (credit / card) whose total went up because of today's prices
+  // and/or the customer's edits -> this amount must go to the gateway.
+  const priceIncreaseDue =
+    isPaid && !isCashPayment
+      ? Math.max(0, Number((livePayableTotal - paidSoFar).toFixed(2)))
+      : 0;
+
+  const additionalDue =
+    isPaid && !isCashPayment
+      ? Math.max(additionalPayAmount, priceIncreaseDue)
+      : additionalPayAmount;
+
+  console.log({
+    paidSoFar,
+    livePayableTotal,
+    priceIncreaseDue,
+    additionalPayAmount,
+    additionalDue,
+  });
+
   // True when at least one package in the confirm step is no longer available
   const hasUnavailablePackage = packagesMeta.some(
     (p) => unavailablePackageIds[p.id] === true,
@@ -2394,8 +2429,8 @@ const showFinalCancelScreen =
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              colors={["#92D01B"]}
-              tintColor="#92D01B"
+              colors={["#000000"]}
+              tintColor="#000000"
             />
           }
         >
@@ -2411,7 +2446,7 @@ const showFinalCancelScreen =
           <View className="h-[1px] bg-[#ECECEC] mb-6" />
 
           {/* Top Notice Banner: Green (if slot full) or Red (if time expired) */}
-         {!isTimeRanOut && (isLimitReached || availableSlots <= 0) ? (
+          {!isTimeRanOut && (isLimitReached || availableSlots <= 0) ? (
             <View className="mx-5 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-5 flex-row items-start">
               <View className="w-6 h-6 rounded-full bg-black items-center justify-center mr-3 mt-0.5">
                 <Ionicons name="time" size={14} color="#FFF" />
@@ -2443,7 +2478,7 @@ const showFinalCancelScreen =
             </View>
           )}
 
-                  {/* Credit Refund Card (card paid OR credit balance paid) */}
+          {/* Credit Refund Card (card paid OR credit balance paid) */}
           {refundableAmount > 0 && (
             <View className="mx-5 mt-6 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-6 items-center">
               <View className="w-10 h-10 rounded-full bg-[#16B364] items-center justify-center mb-3">
@@ -3370,34 +3405,29 @@ const showFinalCancelScreen =
                         </Text>
                       </View>
                     ) : (
-                       <TouchableOpacity
-                          onPress={() => setCurrentStepIndex(item.stepIndex)}
-                          activeOpacity={0.8}
-                          
-                        >
-                      <View className="flex-row items-center justify-between">
-                        <Text className="text-[14px] text-black">
-                          Current Price :{" "}
-                          <Text className="font-bold">
-                            Rs. {formatPrice(item.unitCurrentPrice)}
-                            {item.pkg.qty > 1 ? ` X ${item.pkg.qty}` : ""}
+                      <TouchableOpacity
+                        onPress={() => setCurrentStepIndex(item.stepIndex)}
+                        activeOpacity={0.8}
+                      >
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-[14px] text-black">
+                            Current Price :{" "}
+                            <Text className="font-bold">
+                              Rs. {formatPrice(item.unitCurrentPrice)}
+                              {item.pkg.qty > 1 ? ` X ${item.pkg.qty}` : ""}
+                            </Text>
                           </Text>
-                        </Text>
-                       
-                          <View 
-                          className="w-7 h-7 rounded-full bg-black items-center justify-center"
-                          >
-                          <Ionicons
-                            name="arrow-forward"
-                            size={15}
-                            color="#FFFFFF"
-                          />
+
+                          <View className="w-7 h-7 rounded-full bg-black items-center justify-center">
+                            <Ionicons
+                              name="arrow-forward"
+                              size={15}
+                              color="#FFFFFF"
+                            />
                           </View>
-                      
-                      </View>
-                        </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
                     )}
-                    
                   </View>
                 );
               })}
@@ -3675,7 +3705,9 @@ const showFinalCancelScreen =
             )}
 
             {/* Please Note boxes */}
-            {totalDiff > 0 ? (
+            {/* Please Note boxes */}
+            {totalDiff > 0 ||
+            (isPaid && !isCashPayment && additionalDue >= 0.01) ? (
               <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
                 <Text className="text-[14px] font-bold text-black mb-1">
                   Please Note :
@@ -3694,17 +3726,19 @@ const showFinalCancelScreen =
                   </Text>
                 ) : !isPaid ? (
                   <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                    This scheduled order has not been paid yet. The total amount{" "}
+                    The total amount you need to pay upon at the end of this
+                    process will be{" "}
+                    <Text className="font-bold text-black">increased</Text> by{" "}
                     <Text className="font-bold text-black">
-                      Rs. {formatPrice(fullPayableAmount)}
-                    </Text>{" "}
-                    will need to be paid via card to confirm your order.
+                      Rs. {formatPrice(additionalPayAmount)}
+                    </Text>
+                    .
                   </Text>
                 ) : (
                   <Text className="text-[13px] text-[#6B6B6B] leading-5">
                     You have already paid for this order. The additional amount{" "}
                     <Text className="font-bold text-black">
-                      Rs. {formatPrice(additionalPayAmount)}
+                      Rs. {formatPrice(additionalDue)}
                     </Text>{" "}
                     will need to be paid at the end of this process.
                   </Text>
@@ -3729,16 +3763,13 @@ const showFinalCancelScreen =
                   </Text>
                 ) : !isPaid ? (
                   <Text className="text-[13px] text-[#475467] leading-5">
-                    This scheduled order has not been paid yet. Your total has
-                    been reduced by{" "}
+                    The total amount you need to pay upon at the end of this
+                    process will be{" "}
+                    <Text className="font-bold text-black">reduced</Text> by{" "}
                     <Text className="font-bold text-black">
                       Rs. {formatPrice(totalSavingsAmount)}
                     </Text>
-                    . Your new total of{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(fullPayableAmount)}
-                    </Text>{" "}
-                    will need to be paid via card to confirm.
+                    .
                   </Text>
                 ) : (
                   <Text className="text-[13px] text-[#475467] leading-5">
@@ -3847,8 +3878,8 @@ const showFinalCancelScreen =
                 >
                   {!isCashPayment && !isPaid && fullPayableAmount > 0
                     ? `Pay Rs. ${formatPrice(fullPayableAmount)} & Confirm`
-                    : !isCashPayment && isPaid && additionalPayAmount > 0
-                      ? `Pay Additional Rs. ${formatPrice(additionalPayAmount)} & Confirm`
+                    : !isCashPayment && isPaid && additionalDue >= 0.01
+                      ? `Pay Additional Rs. ${formatPrice(additionalDue)} & Confirm`
                       : "Confirm Order Details"}
                 </Text>
               )}
