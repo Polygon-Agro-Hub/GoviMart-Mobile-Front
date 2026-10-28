@@ -490,6 +490,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const creditApplied = Math.min(creditPaid, orderFullTotal);
   const remaining = Math.max(0, orderFullTotal - creditApplied);
 
+  const isFullyPaidByCredit = creditApplied > 0 && remaining < 0.01;
+
   const isUnpaidCardOrder = isCardOrder && !pay.paid;
 
   // ── PRICE INCREASE ON AN ALREADY-PAID ORDER ──────────────────────────────
@@ -570,7 +572,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         isPaid: 1,
       });
 
-      console.log(apiPayload)
+      console.log(apiPayload);
 
       // 2nd call (only for an already-paid order whose price increased):
       // the order is now confirmed, so the backend's "already confirmed +
@@ -819,12 +821,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         : 0;
 
     // Card DUE: card order that is not paid yet (isPaid = 0)
-    const totalCardDue =
-      isCardOrOnline && !pay.paid ? remainingAfterCredit : 0;
+    const totalCardDue = isCardOrOnline && !pay.paid ? remainingAfterCredit : 0;
 
     // Cash DUE
-    const totalCashDue =
-      isCashMethod && !pay.paid ? remainingAfterCredit : 0;
+    const totalCashDue = isCashMethod && !pay.paid ? remainingAfterCredit : 0;
 
     // Amount returned to the credit balance on cancel = the creditPaid column value
     // (same rule as the server).
@@ -843,7 +843,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       isPkgVal != null &&
       String(isPkgVal).trim() !== "" &&
       Number(isPkgVal) === 0;
-    const hasOrderAlacart = alacarts.length > 0 || rawItemsData.length > 0 || isAlaCarteOnlyOrder;
+    const hasOrderAlacart =
+      alacarts.length > 0 || rawItemsData.length > 0 || isAlaCarteOnlyOrder;
 
     navigation.navigate("OrderConfirmedOrderCancelScreen", {
       orderId: effectiveOrderId,
@@ -1092,6 +1093,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         ) : isCardOrder ? (
           isUnpaidCardOrder ? (
             remaining > 0 ? (
+              // Card order not paid yet: customer must pay now
               <View
                 style={{
                   backgroundColor: "#EEF3FF",
@@ -1161,6 +1163,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               </View>
             ) : (
+              // Card order not paid, but credit balance covers everything
               <View
                 style={{
                   flexDirection: "row",
@@ -1189,7 +1192,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
               </View>
             )
-          ) : (
+          ) : isFullyPaidByCredit ? null : (
+            // Card order paid online (hidden when credit paid everything)
             <View
               style={{
                 flexDirection: "row",
@@ -1248,6 +1252,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </View>
         ) : (
+          // Cash order
           <View
             style={{
               flexDirection: "row",
