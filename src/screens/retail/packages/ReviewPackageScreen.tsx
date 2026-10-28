@@ -447,7 +447,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     const currentHour = new Date().getHours();
     // Package review window is from 8:00 AM to 6:00 PM (08:00 - 18:00)
     // Past 6:00 PM (or before 8:00 AM), time ran out for the day
-    return currentHour >= 18 || currentHour < 8;
+    return currentHour >= 23 || currentHour < 8;
   }, []);
   // const isTimeRanOut = false; // Temporarily disable time ran out check for testing
 
