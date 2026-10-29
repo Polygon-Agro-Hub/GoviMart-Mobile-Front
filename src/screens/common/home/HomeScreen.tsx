@@ -229,6 +229,12 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (state: RootState) =>
       (state as RootState & { cart: CartState }).cart.packages,
   );
+  const isGlobalCartSyncing = useSelector(
+    (state: RootState) => (state.cart as any).isCartSyncing,
+  );
+  const isGlobalCartSyncingRef = useRef(false);
+  isGlobalCartSyncingRef.current = Boolean(isGlobalCartSyncing);
+
   const totalCartItems =
     cartProducts.length +
     cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
@@ -387,11 +393,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         fetchReadyToConfirmOrder();
 
         // Sync this user's cart from backend only if not actively modifying locally
-        if (!isCartSyncingRef.current) {
+        if (!isCartSyncingRef.current && !isGlobalCartSyncingRef.current) {
           cartService
             .getUserCart()
             .then((dbCartRes) => {
-              if (isCartSyncingRef.current) return;
+              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current) return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
                 const dbPackages = dbCartRes.data.data.packages || [];
@@ -740,6 +746,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           cartService
             .getUserCart()
             .then((dbCartRes) => {
+              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current) return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
                 const dbPackages = dbCartRes.data.data.packages || [];
