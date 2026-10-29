@@ -849,7 +849,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         fullName: billingName,
         phonecode1: phoneCode1,
         phone1: cleanPhone1,
-        phonecode2: phoneCode2,
+        phonecode2: cleanPhone2 ? phoneCode2 : "",
         phone2: cleanPhone2,
         longitude: longitude!,
         latitude: latitude!,
