@@ -159,7 +159,6 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 20,
-          paddingTop: 8,
           paddingBottom: 32,
         }}
       >
