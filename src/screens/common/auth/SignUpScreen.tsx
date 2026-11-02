@@ -25,9 +25,12 @@ import {
   Ionicons,
   MaterialIcons,
   Entypo,
+  MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomHeader from "@/component/common/CustomHeader";
+import * as DocumentPicker from "expo-document-picker";
+import BRDocumentUploader from "@/component/common/BRDocumentUploader";
 import { AlertModal } from "@/component/common/AlertModal";
 import authService from "@/services/auth/auth.service";
 import { getSignUpStorageKeys } from "./SignUpOTPScreen";
@@ -215,8 +218,10 @@ const extractFieldErrors = (data: any, msg: string): Record<string, string> => {
     out.email = "Email already exists.";
   }
 
-  if (!out.nic && combined.includes("nic")) {
-    out.nic = "NIC number already exists";
+  if (!out.nic && (combined.includes("nic") || combined.includes("passport"))) {
+    out.nic = combined.includes("passport")
+      ? "Passport ID already exists"
+      : "NIC number already exists";
   }
 
   return out;
@@ -255,6 +260,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [phoneCode, setPhoneCode] = useState(""); // empty default
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [documentType, setDocumentType] = useState<"nic" | "passport">("nic");
   const [nic, setNic] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyPhoneCode, setCompanyPhoneCode] = useState(""); // empty default
@@ -262,6 +268,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [brFile, setBrFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
 
   // Visibility and Modal States
   const [showPassword, setShowPassword] = useState(false);
@@ -337,12 +344,23 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       newErrors.email = "Invalid email address";
     }
 
-    if (!nic.trim()) {
-      newErrors.nic = "NIC number is required";
-    } else if (/\s/.test(nic)) {
-      newErrors.nic = "NIC number cannot contain spaces";
-    } else if (!isValidNic(nic.trim())) {
-      newErrors.nic = NIC_ERROR;
+    if (documentType === "nic") {
+      if (!nic.trim()) {
+        newErrors.nic = "NIC number is required";
+      } else if (/\s/.test(nic)) {
+        newErrors.nic = "NIC number cannot contain spaces";
+      } else if (!isValidNic(nic.trim())) {
+        newErrors.nic = NIC_ERROR;
+      }
+    } else {
+      // Passport ID: ONLY required validation and max 12 characters
+      if (!nic.trim()) {
+        newErrors.nic = "Passport ID is required";
+      } else if (/\s/.test(nic)) {
+        newErrors.nic = "Passport ID cannot contain spaces";
+      } else if (nic.trim().length > 12) {
+        newErrors.nic = "Passport ID cannot exceed 12 characters";
+      }
     }
 
     if (tab === "business") {
@@ -373,7 +391,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     const confirmError = validateConfirmPassword(confirmPassword, password);
     if (confirmError) newErrors.confirmPassword = confirmError;
 
-    if (tab === "home" && !agreeToTerms) {
+    if (tab === "business" && !brFile) {
+      newErrors.brFile = "Business Registration (BR) document is required";
+    }
+
+    if (!agreeToTerms) {
       newErrors.agreeToTerms = "You must agree to the Terms & Conditions";
     }
 
@@ -491,6 +513,52 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         }
       }
 
+      let brImgUrl: string | null = null;
+      if (tab === "business") {
+        if (!brFile) {
+          setErrors((prev) => ({
+            ...prev,
+            brFile: "Business Registration (BR) document is required",
+          }));
+          return;
+        }
+
+        setIsLoading(true);
+        try {
+          const brFormData = new FormData();
+          brFormData.append("brDocument", {
+            uri:
+              Platform.OS === "android"
+                ? brFile.uri
+                : brFile.uri.replace("file://", ""),
+            name: brFile.name || "BR_Certificate_Scan.jpg",
+            type: brFile.mimeType || "application/octet-stream",
+          } as any);
+
+          const uploadRes = await authService.uploadWholesaleBR(brFormData);
+          if (uploadRes.data?.status && uploadRes.data?.fileUrl) {
+            brImgUrl = uploadRes.data.fileUrl;
+          } else {
+            setIsLoading(false);
+            Alert.alert(
+              "Upload Failed",
+              uploadRes.data?.message || "Failed to upload Business Registration document."
+            );
+            return;
+          }
+        } catch (uploadErr: any) {
+          setIsLoading(false);
+          console.error("BR upload error:", uploadErr);
+          Alert.alert(
+            "Upload Error",
+            uploadErr.response?.data?.message ||
+              uploadErr.message ||
+              "Failed to upload Business Registration document."
+          );
+          return;
+        }
+      }
+
       const payload = {
         title,
         firstName: capitalizeName(firstName.trim()),
@@ -499,11 +567,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         phoneNumber: cleanedPhone,
         buyerType: tab === "home" ? "Retail" : "Wholesale",
         email: email.trim().toLowerCase(),
+        docType: documentType === "passport" ? "PASS" : "NIC",
         nic: nic.trim().toUpperCase(),
         password,
         confirmPassword,
         agreeToMarketing: true,
-        agreeToTerms: tab === "home" ? agreeToTerms : true,
+        agreeToTerms: agreeToTerms,
+        brImg: brImgUrl,
         companyName: tab === "business" ? companyName.trim() : null,
         companyPhoneCode: tab === "business" ? companyPhoneCode : null,
         companyPhoneNumber: tab === "business" ? cleanedCompanyPhone : null,
@@ -528,8 +598,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               const raw = await AsyncStorage.getItem(primaryAttemptsKey);
               const existing = raw
                 ? JSON.parse(raw).filter(
-                    (ts: number) => Date.now() - ts < 60 * 60 * 1000,
-                  )
+                  (ts: number) => Date.now() - ts < 60 * 60 * 1000,
+                )
                 : [];
               const updated = [...existing, Date.now()];
               for (const aKey of attemptsKeys) {
@@ -589,17 +659,33 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             const isWholesale =
               (userData.buyerType || "").toLowerCase() === "wholesale";
 
+            if (isWholesale) {
+              Alert.alert(
+                "Registration Submitted",
+                "Your wholesale account has been created and your Business Registration (BR) is submitted for review.",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      navigation.navigate("Login");
+                    },
+                  },
+                ]
+              );
+              return;
+            }
+
             const targetScreen: keyof RootStackParamList = isWholesale
               ? "Home"
               : "ExcludeListAdd";
             const targetParams = !isWholesale
               ? {
-                  customerId: userData.id,
-                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
-                  title: userData.title,
-                  number: userData.phoneNumber,
-                  cusId: userData.cusId,
-                }
+                customerId: userData.id,
+                name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+                title: userData.title,
+                number: userData.phoneNumber,
+                cusId: userData.cusId,
+              }
               : undefined;
 
             Alert.alert(
@@ -683,9 +769,8 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     <TouchableOpacity
       onPress={() => onPress(item.value)}
       activeOpacity={0.7}
-      className={`px-5 py-3.5 flex-row justify-between items-center ${
-        !isLast ? "border-b border-gray-100" : ""
-      }`}
+      className={`px-5 py-3.5 flex-row justify-between items-center ${!isLast ? "border-b border-gray-100" : ""
+        }`}
     >
       <View className="flex-row items-center gap-x-3">
         <Image
@@ -772,11 +857,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "home"
+              className={`text-sm ${tab === "home"
                   ? "font-bold text-black"
                   : "font-semibold text-gray-400"
-              }`}
+                }`}
             >
               I'm Buying for Home
             </Text>
@@ -800,11 +884,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <Ionicons name="checkmark-circle" size={18} color="black" />
             )}
             <Text
-              className={`text-sm ${
-                tab === "business"
+              className={`text-sm ${tab === "business"
                   ? "font-bold text-black"
                   : "font-semibold text-gray-400"
-              }`}
+                }`}
             >
               I'm Buying for Business
             </Text>
@@ -836,11 +919,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 }}
                 activeOpacity={0.8}
                 style={{ height: 50 }}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
-                  errors.title
+                className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${errors.title
                     ? "border-red-500 bg-red-50/10"
                     : "border-black bg-white"
-                }`}
+                  }`}
               >
                 <View className="flex-row items-center gap-x-2">
                   <FontAwesome6 name="user-large" size={14} color="black" />
@@ -865,11 +947,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             <View className="flex-1">
               <View
                 style={{ height: 50 }}
-                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                  errors.firstName
+                className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.firstName
                     ? "border-red-500 bg-red-50/10"
                     : "border-black bg-white"
-                }`}
+                  }`}
               >
                 <FontAwesome6 name="user-large" size={14} color="black" />
                 <TextInput
@@ -905,11 +986,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.lastName
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.lastName
                   ? "border-red-500 bg-red-50/10"
                   : "border-black bg-white"
-              }`}
+                }`}
             >
               <FontAwesome6 name="user-large" size={14} color="black" />
               <TextInput
@@ -950,11 +1030,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   }}
                   activeOpacity={0.8}
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                    errors.phoneCode
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.phoneCode
                       ? "border-red-500 bg-red-50/10"
                       : "border-black"
-                  }`}
+                    }`}
                 >
                   <View className="flex-row items-center gap-x-2">
                     {renderPickerLabel(phoneCode)}
@@ -975,11 +1054,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View className="flex-1">
                 <View
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.phoneNumber
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.phoneNumber
                       ? "border-red-500 bg-red-50/10"
                       : "border-black bg-white"
-                  }`}
+                    }`}
                 >
                   <FontAwesome5 name="phone-alt" size={14} color="black" />
                   <TextInput
@@ -1033,11 +1111,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.email
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.email
                   ? "border-red-500 bg-red-50/10"
                   : "border-black bg-white"
-              }`}
+                }`}
             >
               <Entypo name="mail" size={16} color="black" />
               <TextInput
@@ -1066,8 +1143,110 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* NIC Number Input */}
+          {/* Document Type Selector & Input */}
           <View>
+            <Text className="text-[13px] font-semibold text-[#1E293B] mb-2 px-1">
+              Document Type <Text className="text-[#1E293B]-500">*</Text>
+            </Text>
+
+            {/* Toggle bar between NIC and Passport */}
+            <View
+              style={{
+                backgroundColor: "#F1F3F7",
+                borderRadius: 30,
+                padding: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              {/* NIC Option */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (documentType !== "nic") {
+                    setDocumentType("nic");
+                    setNic("");
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({ ...prev, nic: "" }));
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 24,
+                  backgroundColor: documentType === "nic" ? "#000000" : "transparent",
+                  gap: 8,
+                }}
+              >
+                <FontAwesome
+                  name="id-card"
+                  size={14}
+                  color={documentType === "nic" ? "#FFFFFF" : "#4B5563"}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: documentType === "nic" ? "700" : "500",
+                    color: documentType === "nic" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  NIC Number
+                </Text>
+              </TouchableOpacity>
+
+              {/* Passport Option */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (documentType !== "passport") {
+                    setDocumentType("passport");
+                    setNic("");
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({ ...prev, nic: "" }));
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 24,
+                  backgroundColor:
+                    documentType === "passport" ? "#000000" : "transparent",
+                  gap: 8,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="passport"
+                  size={16}
+                  color={documentType === "passport" ? "#FFFFFF" : "#4B5563"}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: documentType === "passport" ? "700" : "500",
+                    color: documentType === "passport" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  Passport ID
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Input field */}
             <View
               style={{
                 height: 50,
@@ -1077,31 +1256,51 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     ? {}
                     : { backgroundColor: "#FFFFFF", borderColor: "#000000" }),
               }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                isNicLinked
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${isNicLinked
                   ? "border-[#FF9114] bg-[#FFF5E9]"
                   : errors.nic
                     ? "border-red-500 bg-red-50/10"
                     : "border-black bg-white"
-              }`}
+                }`}
             >
-              <FontAwesome name="id-card" size={16} color="black" />
+              {documentType === "nic" ? (
+                <FontAwesome name="id-card" size={16} color="black" />
+              ) : (
+                <MaterialCommunityIcons name="passport" size={18} color="black" />
+              )}
               <TextInput
-                placeholder="NIC Number"
+                placeholder={documentType === "nic" ? "NIC Number" : "Passport ID"}
                 placeholderTextColor="#000000"
                 autoCapitalize="characters"
                 value={nic}
                 onChangeText={(text) => {
-                  const sanitized = sanitizeNIC(text);
-                  setNic(sanitized);
-                  if (isNicLinked) {
-                    setIsNicLinked(false);
-                    setAllowRestore(false);
+                  if (documentType === "nic") {
+                    const sanitized = sanitizeNIC(text);
+                    setNic(sanitized);
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({
+                      ...prev,
+                      nic: !sanitized || isValidNic(sanitized) ? "" : NIC_ERROR,
+                    }));
+                  } else {
+                    const sanitized = text.replace(/\s/g, "").toUpperCase();
+                    setNic(sanitized);
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({
+                      ...prev,
+                      nic: !sanitized.trim()
+                        ? "Passport ID is required"
+                        : sanitized.length > 12
+                        ? "Passport ID cannot exceed 12 characters"
+                        : "",
+                    }));
                   }
-                  setErrors((prev) => ({
-                    ...prev,
-                    nic: !sanitized || isValidNic(sanitized) ? "" : NIC_ERROR,
-                  }));
                 }}
                 maxLength={12}
                 style={inputTextStyle}
@@ -1143,7 +1342,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 </TouchableOpacity>
               )}
             </View>
-           
+
             {errors.nic && !isNicLinked && (
               <View className="flex-row items-center mt-1.5 px-4">
                 <MaterialIcons
@@ -1169,11 +1368,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               <View>
                 <View
                   style={{ height: 50 }}
-                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                    errors.companyName
+                  className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyName
                       ? "border-red-500 bg-red-50/10"
                       : "border-black bg-white"
-                  }`}
+                    }`}
                 >
                   <FontAwesome name="building" size={16} color="black" />
                   <TextInput
@@ -1215,11 +1413,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                       }}
                       activeOpacity={0.8}
                       style={{ height: 50 }}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
-                        errors.companyPhoneCode
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.companyPhoneCode
                           ? "border-red-500 bg-red-50/10"
                           : "border-black"
-                      }`}
+                        }`}
                     >
                       <View className="flex-row items-center gap-x-2">
                         {renderPickerLabel(companyPhoneCode)}
@@ -1244,11 +1441,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   <View className="flex-1">
                     <View
                       style={{ height: 50 }}
-                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                        errors.companyNumber
+                      className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.companyNumber
                           ? "border-red-500 bg-red-50/10"
                           : "border-black bg-white"
-                      }`}
+                        }`}
                     >
                       <FontAwesome5 name="phone-alt" size={14} color="black" />
                       <TextInput
@@ -1318,11 +1514,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.password
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.password
                   ? "border-red-500 bg-red-50/10"
                   : "border-black bg-white"
-              }`}
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -1377,11 +1572,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           <View>
             <View
               style={{ height: 50 }}
-              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${
-                errors.confirmPassword
+              className={`h-[50px] border px-4 rounded-full flex-row items-center gap-x-2 ${errors.confirmPassword
                   ? "border-red-500 bg-red-50/10"
                   : "border-black bg-white"
-              }`}
+                }`}
             >
               <FontAwesome5 name="lock" size={14} color="black" />
               <TextInput
@@ -1420,50 +1614,67 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* Checkbox (Home tab only) */}
-          {tab === "home" && (
-            <View>
-              <TouchableOpacity
-                onPress={() => setAgreeToTerms(!agreeToTerms)}
-                activeOpacity={0.8}
-                className="flex-row items-start gap-x-3 mt-2 px-1"
-              >
-                <View
-                  className={`w-5 h-5 rounded border items-center justify-center ${
-                    agreeToTerms
-                      ? "bg-black border-black"
-                      : "border-black bg-white"
-                  }`}
-                >
-                  {agreeToTerms && (
-                    <Ionicons name="checkmark" size={14} color="white" />
-                  )}
-                </View>
-                <Text className="text-xs text-black leading-relaxed flex-1">
-                  I agree to the{" "}
-                  <Text className="font-bold underline">
-                    Terms & Conditions
-                  </Text>{" "}
-                  and{" "}
-                  <Text
-                    className="font-bold underline"
-                    onPress={() => navigation.navigate("PrivacyPolicy")}
-                  >
-                    Privacy Policy
-                  </Text>
-                  .
-                </Text>
-              </TouchableOpacity>
-              {errors.agreeToTerms && (
-                <View className="flex-row items-center gap-x-1 mt-2 ml-3">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs">
-                    {errors.agreeToTerms}
-                  </Text>
-                </View>
-              )}
-            </View>
+          {/* Wholesale Business Registration (BR) Upload Section */}
+          {tab === "business" && (
+            <BRDocumentUploader
+              selectedFile={brFile}
+              onFileSelect={(file) => {
+                setBrFile(file);
+                if (file) setErrors((prev) => ({ ...prev, brFile: "" }));
+              }}
+              error={errors.brFile}
+              containerStyle={{ marginTop: 16 }}
+            />
           )}
+
+          {/* Terms & Conditions Checkbox */}
+          <View>
+            <TouchableOpacity
+              onPress={() => {
+                const next = !agreeToTerms;
+                setAgreeToTerms(next);
+                if (next) setErrors((prev) => ({ ...prev, agreeToTerms: "" }));
+              }}
+              activeOpacity={0.8}
+              className="flex-row items-start gap-x-3 mt-4 px-1"
+            >
+              <View
+                className={`w-5 h-5 rounded border items-center justify-center ${agreeToTerms
+                    ? "bg-black border-black"
+                    : "border-black bg-white"
+                  }`}
+              >
+                {agreeToTerms && (
+                  <Ionicons name="checkmark" size={14} color="white" />
+                )}
+              </View>
+              <Text className="text-xs text-black leading-relaxed flex-1">
+                I agree to the{" "}
+                <Text
+                  className="font-bold underline"
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Terms & Conditions
+                </Text>{" "}
+                and{" "}
+                <Text
+                  className="font-bold underline"
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </TouchableOpacity>
+            {errors.agreeToTerms && (
+              <View className="flex-row items-center gap-x-1 mt-2 ml-3">
+                <MaterialIcons name="error" size={12} color="#E02424" />
+                <Text className="text-red-500 text-xs">
+                  {errors.agreeToTerms}
+                </Text>
+              </View>
+            )}
+          </View>
 
           {/* Action Button Section */}
           <View className="pb-0 pt-2">
@@ -1611,7 +1822,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         <View
           style={{
             flex: 1,
-        
+
             justifyContent: "flex-end",
           }}
         >
@@ -1785,7 +1996,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 marginBottom: 16,
               }}
             >
-              {/* Go back & Edit NIC */}
+              {/* Go back & Edit ${documentType === "passport" ? "Passport ID" : "NIC"} */}
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {

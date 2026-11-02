@@ -10,6 +10,8 @@ export const ENDPOINTS = {
     FORGOT_PASSWORD_RESEND_OTP: "api/auth/forgot-password/resend-otp",
     FORGOT_PASSWORD_VERIFY_OTP: "api/auth/forgot-password/verify-otp",
     FORGOT_PASSWORD_RESET: "api/auth/forgot-password/reset-password",
+    RESUBMIT_WHOLESALE_BR: "api/auth/resubmit-wholesale-br",
+    UPLOAD_WHOLESALE_BR: "api/auth/upload-wholesale-br",
   },
 
   CUSTOMER: {

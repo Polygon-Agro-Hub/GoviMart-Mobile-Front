@@ -547,6 +547,22 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const isWholesale =
               (userData.buyerType || "").toLowerCase() === "wholesale";
 
+            if (isWholesale) {
+              Alert.alert(
+                "Registration Submitted",
+                "Your wholesale account has been created and your Business Registration (BR) is submitted for review.",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      navigation.navigate("Login");
+                    },
+                  },
+                ]
+              );
+              return;
+            }
+
             const targetScreen: keyof RootStackParamList = isWholesale
               ? "Home"
               : "ExcludeListAdd";

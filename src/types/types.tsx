@@ -94,6 +94,13 @@ export type RootStackParamList = {
   };
   ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
+  VerificationUnsuccessful: {
+    userId: number;
+    approveStatus?: string;
+    brImg?: string;
+    submittedDate?: string;
+    approvedAt?: string;
+  };
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   PrivacyPolicy: undefined;
   Home: undefined;
@@ -322,7 +329,9 @@ export interface SignUpPayload {
   phoneNumber: string;
   buyerType: string;
   email: string;
+  docType?: string;
   nic: string;
+  brImg?: string | null;
   password: string;
   confirmPassword: string;
   agreeToMarketing?: boolean;
