@@ -76,8 +76,21 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
   );
+  const [storedBuyerType, setStoredBuyerType] = useState<string>("");
+
+  useEffect(() => {
+    AsyncStorage.getItem("userProfile").then((stored) => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.buyerType) setStoredBuyerType(parsed.buyerType);
+        } catch (e) {}
+      }
+    });
+  }, []);
+
   const isWholesale =
-    (reduxBuyerType || "").toString().trim().toLowerCase() === "wholesale";
+    (storedBuyerType || reduxBuyerType || "").toString().trim().toLowerCase() === "wholesale";
 
   const [saveAddressAs, setSaveAddressAs] = useState(
     addressParam.saveAs || addressParam.title || ""
@@ -834,7 +847,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         !title.trim() ||
         !billingName.trim() ||
         !p1 ||
-        !buildingType.trim() ||
+        (!isWholesale && !buildingType.trim()) ||
         !buildingNo.trim() ||
         !streetName.trim() ||
         !city.trim() ||
@@ -855,9 +868,11 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       const cleanPhone1 = p1.startsWith("0") ? p1.slice(1) : p1;
       const cleanPhone2 = p2 ? (p2.startsWith("0") ? p2.slice(1) : p2) : "";
 
+      const finalBuildingType = isWholesale ? "House" : (buildingType || "House");
+
       const basePayload = {
-        originalBuildingType: addressParam.buildingType || "House",
-        buildingType,
+        originalBuildingType: isWholesale ? "House" : (addressParam.buildingType || "House"),
+        buildingType: finalBuildingType,
         saveAs: saveAddressAs,
         title,
         fullName: billingName,
@@ -874,8 +889,8 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       };
 
       const payload =
-        buildingType === "House"
-          ? basePayload
+        finalBuildingType === "House"
+          ? { ...basePayload, buildingType: "House" }
           : {
               ...basePayload,
               buildingName: apartmentName,
@@ -1501,6 +1516,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       />
 
       {/* BUILDING TYPE SEARCH MODAL (SEARCH HIDDEN) */}
+      {!isWholesale && (
       <GlobalSearchModal
         visible={buildingTypeModalOpen}
         onClose={() => setBuildingTypeModalOpen(false)}
@@ -1516,6 +1532,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         noResultsText="No building types found"
         multiSelect={false}
       />
+      )}
 
       {/* CITY SEARCH MODAL (SEARCH ACTIVE) - never opened while city is locked */}
       <GlobalSearchModal
