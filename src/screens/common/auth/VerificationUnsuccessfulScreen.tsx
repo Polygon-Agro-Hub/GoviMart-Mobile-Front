@@ -18,6 +18,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import authService from "@/services/auth/auth.service";
 import BRDocumentUploader from "@/component/common/BRDocumentUploader";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type Props = StackScreenProps<
   RootStackParamList,
@@ -114,7 +115,7 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
       const res = await authService.resubmitWholesaleBR(formData);
       if (res.data?.success) {
         Alert.alert(
-          "Documents Resubmitted",
+          "Documents Resubmitted Successfully",
           "Your Business Registration documents have been submitted for review.",
           [
             {
@@ -140,38 +141,28 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      {/* Custom Common Header with Back Button (No Title) */}
+      <CustomHeader
+        title=""
+        showBackButton={true}
+        navigation={navigation}
+        onBackPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate("Login");
+          }
+        }}
+      />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 20,
-          paddingTop: 12,
+          paddingTop: 8,
           paddingBottom: 32,
         }}
       >
-        {/* Top Header / Back Button */}
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => navigation.goBack()}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: "#FFFFFF",
-              borderWidth: 1,
-              borderColor: "#F1F5F9",
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          >
-            <Ionicons name="chevron-back" size={22} color="#0F172A" />
-          </TouchableOpacity>
-        </View>
 
         {/* Status Icon */}
         <View style={{ alignItems: "center", marginTop: 8 }}>

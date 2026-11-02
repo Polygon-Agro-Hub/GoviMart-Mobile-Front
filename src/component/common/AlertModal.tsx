@@ -255,12 +255,16 @@ Alert.alert = (title, message, buttons, options) => {
     const lowerTitle = typeof title === "string" ? title.toLowerCase() : "";
     const isSuccess =
       lowerTitle.includes("success") ||
+      lowerTitle.includes("successful") ||
       lowerTitle.includes("resent") ||
+      lowerTitle.includes("resend") ||
       lowerTitle.includes("sent") ||
       lowerTitle.includes("updated") ||
       lowerTitle.includes("created") ||
       lowerTitle.includes("cancelled") ||
-      lowerTitle.includes("completed");
+      lowerTitle.includes("completed") ||
+      lowerTitle.includes("resubmitted") ||
+      lowerTitle.includes("submitted");
     const type: AlertType = isSuccess ? "success" : "error";
 
     const lowerMsg = typeof message === "string" ? message.toLowerCase() : "";
@@ -276,8 +280,11 @@ Alert.alert = (title, message, buttons, options) => {
       lowerTitle.includes("resend") ||
       lowerTitle.includes("sent") ||
       lowerTitle.includes("otp") ||
+      lowerTitle.includes("resubmitted") ||
+      lowerTitle.includes("resubmit") ||
       lowerMsg.includes("verification code") ||
-      lowerMsg.includes("otp");
+      lowerMsg.includes("otp") ||
+      lowerMsg.includes("submitted for review");
 
     // OTP resent and sent alerts stay open with an OK button.
     // General success alerts (e.g. Login successful) auto-close without an OK button.
