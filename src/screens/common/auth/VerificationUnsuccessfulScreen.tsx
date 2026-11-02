@@ -146,6 +146,8 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
         title=""
         showBackButton={true}
         navigation={navigation}
+        style={{ paddingTop: 0, paddingBottom: 0 }}
+        containerStyle={{ marginTop: -6 }}
         onBackPress={() => {
           if (navigation.canGoBack()) {
             navigation.goBack();
@@ -159,19 +161,20 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 20,
+          paddingTop: 0,
           paddingBottom: 32,
         }}
       >
 
         {/* Status Icon */}
-        <View style={{ alignItems: "center", marginTop: 8 }}>
+        <View style={{ alignItems: "center", marginTop: 0 }}>
           <View
             style={{
-              width: 72,
-              height: 72,
-              borderRadius: 22,
+              width: 80,
+              height: 80,
+              borderRadius: 24,
               backgroundColor: "#FFF1F2",
-              borderWidth: 1,
+              borderWidth: 1.5,
               borderColor: "#FFE4E6",
               alignItems: "center",
               justifyContent: "center",
@@ -180,18 +183,18 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
           >
             <MaterialCommunityIcons
               name="shield-alert-outline"
-              size={36}
+              size={38}
               color="#F43F5E"
             />
             {/* Small red close badge on bottom-right */}
             <View
               style={{
                 position: "absolute",
-                bottom: -3,
-                right: -3,
-                width: 22,
-                height: 22,
-                borderRadius: 11,
+                bottom: -4,
+                right: -4,
+                width: 26,
+                height: 26,
+                borderRadius: 13,
                 backgroundColor: "#E11D48",
                 alignItems: "center",
                 justifyContent: "center",
@@ -199,7 +202,7 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
                 borderColor: "#FFFFFF",
               }}
             >
-              <Ionicons name="close" size={13} color="#FFFFFF" />
+              <Ionicons name="close" size={14} color="#FFFFFF" />
             </View>
           </View>
         </View>
