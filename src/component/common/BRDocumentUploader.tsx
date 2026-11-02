@@ -24,9 +24,11 @@ export interface BRDocumentUploaderProps {
 const formatFileSize = (bytes?: number) => {
   if (!bytes) return "0 KB";
   if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} MB`; // matches screenshot displaying MB / KB
+    const kb = (bytes / 1024).toFixed(1).replace(/\.0$/, "");
+    return `${kb} KB`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const mb = (bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "");
+  return `${mb} MB`;
 };
 
 const getExtensionLabel = (name?: string, mimeType?: string) => {

@@ -16,6 +16,52 @@ import LottieView from "lottie-react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
+import Svg, { Path } from "react-native-svg";
+
+/**
+ * Wholesale verification pending hourglass icon matching design
+ */
+const PendingHourglassIcon: React.FC<{
+  width?: number;
+  height?: number;
+  color?: string;
+}> = ({ width = 28, height = 42, color = "#D97706" }) => (
+  <Svg width={width} height={height} viewBox="0 0 41 62" fill="none">
+    <Path
+      fill={color}
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M0 0H41V12C41 18 30.5 22 30.5 26V31C30.5 35 41 39 41 45V57Q41 62 36 62H5Q0 62 0 57V45C0 39 10.5 35 10.5 31V26C10.5 22 0 18 0 12ZM6.5 6H34.5V12C34.5 17 27 25 20.5 25C14 25 6.5 17 6.5 12ZM6.5 56H34.5V50C34.5 45 27 37 20.5 37C14 37 6.5 45 6.5 50Z"
+    />
+  </Svg>
+);
+
+/**
+ * Wholesale verification pending mini shield checkmark icon matching design
+ */
+const PendingShieldCheckIcon: React.FC<{
+  size?: number;
+  color?: string;
+}> = ({ size = 16, color = "#FFFFFF" }) => (
+  <Svg width={size} height={size} viewBox="0 0 512 512" fill="none">
+    <Path
+      fill="none"
+      stroke={color}
+      strokeWidth={42}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M463.1 112.37C373.68 96.33 336.71 84.45 256 48 175.29 84.45 138.32 96.33 48.9 112.37 32.7 369.13 240.58 457.79 256 464c15.42-6.21 223.3-94.87 207.1-351.63z"
+    />
+    <Path
+      fill="none"
+      stroke={color}
+      strokeWidth={44}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="m160 256 64 64 128-128"
+    />
+  </Svg>
+);
 import {
   FontAwesome6,
   Ionicons,
@@ -874,7 +920,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               paddingBottom: Platform.OS === "ios" ? 40 : 28,
             }}
           >
-            {/* Top Icon with Lottie & Overlapping Mini Shield */}
+            {/* Top Icon with Hourglass & Overlapping Mini Shield */}
             <View style={{ alignItems: "center", marginBottom: 16 }}>
               <View
                 style={{
@@ -889,34 +935,30 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   position: "relative",
                 }}
               >
-                <LottieView
-                  source={require("@/assets/json/auth/br-approval-pending.json")}
-                  autoPlay
-                  loop
-                  style={{ width: 56, height: 56 }}
-                />
+                <PendingHourglassIcon width={28} height={42} color="#D97706" />
 
                 {/* Overlapping Mini Shield Verification Badge */}
                 <View
                   style={{
                     position: "absolute",
-                    bottom: -4,
-                    right: -4,
-                    width: 26,
-                    height: 26,
-                    borderRadius: 13,
-                    backgroundColor: "#221C3E",
-                    borderWidth: 2,
+                    bottom: -5,
+                    right: -5,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: "#281E4B",
+                    borderWidth: 2.5,
                     borderColor: "#FFFFFF",
                     alignItems: "center",
                     justifyContent: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.16,
+                    shadowRadius: 3,
+                    elevation: 4,
                   }}
                 >
-                  <MaterialCommunityIcons
-                    name="shield-check-outline"
-                    size={14}
-                    color="#FFFFFF"
-                  />
+                  <PendingShieldCheckIcon size={16} color="#FFFFFF" />
                 </View>
               </View>
             </View>
