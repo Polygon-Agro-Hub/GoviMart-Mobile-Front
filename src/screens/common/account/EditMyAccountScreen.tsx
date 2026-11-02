@@ -1166,7 +1166,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             </View>
 
             {/* FORM */}
-            <View style={{ width: "100%" }}>
+            <View style={{ width: "100%" }} pointerEvents={isWholesale ? "none" : "auto"}>
               {/* TITLE + FIRST NAME */}
               <View
                 style={{
@@ -1181,7 +1181,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     label="Title"
                     value={title}
                     open={false}
-                    setOpen={() => setTitleModalOpen(true)}
+                    setOpen={() => { if (!isWholesale) setTitleModalOpen(true); }}
+                    disabled={isWholesale}
                     options={[]}
                     onSelect={() => {}}
                     icon="user"
@@ -1196,6 +1197,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     label="First Name"
                     placeholder="First Name"
                     value={firstName}
+                    editable={!isWholesale}
                     autoCapitalize="words"
                     onChangeText={(text) => {
                       const sanitized = sanitizeFirstNameLive(text);
@@ -1227,6 +1229,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                   label="Last Name"
                   placeholder="Last Name"
                   value={lastName}
+                  editable={!isWholesale}
                   autoCapitalize="words"
                   onChangeText={(text) => {
                     const sanitized = sanitizeLastNameLive(text);
@@ -1262,7 +1265,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     label="Code"
                     value={mobileCode}
                     open={false}
-                    setOpen={() => setIsPhoneCodeModalOpen(true)}
+                    setOpen={() => { if (!isWholesale) setIsPhoneCodeModalOpen(true); }}
+                    disabled={isWholesale}
                     options={[]}
                     onSelect={() => {}}
                     icon="flag"
@@ -1281,6 +1285,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     icon="phone"
                     label="Mobile Number"
                     placeholder="Mobile Number"
+                    editable={!isWholesale}
                     circleSize={30}
                     iconSize={14}
                     paddingHorizontal={8}
@@ -1314,6 +1319,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                   icon="house"
                   label="Email"
                   placeholder="Email Address"
+                  editable={!isWholesale}
                   value={email}
                   autoCapitalize="none"
                   onChangeText={(text) => {
@@ -1344,6 +1350,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                       icon="building"
                       label="Company Name"
                       placeholder="Company Name"
+                      editable={!isWholesale}
                       value={companyName}
                       autoCapitalize="words"
                       onChangeText={(text) => {
@@ -1378,7 +1385,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         label="Code"
                         value={companyMobileCode || "+94"}
                         open={false}
-                        setOpen={() => setIsCompanyPhoneCodeModalOpen(true)}
+                        setOpen={() => { if (!isWholesale) setIsCompanyPhoneCodeModalOpen(true); }}
+                        disabled={isWholesale}
                         options={[]}
                         onSelect={() => {}}
                         icon="flag"
@@ -1396,6 +1404,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         icon="phone"
                         label="Company Mobile"
                         placeholder="Company Mobile"
+                        editable={!isWholesale}
                         circleSize={30}
                         iconSize={14}
                         paddingHorizontal={8}
@@ -1447,37 +1456,39 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           </View>
 
           {/* BOTTOM UPDATE BUTTON */}
-          <View
-            style={{
-              marginTop: 24,
-              marginBottom: Platform.OS === "ios" ? 16 : 8,
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={handleUpdate}
-              disabled={updating}
+          {!isWholesale && (
+            <View
               style={{
-                width: "100%",
-                height: 52,
-                borderRadius: 27,
-                backgroundColor: updating ? "#8B9DA7" : "#000",
-                justifyContent: "center",
-                alignItems: "center",
+                marginTop: 24,
+                marginBottom: Platform.OS === "ios" ? 16 : 8,
               }}
             >
-              <Text
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleUpdate}
+                disabled={updating}
                 style={{
-                  color: "#FFFFFF",
-                  fontSize: 14,
-                  fontWeight: "700",
-                  letterSpacing: 0.2,
+                  width: "100%",
+                  height: 52,
+                  borderRadius: 27,
+                  backgroundColor: updating ? "#8B9DA7" : "#000",
+                  justifyContent: "center",
+                  alignItems: "center",
                 }}
               >
-                {updating ? "Updating..." : "Update Account Info"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 14,
+                    fontWeight: "700",
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {updating ? "Updating..." : "Update Account Info"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </KeyboardAwareScrollView>
       )}
 

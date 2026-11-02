@@ -19,6 +19,8 @@ import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import axios from "axios";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 type AddAddressNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -63,6 +65,12 @@ const requiredMessage = (label: string) => `${label} is required`;
 const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const fromCheckout = route.params?.fromCheckout;
 
+  const reduxBuyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType,
+  );
+  const isWholesale =
+    (reduxBuyerType || "").toString().trim().toLowerCase() === "wholesale";
+
   const [saveAddressAs, setSaveAddressAs] = useState("");
   const [title, setTitle] = useState("");
   const [titleModalOpen, setTitleModalOpen] = useState(false);
@@ -72,6 +80,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [phoneCode1, setPhoneCode1] = useState("+94");
   const [phoneCode2, setPhoneCode2] = useState("+94");
   const [buildingType, setBuildingType] = useState("");
+
+  useEffect(() => {
+    if (isWholesale && buildingType !== "House") {
+      setBuildingType("House");
+    }
+  }, [isWholesale]);
   const [buildingNo, setBuildingNo] = useState("");
   const [houseNo, setHouseNo] = useState("");
   const [streetName, setStreetName] = useState("");
@@ -693,14 +707,14 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       }
     }
 
-    if (!buildingType.trim()) {
+    if (!isWholesale && !buildingType.trim()) {
       setBuildingTypeError(requiredMessage(FIELD_LABELS.buildingType));
       hasError = true;
       alertTitle = "Required";
       alertMessage = "Please select a building type.";
     }
 
-    if (buildingType === "House") {
+    if (isWholesale || buildingType === "House") {
       if (!buildingNo.trim()) {
         setBuildingNoError(requiredMessage(FIELD_LABELS.houseNo));
         hasError = true;
@@ -838,8 +852,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       };
 
       const payload =
-        buildingType === "House"
-          ? { ...basePayload, houseNo: buildingNo }
+        (isWholesale || buildingType === "House")
+          ? { ...basePayload, buildingType: "House", houseNo: buildingNo }
           : {
               ...basePayload,
               houseNo,
@@ -1165,7 +1179,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           </View>
 
           {/* ================= APARTMENT SPECIFIC FIELDS ================= */}
-          {buildingType === "Apartment" && (
+          {!isWholesale && buildingType === "Apartment" && (
             <>
               <InputField
                 icon="building"
@@ -1274,8 +1288,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             </>
           )}
 
-          {/* ================= HOUSE SPECIFIC FIELDS ================= */}
-          {buildingType === "House" && (
+          {/* ================= MAIN 3 ADDRESS LINES (Default for Wholesale or House) ================= */}
+          {(isWholesale || buildingType === "House") && (
             <>
               <InputField
                 icon="house"
