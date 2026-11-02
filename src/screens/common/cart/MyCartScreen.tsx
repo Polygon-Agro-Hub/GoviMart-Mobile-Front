@@ -14,6 +14,9 @@ import {
   changeProductUnit,
   updateAvailabilityMap,
   setCartFromBackend,
+  clearDeletedProductId,
+  clearDeletedPackageId,
+  setCartSyncing,
 } from "@/store/cartSlice";
 import PackageCartCard from "@/component/my-cart/PackageCartCard";
 import ProductCartCard from "@/component/my-cart/ProductCartCard";
@@ -38,7 +41,19 @@ interface Props {
 const MyCart: React.FC<Props> = ({ navigation }) => {
   const dispatch = useDispatch();
   const token = useSelector((state: RootState) => state.auth.token);
-  const { packages, products } = useSelector((state: RootState) => state.cart);
+  const {
+    packages,
+    products,
+    deletedProductIds = [],
+    deletedPackageIds = [],
+  } = useSelector((state: RootState) => state.cart);
+  const activePromisesRef = React.useRef<Map<string, Promise<any>>>(new Map());
+  const deletedProductIdsStateRef = React.useRef(deletedProductIds);
+  const deletedPackageIdsStateRef = React.useRef(deletedPackageIds);
+  React.useEffect(() => {
+    deletedProductIdsStateRef.current = deletedProductIds;
+    deletedPackageIdsStateRef.current = deletedPackageIds;
+  }, [deletedProductIds, deletedPackageIds]);
   const [cartId, setCartId] = useState<number | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [isNegativeCreditModalVisible, setIsNegativeCreditModalVisible] =
@@ -105,10 +120,14 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
             // Filter out any items that the user just deleted in this session
             const dbProducts = rawProducts.filter(
-              (p: any) => !deletedProductIdsRef.current.has(p.id),
+              (p: any) =>
+                !deletedProductIdsRef.current.has(p.id) &&
+                !deletedProductIdsStateRef.current.includes(p.id),
             );
             const dbPackages = rawPackages.filter(
-              (pkg: any) => !deletedPackageIdsRef.current.has(pkg.id),
+              (pkg: any) =>
+                !deletedPackageIdsRef.current.has(pkg.id) &&
+                !deletedPackageIdsStateRef.current.includes(pkg.id),
             );
 
             dispatch(
@@ -278,6 +297,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
   const deleteProduct = (id: number) => {
     isCartSyncingRef.current = true;
+    dispatch(setCartSyncing(true));
     deletedProductIdsRef.current.add(id);
     if (productSyncTimersRef.current[id]) {
       clearTimeout(productSyncTimersRef.current[id]);
@@ -285,16 +305,32 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     }
     dispatch(removeProduct(id));
     if (token) {
-      cartService
+      const promiseKey = `del-prod-${id}-${Date.now()}`;
+      const p = cartService
         .removeCartProduct(id)
-        .catch((err) => console.error("Failed DB sync for deleteProduct:", err))
+        .then(() => {
+          deletedProductIdsRef.current.delete(id);
+          dispatch(clearDeletedProductId(id));
+        })
+        .catch((err) => {
+          console.error("Failed DB sync for deleteProduct:", err);
+          deletedProductIdsRef.current.delete(id);
+          dispatch(clearDeletedProductId(id));
+          syncAndCheckCart(true);
+        })
         .finally(() => {
-          setTimeout(() => {
-            isCartSyncingRef.current = false;
-          }, 1000);
+          activePromisesRef.current.delete(promiseKey);
+          if (activePromisesRef.current.size === 0) {
+            setTimeout(() => {
+              isCartSyncingRef.current = false;
+              dispatch(setCartSyncing(false));
+            }, 300);
+          }
         });
+      activePromisesRef.current.set(promiseKey, p);
     } else {
       isCartSyncingRef.current = false;
+      dispatch(setCartSyncing(false));
     }
   };
 
@@ -391,6 +427,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
   const deletePackage = (id: number) => {
     isCartSyncingRef.current = true;
+    dispatch(setCartSyncing(true));
     deletedPackageIdsRef.current.add(id);
     if (packageSyncTimersRef.current[id]) {
       clearTimeout(packageSyncTimersRef.current[id]);
@@ -398,16 +435,32 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     }
     dispatch(removePackage(id));
     if (token) {
-      cartService
+      const promiseKey = `del-pkg-${id}-${Date.now()}`;
+      const p = cartService
         .removeCartPackage(id)
-        .catch((err) => console.error("Failed DB sync for deletePackage:", err))
+        .then(() => {
+          deletedPackageIdsRef.current.delete(id);
+          dispatch(clearDeletedPackageId(id));
+        })
+        .catch((err) => {
+          console.error("Failed DB sync for deletePackage:", err);
+          deletedPackageIdsRef.current.delete(id);
+          dispatch(clearDeletedPackageId(id));
+          syncAndCheckCart(true);
+        })
         .finally(() => {
-          setTimeout(() => {
-            isCartSyncingRef.current = false;
-          }, 1000);
+          activePromisesRef.current.delete(promiseKey);
+          if (activePromisesRef.current.size === 0) {
+            setTimeout(() => {
+              isCartSyncingRef.current = false;
+              dispatch(setCartSyncing(false));
+            }, 300);
+          }
         });
+      activePromisesRef.current.set(promiseKey, p);
     } else {
       isCartSyncingRef.current = false;
+      dispatch(setCartSyncing(false));
     }
   };
 
@@ -459,15 +512,61 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
       maximumFractionDigits: 2,
     });
 
+  const flushPendingSyncs = async () => {
+    const promises: Promise<any>[] = [];
+    Object.entries(productSyncTimersRef.current).forEach(([idStr, timer]) => {
+      clearTimeout(timer);
+      delete productSyncTimersRef.current[Number(idStr)];
+      const prodId = Number(idStr);
+      if (!deletedProductIdsRef.current.has(prodId) && !deletedProductIdsStateRef.current.includes(prodId)) {
+        const prod = productsRef.current.find((p) => p.id === prodId);
+        if (prod && token) {
+          promises.push(cartService.syncCartProduct(prodId, prod.weight, prod.unit).catch(() => {}));
+        }
+      }
+    });
+    Object.entries(packageSyncTimersRef.current).forEach(([idStr, timer]) => {
+      clearTimeout(timer);
+      delete packageSyncTimersRef.current[Number(idStr)];
+      const pkgId = Number(idStr);
+      if (!deletedPackageIdsRef.current.has(pkgId) && !deletedPackageIdsStateRef.current.includes(pkgId)) {
+        const pkg = packagesRef.current.find((p) => p.id === pkgId);
+        if (pkg && token) {
+          promises.push(cartService.syncCartPackage(pkgId, pkg.quantity).catch(() => {}));
+        }
+      }
+    });
+    if (activePromisesRef.current.size > 0) {
+      promises.push(...Array.from(activePromisesRef.current.values()));
+    }
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
+  };
+
   const hasOneTimePackage = packages.some((p) => {
     const type = (p.packageType || "").trim().toLowerCase();
     return type === "one time" || type === "one-time" || type.includes("one");
   });
 
   const handleCheckout = async () => {
+    let resolvedCartId = cartId;
     if (!token) {
       setAuthModalVisible(true);
       return;
+    }
+
+    try {
+      await flushPendingSyncs();
+      if (!resolvedCartId && token) {
+        const dbCartRes = await cartService.getUserCart();
+        if (dbCartRes?.data?.data?.cartId) {
+          resolvedCartId = dbCartRes.data.data.cartId;
+          setCartId(resolvedCartId);
+        }
+      }
+    } catch (syncErr) {
+      console.warn("Error flushing cart sync before checkout:", syncErr);
     }
 
     if (packages.length === 0 && products.length === 0) {
@@ -502,7 +601,7 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
     const grandTotal = Math.max(0, packageTotal + productTotal - totalDiscount);
     const orderContext: OrderContext = {
-      cartId: cartId || undefined,
+      cartId: resolvedCartId || cartId || undefined,
       grandTotal,
       packageTotal,
       productTotal,

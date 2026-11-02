@@ -14,6 +14,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Keyboard,
+  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
@@ -228,6 +229,12 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     (state: RootState) =>
       (state as RootState & { cart: CartState }).cart.packages,
   );
+  const isGlobalCartSyncing = useSelector(
+    (state: RootState) => (state.cart as any).isCartSyncing,
+  );
+  const isGlobalCartSyncingRef = useRef(false);
+  isGlobalCartSyncingRef.current = Boolean(isGlobalCartSyncing);
+
   const totalCartItems =
     cartProducts.length +
     cartPackages.reduce((sum, p) => sum + (p.quantity || 1), 0);
@@ -300,37 +307,37 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
 
   const fetchReadyToConfirmOrder = useCallback(async () => {
-  if (!userTokenRef.current || !isWithinConfirmWindow()) {
-    setReadyOrder(null);
-    return;
-  }
-
-  try {
-    const scheduleRes = await orderService.getScheduleOrders();
-
-    const ord = scheduleRes.data?.order;
-
-    if (scheduleRes.data?.status && ord) {
-      const targetId = ord.processOrderId || ord.orderId;
-
-      if (targetId) {
-        setReadyOrder({
-          orderId: targetId,
-          invoiceNo: ord.invNo || ord.invoiceNo || String(targetId),
-          timeAgo: getTimeElapsedFrom8AM(),
-          createdAt: ord.createdAt,
-        });
-        return;
-      }
+    if (!userTokenRef.current || !isWithinConfirmWindow()) {
+      setReadyOrder(null);
+      return;
     }
 
-    // No schedule order -> hide banner
-    setReadyOrder(null);
-  } catch (err) {
-    console.warn("[HomeScreen] getScheduleOrders error:", err);
-    setReadyOrder(null);
-  }
-}, []);
+    try {
+      const scheduleRes = await orderService.getScheduleOrders();
+
+      const ord = scheduleRes.data?.order;
+
+      if (scheduleRes.data?.status && ord) {
+        const targetId = ord.processOrderId || ord.orderId;
+
+        if (targetId) {
+          setReadyOrder({
+            orderId: targetId,
+            invoiceNo: ord.invNo || ord.invoiceNo || String(targetId),
+            timeAgo: getTimeElapsedFrom8AM(),
+            createdAt: ord.createdAt,
+          });
+          return;
+        }
+      }
+
+      // No schedule order -> hide banner
+      setReadyOrder(null);
+    } catch (err) {
+      console.warn("[HomeScreen] getScheduleOrders error:", err);
+      setReadyOrder(null);
+    }
+  }, []);
 
   // Children order inside the ScrollView:
   // HomeHeader (0), ReadyBanner (optional), Banner/Skeleton, SearchBar
@@ -386,11 +393,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
         fetchReadyToConfirmOrder();
 
         // Sync this user's cart from backend only if not actively modifying locally
-        if (!isCartSyncingRef.current) {
+        if (!isCartSyncingRef.current && !isGlobalCartSyncingRef.current) {
           cartService
             .getUserCart()
             .then((dbCartRes) => {
-              if (isCartSyncingRef.current) return;
+              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current) return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
                 const dbPackages = dbCartRes.data.data.packages || [];
@@ -403,7 +410,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         }
       } else {
         // No token — clear any stale cart items from a previous session
@@ -657,11 +664,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch {}
+              } catch { }
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => {});
+          .catch(() => { });
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -731,7 +738,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
 
         // Also refresh the cart from backend
@@ -739,6 +746,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           cartService
             .getUserCart()
             .then((dbCartRes) => {
+              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current) return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
                 const dbPackages = dbCartRes.data.data.packages || [];
@@ -751,7 +759,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       }
 
@@ -785,11 +793,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch {}
+                } catch { }
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => {}),
+            .catch(() => { }),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -975,8 +983,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawChangeBy =
         product.changeby != null &&
-        String(product.changeby).trim() !== "" &&
-        parseFloat(String(product.changeby)) > 0
+          String(product.changeby).trim() !== "" &&
+          parseFloat(String(product.changeby)) > 0
           ? parseFloat(String(product.changeby))
           : rawStartValue;
 
@@ -989,8 +997,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawMaxQuantity =
         product.maxQuantity != null &&
-        String(product.maxQuantity).trim() !== "" &&
-        parseFloat(String(product.maxQuantity)) > 0
+          String(product.maxQuantity).trim() !== "" &&
+          parseFloat(String(product.maxQuantity)) > 0
           ? parseFloat(String(product.maxQuantity))
           : null;
 
@@ -1193,6 +1201,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   return (
     <View className="flex-1 bg-white">
+      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
       {/* Top Cart Toast Notification */}
       <CartToast visible={toastVisible} message={toastMessage} />
 
@@ -1413,13 +1422,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isPackage = product.type === "package";
                   const cartItem = isProduct
                     ? cartProducts.find(
-                        (p: ProductCartItem) => p.id === product.id,
-                      )
+                      (p: ProductCartItem) => p.id === product.id,
+                    )
                     : null;
                   const cartPackage = isPackage
                     ? cartPackages.find(
-                        (p: PackageCartItem) => p.id === product.id,
-                      )
+                      (p: PackageCartItem) => p.id === product.id,
+                    )
                     : null;
 
                   const isExpanded = product.id === expandedItemId;
@@ -1799,9 +1808,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className={`w-6 h-6 rounded-full items-center justify-center ${
-                                  isItemAtMax ? "bg-gray-300" : "bg-black"
-                                }`}
+                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
+                                  }`}
                               >
                                 <Ionicons
                                   name="add"

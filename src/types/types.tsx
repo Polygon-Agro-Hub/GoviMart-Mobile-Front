@@ -177,11 +177,13 @@ export type RootStackParamList = {
   newScheduleDate?: string;
   refreshKey?: number; // set ONLY by the Notification tab
 };
- SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
+ SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; isPaid?: boolean | number;} | undefined;
 
   OrderConfirmedOrderCancelScreen: {
     orderId?: string | number;
     processOrderId?: string | number;
+    hasAlaCarte?: boolean;
+    hasAlacart?: boolean;
     packages?: Array<{
       id: string;
       name: string;
@@ -239,7 +241,7 @@ export type RootStackParamList = {
     serviceFee?: number;
     totalCardDue?: number;
   } | undefined;
- ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
+ ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; isPaid?: boolean | number;} | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────

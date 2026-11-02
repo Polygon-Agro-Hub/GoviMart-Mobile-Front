@@ -684,7 +684,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
             {!isRateLimited && remainingAttempts > 0 && (
               <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
-                ({remainingAttempts} {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
+                ({remainingAttempts}{" "}
+                {remainingAttempts === 1 ? "attempt" : "attempts"}{" "}
+                remaining)
               </Text>
             )}
           </View>

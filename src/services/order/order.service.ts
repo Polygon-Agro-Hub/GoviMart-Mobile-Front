@@ -34,6 +34,14 @@ class OrderService {
         });
     }
 
+    async getCancelOrderAdditionalItems(orderId: string | number, processOrderId?: string | number) {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_CANCEL_ORDER_ADDITIONAL_ITEMS.replace(":orderId", String(orderId)), {
+            headers,
+            params: processOrderId ? { processOrderId } : undefined,
+        });
+    }
+
     async createOrder(payload: any) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, {

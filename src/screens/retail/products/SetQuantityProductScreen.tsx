@@ -153,6 +153,9 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     .trim()
     .toLowerCase();
 
+    const isPaid =
+  Number(route.params?.isPaid) === 1 || route.params?.isPaid === true;
+
   // "pickup" (or "Pickup" from the DB) -> pickup. "home" / "delivery" -> delivery.
   const isPickup = deliveryMethod.includes("pickup");
   const isCard =
@@ -297,38 +300,52 @@ const ChangeProductQuantity: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
-const amountText = (
-  <Text className="font-bold text-black">
-    Rs. {formatPrice(Math.abs(balance))}
-  </Text>
-);
+  const amountText = (
+    <Text className="font-bold text-black">
+      Rs. {formatPrice(Math.abs(balance))}
+    </Text>
+  );
 
-// 1) Check PAYMENT first.
-//    Card  → already paid, so credited / additional (delivery method doesn't matter)
-//    Cash  → then check DELIVERY: pickup or delivery
-const noteContent = isCard ? (
-  isCredit ? (
-    <>
-      You have already paid for this order, so the remaining balance of{" "}
-      {amountText} will be credited to your account.
-    </>
-  ) : (
-    <>
-      You have already paid for this order. The additional {amountText} will
-      need to be paid at the end of this process.
-    </>
-  )
-) : (
-  <>
-    The total amount you need to pay upon {isPickup ? "pickup" : "delivery"}{" "}
-    will be{" "}
+  const changeWord = (
     <Text className="font-bold text-black">
       {isCredit ? "reduced" : "increased"}
-    </Text>{" "}
-    by {amountText} at the end of this process.
-  </>
-);
+    </Text>
+  );
 
+  let noteContent: React.ReactNode;
+
+  // 1) Check PAYMENT first.
+  //    Card + paid   → credited / additional wording
+  //    Card + unpaid → "total amount you need to pay ... will be reduced/increased"
+  //    Cash          → then check DELIVERY: pickup or delivery
+  if (isCard && isPaid) {
+    noteContent = isCredit ? (
+      <>
+        You have already paid for this order, so the remaining balance of{" "}
+        {amountText} will be credited to your account.
+      </>
+    ) : (
+      <>
+        You have already paid for this order. The additional {amountText} will
+        need to be paid at the end of this process.
+      </>
+    );
+  } else if (isCard && !isPaid) {
+    noteContent = (
+      <>
+        The total amount you need to pay upon at the end of this process will
+        be {changeWord} by {amountText}.
+      </>
+    );
+  } else {
+    noteContent = (
+      <>
+        The total amount you need to pay upon {isPickup ? "pickup" : "delivery"}{" "}
+        will be {changeWord} by {amountText} at the end of this process.
+      </>
+    );
+  }
+  
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />

@@ -329,6 +329,13 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     "Delivered",
   ];
 
+  // Cancelled during REVIEW => Ordered > Processing > Cancelled
+  //   (orders.isPackage = 1 AND orders.isFinalizeImdt = 0)
+  // Cancelled during ORDER CONFIRMATION => Ordered > Cancelled
+  // NOTE: the column name is `isFinalizeImdt` (no "d"), matching the DB table.
+  const isCancelledDuringReview = () =>
+    Number(order?.isPackage) === 1 && Number(order?.isFinalizeImdt) === 0;
+
   const getStatusItems = () => {
     const isPickup =
       (
@@ -418,7 +425,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
       }
 
       if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
-        const isConfirmed = Number(order?.isConfirmed) === 1;
+        const showProcessing = isCancelledDuringReview();
         return [
           {
             title: "Ordered",
@@ -426,7 +433,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             icon: "cart-shopping",
             active: true,
           },
-          ...(isConfirmed
+          ...(showProcessing
             ? [
                 {
                   title: "Processing",
@@ -657,7 +664,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     }
 
     if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
-      const isConfirmed = Number(order?.isConfirmed) === 1;
+      const showProcessing = isCancelledDuringReview();
       return [
         {
           title: "Ordered",
@@ -665,7 +672,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           icon: "cart-shopping",
           active: true,
         },
-        ...(isConfirmed
+        ...(showProcessing
           ? [
               {
                 title: "Processing",

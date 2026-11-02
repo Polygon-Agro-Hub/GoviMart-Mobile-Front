@@ -371,6 +371,7 @@ const ReplaceProduct: React.FC<Props> = ({ navigation, route }) => {
                 stepIndex: route.params?.stepIndex,
                 paymentMethod: route.params?.paymentMethod,
                 deliveryMethod: route.params?.deliveryMethod,
+                isPaid: route.params?.isPaid,
               });
             }}
             activeOpacity={0.85}

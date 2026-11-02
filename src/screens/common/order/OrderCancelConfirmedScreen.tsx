@@ -22,8 +22,9 @@ import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
 
 /*
-  NOTE: add this to RootStackParamList -> "OrderCancelConfirmation" params:
+  NOTE: add these to RootStackParamList -> "OrderCancelConfirmation" params:
     totalCardDue?: number;
+    hasAlaCarte?: boolean;
 */
 type Props = StackScreenProps<RootStackParamList, "OrderCancelConfirmation">;
 
@@ -128,6 +129,8 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const {
     orderId,
     processOrderId,
+    hasAlaCarte: passedHasAlaCarte,
+    hasAlacart: passedHasAlacart,
     packages: passedPackages,
     alaCarteItems: passedAlaCarte,
     totalPaid: passedTotalPaid,
@@ -138,12 +141,62 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
-  } = route.params || {};
+  } = (route.params || {}) as any;
+
+  // Order has ala carte items check
+  const hasAlaCarte = Boolean(
+    passedHasAlaCarte ||
+      passedHasAlacart ||
+      (passedAlaCarte && passedAlaCarte.length > 0),
+  );
 
   const packages: PackageItem[] =
     passedPackages && passedPackages.length > 0 ? passedPackages : [];
-  const alaCarteItems: AlaCarteItem[] =
-    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [];
+
+  // Starts with whatever was passed (if anything), then replaced by fetched data
+  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>(
+    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [],
+  );
+
+  // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
+  useEffect(() => {
+    if (!hasAlaCarte || !orderId) return;
+
+    let isMounted = true;
+    const fetchCancelAlaCarte = async () => {
+      try {
+        const res = await orderService.getCancelOrderAdditionalItems(
+          orderId,
+          processOrderId,
+        );
+        if (isMounted && res.data?.status && Array.isArray(res.data.data)) {
+          const items: AlaCarteItem[] = res.data.data.map((it: any) => {
+            const linePrice = parseFloat(it.price) || 0;
+            const lineNormal = parseFloat(it.normalPrice) || 0;
+            return {
+              id: String(it.id || it.productId || "item"),
+              name: it.displayName || it.name || "Item",
+              icon: it.icon,
+              image: it.image,
+              weight: `${it.qty} ${it.unit || "kg"}`,
+              price: linePrice,
+              originalPrice:
+                lineNormal > linePrice + 0.01 ? lineNormal : undefined,
+            };
+          });
+          setAlaCarteItems(items);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cancel order additional items:", err);
+      }
+    };
+
+    fetchCancelAlaCarte();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasAlaCarte, orderId, processOrderId]);
 
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);

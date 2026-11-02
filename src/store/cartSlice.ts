@@ -34,12 +34,18 @@ export interface CartState {
   packages: PackageCartItem[];
   products: ProductCartItem[];
   cartUserId: number | null;
+  deletedProductIds: number[];
+  deletedPackageIds: number[];
+  isCartSyncing: boolean;
 }
 
 const initialState: CartState = {
   packages: [],
   products: [],
   cartUserId: null,
+  deletedProductIds: [],
+  deletedPackageIds: [],
+  isCartSyncing: false,
 };
 
 const cartSlice = createSlice({
@@ -48,6 +54,7 @@ const cartSlice = createSlice({
   reducers: {
     // ─── PRODUCT ACTIONS ───────────────────────────────────────────────────────
     addProduct: (state, action: PayloadAction<ProductCartItem>) => {
+      state.deletedProductIds = (state.deletedProductIds || []).filter((id) => id !== action.payload.id);
       const existingIndex = state.products.findIndex((p) => p.id === action.payload.id);
       if (existingIndex >= 0) {
         state.products[existingIndex] = {
@@ -70,6 +77,10 @@ const cartSlice = createSlice({
     },
     removeProduct: (state, action: PayloadAction<number>) => {
       state.products = state.products.filter((p) => p.id !== action.payload);
+      if (!state.deletedProductIds) state.deletedProductIds = [];
+      if (!state.deletedProductIds.includes(action.payload)) {
+        state.deletedProductIds.push(action.payload);
+      }
     },
     increaseProductWeight: (state, action: PayloadAction<number>) => {
       const product = state.products.find((p) => p.id === action.payload);
@@ -125,6 +136,7 @@ const cartSlice = createSlice({
 
     // ─── PACKAGE ACTIONS ───────────────────────────────────────────────────────
     addPackage: (state, action: PayloadAction<PackageCartItem>) => {
+      state.deletedPackageIds = (state.deletedPackageIds || []).filter((id) => id !== action.payload.id);
       const existingIndex = state.packages.findIndex((p) => p.id === action.payload.id);
       if (existingIndex >= 0) {
         state.packages[existingIndex].quantity += action.payload.quantity;
@@ -162,6 +174,10 @@ const cartSlice = createSlice({
     },
     removePackage: (state, action: PayloadAction<number>) => {
       state.packages = state.packages.filter((p) => p.id !== action.payload);
+      if (!state.deletedPackageIds) state.deletedPackageIds = [];
+      if (!state.deletedPackageIds.includes(action.payload)) {
+        state.deletedPackageIds.push(action.payload);
+      }
     },
 
     // ─── BACKEND SYNC ACTIONS ──────────────────────────────────────────────────
@@ -173,8 +189,14 @@ const cartSlice = createSlice({
         cartUserId?: number | null;
       }>
     ) => {
-      const incomingProducts = action.payload.products || [];
-      const incomingPackages = action.payload.packages || [];
+      const deletedProdSet = new Set(state.deletedProductIds || []);
+      const incomingProducts = (action.payload.products || []).filter(
+        (p) => !deletedProdSet.has(p.id)
+      );
+      const deletedPkgSet = new Set(state.deletedPackageIds || []);
+      const incomingPackages = (action.payload.packages || []).filter(
+        (pkg) => !deletedPkgSet.has(pkg.id)
+      );
 
       // 1. Stable merge for products: preserve current order of items already visible
       const newProductsMap = new Map(incomingProducts.map((p) => [p.id, p]));
@@ -272,10 +294,27 @@ const cartSlice = createSlice({
       });
     },
 
+    clearDeletedProductId: (state, action: PayloadAction<number>) => {
+      state.deletedProductIds = (state.deletedProductIds || []).filter(
+        (id) => id !== action.payload
+      );
+    },
+    clearDeletedPackageId: (state, action: PayloadAction<number>) => {
+      state.deletedPackageIds = (state.deletedPackageIds || []).filter(
+        (id) => id !== action.payload
+      );
+    },
+    setCartSyncing: (state, action: PayloadAction<boolean>) => {
+      state.isCartSyncing = action.payload;
+    },
+
     clearCart: (state) => {
       state.packages = [];
       state.products = [];
       state.cartUserId = null;
+      state.deletedProductIds = [];
+      state.deletedPackageIds = [];
+      state.isCartSyncing = false;
     },
   },
   extraReducers: (builder) => {
@@ -284,6 +323,9 @@ const cartSlice = createSlice({
         state.packages = [];
         state.products = [];
         state.cartUserId = null;
+      state.deletedProductIds = [];
+      state.deletedPackageIds = [];
+      state.isCartSyncing = false;
       })
       .addCase(loginSuccess, (state, action) => {
         const newUserId = action.payload.userProfile?.id ?? null;
@@ -291,6 +333,9 @@ const cartSlice = createSlice({
           state.packages = [];
           state.products = [];
           state.cartUserId = newUserId;
+          state.deletedProductIds = [];
+          state.deletedPackageIds = [];
+          state.isCartSyncing = false;
         }
       });
   },
@@ -310,6 +355,9 @@ export const {
   setCartFromBackend,
   updateAvailabilityMap,
   clearCart,
+  clearDeletedProductId,
+  clearDeletedPackageId,
+  setCartSyncing,
 } = cartSlice.actions;
 
 export default cartSlice.reducer;
