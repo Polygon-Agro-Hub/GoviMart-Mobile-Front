@@ -181,7 +181,7 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
   const [alertType, setAlertType] = useState<"success" | "error">("error");
 
   const currentPasswordPlaceholder =
-    redirectTo === "Profile" ? "Type Here" : "Type Your NIC Number Here";
+    redirectTo === "Profile" ? "Type Here" : "Your NIC Number / Passport ID";
 
   const showAlert = (
     title: string,

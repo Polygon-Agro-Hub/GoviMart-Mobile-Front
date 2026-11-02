@@ -59,6 +59,22 @@ class AuthService {
   }) {
     return apiClient.post(ENDPOINTS.AUTH.FORGOT_PASSWORD_RESET, data);
   }
+
+  resubmitWholesaleBR(formData: FormData) {
+    return apiClient.post(ENDPOINTS.AUTH.RESUBMIT_WHOLESALE_BR, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
+
+  uploadWholesaleBR(formData: FormData) {
+    return apiClient.post(ENDPOINTS.AUTH.UPLOAD_WHOLESALE_BR, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
 }
 
 export default new AuthService();

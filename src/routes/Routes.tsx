@@ -21,6 +21,7 @@ import ForgotPassword from "@/screens/common/auth/ForgotPasswordScreen";
 import ForgotPasswordInput from "@/screens/common/auth/ForgotPasswordInputScreen";
 import ForgotPasswordOTP from "@/screens/common/auth/ForgotPasswordOTPScreen";
 import ResetPassword from "@/screens/common/auth/ResetPasswordScreen";
+import VerificationUnsuccessful from "@/screens/common/auth/VerificationUnsuccessfulScreen";
 import DeliveryLocation from "@/screens/common/locations/DeliveryLocationScreen";
 import CameraAccess from "@/screens/common/permission/CameraAccess";
 import LocationAccess from "@/screens/common/permission/LocationAccess";
@@ -184,6 +185,7 @@ export const PUBLIC_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ForgotPasswordInput", component: ForgotPasswordInput, allowedRoles: "PUBLIC" },
   { name: "ForgotPasswordOTP", component: ForgotPasswordOTP, allowedRoles: "PUBLIC" },
   { name: "ResetPassword", component: ResetPassword, allowedRoles: "PUBLIC" },
+  { name: "VerificationUnsuccessful", component: VerificationUnsuccessful, allowedRoles: "PUBLIC" },
   { name: "DeliveryLocation", component: DeliveryLocation, allowedRoles: "PUBLIC" },
   { name: "CameraAccess", component: CameraAccess as any, allowedRoles: "PUBLIC" },
   { name: "LocationAccess", component: LocationAccess as any, allowedRoles: "PUBLIC" },
