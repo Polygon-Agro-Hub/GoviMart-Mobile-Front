@@ -13,6 +13,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   BackHandler,
+  NativeScrollEvent,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import CustomHeader from "@/component/common/CustomHeader";
@@ -61,6 +62,16 @@ type NotificationNavigationProp = StackNavigationProp<
 interface NotificationProps {
   navigation: NotificationNavigationProp;
 }
+
+// ─── PAGINATION ──────────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
+
+const isCloseToBottom = ({
+  layoutMeasurement,
+  contentOffset,
+  contentSize,
+}: NativeScrollEvent) =>
+  layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
 
 // ─── TITLE MATCHERS ──────────────────────────────────────────────────────────
 const isPackageReviewTitle = (title?: string) => {
@@ -198,6 +209,8 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
   const [notifications, setNotifications] = useState<UiNotificationItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [hasMore, setHasMore] = useState<boolean>(true);
   const [itemLoadingId, setItemLoadingId] = useState<number | null>(null);
   const [showMenu, setShowMenu] = useState<boolean>(false);
   const [alertConfig, setAlertConfig] = useState<{
@@ -213,6 +226,10 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
   });
 
   const hasFocusedOnce = useRef(false);
+  // Number of RAW rows loaded from the server so far (before client filtering)
+  const offsetRef = useRef(0);
+  const isFetchingMoreRef = useRef(false);
+  const listHeightRef = useRef(0);
 
   const showAlert = (
     title: string,
@@ -251,20 +268,64 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     }, [showMenu, navigation]),
   );
 
+  const applyRoleFilter = useCallback(
+    (items: UiNotificationItem[]) =>
+      isRetail ? items : items.filter((n) => !isPackageReviewTitle(n.title)),
+    [isRetail],
+  );
+
+  // Re-fetch the first `count` rows as separate 10-row pages (in parallel),
+  // so every request is still limit=10 no matter how many are loaded.
+  const fetchPages = useCallback(async (count: number) => {
+    const pages = Math.max(Math.ceil(count / PAGE_SIZE), 1);
+    const responses = await Promise.all(
+      Array.from({ length: pages }, (_, i) =>
+        notificationService.getNotifications(PAGE_SIZE, i * PAGE_SIZE),
+      ),
+    );
+
+    const first = responses[0];
+    const lastList = responses[pages - 1].data?.notifications ?? [];
+    const all: ServerNotificationItem[] = responses.flatMap(
+      (r) => r.data?.notifications ?? [],
+    );
+
+    // De-dupe by id (rows can shift between page requests)
+    const seen = new Set<number>();
+    const raw = all.filter((n) => {
+      if (seen.has(n.id)) return false;
+      seen.add(n.id);
+      return true;
+    });
+
+    return {
+      ok: !!first.data?.status,
+      raw,
+      rawCount: all.length,
+      unreadCount: Number(first.data?.unreadCount) || 0,
+      lastPageFull: lastList.length >= PAGE_SIZE,
+    };
+  }, []);
+
   // Fetch notifications from API
+  // reset = true  -> go back to the first page (initial load, pull-to-refresh)
+  // reset = false -> re-fetch everything already loaded, so focus / socket
+  //                  refreshes don't throw away pages 2, 3, ...
   const loadNotifications = useCallback(
-    async (showLoadingSpinner = true) => {
+    async (showLoadingSpinner = true, reset = false) => {
       if (showLoadingSpinner) setIsLoading(true);
       try {
-        const res = await notificationService.getNotifications(50, 0);
-        if (res.data?.status && Array.isArray(res.data?.notifications)) {
-          let uiItems = res.data.notifications.map(mapServerItemToUi);
-          if (!isRetail) {
-            uiItems = uiItems.filter((n) => !isPackageReviewTitle(n.title));
-          }
-          setNotifications(uiItems);
+        const loaded = reset
+          ? PAGE_SIZE
+          : Math.max(offsetRef.current, PAGE_SIZE);
+        const result = await fetchPages(loaded);
+
+        if (result.ok) {
+          offsetRef.current = result.rawCount;
+          setHasMore(result.lastPageFull);
+          setNotifications(applyRoleFilter(result.raw.map(mapServerItemToUi)));
           // Keep global store in sync for badge on all tabs
-          updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
+          updateGlobalUnreadCount(result.unreadCount);
         }
       } catch (error) {
         console.warn("Failed to load notifications from API:", error);
@@ -273,8 +334,69 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         setIsRefreshing(false);
       }
     },
-    [isRetail],
+    [applyRoleFilter, fetchPages],
   );
+
+  // Load the next 10
+  const loadMore = useCallback(async () => {
+    if (
+      isFetchingMoreRef.current ||
+      !hasMore ||
+      isLoading ||
+      isRefreshing ||
+      offsetRef.current === 0
+    ) {
+      return;
+    }
+
+    isFetchingMoreRef.current = true;
+    setIsLoadingMore(true);
+    try {
+      const res = await notificationService.getNotifications(
+        PAGE_SIZE,
+        offsetRef.current,
+      );
+      if (res.data?.status && Array.isArray(res.data?.notifications)) {
+        const raw = res.data.notifications;
+        offsetRef.current += raw.length;
+        // Use RAW length (not filtered length) to decide if more pages exist
+        setHasMore(raw.length >= PAGE_SIZE);
+
+        const incoming = applyRoleFilter(raw.map(mapServerItemToUi));
+        setNotifications((prev) => {
+          const ids = new Set(prev.map((n) => n.id));
+          return [...prev, ...incoming.filter((n) => !ids.has(n.id))];
+        });
+      }
+    } catch (error) {
+      console.warn("Failed to load more notifications:", error);
+    } finally {
+      isFetchingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isLoading, isRefreshing, applyRoleFilter]);
+
+  // If a page was fully filtered out (e.g. non-retail hides package reviews)
+  // and the list is still empty, keep pulling pages automatically.
+  useEffect(() => {
+    if (
+      !isLoading &&
+      !isRefreshing &&
+      !isLoadingMore &&
+      hasMore &&
+      notifications.length === 0 &&
+      offsetRef.current > 0
+    ) {
+      loadMore();
+    }
+  }, [
+    isLoading,
+    isRefreshing,
+    isLoadingMore,
+    hasMore,
+    notifications.length,
+    loadMore,
+  ]);
 
   // Re-fetch every time the screen regains focus (e.g. returning from
   // ReviewPackage / OrderConfirmation) so isFinalized / isConfirmed are fresh.
@@ -288,7 +410,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
   );
 
   useEffect(() => {
-    loadNotifications(true);
+    loadNotifications(true, true);
 
     // Connect socket
     socketService.connect();
@@ -330,10 +452,9 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    loadNotifications(false);
+    loadNotifications(false, true);
   };
 
-  // MARK NOTIFICATION AS READ & NAVIGATE
   // MARK NOTIFICATION AS READ & NAVIGATE
   const handleNotificationPress = async (tapped: UiNotificationItem) => {
     if (itemLoadingId !== null) return;
@@ -343,10 +464,11 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
       // 0) Always decide using the freshest order state from the server
       let item: UiNotificationItem = tapped;
       try {
-        const res = await notificationService.getNotifications(50, 0);
-        const fresh = res.data?.notifications?.find(
-          (n: any) => n.id === tapped.id,
+        // Re-fetch every loaded page (10 per request) so the tapped item is included
+        const result = await fetchPages(
+          Math.max(offsetRef.current, PAGE_SIZE),
         );
+        const fresh = result.raw.find((n) => n.id === tapped.id);
         if (fresh) {
           item = mapServerItemToUi(fresh);
           // Retain local isPaid if previously confirmed paid
@@ -381,7 +503,6 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         !!item.orderStatus && item.orderStatus.toLowerCase() === "cancelled";
 
       // 1) Package finalization review
-      // 1) Package finalization review
       if (isRetail && isPackageReviewTitle(item.title)) {
         if (isCancelled) {
           showAlert(
@@ -409,6 +530,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         });
         return;
       }
+
       // 2) Please Confirm Your Order -> Order Confirmation screen
       if (isOrderConfirmTitle(item.title)) {
         if (!targetId) return;
@@ -595,9 +717,47 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
     [notifications],
   );
 
+  // MESSAGE: bold invoice number (existing helper) + bold reason text.
+  // "Reason :" label stays normal; everything after it on that line is bold,
+  // whether or not the server wrapped it in quotes.
+  const messageBaseStyle = {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#6B7280",
+  } as const;
+
+  const messageBoldStyle = {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: "#111827",
+  } as const;
+
+  const renderMessageWithBoldReason = (message: string) => {
+    const match = message.match(/^([\s\S]*?Reason\s*[:：]\s*)([^\n\r]+)([\s\S]*)$/i);
+
+    if (!match) {
+      return renderBoldInvoiceMessage(
+        message,
+        messageBaseStyle,
+        messageBoldStyle,
+      );
+    }
+
+    const [, before, reason, after] = match;
+    return (
+      <>
+        {renderBoldInvoiceMessage(before, messageBaseStyle, messageBoldStyle)}
+        <Text style={messageBoldStyle}>{reason.trim()}</Text>
+        {after
+          ? renderBoldInvoiceMessage(after, messageBaseStyle, messageBoldStyle)
+          : null}
+      </>
+    );
+  };
+
   // NOTIFICATION CARD
   const renderNotification = (item: UiNotificationItem) => {
-    const isThisItemLoading = itemLoadingId === item.id;
     return (
       <TouchableOpacity
         key={item.id}
@@ -704,20 +864,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
             color: "#6B7280",
           }}
         >
-          {renderBoldInvoiceMessage(
-            item.message,
-            {
-              fontSize: 13,
-              lineHeight: 18,
-              color: "#6B7280",
-            },
-            {
-              fontSize: 13,
-              lineHeight: 18,
-              fontWeight: "700",
-              color: "#111827",
-            },
-          )}
+          {renderMessageWithBoldReason(item.message)}
         </Text>
       </TouchableOpacity>
     );
@@ -840,7 +987,7 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         >
           <ActivityIndicator size="large" color="#3E206D" />
         </View>
-      ) : notifications.length === 0 ? (
+      ) : notifications.length === 0 && !hasMore ? (
         <ScrollView
           contentContainerStyle={{
             flex: 1,
@@ -887,6 +1034,17 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={200}
+          onLayout={(e) => {
+            listHeightRef.current = e.nativeEvent.layout.height;
+          }}
+          onScroll={({ nativeEvent }) => {
+            if (isCloseToBottom(nativeEvent)) loadMore();
+          }}
+          // If the loaded content doesn't fill the screen, load the next page
+          onContentSizeChange={(_w, h) => {
+            if (hasMore && h < listHeightRef.current) loadMore();
+          }}
           contentContainerStyle={{
             paddingHorizontal: 14,
             paddingTop: 8,
@@ -903,6 +1061,13 @@ const Notifications: React.FC<NotificationProps> = ({ navigation }) => {
           {renderGroup("Today", todayNotifications)}
           {renderGroup("Yesterday", yesterdayNotifications)}
           {renderGroup("Earlier", earlierNotifications, true)}
+
+          {/* Pagination footer */}
+          {isLoadingMore && (
+            <View style={{ paddingVertical: 16, alignItems: "center" }}>
+              <ActivityIndicator size="small" color="#3E206D" />
+            </View>
+          )}
         </ScrollView>
       )}
 

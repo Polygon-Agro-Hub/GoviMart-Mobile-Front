@@ -37,7 +37,7 @@ export interface NotificationResponse {
 }
 
 class NotificationService {
-  async getNotifications(limit: number = 50, offset: number = 0) {
+  async getNotifications(limit: number = 10, offset: number = 0) {
     return apiClient.get<NotificationResponse>(
       `${ENDPOINTS.NOTIFICATION.GET_ALL}?limit=${limit}&offset=${offset}`
     );
