@@ -64,11 +64,7 @@ import NoDataFound from "@/component/common/NoDataFound";
 import productService from "@/services/product/product.service";
 import socketService from "@/services/socket/socket.service";
 import orderService from "@/services/order/order.service";
-import {
-  CATEGORIES,
-  CATEGORY_IMAGES,
-  DisplayType,
-} from "@/constants/home";
+import { CATEGORIES, CATEGORY_IMAGES, DisplayType } from "@/constants/home";
 
 export type { ProductType, PackageType } from "@/types/types";
 
@@ -307,7 +303,6 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     null,
   );
 
-
   const fetchReadyToConfirmOrder = useCallback(async () => {
     if (!userTokenRef.current || !isWithinConfirmWindow()) {
       setReadyOrder(null);
@@ -399,7 +394,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           cartService
             .getUserCart()
             .then((dbCartRes) => {
-              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current) return;
+              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current)
+                return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
                 const dbPackages = dbCartRes.data.data.packages || [];
@@ -412,7 +408,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { });
+            .catch(() => {});
         }
       } else {
         // No token — clear any stale cart items from a previous session
@@ -666,11 +662,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     }));
                   matchingProducts = [...matchingPkgs, ...matchingProducts];
                 }
-              } catch { }
+              } catch {}
             }
             setShopItems(matchingProducts);
           })
-          .catch(() => { });
+          .catch(() => {});
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
           fetchPackages();
@@ -740,7 +736,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
 
         // Also refresh the cart from backend
@@ -748,7 +744,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           cartService
             .getUserCart()
             .then((dbCartRes) => {
-              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current) return;
+              if (isCartSyncingRef.current || isGlobalCartSyncingRef.current)
+                return;
               if (dbCartRes.data?.status && dbCartRes.data?.data) {
                 const dbProducts = dbCartRes.data.data.products || [];
                 const dbPackages = dbCartRes.data.data.packages || [];
@@ -761,7 +758,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                 );
               }
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
       }
 
@@ -795,11 +792,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       }));
                     matchingProducts = [...matchingPkgs, ...matchingProducts];
                   }
-                } catch { }
+                } catch {}
               }
               setShopItems(matchingProducts);
             })
-            .catch(() => { }),
+            .catch(() => {}),
         );
       } else {
         if (selectedCategoryId === "Packages" && isRetail) {
@@ -860,7 +857,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleToggleUnit = useCallback(
     (productId: number, unit: "g" | "kg") => {
-      if (!userToken) { setShowAuthModal(true); return; }
+      if (!userToken) {
+        setShowAuthModal(true);
+        return;
+      }
       const item = cartProducts.find(
         (p: ProductCartItem) => p.id === productId,
       );
@@ -890,7 +890,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleIncrement = useCallback(
     (productId: number) => {
-      if (!userToken) { setShowAuthModal(true); return; }
+      if (!userToken) {
+        setShowAuthModal(true);
+        return;
+      }
       const item = cartProducts.find(
         (p: ProductCartItem) => p.id === productId,
       );
@@ -929,7 +932,10 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
   const handleDecrement = useCallback(
     (productId: number) => {
-      if (!userToken) { setShowAuthModal(true); return; }
+      if (!userToken) {
+        setShowAuthModal(true);
+        return;
+      }
       isCartSyncingRef.current = true;
       const existing = cartProducts.find(
         (p: ProductCartItem) => p.id === productId,
@@ -1000,8 +1006,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawChangeBy =
         product.changeby != null &&
-          String(product.changeby).trim() !== "" &&
-          parseFloat(String(product.changeby)) > 0
+        String(product.changeby).trim() !== "" &&
+        parseFloat(String(product.changeby)) > 0
           ? parseFloat(String(product.changeby))
           : rawStartValue;
 
@@ -1014,8 +1020,8 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
 
       const rawMaxQuantity =
         product.maxQuantity != null &&
-          String(product.maxQuantity).trim() !== "" &&
-          parseFloat(String(product.maxQuantity)) > 0
+        String(product.maxQuantity).trim() !== "" &&
+        parseFloat(String(product.maxQuantity)) > 0
           ? parseFloat(String(product.maxQuantity))
           : null;
 
@@ -1443,13 +1449,13 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isPackage = product.type === "package";
                   const cartItem = isProduct
                     ? cartProducts.find(
-                      (p: ProductCartItem) => p.id === product.id,
-                    )
+                        (p: ProductCartItem) => p.id === product.id,
+                      )
                     : null;
                   const cartPackage = isPackage
                     ? cartPackages.find(
-                      (p: PackageCartItem) => p.id === product.id,
-                    )
+                        (p: PackageCartItem) => p.id === product.id,
+                      )
                     : null;
 
                   const isExpanded = product.id === expandedItemId;
@@ -1592,7 +1598,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     >
                       <View
                         key={product.id!}
-                        className="flex-1 bg-[#F4F3F3] pt-4 pb-4 px-3 items-center mx-2 relative mb-6 min-h-[215px]"
+                        className="flex-1 bg-[#F4F3F3] pt-4 pb-8 px-3 items-center mx-2 relative mb-6 min-h-[220px]"
                         style={{
                           borderTopLeftRadius: 100,
                           borderTopRightRadius: 100,
@@ -1829,8 +1835,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                   e.stopPropagation();
                                   handleIncrement(product.id);
                                 }}
-                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
-                                  }`}
+                                className={`w-6 h-6 rounded-full items-center justify-center ${
+                                  isItemAtMax ? "bg-gray-300" : "bg-black"
+                                }`}
                               >
                                 <Ionicons
                                   name="add"
@@ -2032,14 +2039,20 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       />
 
       {/* Floating Bottom Navigation Bar */}
-      <BottomNavigation activeScreen="Home" navigation={navigation} onRequireAuth={() => setShowAuthModal(true)} />
+      <BottomNavigation
+        activeScreen="Home"
+        navigation={navigation}
+        onRequireAuth={() => setShowAuthModal(true)}
+      />
       {/* Guest Authentication Modal */}
       <AuthPromptModal
         visible={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         navigation={navigation}
         title="Welcome, Guest!"
-        subtitle={"We're excited to have you here!\nTo unlock the best experience,\nplease log in or create a new account."}
+        subtitle={
+          "We're excited to have you here!\nTo unlock the best experience,\nplease log in or create a new account."
+        }
       />
     </View>
   );

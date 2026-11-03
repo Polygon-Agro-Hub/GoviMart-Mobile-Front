@@ -2162,7 +2162,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 <Text style={{ fontWeight: "700", color: "#1E293B" }}>
                   {getPaymentDueText()}
                 </Text>
-                after receiving your order confirmation. If paying by card or
+                {" "}after receiving your order confirmation. If paying by card or
                 using credit to cover the full order total, complete any
                 outstanding payments by the deadline.
               </Text>

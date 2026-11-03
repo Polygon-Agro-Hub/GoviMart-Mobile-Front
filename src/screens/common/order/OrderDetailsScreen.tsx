@@ -57,38 +57,6 @@ interface CartItem {
 }
 
 // ─── PICKUP SCHEDULE HELPER ──────────────────────────────────────────────────
-// The DB column `sheduleDate` only stores the date (e.g. 2026-10-21 05:30:00),
-// while pickup orders are shown with a fixed pickup time of 09:30 PM.
-const PICKUP_TIME_LABEL = "09:30 PM";
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-// "2026-10-21 05:30:00" -> { date: "Oct 21, 2026", time: "09:30 PM" }
-// Reads the date digits literally, so a timezone can never shift the day.
-const formatPickupSchedule = (
-  raw: any,
-): { date: string; time: string } | null => {
-  if (!raw) return null;
-  const str = raw instanceof Date ? raw.toISOString() : String(raw);
-  const m = str.match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
-  if (!m) return null;
-  return {
-    date: `${MONTHS[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}, ${m[1]}`,
-    time: PICKUP_TIME_LABEL,
-  };
-};
 
 const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
   const orderId = route.params?.orderId;
@@ -110,10 +78,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
       order?.deliveryType ||
       ""
     ).toUpperCase() === "PICKUP";
-
-  const pickupSchedule = isPickupOrder
-    ? formatPickupSchedule(order?.sheduleDate || order?.scheduleDate)
-    : null;
 
   const formatAmount = (amount: number | string) => {
     const num =
@@ -386,14 +350,13 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           order?.returnNote ||
           order?.returnReason ||
           "Customer did not picked up the order during the day.";
-        const pickupSched =
-          pickupSchedule ||
-          formatPickupSchedule(
-            order?.sheduleDate || order?.scheduleDate || order?.deliveryDate,
-          );
-        const pickupReturnTime = pickupSched
-          ? `${pickupSched.date}, ${pickupSched.time}`
-          : returnTime || updateTime;
+
+        const schedDate = formatDate(order?.sheduleDate || order?.scheduleDate);
+        const schedTime = order?.sheduleTime || order?.scheduleTime;
+        const pickupReturnTime =
+          schedDate !== "N/A"
+            ? `${schedDate}${schedTime ? `, ${schedTime}` : ""}`
+            : returnTime || updateTime;
 
         return [
           {
@@ -845,8 +808,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   marginLeft: 3,
                 }}
               >
-                {pickupSchedule?.date ??
-                  formatDate(order?.sheduleDate || order?.scheduleDate)}
+                {formatDate(order?.sheduleDate || order?.scheduleDate)}
               </Text>
             </View>
 
@@ -875,8 +837,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   marginLeft: 3,
                 }}
               >
-                {pickupSchedule?.time ??
-                  (order?.sheduleTime || order?.scheduleTime || "N/A")}
+                {order?.sheduleTime || order?.scheduleTime || "N/A"}
               </Text>
             </View>
 

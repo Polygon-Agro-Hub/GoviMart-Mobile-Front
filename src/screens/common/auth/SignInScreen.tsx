@@ -12,7 +12,6 @@ import {
   Platform,
   Modal,
 } from "react-native";
-import LottieView from "lottie-react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
@@ -118,6 +117,21 @@ const COUNTRY_DIAL_CODES = [
   { dial: "31", code: "+31", name: "Netherlands", example: "316XXXXXXXX" },
 ];
 
+/**
+ * Normalizes the login identifier.
+ * - Email (contains "@" or letters): only whitespace is removed.
+ * - Phone number: "+", spaces and hyphens are removed, so "+94 77-123 4567"
+ *   becomes "94771234567" (the format the backend expects).
+ */
+const normalizeIdentifier = (val: string): string => {
+  const trimmed = (val || "").trim();
+  if (!trimmed) return "";
+  if (trimmed.includes("@") || /[a-zA-Z]/.test(trimmed)) {
+    return trimmed.replace(/\s/g, "");
+  }
+  return trimmed.replace(/[\s\-+]/g, "");
+};
+
 const validateIdentifier = (
   val: string,
 ): { isValid: boolean; error?: string } => {
@@ -134,11 +148,9 @@ const validateIdentifier = (
     return { isValid: true };
   }
 
-  // Clean phone number (strip spaces and hyphens)
+  // Clean phone number (strip spaces, hyphens and leading +)
   const cleanPhone = trimmed.replace(/[\s-]/g, "");
-  const numWithoutPlus = cleanPhone.startsWith("+")
-    ? cleanPhone.slice(1)
-    : cleanPhone;
+  const numWithoutPlus = cleanPhone.replace(/^\+/, "");
 
   // Must contain only digits
   if (!/^\d+$/.test(numWithoutPlus)) {
@@ -152,13 +164,13 @@ const validateIdentifier = (
   if (numWithoutPlus.startsWith("0")) {
     return {
       isValid: false,
-      error: "Please enter mobile number with country code without + (e.g. 947XXXXXXXX)",
+      error: "Please enter mobile number with country code (e.g. 947XXXXXXXX)",
     };
   }
   if (numWithoutPlus.startsWith("7") && numWithoutPlus.length === 9) {
     return {
       isValid: false,
-      error: "Please enter mobile number with country code without + (e.g. 947XXXXXXXX)",
+      error: "Please enter mobile number with country code (e.g. 947XXXXXXXX)",
     };
   }
 
@@ -170,7 +182,7 @@ const validateIdentifier = (
   if (!matched) {
     return {
       isValid: false,
-      error: "Please enter mobile number with valid country code without + (e.g. 947XXXXXXXX)",
+      error: "Please enter mobile number with a valid country code (e.g. 947XXXXXXXX)",
     };
   }
 
@@ -323,8 +335,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           );
           const storedPassword =
             await SecureStore.getItemAsync("rememberedPassword");
-          if (storedIdentifier) {
-            setIdentifier(storedIdentifier.replace(/\s/g, ""));
+          const normalizedStored = normalizeIdentifier(storedIdentifier || "");
+          if (normalizedStored) {
+            setIdentifier(normalizedStored);
           }
           if (storedPassword) {
             setPassword(storedPassword.replace(/\s/g, ""));
@@ -333,7 +346,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { identifier: storedIdentifier || "" },
+              rememberedDetails: { identifier: normalizedStored },
             }),
           );
         }
@@ -347,7 +360,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const handleSignIn = async () => {
     let hasError = false;
 
-    const idRes = validateIdentifier(identifier);
+    // Remove "+", spaces and hyphens from phone numbers before validating/sending
+    const normalizedIdentifier = normalizeIdentifier(identifier);
+
+    const idRes = validateIdentifier(normalizedIdentifier);
     if (!idRes.isValid) {
       setIdentifierError(
         idRes.error || "Please enter a valid mobile number or email address",
@@ -369,7 +385,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     setLoading(true);
     try {
       const response = await authService.login({
-        identifier: identifier.replace(/\s/g, "").trim(),
+        identifier: normalizedIdentifier,
         password: password.replace(/\s/g, ""),
       });
       if (response.data && response.data.success) {
@@ -432,7 +448,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
         if (rememberMe) {
           await AsyncStorage.setItem("rememberMeEnabled", "true");
-          await AsyncStorage.setItem("rememberedIdentifier", identifier.trim());
+          await AsyncStorage.setItem("rememberedIdentifier", normalizedIdentifier);
           if (refreshToken) {
             await tokenStorage.setRefreshToken(refreshToken);
           }
@@ -440,7 +456,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { identifier: identifier.trim() },
+              rememberedDetails: { identifier: normalizedIdentifier },
             }),
           );
         } else {
@@ -648,7 +664,8 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 <TextInput
                   value={identifier}
                   onChangeText={(text) => {
-                    const clean = text.replace(/\s/g, "");
+                    // Strips "+", spaces and hyphens for phone numbers
+                    const clean = normalizeIdentifier(text);
                     setIdentifier(clean);
                     if (identifierError) {
                       const res = validateIdentifier(clean);
