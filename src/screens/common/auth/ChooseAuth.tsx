@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome6 } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
 type ChooseAuthNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -27,7 +27,34 @@ const ChooseAuth: React.FC<ChooseAuthProps> = ({ navigation }) => {
       contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
       showsVerticalScrollIndicator={false}
     >
-      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
+            <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
+
+      {/* Back button to return to Home if navigated from Home */}
+      {navigation.canGoBack?.() && (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{
+            position: "absolute",
+            top: 48,
+            left: 20,
+            zIndex: 30,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 4,
+            elevation: 4,
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={22} color="#000000" />
+        </TouchableOpacity>
+      )}
 
       {/* Top Header Section */}
       <View className="relative w-full h-[320px] px-6 pt-12 flex-row justify-between items-center">
