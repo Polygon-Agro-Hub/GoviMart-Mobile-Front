@@ -261,7 +261,6 @@ Alert.alert = (title, message, buttons, options) => {
       lowerTitle.includes("sent") ||
       lowerTitle.includes("updated") ||
       lowerTitle.includes("created") ||
-      lowerTitle.includes("cancelled") ||
       lowerTitle.includes("completed") ||
       lowerTitle.includes("resubmitted") ||
       lowerTitle.includes("submitted");

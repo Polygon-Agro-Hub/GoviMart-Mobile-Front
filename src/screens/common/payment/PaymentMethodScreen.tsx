@@ -1796,7 +1796,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                       color: "#111111",
                     }}
                   >
-                    Use Credit Balance
+                    Use My Polygon Wallet
                   </Text>
 
                   <Text
