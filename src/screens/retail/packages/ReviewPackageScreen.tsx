@@ -19,7 +19,7 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
@@ -399,6 +399,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     Record<string, number>
   >({});
 
+  // orderadditionalitems.price (what was saved earlier) per saved row
+  const [alacartSavedPriceMap, setAlacartSavedPriceMap] = useState<
+    Record<string, number>
+  >({});
+
   // Package review window closes at 6:00 PM (18:00)
   const REVIEW_END_HOUR = 18;
 
@@ -740,6 +745,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             {};
           // orderadditionalitems.normalPrice per saved row (line price before discount)
           const loadedNormalMap: Record<string, number> = {};
+          // orderadditionalitems.price per saved row (what was saved EARLIER)
+          const loadedSavedMap: Record<string, number> = {};
 
           if (Array.isArray(additionalItems) && additionalItems.length > 0) {
             additionalItems.forEach((item: any) => {
@@ -837,12 +844,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 unitType: item.unitType,
               };
 
-              // Normal line price from marketplaceitems table (used for strikethrough if discounted)
+              // Normal line price from marketplaceitems table (used by the cancel screen)
               loadedNormalMap[itemKey] = liveNormalPrice;
+
+              // Price stored in orderadditionalitems when the item was saved.
+              // Used for the strikethrough on "Added Earlier" rows when it differs
+              // from today's marketplace price.
+              // NOTE: if your API sends this under another name (e.g. savedPrice),
+              // change the field read here.
+              loadedSavedMap[itemKey] = parseFloat(item.price || 0) || 0;
             });
           }
 
           setAlacartNormalPriceMap(loadedNormalMap);
+          setAlacartSavedPriceMap(loadedSavedMap);
 
           // Remember what the customer ORIGINALLY paid for ala carte items,
           // so "Pay Additional" only counts real changes.
@@ -1581,6 +1596,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     setDisabledAlacartProductIds(new Set());
     setOriginalAlacartTotal(0);
     setOriginalAlacartMap({});
+    setAlacartSavedPriceMap({});
     setCurrentStepIndex(0);
     setMode("overview");
     setPendingConfirmPayload(null);
@@ -2272,6 +2288,26 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     const calcNormal =
       normalRate > 0 ? Number((normalRate * weightKg).toFixed(2)) : linePrice;
     return Math.max(calcNormal, linePrice);
+  };
+
+  // Strikethrough price for "Added Earlier" rows only.
+  // Returns the saved orderadditionalitems price (scaled to the current qty)
+  // when it differs from today's marketplace price; otherwise null.
+  const getSavedStrikePrice = (item: any): number | null => {
+    if (item.isAddedNow || !item.additionalItemId) return null;
+    const saved = alacartSavedPriceMap[String(item.id)];
+    const orig = originalAlacartMap[item.additionalItemId];
+    if (!saved || saved <= 0 || !orig) return null;
+
+    const toKg = (a: number, u: string) => (u === "kg" ? a : a / 1000);
+    const origKg = toKg(Number(orig.amount), orig.unit);
+    if (origKg <= 0) return null;
+
+    const scaledSaved = Number(
+      ((saved / origKg) * toKg(Number(item.amount), item.unit)).toFixed(2),
+    );
+    const current = item.price * item.quantity;
+    return Math.abs(scaledSaved - current) > 0.005 ? scaledSaved : null;
   };
 
   // Totals for the final confirm step
@@ -3433,10 +3469,9 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                   {Object.values(alacartSelection).map((item, aIdx) => {
                     const isItemDisabled = isItemUnavailable(item);
 
-                    const paidLine = item.price * item.quantity;
-                    const normalLine = getNormalLinePrice(item);
-                    const showStrike =
-                      !isItemDisabled && normalLine > paidLine + 0.001;
+                    const strikePrice = isItemDisabled
+                      ? null
+                      : getSavedStrikePrice(item);
 
                     return (
                       <View
@@ -3487,32 +3522,30 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                               >
                                 {item.displayName}
                               </Text>
-
                               <View className="flex-row items-center mt-0.5">
-                                {showStrike && (
+                                <Text
+                                  className="text-[15px] font-bold"
+                                  style={{
+                                    color:
+                                      isItemDisabled || item.isAddedNow
+                                        ? "#F04438"
+                                        : "#000000",
+                                  }}
+                                >
+                                  Rs. {formatPrice(item.price * item.quantity)}
+                                </Text>
+                                {strikePrice != null && (
                                   <Text
                                     style={{
                                       fontSize: 13,
                                       color: "#9CA3AF",
                                       textDecorationLine: "line-through",
-                                      marginRight: 6,
+                                      marginLeft: 6,
                                     }}
                                   >
-                                    Rs. {formatPrice(normalLine)}
+                                    Rs. {formatPrice(strikePrice)}
                                   </Text>
                                 )}
-                                <Text
-                                  className="text-[15px] font-bold"
-                                  style={{
-                                    color: isItemDisabled
-                                      ? "#F04438"
-                                      : item.isAddedNow
-                                        ? "#F04438"
-                                        : "#000000",
-                                  }}
-                                >
-                                  Rs. {formatPrice(item.price)}
-                                </Text>
                               </View>
                             </View>
                           </View>
@@ -3533,8 +3566,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                                 justifyContent: "center",
                               }}
                             >
-                              <Ionicons
-                                name="trash-outline"
+                              <FontAwesome6
+                                name="trash"
                                 size={16}
                                 color={isItemDisabled ? "#F04438" : "#000000"}
                               />
@@ -3544,6 +3577,15 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                               <View className="mt-12">
                                 <Text className="text-[12px] font-medium text-[#F04438]">
                                   Added Now
+                                </Text>
+                              </View>
+                            ) : !isItemDisabled ? (
+                              <View className="mt-12">
+                                <Text
+                                  className="text-[12px] font-medium"
+                                  style={{ color: "#12B8A6" }}
+                                >
+                                  Added Earlier
                                 </Text>
                               </View>
                             ) : (
