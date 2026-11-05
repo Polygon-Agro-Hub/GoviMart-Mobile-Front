@@ -1,4 +1,5 @@
-import { ReviewProduct } from "@/types/types";
+import { ReviewProduct, OriginalAlacartEntry } from "@/types/types";
+import { AlacartSelectedProduct } from "@/store/packageReviewSlice";
 
 export const formatPrice = (value: number | string) =>
   (Number(value) || 0).toLocaleString("en-US", {
@@ -82,3 +83,226 @@ export const toDisplayProduct = (p: ReviewProduct): ReviewProduct => ({
     }
     : undefined,
 });
+
+export const buildReplacementsPayload = (
+  packageProducts: Record<string, ReviewProduct[]>,
+  orderPackageDbIds: Record<string, number>,
+  productTemplatesState: Record<string, ReviewProduct[]>,
+) => {
+  const replacements: Array<{
+    orderPackageId: number;
+    replceId?: number;
+    newProductId: number;
+    productType?: string | number;
+    newQty: number;
+    newPrice: number;
+  }> = [];
+
+  Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
+    const orderPkgId = orderPackageDbIds[pkgKey];
+    if (orderPkgId) {
+      const templateProds = productTemplatesState[pkgKey] || [];
+      prods.forEach((p) => {
+        const templateProd = templateProds.find(
+          (t) =>
+            (t.productId && p.productId && t.productId === p.productId) ||
+            String(t.itemId || t.id) === String(p.itemId || p.id),
+        );
+        const baselineQty =
+          templateProd?.quantity ??
+          p.minQuantity ??
+          p.originalProduct?.quantity;
+        const isQtyChanged =
+          baselineQty !== undefined
+            ? Number(p.quantity) !== Number(baselineQty)
+            : false;
+
+        if (p.isReplaced || isQtyChanged) {
+          const replceId =
+            p.originalProduct?.itemId ||
+            p.itemId ||
+            (p.originalProduct?.id
+              ? parseInt(p.originalProduct.id)
+              : undefined) ||
+            p.productId ||
+            parseInt(p.id) ||
+            undefined;
+          const newProdId = p.productId || parseInt(p.id) || 0;
+          replacements.push({
+            orderPackageId: orderPkgId,
+            replceId: replceId,
+            newProductId: newProdId,
+            productType: p.productTypeId || p.productType || p.category,
+            newQty: p.quantity || 1,
+            newPrice: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+          });
+        }
+      });
+    }
+  });
+
+  return replacements;
+};
+
+export const buildAdditionalItemsPayload = (
+  alacartSelection: Record<string | number, AlacartSelectedProduct>,
+) => {
+  return Object.values(alacartSelection)
+    .filter((item) => item.isAddedNow)
+    .map((item) => ({
+      productId:
+        typeof item.productId === "number"
+          ? item.productId
+          : parseInt(
+            String(item.productId || item.id).replace(/[^0-9]/g, ""),
+          ) || 0,
+      qty: item.amount,
+      unit: item.unit,
+      normalPrice: item.basePrice,
+      price: item.price,
+    }));
+};
+
+export const buildUpdatedAdditionalItemsPayload = (
+  alacartSelection: Record<string | number, AlacartSelectedProduct>,
+  originalAlacartMap: Record<number, OriginalAlacartEntry>,
+  isItemUnavailable: (item: any) => boolean,
+) => {
+  return Object.values(alacartSelection)
+    .filter((item) => {
+      if (item.isAddedNow || !item.additionalItemId) return false;
+      if (isItemUnavailable(item)) return false;
+      const orig = originalAlacartMap[item.additionalItemId];
+      if (!orig) return false;
+      return (
+        Number(orig.amount) !== Number(item.amount) || orig.unit !== item.unit
+      );
+    })
+    .map((item) => ({
+      id: item.additionalItemId as number,
+      productId:
+        typeof item.productId === "number"
+          ? item.productId
+          : parseInt(
+            String(item.productId || item.id).replace(/[^0-9]/g, ""),
+          ) || 0,
+      qty: item.amount,
+      unit: item.unit,
+      price: Number((item.price * item.quantity).toFixed(2)),
+    }));
+};
+
+export const buildPackagesPayload = (
+  packageProducts: Record<string, ReviewProduct[]>,
+  orderPackageDbIds: Record<string, number>,
+) => {
+  return Object.entries(packageProducts).map(([pkgKey, prods]) => ({
+    orderPackageId: orderPackageDbIds[pkgKey],
+    packageId: pkgKey,
+    items: (prods as any[]).map((p) => {
+      const pType =
+        p.productTypeId != null && !isNaN(Number(p.productTypeId))
+          ? Number(p.productTypeId)
+          : p.productType != null && !isNaN(Number(p.productType))
+            ? Number(p.productType)
+            : null;
+      const prodId =
+        p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+      return {
+        productType: pType,
+        productId: prodId,
+        qty: Number(p.quantity) || 1,
+        price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+      };
+    }),
+  }));
+};
+
+export interface BuildConfirmPayloadParams {
+  orderId: string | number;
+  processOrderId?: string | number | null;
+  packageProducts: Record<string, ReviewProduct[]>;
+  orderPackageDbIds: Record<string, number>;
+  productTemplatesState: Record<string, ReviewProduct[]>;
+  alacartSelection: Record<string | number, AlacartSelectedProduct>;
+  originalAlacartMap: Record<number, OriginalAlacartEntry>;
+  deletedAdditionalItemIds?: number[];
+  isItemUnavailable: (item: any) => boolean;
+  additionalDue: number;
+  newScheduleDate?: string;
+  paymentMethod?: string;
+  isPaid?: boolean | number;
+  overrideIsPaid?: boolean | number;
+  finalOrderTotalWithDelivery: number;
+  totalDiff: number;
+}
+
+export const buildConfirmPayload = ({
+  orderId,
+  processOrderId,
+  packageProducts,
+  orderPackageDbIds,
+  productTemplatesState,
+  alacartSelection,
+  originalAlacartMap,
+  deletedAdditionalItemIds,
+  isItemUnavailable,
+  additionalDue,
+  newScheduleDate,
+  paymentMethod,
+  isPaid,
+  overrideIsPaid,
+  finalOrderTotalWithDelivery,
+  totalDiff,
+}: BuildConfirmPayloadParams) => {
+  const replacements = buildReplacementsPayload(
+    packageProducts,
+    orderPackageDbIds,
+    productTemplatesState,
+  );
+
+  const additionalItemsPayload = buildAdditionalItemsPayload(alacartSelection);
+
+  const updatedAdditionalItemsPayload = buildUpdatedAdditionalItemsPayload(
+    alacartSelection,
+    originalAlacartMap,
+    isItemUnavailable,
+  );
+
+  const packagesPayload = buildPackagesPayload(
+    packageProducts,
+    orderPackageDbIds,
+  );
+
+  const netDiff = totalDiff;
+  const netRefundSavings =
+    Boolean(isPaid) && netDiff < 0 && additionalDue < 0.01
+      ? Number(Math.abs(netDiff).toFixed(2))
+      : 0;
+
+  const resolvedIsPaidPayload =
+    overrideIsPaid !== undefined ? (overrideIsPaid ? 1 : 0) : isPaid ? 1 : 0;
+
+  return {
+    orderId,
+    processOrderId: processOrderId || undefined,
+    lockNow: true,
+    additionalAmount: additionalDue > 0 ? additionalDue : 0,
+    newScheduleDate,
+    paymentMethod: paymentMethod || undefined,
+    isPaid: resolvedIsPaidPayload,
+    newTotal: finalOrderTotalWithDelivery,
+    creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
+    replacements,
+    additionalItems: additionalItemsPayload,
+    updatedAdditionalItems:
+      updatedAdditionalItemsPayload.length > 0
+        ? updatedAdditionalItemsPayload
+        : undefined,
+    deletedAdditionalItemIds:
+      deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+        ? deletedAdditionalItemIds
+        : undefined,
+    packages: packagesPayload,
+  };
+};
