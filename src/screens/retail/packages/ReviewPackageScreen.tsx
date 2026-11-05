@@ -40,11 +40,19 @@ import {
   AlacartSelectedProduct,
   PackageMeta,
 } from "@/store/packageReviewSlice";
-import { RootStackParamList, ProductType, ReviewProduct } from "@/types/types";
+import {
+  RootStackParamList,
+  ProductType,
+  ReviewProduct,
+  ScreenMode,
+  FlowStep,
+  OriginalAlacartEntry,
+  PackageSummary,
+} from "@/types/types";
 import productService from "@/services/product/product.service";
 import orderService from "@/services/order/order.service";
-import { HurryBanner } from "@/component/package/HurryBanner";
-import { TimeRanOutBanner } from "@/component/package/TimeRanOutBanner";
+import { HurryBanner } from "@/component/package/common/HurryBanner";
+import { TimeRanOutBanner } from "@/component/package/common/TimeRanOutBanner";
 import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
 import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
 import ConfirmationModal from "@/component/common/ConfirmationModal";
@@ -65,275 +73,31 @@ import { getAuthHeader } from "@/services/config-service/auth-header";
 
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
-/* ---------------------------------------------------------
-   Types
---------------------------------------------------------- */
-
-type ScreenMode = "overview" | "flow";
-
-const getPackageImage = (pkgId: string, image?: any) => {
-  if (image) {
-    if (typeof image === "string") return { uri: image };
-    return image;
-  }
-  if (pkgId === "fruity") return require("@/assets/images/home/fruits.webp");
-  if (pkgId === "veggie") return require("@/assets/images/home/veggies.webp");
-  return require("@/assets/images/home/packages.webp");
-};
-
-// One step per package type, plus one alacart step, plus one confirm step.
-type FlowStep =
-  | { type: "package"; packageId: string }
-  | { type: "alacart" }
-  | { type: "confirm" };
-
-interface Category {
-  id: string;
-  name: string;
-  circleBg: string;
-  borderColor: string;
-  activeBg: string;
-  active: boolean;
-}
-
-const CATEGORY_IMAGES: Record<string, any> = {
-  Vegetables: require("@/assets/images/home/veggies.webp"),
-  Fruits: require("@/assets/images/home/fruits.webp"),
-  Cereals: require("@/assets/images/home/cereal.webp"),
-  Spices: require("@/assets/images/home/spices.webp"),
-  Mushrooms: require("@/assets/images/home/mushroom.webp"),
-  Pulses: require("@/assets/images/home/pulses.webp"),
-};
-
-const CATEGORIES: Category[] = [
-  {
-    id: "Vegetables",
-    name: "Veggies",
-    circleBg: "#F3FFDD",
-    borderColor: "#50FF43",
-    activeBg: "#92D01B",
-    active: true,
-  },
-  {
-    id: "Fruits",
-    name: "Fruits",
-    circleBg: "#FEE5E4",
-    borderColor: "#EA2A3D",
-    activeBg: "#EA2A3D",
-    active: false,
-  },
-  {
-    id: "Cereals",
-    name: "Cereal",
-    circleBg: "#FFFBE0",
-    borderColor: "#FFCF70",
-    activeBg: "#FBA600",
-    active: false,
-  },
-  {
-    id: "Spices",
-    name: "Spices",
-    circleBg: "#FFF0DD",
-    borderColor: "#A56021",
-    activeBg: "#8C4C17",
-    active: false,
-  },
-  {
-    id: "Mushrooms",
-    name: "Mushrooms",
-    circleBg: "#FFEED9",
-    borderColor: "#B47E7F",
-    activeBg: "#8D4546",
-    active: false,
-  },
-  {
-    id: "Pulses",
-    name: "Pulses",
-    circleBg: "#FFE3E9",
-    borderColor: "#B47E7F",
-    activeBg: "#872844",
-    active: false,
-  },
-];
-
-const formatPrice = (value: number | string) =>
-  (Number(value) || 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-/* ---------------------------------------------------------
-   Date helpers (schedule date shifting)
---------------------------------------------------------- */
-
-const getOrdinal = (n: number) => {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
-
-// "YYYY-MM-DD" -> local Date (avoids timezone drift)
-const parseDateOnly = (raw?: string | null): Date | null => {
-  if (!raw) return null;
-  const [y, m, d] = raw.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
-};
-
-const addDays = (date: Date, days: number): Date => {
-  const r = new Date(date);
-  r.setDate(r.getDate() + days);
-  return r;
-};
-
-// "16th August"
-const formatScheduleLabel = (d: Date) =>
-  `${getOrdinal(d.getDate())} ${d.toLocaleDateString("en-US", {
-    month: "long",
-  })}`;
-
-// Local YYYY-MM-DD (no UTC conversion)
-const toLocalDateOnly = (d: Date) => {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-
-// Parse a DB value exactly. A real 0 stays 0 (no `|| 50` style fallbacks).
-const num = (v: any): number => {
-  const n = parseFloat(v);
-  return isNaN(n) ? 0 : n;
-};
-
-const formatWeightDisplay = (
-  display?: string,
-  amount?: number,
-  unit?: string,
-): string => {
-  if (amount != null && !isNaN(Number(amount)) && unit) {
-    return `${parseFloat(String(amount))} ${unit.toLowerCase()}`;
-  }
-  if (display) {
-    const match = display.match(/^([\d.]+)\s*(.*)$/);
-    if (match) {
-      const cleanNum = parseFloat(match[1]);
-      return isNaN(cleanNum) ? display : `${cleanNum} ${match[2]}`.trim();
-    }
-    return display;
-  }
-  return "";
-};
-
-// Store price is PER KG (needed for the stepper and totals).
-// The card SHOWS the line price = price x quantity, which equals
-// definepackageitems.price at the define quantity (e.g. Ginger 120/kg x 0.5 = 60).
-const toDisplayProduct = (p: ReviewProduct): ReviewProduct => ({
-  ...p,
-  price: Number(((p.price || 0) * (p.quantity || 0)).toFixed(2)),
-  originalProduct: p.originalProduct
-    ? {
-        ...p.originalProduct,
-        price: Number(
-          (
-            (p.originalProduct.price || 0) * (p.originalProduct.quantity || 0)
-          ).toFixed(2),
-        ),
-      }
-    : undefined,
-});
-
-// Shape of what we remember about ala carte rows already saved in the DB
-type OriginalAlacartEntry = { amount: number; unit: string };
-
-/* ---------------------------------------------------------
-   Small pieces
---------------------------------------------------------- */
-
-const TimeBox: React.FC<{ value: string }> = ({ value }) => (
-  <View className="bg-black rounded-md px-3 py-1.5 min-w-[42px] items-center">
-    <Text className="text-white text-[16px] font-bold">{value}</Text>
-  </View>
-);
-
-// One dot per step in the WHOLE flow (packages + alacart + confirm), not per package type.
-const ProgressDots: React.FC<{ total: number; current: number }> = ({
-  total,
-  current,
-}) => (
-  <View className="flex-row mx-5 mt-6" style={{ gap: 6 }}>
-    {Array.from({ length: total }).map((_, i) => (
-      <View
-        key={i}
-        className="flex-1 rounded-full"
-        style={{
-          height: 4,
-          backgroundColor: i <= current ? "#000" : "#E4E4E4",
-        }}
-      />
-    ))}
-  </View>
-);
-
-// Renders the exclude warning with the product name in bold.
-const renderExcludedWarning = (warning: string, productName?: string) => {
-  if (!productName) return warning;
-
-  const idx = warning.toLowerCase().indexOf(productName.toLowerCase());
-  if (idx === -1) return warning;
-
-  const before = warning.slice(0, idx);
-  const match = warning.slice(idx, idx + productName.length);
-  const after = warning.slice(idx + productName.length);
-
-  return (
-    <>
-      {before}
-      <Text style={{ fontWeight: "700" }}>{match}</Text>
-      {after}
-    </>
-  );
-};
-
-const PriceRow: React.FC<{
-  label: string;
-  value: string;
-  valueColor?: string;
-  strong?: boolean;
-  big?: boolean;
-  marginBottom?: number;
-}> = ({ label, value, valueColor = "#000000", strong, big, marginBottom }) => (
-  <View
-    style={{
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 2,
-      marginBottom,
-    }}
-  >
-    <Text
-      style={{
-        fontSize: big ? 18 : 16,
-        fontWeight: strong ? "700" : "400",
-        color: "#000000",
-      }}
-    >
-      {label}
-    </Text>
-    <Text
-      style={{
-        fontSize: big ? 18 : 16,
-        fontWeight: strong ? "700" : "600",
-        color: valueColor,
-      }}
-    >
-      {value}
-    </Text>
-  </View>
-);
-
-const RowDivider = () => (
-  <View style={{ height: 1, backgroundColor: "#E1E7EE", marginVertical: 14 }} />
-);
+import {
+  CATEGORIES,
+  CATEGORY_IMAGES,
+  getPackageImage,
+} from "../../../constants/reviewPackage.constants";
+import {
+  formatPrice,
+  getOrdinal,
+  parseDateOnly,
+  addDays,
+  formatScheduleLabel,
+  toLocalDateOnly,
+  num,
+  formatWeightDisplay,
+  toDisplayProduct,
+} from "../../../utils/reviewPackageUtils";
+import { FinalCancelView } from "../../../component/package/overview/FinalCancelView";
+import { LimitReachedView } from "../../../component/package/overview/LimitReachedView";
+import { ReviewOverviewView } from "../../../component/package/overview/ReviewOverviewView";
+import PackageStepView from "../../../component/package/flow/PackageStepView";
+import AlacartStepView from "../../../component/package/flow/AlacartStepView";
+import FloatingAlacartBar from "../../../component/package/flow/FloatingAlacartBar";
+import ConfirmationStepView from "../../../component/package/flow/ConfirmationStepView";
+import SubmittingModal from "../../../component/package/common/SubmittingModal";
+import ExitConfirmModal from "../../../component/package/common/ExitConfirmModal";
 
 /* ---------------------------------------------------------
    Main Screen Component
@@ -579,7 +343,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         try {
           const card = await cardStorageService.getSavedCard(userProfile?.id);
           if (isMounted) setSavedCard(card);
-        } catch {}
+        } catch { }
       };
       loadCard();
       return () => {
@@ -791,8 +555,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
               const rawChangeBy =
                 item.changeby != null &&
-                String(item.changeby).trim() !== "" &&
-                parseFloat(String(item.changeby)) > 0
+                  String(item.changeby).trim() !== "" &&
+                  parseFloat(String(item.changeby)) > 0
                   ? parseFloat(String(item.changeby))
                   : item.startValue
                     ? parseFloat(String(item.startValue))
@@ -948,33 +712,33 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                     excludedWarning: i.excludedWarning,
                     originalProduct: i.originalProduct
                       ? {
-                          id: String(i.originalProduct.id),
-                          itemId: i.originalProduct.itemId
-                            ? Number(i.originalProduct.itemId)
-                            : i.itemId
-                              ? Number(i.itemId)
-                              : undefined,
-                          productId: i.originalProduct.productId
-                            ? Number(i.originalProduct.productId)
-                            : i.productId
-                              ? Number(i.productId)
-                              : undefined,
-                          category:
-                            i.originalProduct.category || "Original Item",
-                          name: i.originalProduct.name,
-                          icon: "🥗",
-                          image: i.originalProduct.image,
-                          price: parseFloat(i.originalProduct.price || 0),
-                          quantity: parseFloat(i.originalProduct.quantity ?? 1),
-                          unit: "kg" as "kg" | "g",
-                          step: parseFloat(
-                            i.originalProduct.step ||
-                              i.originalProduct.changeby ||
-                              itemStep,
-                          ),
-                          productType: i.originalProduct.productType,
-                          productTypeId: i.originalProduct.productType,
-                        }
+                        id: String(i.originalProduct.id),
+                        itemId: i.originalProduct.itemId
+                          ? Number(i.originalProduct.itemId)
+                          : i.itemId
+                            ? Number(i.itemId)
+                            : undefined,
+                        productId: i.originalProduct.productId
+                          ? Number(i.originalProduct.productId)
+                          : i.productId
+                            ? Number(i.productId)
+                            : undefined,
+                        category:
+                          i.originalProduct.category || "Original Item",
+                        name: i.originalProduct.name,
+                        icon: "🥗",
+                        image: i.originalProduct.image,
+                        price: parseFloat(i.originalProduct.price || 0),
+                        quantity: parseFloat(i.originalProduct.quantity ?? 1),
+                        unit: "kg" as "kg" | "g",
+                        step: parseFloat(
+                          i.originalProduct.step ||
+                          i.originalProduct.changeby ||
+                          itemStep,
+                        ),
+                        productType: i.originalProduct.productType,
+                        productTypeId: i.originalProduct.productType,
+                      }
                       : undefined,
                   };
                 },
@@ -1373,7 +1137,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               setAlaCartProducts(products);
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
       // Re-check both packages and ala carte items availability in real time via socket
       checkAllAvailability();
@@ -1492,8 +1256,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           typeof item.productId === "number"
             ? item.productId
             : parseInt(
-                String(item.productId || item.id).replace(/[^0-9]/g, ""),
-              ) || 0,
+              String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            ) || 0,
         qty: item.amount,
         unit: item.unit,
         normalPrice: item.basePrice,
@@ -1516,8 +1280,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           typeof item.productId === "number"
             ? item.productId
             : parseInt(
-                String(item.productId || item.id).replace(/[^0-9]/g, ""),
-              ) || 0,
+              String(item.productId || item.id).replace(/[^0-9]/g, ""),
+            ) || 0,
         qty: item.amount,
         unit: item.unit,
         price: Number((item.price * item.quantity).toFixed(2)),
@@ -1757,8 +1521,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               Alert.alert(
                 "Payment Error",
                 chargeErr?.response?.data?.message ||
-                  chargeErr?.message ||
-                  "Payment failed. Please try again.",
+                chargeErr?.message ||
+                "Payment failed. Please try again.",
               );
               return;
             }
@@ -1782,8 +1546,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         Alert.alert(
           "Payment Error",
           err?.response?.data?.message ||
-            err?.message ||
-            "Failed to start payment. Please try again.",
+          err?.message ||
+          "Failed to start payment. Please try again.",
         );
       }
       return; // Do NOT fall through to the direct confirmPackageReview call
@@ -1837,8 +1601,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
               Alert.alert(
                 "Payment Error",
                 chargeErr?.response?.data?.message ||
-                  chargeErr?.message ||
-                  "Payment failed. Please try again.",
+                chargeErr?.message ||
+                "Payment failed. Please try again.",
               );
               return;
             }
@@ -1862,8 +1626,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
         Alert.alert(
           "Payment Error",
           err?.response?.data?.message ||
-            err?.message ||
-            "Failed to start payment. Please try again.",
+          err?.message ||
+          "Failed to start payment. Please try again.",
         );
       }
       return; // Do NOT fall through to the direct confirmPackageReview call
@@ -1933,8 +1697,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             typeof item.productId === "number"
               ? item.productId
               : parseInt(
-                  String(item.productId || item.id).replace(/[^0-9]/g, ""),
-                ) || 0,
+                String(item.productId || item.id).replace(/[^0-9]/g, ""),
+              ) || 0,
           qty: item.amount,
           unit: item.unit,
           normalPrice: item.basePrice,
@@ -1960,8 +1724,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             typeof item.productId === "number"
               ? item.productId
               : parseInt(
-                  String(item.productId || item.id).replace(/[^0-9]/g, ""),
-                ) || 0,
+                String(item.productId || item.id).replace(/[^0-9]/g, ""),
+              ) || 0,
           qty: item.amount,
           unit: item.unit,
           // fallback only: backend recalculates from marketplace per-kg rates
@@ -2082,8 +1846,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
 
       showSuccessMessage(
         invoiceNo ||
-          routeInvoiceNo ||
-          (effectiveOrderId ? `#${effectiveOrderId}` : ""),
+        routeInvoiceNo ||
+        (effectiveOrderId ? `#${effectiveOrderId}` : ""),
       );
     } catch (err: any) {
       console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
@@ -2439,1561 +2203,155 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
           <LoadingPage message="Loading package details..." fullScreen={true} />
         </View>
       ) : mode === "overview" && showFinalCancelScreen ? (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 32 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={["#000000"]}
-              tintColor="#000000"
-            />
+        <FinalCancelView
+          invoiceNo={invoiceNo}
+          effectiveOrderId={effectiveOrderId}
+          scheduleDateStr={scheduleDateStr}
+          isTimeRanOut={isTimeRanOut}
+          isLimitReached={isLimitReached}
+          availableSlots={
+            typeof availableSlots === "number"
+              ? Math.max(0, availableSlots)
+              : 0
           }
-        >
-          <View className="items-center mt-2 mb-4">
-            <Text className="text-[17px] font-bold text-black">
-              Order : #{invoiceNo || effectiveOrderId}
-            </Text>
-            <Text className="text-[14px] text-[#494A65] mt-1">
-              Schedule to : {scheduleDateStr}
-            </Text>
-          </View>
-
-          <View className="h-[1px] bg-[#ECECEC] mb-6" />
-
-          {/* Top Notice Banner: Green (if slot full) or Red (if time expired) */}
-          {!isTimeRanOut && (isLimitReached || availableSlots <= 0) ? (
-            <View className="mx-5 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-5 flex-row items-start">
-              <View className="w-6 h-6 rounded-full bg-black items-center justify-center mr-3 mt-0.5">
-                <Ionicons name="time" size={14} color="#FFF" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[15px] font-bold text-black leading-5">
-                  Sorry, We’re not accepting any orders for Today!
-                </Text>
-                <Text className="text-[13px] text-[#475467] mt-2 leading-5">
-                  You have already used all 3 in-app reminders. This order will
-                  be automatically canceled.
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View className="mx-5 bg-[#FEF3F2] border border-[#FDA29B] rounded-3xl p-5 flex-row items-start">
-              <View className="w-6 h-6 rounded-full bg-black items-center justify-center mr-3 mt-0.5">
-                <Ionicons name="time" size={14} color="#FFF" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[15px] font-bold text-black leading-5">
-                  Time Ran Out!
-                </Text>
-                <Text className="text-[13px] text-[#475467] mt-2 leading-5">
-                  You have already used all 3 in-app reminders. This order will
-                  be automatically canceled.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Credit Refund Card (card paid OR credit balance paid) */}
-          {refundableAmount > 0 && (
-            <View className="mx-5 mt-6 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-6 items-center">
-              <View className="w-10 h-10 rounded-full bg-[#16B364] items-center justify-center mb-3">
-                <Ionicons name="wallet" size={20} color="#FFFFFF" />
-              </View>
-              <Text className="text-[15px] font-bold text-black text-center">
-                Amount will be credited to your credit balance.
-              </Text>
-              <Text className="text-[13px] text-[#475467] text-center mt-2 leading-5">
-                After canceling, the full amount of{" "}
-                <Text className="font-bold text-black">
-                  Rs. {formatPrice(refundableAmount)}
-                </Text>{" "}
-                will be added to your credit balance. You can use it for your
-                next purchase.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+          refundableAmount={refundableAmount}
+          isRefreshing={isRefreshing}
+          onRefresh={handleRefresh}
+        />
       ) : mode === "overview" && (isLimitReached || availableSlots <= 0) ? (
-        /* Case 2: Day 1 or Day 2 Slot Limit Full with Reminder/Cancel Options */
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 32 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={["#92D01B"]}
-              tintColor="#92D01B"
-            />
-          }
-        >
-          <View className="items-center mt-2 mb-4">
-            <Text className="text-[17px] font-bold text-black">
-              Order : #{invoiceNo || effectiveOrderId}
-            </Text>
-            <Text className="text-[14px] text-[#494A65] mt-1">
-              Schedule to : {scheduleDateStr}
-            </Text>
-          </View>
-
-          <View className="h-[1px] bg-[#ECECEC] mb-6" />
-
-          {/* Green Notice Box */}
-          <View className="mx-5 bg-[#EDFDF2] border border-[#A6F4C5] rounded-3xl p-5 flex-row items-start">
-            <View className="w-6 h-6 rounded-full bg-black items-center justify-center mr-3 mt-0.5">
-              <Ionicons name="time" size={14} color="#FFF" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-[15px] font-bold text-black leading-5">
-                Sorry, We’re not accepting any orders for Today!
-              </Text>
-              <Text className="text-[13px] text-[#475467] mt-2 leading-5">
-                We accept limited orders for packing, Please try again tomorrow
-                when you receive the notification.
-              </Text>
-            </View>
-          </View>
-
-          {/* Section Header */}
-          <Text className="text-center text-[18px] font-bold text-black mt-8 mb-2">
-            What would you like to do?
-          </Text>
-
-          {/* Option 1: Send me the reminder tomorrow */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => {
-              navigation.navigate("Notification");
-            }}
-            className="mx-5 mt-4 bg-[#FAF5FF] border border-[#D6BBFB] rounded-3xl p-5 flex-row items-center justify-between"
-          >
-            <View className="w-14 h-14 rounded-full bg-[#EDE4FF] items-center justify-center mr-4">
-              <Text style={{ fontSize: 28 }}>🔔</Text>
-            </View>
-            <View className="flex-1 pr-2">
-              <Text className="text-[15px] font-bold text-black">
-                Send me the reminder tomorrow
-              </Text>
-              <Text className="text-[12px] text-[#475467] mt-1 leading-4">
-                Your scheduled order date will be extended to{" "}
-                <Text className="font-bold text-black">
-                  {nextScheduleDateStr}
-                </Text>
-                .{"\n"}If that works for you, we’ll remind you again tomorrow at
-                8:00 AM.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#000" />
-          </TouchableOpacity>
-
-          {/* Divider: or */}
-          <View className="flex-row items-center justify-center my-6 mx-10">
-            <View className="flex-1 h-[1px] bg-[#D0D5DD]" />
-            <Text className="mx-4 text-[14px] text-[#475467] font-medium">
-              or
-            </Text>
-            <View className="flex-1 h-[1px] bg-[#D0D5DD]" />
-          </View>
-
-          {/* Option 2: Cancel My Order */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onCancelOrder}
-            className="mx-5 bg-[#FEF3F2] border border-[#FDA29B] rounded-3xl p-5 flex-row items-center justify-between"
-          >
-            <View className="w-14 h-14 rounded-full bg-[#FEE4E2] items-center justify-center mr-4">
-              <Ionicons name="close-circle" size={36} color="#F04438" />
-            </View>
-            <View className="flex-1 pr-2">
-              <Text className="text-[15px] font-bold text-black">
-                Cancel My Order
-              </Text>
-              <Text className="text-[13px] text-[#475467] mt-1">
-                I no longer needed this order.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#000" />
-          </TouchableOpacity>
-        </ScrollView>
+        <LimitReachedView
+          invoiceNo={invoiceNo}
+          effectiveOrderId={effectiveOrderId}
+          scheduleDateStr={scheduleDateStr}
+          nextScheduleDateStr={nextScheduleDateStr}
+          isRefreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          onSendReminderTomorrow={onSendReminderTomorrow}
+          onCancelOrder={onCancelOrder}
+        />
       ) : mode === "overview" ? (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="flex-1"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "space-between",
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={["#000000"]}
-              tintColor="#000000"
-            />
+        <ReviewOverviewView
+          invoiceNo={invoiceNo}
+          effectiveOrderId={effectiveOrderId}
+          scheduleDateStr={scheduleDateStr}
+          nextScheduleDateStr={nextScheduleDateStr}
+          isLocked={isLocked}
+          isTimeRanOut={isTimeRanOut}
+          availableSlots={
+            typeof availableSlots === "number"
+              ? Math.max(0, availableSlots)
+              : 0
           }
-        >
-          <View>
-            <View className="items-center mt-2">
-              <Text className="text-[17px] font-bold text-black">
-                Order : #{invoiceNo || effectiveOrderId}
-              </Text>
-              <Text className="text-[14px] text-[#494A65] mt-1">
-                Schedule to : {scheduleDateStr}
-              </Text>
-            </View>
-
-            {isLocked && (
-              <View className="mx-5 mt-3 bg-[#FFF3CD] border border-[#FFEBAA] rounded-2xl p-4 flex-row items-center">
-                <Ionicons name="lock-closed" size={20} color="#856404" />
-                <Text className="text-[13px] text-[#856404] font-medium ml-2 flex-1">
-                  Package reviewing is currently locked. Your order is already
-                  being packed.
-                </Text>
-              </View>
-            )}
-
-            <View className="h-[1px] bg-[#ECECEC] mt-5" />
-
-            {isTimeRanOut ? (
-              <TimeRanOutBanner
-                nextScheduleDateStr={nextScheduleDateStr}
-                onSendReminderTomorrow={onSendReminderTomorrow}
-                onCancelOrder={onCancelOrder}
-              />
-            ) : (
-              <>
-                <Text className="text-center text-[12px] text-[#5A5859] mt-4 mx-8 leading-5">
-                  Review and customize your package as per your preference.
-                </Text>
-
-                <View className="mt-5">
-                  <HurryBanner
-                    ordersLeft={
-                      typeof availableSlots === "number"
-                        ? Math.max(0, availableSlots)
-                        : 0
-                    }
-                    date={scheduleDateStr}
-                    showCancelLink={true}
-                    onCancelOrder={onCancelOrder}
-                  />
-                </View>
-
-                <View className="h-[1px] bg-[#ECECEC] mt-6" />
-
-                <Text className="text-center text-[12px] text-[#494A65] mt-4 mx-8 leading-5">
-                  Here are the packages you purchased. You can review and update
-                  them if needed.
-                </Text>
-
-                {loadingReview ? (
-                  <LoadingPage
-                    message="Loading package details..."
-                    fullScreen={false}
-                  />
-                ) : packagesMeta.length === 0 ? (
-                  <View className="mx-5 mt-4 p-6 bg-[#F9FAFB] rounded-2xl items-center justify-center border border-[#ECECEC]">
-                    <Ionicons name="cube-outline" size={36} color="#9CA3AF" />
-                    <Text className="text-[14px] text-[#6B6B6B] font-medium mt-2">
-                      No packages found for this order.
-                    </Text>
-                  </View>
-                ) : (
-                  packagesMeta.map((pkg, pIdx) => (
-                    <View
-                      key={`pkg-${pkg.id}-${pIdx}`}
-                      className="mx-5 mt-4 border border-[#EEEEEE] bg-white rounded-2xl px-4 py-2.5 flex-row items-center"
-                    >
-                      <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center overflow-hidden">
-                        {pkg.image ? (
-                          <Image
-                            source={{ uri: pkg.image }}
-                            className="w-12 h-12 rounded-xl"
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Text style={{ fontSize: 24 }}>
-                            {pkg.icon || "📦"}
-                          </Text>
-                        )}
-                      </View>
-                      <View className="ml-3 flex-1">
-                        <Text
-                          className="text-[17px] font-bold text-black"
-                          numberOfLines={2}
-                        >
-                          {pkg.name} (x{pkg.qty})
-                        </Text>
-                        <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                          Price :{" "}
-                          <Text className="font-bold text-black">
-                            Rs.{" "}
-                            {formatPrice(
-                              pkg.unitPrice + pkg.serviceFee + pkg.packingFee,
-                            )}{" "}
-                            x {pkg.qty} = Rs.{" "}
-                            {formatPrice(
-                              (pkg.unitPrice +
-                                pkg.serviceFee +
-                                pkg.packingFee) *
-                                pkg.qty,
-                            )}
-                          </Text>
-                        </Text>
-                      </View>
-                    </View>
-                  ))
-                )}
-
-                <Text className="text-center text-[14px] text-[#6B6B6B] mt-5 mx-8 leading-5">
-                  Lastly, you may also purchase any additional items you want
-                  after reviewing the packages you purchased.
-                </Text>
-
-                <View className="mx-5 mt-4 bg-[#F5F5F5] rounded-2xl p-4">
-                  <Text className="text-[14px] font-bold text-black mb-1">
-                    Please Note :
-                  </Text>
-                  <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                    If you update the quantities of products in your packages,
-                    or add or replace products, the total amount may change.
-                    You'll need to pay any additional amount due.
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
-
-          {/* Bottom Payment & Action Section (overview) inside ScrollView */}
-          {!loadingReview && !isTimeRanOut && (
-            <View
-              style={{
-                backgroundColor: "#FFF",
-                borderTopLeftRadius: 28,
-                borderTopRightRadius: 28,
-                paddingHorizontal: 20,
-                paddingTop: 22,
-                paddingBottom: Platform.OS === "ios" ? 34 : 20,
-                marginTop: 20,
-                shadowColor: "#000",
-                shadowOpacity: 0.12,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: -3 },
-                elevation: 15,
-              }}
-            >
-              {/* Total = Full Total + Discount Received */}
-              <PriceRow
-                label="Total"
-                value={`Rs. ${formatPrice(overviewTotal)}`}
-              />
-
-              <RowDivider />
-
-              {/* Discount Received = definepackage.price - marketplacepackages.productPrice */}
-              <PriceRow
-                label="Discount Received"
-                value={`- Rs. ${formatPrice(overviewDiscount)}`}
-                valueColor="#1B8A3A"
-              />
-
-              <RowDivider />
-
-              {/* Full Total = productPrice + packingFee + serviceFee */}
-              <PriceRow
-                label="Full Total"
-                value={`Rs. ${formatPrice(overviewFullTotal)}`}
-                strong
-                big
-                marginBottom={14}
-              />
-
-              {/* Note about what is shown from this point onward */}
-              <View
-                style={{
-                  backgroundColor: "#F5F8FF",
-                  borderRadius: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  marginBottom: 18,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: "#000000",
-                    marginBottom: 4,
-                  }}
-                >
-                  Please Note :
-                </Text>
-                <Text
-                  style={{ fontSize: 12, lineHeight: 18, color: "#494A65" }}
-                >
-                  From this point onward, only the package prices and à la carte
-                  prices will be shown. Any à la carte discounts, coupon
-                  discounts, delivery fees will not be reflected here.
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                disabled={loadingReview || packagesMeta.length === 0}
-                onPress={() => {
-                  setCurrentStepIndex(0);
-                  setMode("flow");
-                }}
-                activeOpacity={0.85}
-                style={{
-                  height: 54,
-                  backgroundColor:
-                    loadingReview || packagesMeta.length === 0
-                      ? "#7F919C"
-                      : "#000000",
-                  borderRadius: 30,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  shadowColor: "#000",
-                  shadowOpacity:
-                    loadingReview || packagesMeta.length === 0 ? 0 : 0.15,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: loadingReview || packagesMeta.length === 0 ? 0 : 5,
-                }}
-              >
-                <Text
-                  style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}
-                >
-                  {loadingReview ? "Loading Packages..." : "Review My Packages"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </ScrollView>
+          loadingReview={loadingReview}
+          packagesMeta={packagesMeta}
+          isRefreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          overviewTotal={overviewTotal}
+          overviewDiscount={overviewDiscount}
+          overviewFullTotal={overviewFullTotal}
+          onSendReminderTomorrow={onSendReminderTomorrow}
+          onCancelOrder={onCancelOrder}
+          onStartReview={() => {
+            setCurrentStepIndex(0);
+            setMode("flow");
+          }}
+        />
       ) : null}
 
       {mode === "flow" &&
         currentStep.type === "package" &&
         (() => {
-          const pkg = packagesMeta.find((p) => p.id === currentStep.packageId)!;
+          const pkg = packagesMeta.find((p) => p.id === currentStep.packageId);
           if (!pkg) return null;
           const products = packageProducts[pkg.id] || [];
           const templateProds = productTemplatesState[pkg.id] || [];
-          const templateSum = templateProds.reduce(
-            (s, p) => s + p.price * p.quantity,
-            0,
-          );
-          const currentSum = products.reduce(
-            (s, p) => s + p.price * p.quantity,
-            0,
-          );
-          // diff = extra cost / saving the user caused by changing/replacing items
-          const diff = currentSum - templateSum;
-
-          const serviceFee = pkg.serviceFee;
-          const packingFee = pkg.packingFee;
-
-          // Discount Received = definepackage.price - marketplacepackages.productPrice
-          const discountPerUnit = pkg.discountPerUnit ?? 0;
-
-          // Original Package = definepackage.price (productPrice + discount)
-          const originalPackagePrice = pkg.unitPrice + discountPerUnit;
-
-          // Full Total (1 package) = productPrice + packingFee + serviceFee (+ changes)
-          const totalFor1Package =
-            pkg.unitPrice + packingFee + serviceFee + diff;
-          const totalForNPackages = totalFor1Package * pkg.qty;
-
-          // Count how many products fall under each category within
-          // THIS package only, so the header shown on every card in
-          // that category reflects the correct group size.
-          const categoryCounts: Record<string, number> = {};
-          products.forEach((p) => {
-            const key = p.category || "Other";
-            categoryCounts[key] = (categoryCounts[key] || 0) + 1;
-          });
 
           return (
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              className="flex-1"
-              contentContainerStyle={{
-                flexGrow: 1,
-                justifyContent: "space-between",
-                paddingBottom: 0,
-              }}
-            >
-              <View>
-                <View className="bg-white pt-1 pb-3">
-                  <HurryBanner
-                    ordersLeft={
-                      typeof availableSlots === "number"
-                        ? Math.max(0, availableSlots)
-                        : 0
-                    }
-                    date={scheduleDateStr}
-                    showCancelLink
-                    onCancelOrder={onCancelOrder}
-                  />
-                  <ProgressDots
-                    total={steps.length}
-                    current={currentStepIndex}
-                  />
-                </View>
-
-                <Text className="text-[19px] font-bold text-black mx-5 mt-4">
-                  Package : {pkg.name}
-                  {pkg.qty > 1 ? ` (x${pkg.qty})` : ""}
-                </Text>
-                <Text className="text-[13px] text-[#6B6B6B] mx-5 mt-1 mb-2">
-                  You can change the products and quantity as needed.
-                </Text>
-
-                {products.map((product, index) => (
-                  <React.Fragment
-                    key={`pkg-${pkg.id}-item-${product.itemId || product.productId || product.id}-idx-${index}`}
-                  >
-                    <ProductReviewCard
-                      // display-only copy: price shown = price x quantity.
-                      // excludedWarning is cleared here so the card does not
-                      // draw it inside itself; it is rendered below the card.
-                      product={{
-                        ...toDisplayProduct(product),
-                        excludedWarning: undefined,
-                      }}
-                      categoryCount={
-                        categoryCounts[product.category || "Other"]
-                      }
-                      onIncrease={() =>
-                        updateProductQuantity(pkg.id, product.id, 1)
-                      }
-                      onDecrease={() =>
-                        updateProductQuantity(pkg.id, product.id, -1)
-                      }
-                      // these use the ORIGINAL product (per-kg price)
-                      onChangeProduct={() => onChangeProduct(pkg.id, product)}
-                      onResetToOriginal={() =>
-                        onResetToOriginal(pkg.id, product.id)
-                      }
-                    />
-
-                    {/* Exclude warning: shown UNDER the card, outside it */}
-                    {!!product.excludedWarning && (
-                      <View className="mx-5 mt-2 mb-3 flex-row items-start">
-                        <Ionicons
-                          name="information-circle"
-                          size={14}
-                          color="#FF383C"
-                          style={{ marginTop: 2, marginRight: 6 }}
-                        />
-                        <Text
-                          className="flex-1 text-[13px] leading-5"
-                          style={{ color: "#FF383C" }}
-                        >
-                          {renderExcludedWarning(
-                            product.excludedWarning,
-                            product.name,
-                          )}
-                        </Text>
-                      </View>
-                    )}
-                  </React.Fragment>
-                ))}
-              </View>
-
-              {/* Price Breakdown & Confirm Button (Inside ScrollView) */}
-              <View
-                style={{
-                  backgroundColor: "#FFF",
-                  borderTopLeftRadius: 28,
-                  borderTopRightRadius: 28,
-                  paddingHorizontal: 20,
-                  paddingTop: 22,
-                  paddingBottom: Platform.OS === "ios" ? 34 : 12,
-                  marginTop: 20,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.12,
-                  shadowRadius: 8,
-                  shadowOffset: {
-                    width: 0,
-                    height: -3,
-                  },
-                  elevation: 15,
-                }}
-              >
-                <PriceRow
-                  label="Original Package"
-                  value={`Rs. ${formatPrice(originalPackagePrice)}`}
-                />
-
-                {discountPerUnit > 0 && (
-                  <>
-                    <RowDivider />
-                    <PriceRow
-                      label="Discount Received"
-                      value={`- Rs. ${formatPrice(discountPerUnit)}`}
-                      valueColor="#1B8A3A"
-                    />
-                  </>
-                )}
-
-                <RowDivider />
-                <PriceRow
-                  label="Service Fee"
-                  value={`Rs. ${formatPrice(serviceFee)}`}
-                />
-
-                <RowDivider />
-                <PriceRow
-                  label="Packing Fee"
-                  value={`Rs. ${formatPrice(packingFee)}`}
-                />
-
-                {/* Due to Changes — shown only when user has modified products */}
-                {diff !== 0 && (
-                  <>
-                    <RowDivider />
-                    <PriceRow
-                      label="Due to Changes"
-                      value={`${diff > 0 ? "+ " : "- "}Rs. ${formatPrice(Math.abs(diff))}`}
-                      valueColor={diff > 0 ? "#FF2D55" : "#0088FF"}
-                    />
-                  </>
-                )}
-
-                <RowDivider />
-                <PriceRow
-                  label="Total for a Package"
-                  value={`Rs. ${formatPrice(totalFor1Package)}`}
-                  strong
-                  big={pkg.qty === 1}
-                  marginBottom={pkg.qty > 1 ? 0 : 20}
-                />
-
-                {pkg.qty > 1 && (
-                  <>
-                    <RowDivider />
-                    <PriceRow
-                      label={`Total for ${pkg.qty} Packages`}
-                      value={`Rs. ${formatPrice(totalForNPackages)}`}
-                      strong
-                      big
-                      marginBottom={20}
-                    />
-                  </>
-                )}
-
-                <TouchableOpacity
-                  onPress={goToNextStep}
-                  activeOpacity={0.85}
-                  style={{
-                    height: 54,
-                    backgroundColor: "#000000",
-                    borderRadius: 30,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    shadowColor: "#000",
-                    shadowOpacity: 0.15,
-                    shadowRadius: 6,
-                    shadowOffset: {
-                      width: 0,
-                      height: 3,
-                    },
-                    elevation: 5,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#FFF",
-                      fontSize: 16,
-                      fontWeight: "700",
-                    }}
-                  >
-                    Confirm & Continue ({currentStepIndex + 1})
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          );
-        })()}
-
-      {mode === "flow" && currentStep.type === "alacart" && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 24 }}
-        >
-          <View className="bg-white pt-1 pb-3">
-            <HurryBanner
-              ordersLeft={
+            <PackageStepView
+              key={pkg.id}
+              pkg={pkg}
+              products={products}
+              templateProds={templateProds}
+              availableSlots={
                 typeof availableSlots === "number"
                   ? Math.max(0, availableSlots)
                   : 0
               }
-              date={scheduleDateStr}
-              showCancelLink
+              scheduleDateStr={scheduleDateStr}
+              totalSteps={steps.length}
+              currentStepIndex={currentStepIndex}
               onCancelOrder={onCancelOrder}
+              updateProductQuantity={updateProductQuantity}
+              onChangeProduct={onChangeProduct}
+              onResetToOriginal={onResetToOriginal}
+              onNext={goToNextStep}
             />
-            <ProgressDots total={steps.length} current={currentStepIndex} />
-          </View>
+          );
+        })()}
 
-          <Text className="text-[20px] font-bold text-black text-center mt-4">
-            Ala Carte Items
-          </Text>
-          <Text className="text-[13px] text-[#6B6B6B] text-center mt-1 mb-4">
-            Feel free to add anything you like from here!
-          </Text>
-
-          {/* Category filter selector */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-            className="flex-row"
-          >
-            {CATEGORIES.map((category) => {
-              const isActive = category.id === selectedAlaCartCategory;
-              return (
-                <TouchableOpacity
-                  key={category.id}
-                  activeOpacity={0.9}
-                  onPress={() => fetchCategoryProducts(category.id)}
-                  style={{
-                    width: 76,
-                    height: 98,
-                    backgroundColor: isActive ? category.activeBg : "#FFFFFF",
-                    borderWidth: 1.2,
-                    borderColor: isActive
-                      ? category.activeBg
-                      : category.borderColor,
-                    borderTopLeftRadius: 38,
-                    borderTopRightRadius: 38,
-                    borderBottomLeftRadius: 18,
-                    borderBottomRightRadius: 18,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingTop: 4,
-                    paddingBottom: 4,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 24,
-                      backgroundColor: isActive ? "#FFFFFF" : category.circleBg,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Image
-                      source={CATEGORY_IMAGES[category.id]}
-                      style={{ width: 28, height: 28 }}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "bold",
-                      color: isActive ? "#FFFFFF" : "#1E1E1E",
-                      textAlign: "center",
-                      marginTop: 6,
-                    }}
-                  >
-                    {category.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* 2-column Product Grid or Skeleton */}
-          {loadingAlaCartProducts ? (
-            <View className="mt-6 px-3">
-              <View className="flex-row justify-between mb-4">
-                <AlacartCardSkeleton pulseAnim={pulseAnim} />
-                <AlacartCardSkeleton pulseAnim={pulseAnim} />
-              </View>
-              <View className="flex-row justify-between mb-4">
-                <AlacartCardSkeleton pulseAnim={pulseAnim} />
-                <AlacartCardSkeleton pulseAnim={pulseAnim} />
-              </View>
-            </View>
-          ) : alaCartProducts.length === 0 ? (
-            <View className="py-12 items-center justify-center">
-              <Image
-                source={require("@/assets/images/order/no-replce-products.webp")}
-                style={{ width: 56, height: 56 }}
-                resizeMode="contain"
-              />
-              <Text className="text-[#8A8A8A] text-[14px] mt-3">
-                No items available in this category
-              </Text>
-            </View>
-          ) : (
-            <View className="mt-6 px-3">
-              {(() => {
-                const rows: ProductType[][] = [];
-                for (let i = 0; i < alaCartProducts.length; i += 2) {
-                  rows.push(alaCartProducts.slice(i, i + 2));
-                }
-                return rows.map((row, rowIndex) => (
-                  <View
-                    key={`alacart-row-${rowIndex}`}
-                    className="flex-row justify-between mb-4"
-                  >
-                    {row.map((product, pIdx) => {
-                      const isDisabled =
-                        product.isEnable === 0 ||
-                        product.isEnable === false ||
-                        disabledAlacartProductIds.has(String(product.id));
-                      const isSelected = Object.values(alacartSelection).some(
-                        (item) =>
-                          String(item.productId || item.id) ===
-                            String(product.id) && Boolean(item.isAddedNow),
-                      );
-                      return (
-                        <AlacartProductCard
-                          key={`alacart-prod-${product.id}-${rowIndex}-${pIdx}`}
-                          product={product}
-                          selected={isSelected && !isDisabled}
-                          disabled={isDisabled}
-                          onToggle={() => {
-                            if (!isDisabled) {
-                              // If it was previously selected and is now disabled,
-                              // remove it from selection
-                              if (isSelected && isDisabled) {
-                                removeAlacartItem(
-                                  Object.values(alacartSelection).find(
-                                    (item) =>
-                                      String(item.productId || item.id) ===
-                                      String(product.id),
-                                  )?.id ?? product.id,
-                                );
-                              } else {
-                                toggleAlacartProduct(product);
-                              }
-                            }
-                          }}
-                        />
-                      );
-                    })}
-                    {row.length === 1 && <View className="flex-1 mx-2" />}
-                  </View>
-                ));
-              })()}
-            </View>
-          )}
-        </ScrollView>
+      {mode === "flow" && currentStep.type === "alacart" && (
+        <AlacartStepView
+          availableSlots={availableSlots}
+          scheduleDateStr={scheduleDateStr}
+          onCancelOrder={onCancelOrder}
+          totalSteps={steps.length}
+          currentStepIndex={currentStepIndex}
+          selectedAlaCartCategory={selectedAlaCartCategory}
+          onSelectCategory={fetchCategoryProducts}
+          loadingAlaCartProducts={loadingAlaCartProducts}
+          pulseAnim={pulseAnim}
+          alaCartProducts={alaCartProducts}
+          disabledAlacartProductIds={disabledAlacartProductIds}
+          alacartSelection={alacartSelection}
+          toggleAlacartProduct={toggleAlacartProduct}
+          removeAlacartItem={removeAlacartItem}
+        />
       )}
 
       {/* Step: final confirm order details with dedicated ScrollView */}
       {mode === "flow" && currentStep.type === "confirm" && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="flex-1"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "space-between",
-            paddingBottom: 0,
-          }}
-        >
-          {/* ───────── Content (child 1) ───────── */}
-          <View>
-            <View className="bg-white pt-1 pb-3">
-              <HurryBanner
-                ordersLeft={
-                  typeof availableSlots === "number"
-                    ? Math.max(0, availableSlots)
-                    : 0
-                }
-                date={scheduleDateStr}
-                showCancelLink
-                onCancelOrder={onCancelOrder}
-              />
-              <ProgressDots total={steps.length} current={currentStepIndex} />
-            </View>
-
-            {/* Package Cards */}
-            <View className="mt-3">
-              {packageSummaries.map((item, sIdx) => {
-                const isUnavailable =
-                  unavailablePackageIds[item.pkg.id] === true;
-                return (
-                  <View
-                    key={`summary-${item.pkg.id}-${sIdx}`}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: isUnavailable ? "#FF383C" : "#EEEEEE",
-                      borderRadius: 16,
-                      padding: 16,
-                      marginBottom: 12,
-                      marginHorizontal: 20,
-                      backgroundColor: "#FFFFFF",
-                    }}
-                  >
-                    <View className="flex-row items-center">
-                      <View className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-[#EEEEEE] items-center justify-center mr-3 overflow-hidden">
-                        {item.pkg.image ? (
-                          <Image
-                            source={
-                              typeof item.pkg.image === "string"
-                                ? { uri: item.pkg.image }
-                                : item.pkg.image
-                            }
-                            className="w-12 h-12 rounded-xl"
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Image
-                            source={getPackageImage(item.pkg.id)}
-                            className="w-10 h-10"
-                            resizeMode="contain"
-                          />
-                        )}
-                      </View>
-                      <View className="flex-1">
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: "700",
-                            color: isUnavailable ? "#FF383C" : "#000000",
-                          }}
-                        >
-                          {item.pkg.name}
-                        </Text>
-                        {!isUnavailable && (
-                          <>
-                            <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                              Original Price :{" "}
-                              <Text className="font-bold text-black">
-                                Rs. {formatPrice(item.unitOriginalPrice)}
-                              </Text>
-                            </Text>
-                            <Text className="text-[13px] text-[#6B6B6B] mt-0.5">
-                              Additional Changes :{" "}
-                              {item.diff === 0 ? (
-                                <Text className="font-bold text-black">
-                                  Rs. 0.00
-                                </Text>
-                              ) : (
-                                <Text
-                                  className="font-bold"
-                                  style={{
-                                    color:
-                                      item.diff > 0 ? "#FF2D55" : "#0088FF",
-                                  }}
-                                >
-                                  {item.diff > 0 ? "+ " : "- "}Rs.{" "}
-                                  {formatPrice(Math.abs(item.diff))}
-                                </Text>
-                              )}
-                            </Text>
-                          </>
-                        )}
-                      </View>
-                    </View>
-
-                    <View className="h-[1px] bg-[#F0F0F0] my-3" />
-
-                    {isUnavailable ? (
-                      <View className="flex-row items-center justify-between">
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            color: "#FF383C",
-                            fontWeight: "600",
-                          }}
-                        >
-                          Qty: {item.pkg.qty}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            color: "#FF383C",
-                            fontWeight: "700",
-                          }}
-                        >
-                          No longer available
-                        </Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={() => setCurrentStepIndex(item.stepIndex)}
-                        activeOpacity={0.8}
-                      >
-                        <View className="flex-row items-center justify-between">
-                          <Text className="text-[14px] text-black">
-                            Current Price :{" "}
-                            <Text className="font-bold">
-                              Rs. {formatPrice(item.unitCurrentPrice)}
-                              {item.pkg.qty > 1 ? ` X ${item.pkg.qty}` : ""}
-                            </Text>
-                          </Text>
-
-                          <View className="w-7 h-7 rounded-full bg-black items-center justify-center">
-                            <Ionicons
-                              name="arrow-forward"
-                              size={15}
-                              color="#FFFFFF"
-                            />
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Ala Carte Items Section */}
-            {Object.keys(alacartSelection).length > 0 && (
-              <>
-                <View className="h-[1px] bg-[#E5E5EA] my-3" />
-
-                <View className="mt-1">
-                  <Text className="text-[16px] font-bold text-black mx-5 mb-3">
-                    Ala Carte Items (
-                    {String(Object.keys(alacartSelection).length).padStart(
-                      2,
-                      "0",
-                    )}
-                    )
-                  </Text>
-
-                  {Object.values(alacartSelection).map((item, aIdx) => {
-                    const isItemDisabled = isItemUnavailable(item);
-
-                    const strikePrice = isItemDisabled
-                      ? null
-                      : getSavedStrikePrice(item);
-
-                    return (
-                      <View
-                        key={`alacart-item-${item.id}-${aIdx}`}
-                        style={{
-                          borderWidth: 1,
-                          borderColor: isItemDisabled ? "#F04438" : "#EEEEEE",
-                          borderRadius: 16,
-                          padding: 16,
-                          marginBottom: 12,
-                          marginHorizontal: 20,
-                          backgroundColor: "#FFFFFF",
-                        }}
-                      >
-                        {/* Top row */}
-                        <View className="flex-row items-stretch justify-between">
-                          <View className="flex-row items-center flex-1">
-                            <View
-                              className="w-14 h-14 rounded-2xl bg-[#F8F8F8] items-center justify-center mr-3 overflow-hidden border border-[#F0F0F0]"
-                              style={{ opacity: isItemDisabled ? 0.6 : 1 }}
-                            >
-                              {item.image ? (
-                                typeof item.image === "string" ? (
-                                  <Image
-                                    source={{ uri: item.image }}
-                                    className="w-12 h-12"
-                                    resizeMode="contain"
-                                  />
-                                ) : (
-                                  <Image
-                                    source={item.image}
-                                    className="w-12 h-12"
-                                    resizeMode="contain"
-                                  />
-                                )
-                              ) : (
-                                <Ionicons
-                                  name="leaf-outline"
-                                  size={24}
-                                  color={isItemDisabled ? "#CCCCCC" : "#92D01B"}
-                                />
-                              )}
-                            </View>
-                            <View className="flex-1 pr-2">
-                              <Text
-                                className="text-[16px] font-bold text-black"
-                                numberOfLines={2}
-                              >
-                                {item.displayName}
-                              </Text>
-                              <View className="flex-row items-center mt-0.5">
-                                <Text
-                                  className="text-[15px] font-bold"
-                                  style={{
-                                    color:
-                                      isItemDisabled || item.isAddedNow
-                                        ? "#F04438"
-                                        : "#000000",
-                                  }}
-                                >
-                                  Rs. {formatPrice(item.price * item.quantity)}
-                                </Text>
-                                {strikePrice != null && (
-                                  <Text
-                                    style={{
-                                      fontSize: 13,
-                                      color: "#9CA3AF",
-                                      textDecorationLine: "line-through",
-                                      marginLeft: 6,
-                                    }}
-                                  >
-                                    Rs. {formatPrice(strikePrice)}
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                          </View>
-
-                          {/* Right column: trash + Added Now */}
-                          <View className="items-end justify-between min-h-[56px]">
-                            <TouchableOpacity
-                              onPress={() => removeAlacartItem(item.id)}
-                              activeOpacity={0.7}
-                              style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: 16,
-                                backgroundColor: isItemDisabled
-                                  ? "#FEE4E2"
-                                  : "#F5F5F5",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              <FontAwesome6
-                                name="trash"
-                                size={16}
-                                color={isItemDisabled ? "#F04438" : "#000000"}
-                              />
-                            </TouchableOpacity>
-
-                            {!isItemDisabled && item.isAddedNow ? (
-                              <View className="mt-12">
-                                <Text className="text-[12px] font-medium text-[#F04438]">
-                                  Added Now
-                                </Text>
-                              </View>
-                            ) : !isItemDisabled ? (
-                              <View className="mt-12">
-                                <Text
-                                  className="text-[12px] font-medium"
-                                  style={{ color: "#12B8A6" }}
-                                >
-                                  Added Earlier
-                                </Text>
-                              </View>
-                            ) : (
-                              <View />
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Dashed separator */}
-                        <View
-                          style={{
-                            borderBottomWidth: 1,
-                            borderStyle: "dashed",
-                            borderColor: isItemDisabled ? "#FDA29B" : "#E5E5EA",
-                            marginVertical: 14,
-                          }}
-                        />
-
-                        {isItemDisabled ? (
-                          <View className="flex-row items-center justify-between">
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color: "#F04438",
-                                fontWeight: "500",
-                              }}
-                            >
-                              {formatWeightDisplay(
-                                item.weightDisplay,
-                                item.amount,
-                                item.unit,
-                              )}
-                            </Text>
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color: "#F04438",
-                                fontWeight: "600",
-                              }}
-                            >
-                              No longer available
-                            </Text>
-                          </View>
-                        ) : (
-                          <View className="flex-row items-center justify-between">
-                            <View className="flex-row items-center">
-                              <Text className="text-[13px] text-[#6B6B6B] mr-2">
-                                Unit :
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() =>
-                                  toggleAlacartItemUnit(item.id, "kg")
-                                }
-                                activeOpacity={0.8}
-                                className={`px-3.5 py-1 rounded-full mr-1.5 ${
-                                  item.unit === "kg"
-                                    ? "bg-[#FF9114]"
-                                    : "bg-[#FCE1C5]"
-                                }`}
-                              >
-                                <Text className="text-white font-bold text-[12px]">
-                                  kg
-                                </Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() =>
-                                  toggleAlacartItemUnit(item.id, "g")
-                                }
-                                activeOpacity={0.8}
-                                className={`px-3.5 py-1 rounded-full ${
-                                  item.unit === "g"
-                                    ? "bg-[#FF9114]"
-                                    : "bg-[#FCE1C5]"
-                                }`}
-                              >
-                                <Text className="text-white font-bold text-[12px]">
-                                  g
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-
-                            <View className="flex-row items-center">
-                              {(() => {
-                                const stepVal =
-                                  item.step && item.step > 0
-                                    ? item.step
-                                    : item.unit === "kg"
-                                      ? 0.5
-                                      : 500;
-                                const minVal =
-                                  item.minQuantity && item.minQuantity > 0
-                                    ? item.minQuantity
-                                    : stepVal;
-                                const isAtMin = item.amount <= minVal;
-
-                                return (
-                                  <TouchableOpacity
-                                    onPress={() =>
-                                      updateAlacartItemQuantity(item.id, -1)
-                                    }
-                                    disabled={isAtMin}
-                                    activeOpacity={0.7}
-                                    className={`w-6 h-6 rounded-full items-center justify-center ${
-                                      isAtMin ? "bg-[#D1D1D6]" : "bg-black"
-                                    }`}
-                                  >
-                                    <Ionicons
-                                      name="remove"
-                                      size={14}
-                                      color="#FFF"
-                                    />
-                                  </TouchableOpacity>
-                                );
-                              })()}
-
-                              <Text className="text-[13px] font-semibold text-black mx-2.5 min-w-[40px] text-center">
-                                {formatWeightDisplay(
-                                  item.weightDisplay,
-                                  item.amount,
-                                  item.unit,
-                                )}
-                              </Text>
-
-                              <TouchableOpacity
-                                onPress={() =>
-                                  updateAlacartItemQuantity(item.id, 1)
-                                }
-                                activeOpacity={0.7}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                              >
-                                <Ionicons name="add" size={14} color="#FFF" />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* Please Note boxes */}
-            {/* Please Note boxes */}
-            {totalDiff > 0 ||
-            (isPaid && !isCashPayment && additionalDue >= 0.01) ? (
-              <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
-                <Text className="text-[14px] font-bold text-black mb-1">
-                  Please Note :
-                </Text>
-                {isCashPayment ? (
-                  <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                    Your {cashLabel} order total has increased by{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(additionalPayAmount)}
-                    </Text>
-                    . Your new total is{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(confirmGrandTotal)}
-                    </Text>
-                    .
-                  </Text>
-                ) : !isPaid ? (
-                  <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                    The total amount you need to pay upon at the end of this
-                    process will be{" "}
-                    <Text className="font-bold text-black">increased</Text> by{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(additionalPayAmount)}
-                    </Text>
-                    .
-                  </Text>
-                ) : (
-                  <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                    You have already paid for this order. The additional amount{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(additionalDue)}
-                    </Text>{" "}
-                    will need to be paid at the end of this process.
-                  </Text>
-                )}
-              </View>
-            ) : totalDiff < 0 ? (
-              <View className="bg-[#EDFDF2] border border-[#A6F4C5] rounded-2xl p-4 mx-5 my-4">
-                <Text className="text-[14px] font-bold text-black mb-1">
-                  Please Note :
-                </Text>
-                {isCashPayment ? (
-                  <Text className="text-[13px] text-[#475467] leading-5">
-                    Your {cashLabel} order total has been reduced by{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(totalSavingsAmount)}
-                    </Text>
-                    . Your new total is{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(confirmGrandTotal)}
-                    </Text>
-                    .
-                  </Text>
-                ) : !isPaid ? (
-                  <Text className="text-[13px] text-[#475467] leading-5">
-                    The total amount you need to pay upon at the end of this
-                    process will be{" "}
-                    <Text className="font-bold text-black">reduced</Text> by{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(totalSavingsAmount)}
-                    </Text>
-                    .
-                  </Text>
-                ) : (
-                  <Text className="text-[13px] text-[#475467] leading-5">
-                    You have already paid for this order, so the remaining
-                    balance of{" "}
-                    <Text className="font-bold text-black">
-                      Rs. {formatPrice(totalSavingsAmount)}
-                    </Text>{" "}
-                    will be credited to your account.
-                  </Text>
-                )}
-              </View>
-            ) : !isCashPayment && !isPaid ? (
-              <View className="bg-[#F8F9FA] rounded-2xl p-4 mx-5 my-4">
-                <Text className="text-[14px] font-bold text-black mb-1">
-                  Please Note :
-                </Text>
-                <Text className="text-[13px] text-[#6B6B6B] leading-5">
-                  This scheduled order has not been paid yet. The total amount
-                  of{" "}
-                  <Text className="font-bold text-black">
-                    Rs. {formatPrice(fullPayableAmount)}
-                  </Text>{" "}
-                  will need to be paid via card to confirm your order.
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* ───────── Price section (child 2, inside ScrollView) ───────── */}
-          <View
-            style={{
-              backgroundColor: "#FFF",
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingHorizontal: 20,
-              paddingTop: 22,
-              paddingBottom: Platform.OS === "ios" ? 34 : 12,
-              marginTop: 20,
-              shadowColor: "#000",
-              shadowOpacity: 0.12,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: -3 },
-              elevation: 15,
-            }}
-          >
-            <PriceRow
-              label="For Packages"
-              value={`Rs. ${formatPrice(confirmPackagesTotal)}`}
-            />
-
-            {Object.keys(alacartSelection).length > 0 && (
-              <>
-                <RowDivider />
-                <PriceRow
-                  label="Ala Carte Items"
-                  value={`Rs. ${formatPrice(alacartTotal)}`}
-                />
-              </>
-            )}
-
-            <RowDivider />
-
-            <PriceRow
-              label="Total"
-              value={`Rs. ${formatPrice(confirmGrandTotal)}`}
-              strong
-              big
-              marginBottom={20}
-            />
-
-            <TouchableOpacity
-              onPress={
-                isConfirmDisabled || isSubmitting ? undefined : goToNextStep
-              }
-              disabled={isConfirmDisabled || isSubmitting}
-              activeOpacity={isSubmitting ? 1 : 0.85}
-              style={{
-                height: 54,
-                backgroundColor: isConfirmDisabled ? "#7F919C" : "#000000",
-                opacity: isSubmitting ? 0.85 : 1,
-                borderRadius: 30,
-                justifyContent: "center",
-                alignItems: "center",
-                flexDirection: "row",
-                gap: 8,
-                shadowColor: "#000",
-                shadowOpacity: isConfirmDisabled ? 0 : 0.15,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 3 },
-                elevation: isConfirmDisabled ? 0 : 5,
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <ActivityIndicator color="#FFFFFF" />
-                  <Text
-                    style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}
-                  >
-                    Processing...
-                  </Text>
-                </>
-              ) : (
-                <Text
-                  style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}
-                >
-                  {!isCashPayment && !isPaid && fullPayableAmount > 0
-                    ? `Pay Rs. ${formatPrice(fullPayableAmount)} & Confirm`
-                    : !isCashPayment && isPaid && additionalDue >= 0.01
-                      ? `Pay Additional Rs. ${formatPrice(additionalDue)} & Confirm`
-                      : "Confirm Order Details"}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+        <ConfirmationStepView
+          availableSlots={availableSlots}
+          scheduleDateStr={scheduleDateStr}
+          onCancelOrder={onCancelOrder}
+          totalSteps={steps.length}
+          currentStepIndex={currentStepIndex}
+          packageSummaries={packageSummaries}
+          unavailablePackageIds={unavailablePackageIds}
+          onSelectStepIndex={(idx) => setCurrentStepIndex(idx)}
+          alacartSelection={alacartSelection}
+          isItemUnavailable={isItemUnavailable}
+          getSavedStrikePrice={getSavedStrikePrice}
+          removeAlacartItem={removeAlacartItem}
+          toggleAlacartItemUnit={toggleAlacartItemUnit}
+          updateAlacartItemQuantity={updateAlacartItemQuantity}
+          totalDiff={totalDiff}
+          isPaid={isPaid}
+          isCashPayment={isCashPayment}
+          additionalDue={additionalDue}
+          cashLabel={cashLabel}
+          additionalPayAmount={additionalPayAmount}
+          confirmGrandTotal={confirmGrandTotal}
+          totalSavingsAmount={totalSavingsAmount}
+          fullPayableAmount={fullPayableAmount}
+          confirmPackagesTotal={confirmPackagesTotal}
+          alacartTotal={alacartTotal}
+          isConfirmDisabled={isConfirmDisabled}
+          isSubmitting={isSubmitting}
+          onConfirm={goToNextStep}
+        />
       )}
 
       {mode === "flow" && currentStep.type === "alacart" && (
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 20,
-            paddingTop: 22,
-            paddingBottom: Platform.OS === "ios" ? 34 : 12,
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: -3 },
-            elevation: 15,
-          }}
-        >
-          <PriceRow
-            label="For Ala Carte Items"
-            value={`Rs. ${formatPrice(newlyAddedAlacartTotal)}`}
-            strong
-            big
-            marginBottom={20}
-          />
-
-          <TouchableOpacity
-            onPress={goToNextStep}
-            activeOpacity={0.85}
-            style={{
-              height: 54,
-              backgroundColor: "#000000",
-              borderRadius: 30,
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOpacity: 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 5,
-            }}
-          >
-            <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "700" }}>
-              Confirm & Continue ({currentStepIndex + 1})
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <FloatingAlacartBar
+          newlyAddedAlacartTotal={newlyAddedAlacartTotal}
+          currentStepIndex={currentStepIndex}
+          onContinue={goToNextStep}
+        />
       )}
 
       {/* Loading overlay — shown while API call is in progress (cash orders) */}
-      <Modal visible={isSubmitting} transparent animationType="fade">
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: 20,
-              paddingVertical: 36,
-              paddingHorizontal: 40,
-              alignItems: "center",
-              minWidth: 220,
-            }}
-          >
-            <ActivityIndicator size="large" color="#000000" />
-            <Text
-              style={{
-                marginTop: 16,
-                fontSize: 15,
-                fontWeight: "600",
-                color: "#000000",
-                textAlign: "center",
-              }}
-            >
-              Confirming your order...
-            </Text>
-          </View>
-        </View>
-      </Modal>
+      <SubmittingModal visible={isSubmitting} />
 
       {/* Additional Card Payment Modal — card orders with extra amount due */}
       {checkoutSession && (
@@ -4030,21 +2388,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       />
 
       {/* Confirmation Modal when navigating back */}
-      <ConfirmationModal
+      <ExitConfirmModal
         visible={showExitModal}
-        title="Are you sure you want to go back?"
-        message="Going back will cause you to lose all your changes."
-        confirmLabel="Yes, Go Back"
-        cancelLabel="No, Stay on the page"
-        confirmButtonColor="#000000"
-        confirmButtonTextColor="#FFFFFF"
-        cancelButtonBgColor="#EAEFF5"
-        cancelButtonTextColor="#4B5563"
-        iconName="warning"
-        iconColor="#D32F2F"
-        iconBgColor="bg-[#FEECEC]"
-        buttonLayout="column"
-        showCloseButton={false}
         onConfirm={() => {
           setShowExitModal(false);
           setCurrentStepIndex(0);
