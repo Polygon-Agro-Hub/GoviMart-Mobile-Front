@@ -7,19 +7,10 @@ import React, {
 } from "react";
 import {
   View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Image,
   Animated,
   BackHandler,
-  RefreshControl,
   Alert,
-  Platform,
-  ActivityIndicator,
-  Modal,
 } from "react-native";
-import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
@@ -47,17 +38,10 @@ import {
   ScreenMode,
   FlowStep,
   OriginalAlacartEntry,
-  PackageSummary,
 } from "@/types/types";
 import productService from "@/services/product/product.service";
 import orderService from "@/services/order/order.service";
-import { HurryBanner } from "@/component/package/common/HurryBanner";
-import { TimeRanOutBanner } from "@/component/package/common/TimeRanOutBanner";
-import { AlacartCardSkeleton } from "@/component/ala-cart-product/AlacartCardSkeleton";
-import { AlacartProductCard } from "@/component/ala-cart-product/AlacartProductCard";
-import ConfirmationModal from "@/component/common/ConfirmationModal";
 import { AlertModal } from "@/component/common/AlertModal";
-import { ProductReviewCard } from "@/component/ala-cart-product/ProductReviewCard";
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
 import socketService from "@/services/socket/socket.service";
@@ -74,20 +58,12 @@ import { getAuthHeader } from "@/services/config-service/auth-header";
 type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
 import {
-  CATEGORIES,
-  CATEGORY_IMAGES,
-  getPackageImage,
-} from "../../../constants/reviewPackage.constants";
-import {
-  formatPrice,
-  getOrdinal,
   parseDateOnly,
   addDays,
   formatScheduleLabel,
   toLocalDateOnly,
   num,
   formatWeightDisplay,
-  toDisplayProduct,
 } from "../../../utils/reviewPackageUtils";
 import { FinalCancelView } from "../../../component/package/overview/FinalCancelView";
 import { LimitReachedView } from "../../../component/package/overview/LimitReachedView";
