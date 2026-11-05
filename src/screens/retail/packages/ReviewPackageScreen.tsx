@@ -16,53 +16,31 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import {
-  initReviewData,
-  setLoadingReview,
   setPackingSlots,
   replacePackageProduct,
   resetPackageProduct,
   updateProductQuantity as updateProductQuantityAction,
-  toggleAlacartProduct as toggleAlacartProductAction,
-  removeAlacartItem as removeAlacartItemAction,
-  toggleAlacartItemUnit as toggleAlacartItemUnitAction,
-  updateAlacartItemQuantity as updateAlacartItemQuantityAction,
   revertReviewChanges,
   clearPackageReview as clearReviewData,
-  AlacartSelectedProduct,
   PackageMeta,
 } from "@/store/packageReviewSlice";
 import {
   RootStackParamList,
-  ProductType,
   ReviewProduct,
   ScreenMode,
   FlowStep,
-  OriginalAlacartEntry,
 } from "@/types/types";
-import productService from "@/services/product/product.service";
 import orderService from "@/services/order/order.service";
 import { AlertModal } from "@/component/common/AlertModal";
 import LoadingPage from "@/component/common/LoadingPage";
 import CustomHeader from "@/component/common/CustomHeader";
-import socketService from "@/services/socket/socket.service";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
-import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
-import cardStorageService, {
-  SavedCard,
-} from "@/services/payment/cardStorageService";
-import apiClient from "@/services/config-service/axio-config";
-import { ENDPOINTS } from "@/services/config-service/endpoints";
-import { getAuthHeader } from "@/services/config-service/auth-header";
-
-type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
 
 import {
   parseDateOnly,
   addDays,
   formatScheduleLabel,
-  toLocalDateOnly,
-  num,
   formatWeightDisplay,
 } from "../../../utils/reviewPackageUtils";
 import { FinalCancelView } from "../../../component/package/overview/FinalCancelView";
@@ -75,6 +53,13 @@ import ConfirmationStepView from "../../../component/package/flow/ConfirmationSt
 import SubmittingModal from "../../../component/package/common/SubmittingModal";
 import ExitConfirmModal from "../../../component/package/common/ExitConfirmModal";
 
+import { useReviewPayment } from "@/hooks/useReviewPayment";
+import { useReviewAvailability } from "@/hooks/useReviewAvailability";
+import { useReviewAlacart } from "@/hooks/useReviewAlacart";
+import { useReviewData } from "@/hooks/useReviewData";
+
+type Props = StackScreenProps<RootStackParamList, "ReviewPackage">;
+
 /* ---------------------------------------------------------
    Main Screen Component
 --------------------------------------------------------- */
@@ -86,6 +71,11 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // invoiceNo from route params acts as an initial display value before the API fetch completes
   const routeInvoiceNo = route.params?.invoiceNo;
   const dispatch = useDispatch();
+
+  const userProfile = useSelector((state: RootState) => state.auth.userProfile);
+  const buyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
+  );
 
   const {
     packagesMeta,
@@ -133,63 +123,119 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // (comes from the backend as packingSlots.reminderCount)
   const [reminderCount, setReminderCount] = useState<number>(1);
 
-  // orderadditionalitems.normalPrice (line price BEFORE discount) per saved row.
-  // key = redux ala carte item id (e.g. "prev-7073")
-  const [alacartNormalPriceMap, setAlacartNormalPriceMap] = useState<
-    Record<string, number>
-  >({});
-
-  // orderadditionalitems.price (what was saved earlier) per saved row
-  const [alacartSavedPriceMap, setAlacartSavedPriceMap] = useState<
-    Record<string, number>
-  >({});
-
   // Package review window closes at 6:00 PM (18:00)
   const REVIEW_END_HOUR = 18;
 
-  // ── Additional Card Payment State ──────────────────────────────────────────
-  const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
-  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
-  const [checkoutSession, setCheckoutSession] =
-    useState<UnifiedCheckoutSession | null>(null);
-  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-  const [pendingConfirmPayload, setPendingConfirmPayload] = useState<any>(null);
-
-  const [selectedAlaCartCategory, setSelectedAlaCartCategory] =
-    useState<string>("Vegetables");
-  const [alaCartProducts, setAlaCartProducts] = useState<ProductType[]>([]);
-  const [loadingAlaCartProducts, setLoadingAlaCartProducts] =
-    useState<boolean>(false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [unavailablePackageIds, setUnavailablePackageIds] = useState<
-    Record<string, boolean>
-  >({});
-  // Tracks product IDs (as strings) that have been disabled via socket — used
-  // to show "No longer available" red style in BOTH the ala carte grid AND the confirm step.
-  const [disabledAlacartProductIds, setDisabledAlacartProductIds] = useState<
-    Set<string>
-  >(new Set());
-
-  const [originalAlacartTotal, setOriginalAlacartTotal] = useState<number>(0);
-
-  // The qty + unit each SAVED ala carte row had when the review loaded
-  // (key = orderadditionalitems.id). Used to detect which saved rows the
-  // customer edited so we can send them to the backend for an UPDATE.
-  const [originalAlacartMap, setOriginalAlacartMap] = useState<
-    Record<number, OriginalAlacartEntry>
-  >({});
-
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
-  // Which order (as a string key) the data currently in Redux was loaded for.
-  // null = nothing loaded yet (or it was cleared) → a fetch is required.
-  const loadedOrderIdRef = useRef<string | null>(null);
-  // Monotonically increasing id so a slow response for an OLD order
-  // can never overwrite the data of the order the user is looking at now.
-  const requestIdRef = useRef(0);
-  // Tracks whether the user has successfully confirmed this order,
-  // preventing background re-fetches and alerts while the success overlay is showing.
-  const isConfirmedRef = useRef(false);
+  // Build the step list: one "package" step per unique package type,
+  // then one "alacart" step (always displayed so user can add items),
+  // then one "confirm" step.
+  const steps: FlowStep[] = useMemo(() => {
+    const packageSteps: FlowStep[] = packagesMeta.map((pkg) => ({
+      type: "package" as const,
+      packageId: pkg.id,
+    }));
+    return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
+  }, [packagesMeta]);
+
+  const currentStep =
+    steps[currentStepIndex] || steps[0] || { type: "confirm" as const };
+
+  // ── Custom Hooks ───────────────────────────────────────────────────────────
+  const alacart = useReviewAlacart();
+
+  const availability = useReviewAvailability({
+    effectiveOrderId,
+    processOrderId,
+    rawScheduleDate,
+    mode,
+    currentStep,
+    selectedAlaCartCategory: alacart.selectedAlaCartCategory,
+    alaCartProducts: alacart.alaCartProducts,
+    packagesMeta,
+    alacartSelection,
+    setAlaCartProducts: alacart.setAlaCartProducts,
+    setReminderCount,
+    setDisabledAlacartProductIds: alacart.setDisabledAlacartProductIds,
+  });
+
+  const data = useReviewData({
+    effectiveOrderId,
+    orderKey,
+    buyerType,
+    mode,
+    navigation,
+    setOriginalAlacartTotal: alacart.setOriginalAlacartTotal,
+    setOriginalAlacartMap: alacart.setOriginalAlacartMap,
+    setAlacartNormalPriceMap: alacart.setAlacartNormalPriceMap,
+    setAlacartSavedPriceMap: alacart.setAlacartSavedPriceMap,
+    setDisabledAlacartProductIds: alacart.setDisabledAlacartProductIds,
+    setUnavailablePackageIds: availability.setUnavailablePackageIds,
+    setReminderCount,
+  });
+
+  // Show the success message FIRST. Home navigation happens only when the
+  // AlertModal closes (see its onClose).
+  const showSuccessMessage = (inv: string) => {
+    setSuccessInvoiceNo(inv);
+    data.isConfirmedRef.current = true; // stop refetch / redirects
+    data.requestIdRef.current += 1; // invalidate any in-flight fetch
+    setIsSubmitting(false); // close the "Confirming your order..." Modal
+    // wait for the loading Modal to finish closing before opening the next one
+    setTimeout(() => setShowSuccessOverlay(true), 350);
+  };
+
+  const payment = useReviewPayment({
+    userId: userProfile?.id,
+    invoiceNo,
+    routeInvoiceNo,
+    effectiveOrderId,
+    showSuccessMessage,
+    setIsSubmitting,
+  });
+
+  const {
+    selectedAlaCartCategory,
+    alaCartProducts,
+    loadingAlaCartProducts,
+    disabledAlacartProductIds,
+    setDisabledAlacartProductIds,
+    originalAlacartTotal,
+    setOriginalAlacartTotal,
+    originalAlacartMap,
+    setOriginalAlacartMap,
+    alacartNormalPriceMap,
+    setAlacartNormalPriceMap,
+    alacartSavedPriceMap,
+    setAlacartSavedPriceMap,
+    fetchCategoryProducts,
+    toggleAlacartProduct,
+    removeAlacartItem,
+    toggleAlacartItemUnit,
+    updateAlacartItemQuantity,
+    isItemUnavailable,
+    getNormalLinePrice,
+    getSavedStrikePrice,
+  } = alacart;
+
+  const { unavailablePackageIds, setUnavailablePackageIds } = availability;
+
+  const { isRefreshing, handleRefresh } = data;
+
+  const {
+    activeGateway,
+    savedCard,
+    setSavedCard,
+    checkoutSession,
+    setCheckoutSession,
+    checkoutModalVisible,
+    setCheckoutModalVisible,
+    pendingConfirmPayload,
+    setPendingConfirmPayload,
+    handleAdditionalPaymentSuccess,
+    handleAdditionalPaymentCancel,
+  } = payment;
 
   const isTimeRanOut = useMemo(() => {
     const currentHour = new Date().getHours();
@@ -262,11 +308,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     return () => loop.stop();
   }, [pulseAnim]);
 
-  const userProfile = useSelector((state: RootState) => state.auth.userProfile);
-  const buyerType = useSelector(
-    (state: RootState) => state.auth.userProfile?.buyerType || "Retail",
-  );
-
   // Wholesale guard: Block Wholesale users from viewing ReviewPackage
   useEffect(() => {
     if (buyerType && buyerType.toLowerCase() !== "retail") {
@@ -293,41 +334,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [buyerType, effectiveOrderId, navigation]);
 
-  // Fetch active payment gateway from backend config
-  useEffect(() => {
-    const fetchActiveGateway = async () => {
-      try {
-        const headers = await getAuthHeader();
-        const res = await apiClient.get(ENDPOINTS.PAYMENT.ACTIVE_GATEWAY, {
-          headers,
-        });
-        if (res.data?.status && res.data?.data?.activeGateway) {
-          setActiveGateway(res.data.data.activeGateway);
-        }
-      } catch {
-        setActiveGateway("payments_lk");
-      }
-    };
-    fetchActiveGateway();
-  }, []);
-
-  // Load saved card for 1-click fast pay (additional payment flow)
-  useFocusEffect(
-    useCallback(() => {
-      let isMounted = true;
-      const loadCard = async () => {
-        try {
-          const card = await cardStorageService.getSavedCard(userProfile?.id);
-          if (isMounted) setSavedCard(card);
-        } catch { }
-      };
-      loadCard();
-      return () => {
-        isMounted = false;
-      };
-    }, [userProfile?.id]),
-  );
-
   // Reset EVERYTHING whenever the order being reviewed changes
   // (also runs on first mount, which wipes data left in Redux by a previous
   // order). Depends on orderKey (a string) so a type change of the same id
@@ -345,543 +351,10 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     setOriginalAlacartMap({});
     setAlacartNormalPriceMap({});
     setReminderCount(1);
-    loadedOrderIdRef.current = null;
+    data.loadedOrderIdRef.current = null;
     // NOTE: Redux is NOT cleared here. clearReviewData() runs only after the
     // final confirm step succeeds (see goToNextStep).
   }, [orderKey]);
-
-  // Fetch review data from backend
-  const fetchReviewData = useCallback(
-    async (force = false) => {
-      if (isConfirmedRef.current) return;
-      if (buyerType && buyerType.toLowerCase() !== "retail") {
-        return;
-      }
-      // Tag this request; only the latest one is allowed to write to Redux
-      const reqId = ++requestIdRef.current;
-      dispatch(setLoadingReview(true));
-      try {
-        const res = await orderService.getPackageReview(effectiveOrderId);
-
-        // A newer request (e.g. a different order) superseded this one
-        if (reqId !== requestIdRef.current) return;
-
-        if (res.data?.status && res.data?.data) {
-          const { orderInfo, packages, additionalItems, packingSlots } =
-            res.data.data;
-
-          if (
-            orderInfo?.status &&
-            orderInfo.status.toLowerCase() === "cancelled"
-          ) {
-            dispatch(setLoadingReview(false));
-            Alert.alert(
-              "Cannot Proceed!",
-              "You have already cancelled this order. You cannot proceed to the payment.",
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (effectiveOrderId) {
-                      navigation.replace("OrderDetails", {
-                        orderId: String(effectiveOrderId),
-                      });
-                    } else if (navigation.canGoBack()) {
-                      navigation.goBack();
-                    } else {
-                      navigation.replace("Home");
-                    }
-                  },
-                },
-              ],
-              { cancelable: false },
-            );
-            return;
-          }
-
-          if (
-            orderInfo?.isFinalized &&
-            (Number(orderInfo.isFinalized) === 1 ||
-              orderInfo.isFinalized === true)
-          ) {
-            dispatch(setLoadingReview(false));
-            if (!isConfirmedRef.current) {
-              if (effectiveOrderId) {
-                navigation.replace("OrderDetails", {
-                  orderId: String(effectiveOrderId),
-                });
-              } else if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.replace("Home");
-              }
-            }
-            return;
-          }
-
-          let resolvedProcessOrderId = null;
-          let resolvedInvNo = "INV-2660000";
-          let resolvedPaidAmount = 0;
-          let resolvedMoneyPaid = 0;
-          let resolvedCreditPaid = 0;
-          let resolvedPaymentMethod = "";
-          // delivaryMethod is the DB column name (typo in schema — kept as-is for compatibility)
-          let resolvedDeliveryMethod = "";
-          let resolvedIsPaid = false;
-          let resolvedProcessOrderAmount = 0;
-          let resolvedDeliveryCharge = 0;
-          let resolvedDateStr = "14th August";
-          let resolvedRawDate: string | null = null;
-          let resolvedIsCoupon = 0;
-          let resolvedCouponType: string | null = null;
-          let resolvedCouponValue = 0;
-
-          if (orderInfo) {
-            resolvedProcessOrderId =
-              orderInfo.processOrderId || orderInfo.actualOrderId;
-            if (orderInfo.invNo) resolvedInvNo = orderInfo.invNo;
-            if (orderInfo.amount) {
-              resolvedPaidAmount = parseFloat(orderInfo.amount) || 0;
-              resolvedProcessOrderAmount = parseFloat(orderInfo.amount) || 0;
-            }
-            if (orderInfo.deliveryCharge) {
-              resolvedDeliveryCharge =
-                parseFloat(orderInfo.deliveryCharge) || 0;
-            }
-            if (orderInfo.moneyPaid) {
-              resolvedMoneyPaid = parseFloat(orderInfo.moneyPaid) || 0;
-            }
-            if (orderInfo.creditPaid) {
-              resolvedCreditPaid = parseFloat(orderInfo.creditPaid) || 0;
-            }
-            if (orderInfo.paymentMethod) {
-              resolvedPaymentMethod = orderInfo.paymentMethod;
-            }
-            // DB column is "delivaryMethod" (typo in the DB schema — intentionally kept).
-            if (orderInfo.delivaryMethod) {
-              resolvedDeliveryMethod = String(orderInfo.delivaryMethod).trim();
-            }
-            resolvedIsPaid =
-              parseInt(orderInfo.isPaid, 10) === 1 || orderInfo.isPaid === true;
-            resolvedIsCoupon = Number(orderInfo.isCoupon) === 1 ? 1 : 0;
-            resolvedCouponType = orderInfo.couponType || null;
-            resolvedCouponValue = parseFloat(orderInfo.couponValue) || 0;
-            if (orderInfo.sheduleDate || orderInfo.processScheduleDate) {
-              const rawDateVal =
-                orderInfo.sheduleDate || orderInfo.processScheduleDate;
-              const d = new Date(rawDateVal);
-              if (!isNaN(d.getTime())) {
-                // Local date parts (not toISOString, which is UTC and can be 1 day off)
-                resolvedRawDate = toLocalDateOnly(d);
-                resolvedDateStr = d.toLocaleDateString("en-US", {
-                  day: "numeric",
-                  month: "long",
-                });
-              }
-            }
-          }
-
-          const loadedAlacart: Record<string | number, AlacartSelectedProduct> =
-            {};
-          // orderadditionalitems.normalPrice per saved row (line price before discount)
-          const loadedNormalMap: Record<string, number> = {};
-          // orderadditionalitems.price per saved row (what was saved EARLIER)
-          const loadedSavedMap: Record<string, number> = {};
-
-          if (Array.isArray(additionalItems) && additionalItems.length > 0) {
-            additionalItems.forEach((item: any) => {
-              const prodId = item.productId || item.additionalItemId;
-              const perKgNormal = parseFloat(item.perKgNormalPrice || 0);
-              const perKgDiscounted = parseFloat(
-                item.perKgDiscountedPrice || 0,
-              );
-              const perKgPrice =
-                perKgDiscounted > 0
-                  ? perKgDiscounted
-                  : perKgNormal > 0
-                    ? perKgNormal
-                    : parseFloat(item.price || item.normalPrice || 0);
-              const basePrice = perKgNormal > 0 ? perKgNormal : perKgPrice;
-              const dbUnitType = (item.unitType || "g").toLowerCase();
-              // The unit saved on the order row always wins; the product's unitType is only a fallback
-              const rowUnit = String(item.unit || "")
-                .trim()
-                .toLowerCase();
-              const unit = (
-                rowUnit === "kg" || rowUnit === "g"
-                  ? rowUnit
-                  : dbUnitType === "g"
-                    ? "g"
-                    : "kg"
-              ) as "kg" | "g";
-              const rawQty = item.qty || item.quantity || item.weight || 1;
-              const parsedAmount = parseFloat(String(rawQty));
-              const amount = isNaN(parsedAmount) ? 1 : parsedAmount;
-
-              // Calculate price using marketplaceitems table current rates for the ordered quantity
-              const weightKg = unit === "kg" ? amount : amount / 1000;
-              const livePrice =
-                perKgPrice > 0
-                  ? Number((perKgPrice * weightKg).toFixed(2))
-                  : parseFloat(item.price || item.normalPrice || 0);
-              const liveNormalPrice =
-                perKgNormal > 0
-                  ? Number((perKgNormal * weightKg).toFixed(2))
-                  : livePrice;
-
-              const rawChangeBy =
-                item.changeby != null &&
-                  String(item.changeby).trim() !== "" &&
-                  parseFloat(String(item.changeby)) > 0
-                  ? parseFloat(String(item.changeby))
-                  : item.startValue
-                    ? parseFloat(String(item.startValue))
-                    : 0.5;
-
-              const step =
-                unit === "g"
-                  ? dbUnitType === "kg" || rawChangeBy <= 10
-                    ? Math.round(rawChangeBy * 1000)
-                    : Math.round(rawChangeBy)
-                  : dbUnitType === "kg" || rawChangeBy <= 10
-                    ? parseFloat(rawChangeBy.toFixed(3))
-                    : parseFloat((rawChangeBy / 1000).toFixed(3));
-
-              const rawStart =
-                parseFloat(item.startValue) > 0
-                  ? parseFloat(item.startValue)
-                  : rawChangeBy;
-              const minQuantity =
-                unit === "g"
-                  ? dbUnitType === "kg" || rawStart <= 10
-                    ? Math.round(rawStart * 1000)
-                    : Math.round(rawStart)
-                  : dbUnitType === "kg" || rawStart <= 10
-                    ? parseFloat(rawStart.toFixed(3))
-                    : parseFloat((rawStart / 1000).toFixed(3));
-
-              const itemKey = `prev-${item.id || prodId}`;
-              loadedAlacart[itemKey] = {
-                id: itemKey,
-                additionalItemId: item.id ? Number(item.id) : undefined,
-                productId: prodId,
-                displayName: item.productName || item.cropNameEnglish || "Item",
-                image: item.productImage,
-                price: livePrice,
-                basePrice: basePrice,
-                perKgPrice: perKgPrice,
-                perKgNormalPrice: perKgNormal,
-                perKgDiscountedPrice: perKgDiscounted,
-                weightDisplay: `${amount} ${unit}`,
-                unit: unit,
-                amount: amount,
-                quantity: 1,
-                isAddedNow: false,
-                step: step,
-                minQuantity: minQuantity,
-                changeby: item.changeby,
-                startValue: item.startValue,
-                unitType: item.unitType,
-              };
-
-              // Normal line price from marketplaceitems table (used by the cancel screen)
-              loadedNormalMap[itemKey] = liveNormalPrice;
-
-              // Price stored in orderadditionalitems when the item was saved.
-              // Used for the strikethrough on "Added Earlier" rows when it differs
-              // from today's marketplace price.
-              // NOTE: if your API sends this under another name (e.g. savedPrice),
-              // change the field read here.
-              loadedSavedMap[itemKey] = parseFloat(item.price || 0) || 0;
-            });
-          }
-
-          setAlacartNormalPriceMap(loadedNormalMap);
-          setAlacartSavedPriceMap(loadedSavedMap);
-
-          // Remember what the customer ORIGINALLY paid for ala carte items,
-          // so "Pay Additional" only counts real changes.
-          setOriginalAlacartTotal(
-            Object.values(loadedAlacart).reduce(
-              (sum, item) => sum + item.price * item.quantity,
-              0,
-            ),
-          );
-
-          // Remember the original qty + unit of every SAVED ala carte row
-          // (keyed by orderadditionalitems.id) so we can detect edits later.
-          setOriginalAlacartMap(
-            Object.values(loadedAlacart).reduce(
-              (acc, item) => {
-                if (item.additionalItemId) {
-                  acc[item.additionalItemId] = {
-                    amount: item.amount,
-                    unit: item.unit,
-                  };
-                }
-                return acc;
-              },
-              {} as Record<number, OriginalAlacartEntry>,
-            ),
-          );
-
-          const newMeta: PackageMeta[] = [];
-          const newTemplates: Record<string, ReviewProduct[]> = {};
-          const newProducts: Record<string, ReviewProduct[]> = {};
-          const dbIdMap: Record<string, number> = {};
-          let anyLocked = false;
-
-          if (Array.isArray(packages) && packages.length > 0) {
-            packages.forEach((pkg: any) => {
-              const pkgKey = String(pkg.packageId || pkg.orderPackageId);
-              dbIdMap[pkgKey] = pkg.orderPackageId;
-              if (pkg.isLock === 1) anyLocked = true;
-
-              // Use DB values exactly (no `|| 1000` / `|| 50` fallbacks).
-              newMeta.push({
-                id: pkgKey,
-                name: pkg.packageName || "Custom Package",
-                icon: pkg.packageName?.toLowerCase().includes("fruit")
-                  ? "🍇"
-                  : "🥗",
-                image: pkg.packageImage,
-                qty: parseInt(pkg.qty) || 1,
-                unitPrice: num(pkg.unitPrice), // marketplacepackages.productPrice
-                serviceFee: num(pkg.serviceFee), // marketplacepackages.serviceFee
-                packingFee: num(pkg.packingFee), // marketplacepackages.packingFee
-                discountPerUnit: num(pkg.discountPerUnit), // definepackage.price - productPrice
-              });
-
-              // Map active items
-              const activeItems: ReviewProduct[] = (pkg.items || []).map(
-                (i: any, itemIdx: number) => {
-                  const itemStep = parseFloat(i.step || i.changeby || 0.5);
-                  const itemMin = parseFloat(
-                    i.minQuantity || i.startValue || i.qty || itemStep,
-                  );
-                  return {
-                    id: String(
-                      i.productId || i.itemId || `${pkgKey}-${itemIdx}`,
-                    ),
-                    itemId: i.itemId ? Number(i.itemId) : undefined,
-                    productId: i.productId ? Number(i.productId) : undefined,
-                    category:
-                      i.categoryName || i.productTypeName || "Package Item",
-                    name: i.productName || "Product",
-                    icon: "🥗",
-                    image: i.productImage,
-                    // PER-KG price. For definepackageitems fallback rows the backend
-                    // sends discountedPrice = null and baseUnitPrice = definePrice / qty.
-                    price: parseFloat(
-                      i.discountedPrice || i.baseUnitPrice || i.price || 0,
-                    ),
-                    // definepackageitems.qty (fallback) or orderpackageitems.qty
-                    quantity: parseFloat(i.qty ?? 1),
-                    minQuantity: itemMin,
-                    // orderpackageitems.qty is always stored in kg — never use 'g' here
-                    unit: "kg" as "kg" | "g",
-                    step: itemStep,
-                    productType: i.productType,
-                    productTypeId: i.productType || i.productTypeId,
-                    productTypeName: i.productTypeName,
-                    isReplaced: !!i.isReplaced,
-                    excludedWarning: i.excludedWarning,
-                    originalProduct: i.originalProduct
-                      ? {
-                        id: String(i.originalProduct.id),
-                        itemId: i.originalProduct.itemId
-                          ? Number(i.originalProduct.itemId)
-                          : i.itemId
-                            ? Number(i.itemId)
-                            : undefined,
-                        productId: i.originalProduct.productId
-                          ? Number(i.originalProduct.productId)
-                          : i.productId
-                            ? Number(i.productId)
-                            : undefined,
-                        category:
-                          i.originalProduct.category || "Original Item",
-                        name: i.originalProduct.name,
-                        icon: "🥗",
-                        image: i.originalProduct.image,
-                        price: parseFloat(i.originalProduct.price || 0),
-                        quantity: parseFloat(i.originalProduct.quantity ?? 1),
-                        unit: "kg" as "kg" | "g",
-                        step: parseFloat(
-                          i.originalProduct.step ||
-                          i.originalProduct.changeby ||
-                          itemStep,
-                        ),
-                        productType: i.originalProduct.productType,
-                        productTypeId: i.originalProduct.productType,
-                      }
-                      : undefined,
-                  };
-                },
-              );
-
-              // Map baseline templates
-              const baseItems: ReviewProduct[] = (
-                pkg.baselineProducts || []
-              ).map((b: any, bIdx: number) => {
-                const baseStep = parseFloat(b.step || b.changeby || 0.5);
-                const baseMin = parseFloat(
-                  b.minQuantity || b.startValue || b.qty || baseStep,
-                );
-                return {
-                  id: String(
-                    b.productId || b.baselineId || `${pkgKey}-base-${bIdx}`,
-                  ),
-                  itemId:
-                    b.itemId || b.baselineId
-                      ? Number(b.itemId || b.baselineId)
-                      : undefined,
-                  productId: b.productId ? Number(b.productId) : undefined,
-                  category:
-                    b.categoryName || b.productTypeName || "Baseline Item",
-                  name: b.productName || "Product",
-                  icon: "🥗",
-                  image: b.productImage,
-                  price: parseFloat(
-                    b.discountedPrice || b.baseUnitPrice || b.price || 0,
-                  ),
-                  quantity: parseFloat(b.qty ?? 1),
-                  minQuantity: baseMin,
-                  unit: "kg" as "kg" | "g",
-                  step: baseStep,
-                  productType: b.productType,
-                  productTypeId: b.productType || b.productTypeId,
-                  productTypeName: b.productTypeName,
-                };
-              });
-
-              newProducts[pkgKey] = activeItems;
-              newTemplates[pkgKey] =
-                baseItems.length > 0 ? baseItems : activeItems;
-            });
-          }
-
-          dispatch(
-            initReviewData({
-              orderId: effectiveOrderId,
-              processOrderId: resolvedProcessOrderId,
-              actualOrderId: orderInfo?.actualOrderId,
-              invoiceNo: resolvedInvNo,
-              scheduleDateStr: resolvedDateStr,
-              rawScheduleDate: resolvedRawDate,
-              initialPaidAmount: resolvedPaidAmount,
-              moneyPaid: resolvedMoneyPaid,
-              creditPaid: resolvedCreditPaid,
-              paymentMethod: resolvedPaymentMethod,
-              deliveryMethod: resolvedDeliveryMethod,
-              isPaid: resolvedIsPaid,
-              processOrderAmount: resolvedProcessOrderAmount,
-              deliveryCharge: resolvedDeliveryCharge,
-              isCoupon: resolvedIsCoupon,
-              couponType: resolvedCouponType,
-              couponValue: resolvedCouponValue,
-              packagesMeta: newMeta,
-              packageProducts: newProducts,
-              productTemplatesState: newTemplates,
-              orderPackageDbIds: dbIdMap,
-              alacartSelection: loadedAlacart,
-              isLocked: anyLocked,
-              availableSlots: packingSlots?.availableSlots,
-              targetLimit: packingSlots?.targetLimit,
-              isLimitReached: packingSlots?.isLimitReached,
-              unreadReminderDays: packingSlots?.unreadReminderDays,
-            }),
-          );
-
-          // Reminder rows count -> schedule date shift (1 = +0, 2 = +1, 3 = +2 days)
-          const rc = Number(packingSlots?.reminderCount);
-          setReminderCount(
-            Number.isFinite(rc) && rc > 0
-              ? rc
-              : Math.max(1, Number(packingSlots?.unreadReminderDays) || 1),
-          );
-
-          // Redux now holds data for THIS order (stored as a string key)
-          loadedOrderIdRef.current = orderKey;
-        }
-      } catch (err) {
-        console.log("Failed to load package review details from API:", err);
-      } finally {
-        // Only the latest request may turn the loading flag off
-        if (reqId === requestIdRef.current) {
-          dispatch(setLoadingReview(false));
-        }
-      }
-    },
-    [dispatch, effectiveOrderId, orderKey, buyerType, navigation],
-  );
-
-  // Fetch when:
-  //  • the user is on the overview screen (always refresh), OR
-  //  • Redux holds data for a DIFFERENT order than the one being opened.
-  // NEVER refetch while the user is editing inside the flow for the same order
-  // (e.g. coming back from ReplaceProduct) — that would wipe their edits.
-  useFocusEffect(
-    useCallback(() => {
-      if (isConfirmedRef.current) return;
-      const dataIsForThisOrder = loadedOrderIdRef.current === orderKey;
-
-      // Never refetch while the user is editing in the flow
-      if (mode === "flow" && dataIsForThisOrder) return;
-
-      if (mode === "overview" || !dataIsForThisOrder) {
-        fetchReviewData(true);
-      }
-    }, [mode, orderKey, fetchReviewData]),
-  );
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    await fetchReviewData(true);
-    setIsRefreshing(false);
-  }, [fetchReviewData]);
-
-  // Poll packing slots remaining count every 1 minute while screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      const interval = setInterval(async () => {
-        try {
-          const orderIdParam = processOrderId || effectiveOrderId;
-          const res = await orderService.getPackingLimit(
-            rawScheduleDate || undefined,
-            orderIdParam,
-          );
-          if (res.data?.status && res.data?.data) {
-            const slotData = res.data.data;
-            const slots =
-              slotData.remaining !== undefined
-                ? slotData.remaining
-                : slotData.availableSlots;
-            dispatch(
-              setPackingSlots({
-                availableSlots: slots,
-                targetLimit: slotData.targetLimit,
-                isLimitReached: slotData.isLimitReached || slots <= 0,
-                unreadReminderDays: slotData.unreadReminderDays,
-              }),
-            );
-            // Keep reminder count in sync (drives the schedule date shift)
-            const rc = Number(slotData.reminderCount);
-            if (Number.isFinite(rc) && rc > 0) setReminderCount(rc);
-          }
-        } catch (err) {
-          console.warn(
-            "[ReviewPackageScreen] Polling packing limit error:",
-            err,
-          );
-        }
-      }, 60000);
-
-      return () => {
-        clearInterval(interval);
-      };
-    }, [dispatch, rawScheduleDate, processOrderId, effectiveOrderId]),
-  );
 
   // Handle navigation returns with step or replaced item
   useEffect(() => {
@@ -930,131 +403,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  // Build the step list: one "package" step per unique package type,
-  // then one "alacart" step (always displayed so user can add items),
-  // then one "confirm" step.
-  const steps: FlowStep[] = useMemo(() => {
-    const packageSteps: FlowStep[] = packagesMeta.map((pkg) => ({
-      type: "package" as const,
-      packageId: pkg.id,
-    }));
-    return [...packageSteps, { type: "alacart" }, { type: "confirm" }];
-  }, [packagesMeta]);
-
-  const fetchCategoryProducts = async (categoryId: string) => {
-    try {
-      setSelectedAlaCartCategory(categoryId);
-      setLoadingAlaCartProducts(true);
-      const response = await productService.getProductsByCategory(categoryId);
-
-      if (response.data?.status && Array.isArray(response.data.products)) {
-        if (response.data.products.length > 0) {
-          // Keep ALL products (enabled AND disabled) so that when a product
-          // is disabled via socket, the card turns red ("No longer available")
-          // instead of disappearing — giving the user clear visual feedback.
-          const products = response.data.products.map((item: any) => ({
-            ...item,
-            type: "product",
-          }));
-          setAlaCartProducts(products);
-        } else {
-          setAlaCartProducts([]);
-        }
-      } else {
-        setAlaCartProducts([]);
-      }
-    } catch (error: any) {
-      console.error("Failed to load products by category from API:", error);
-      setAlaCartProducts([]);
-      const errorMsg =
-        error?.response?.data?.message ||
-        `Failed to load products for ${categoryId}. Please check your connection and try again.`;
-      Alert.alert("Error", errorMsg);
-    } finally {
-      setLoadingAlaCartProducts(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCategoryProducts("Vegetables");
-  }, []);
-
-  // Helper: check if any packages or ala carte items in the current review are still enabled in marketplaceitems/marketplacepackages
-  const checkAllAvailability = useCallback(async () => {
-    try {
-      const packageIds = packagesMeta
-        .map((p) => parseInt(p.id))
-        .filter((id) => !isNaN(id));
-
-      const productIds = Object.values(alacartSelection)
-        .map((item) => {
-          if (typeof item.productId === "number" && !isNaN(item.productId))
-            return item.productId;
-          const parsed = parseInt(
-            String(item.productId || item.id).replace(/[^0-9]/g, ""),
-            10,
-          );
-          return isNaN(parsed) ? 0 : parsed;
-        })
-        .filter((id) => id > 0);
-
-      if (packageIds.length === 0 && productIds.length === 0) return;
-
-      const res = await productService.checkAvailability(
-        productIds,
-        packageIds,
-      );
-
-      if (res.data?.packages) {
-        const unavailable: Record<string, boolean> = {};
-        packagesMeta.forEach((p) => {
-          const id = parseInt(p.id);
-          if (res.data.packages[id] === false) {
-            unavailable[p.id] = true;
-          }
-        });
-        setUnavailablePackageIds(unavailable);
-      }
-
-      if (res.data?.products) {
-        setDisabledAlacartProductIds((prev) => {
-          const next = new Set(prev);
-          Object.entries(res.data.products).forEach(([idStr, isAvailable]) => {
-            if (isAvailable === false) {
-              next.add(String(idStr));
-            } else if (isAvailable === true) {
-              next.delete(String(idStr));
-            }
-          });
-          return next;
-        });
-      }
-    } catch (err) {
-      console.log("[ReviewPackageScreen] checkAllAvailability error:", err);
-    }
-  }, [packagesMeta, alacartSelection]);
-
-  // Re-check availability whenever packagesMeta or alacartSelection changes
-  useEffect(() => {
-    checkAllAvailability();
-  }, [checkAllAvailability]);
-
-  const toggleAlacartProduct = (product: ProductType) => {
-    dispatch(toggleAlacartProductAction(product));
-  };
-
-  const removeAlacartItem = (id: string | number) => {
-    dispatch(removeAlacartItemAction(id));
-  };
-
-  const toggleAlacartItemUnit = (id: string | number, newUnit: "kg" | "g") => {
-    dispatch(toggleAlacartItemUnitAction({ id, newUnit }));
-  };
-
-  const updateAlacartItemQuantity = (id: string | number, delta: number) => {
-    dispatch(updateAlacartItemQuantityAction({ id, delta }));
-  };
-
   // Handle Reset to Original (DISPATCH TO REDUX - NO API CALL)
   const onResetToOriginal = (packageId: string, productId: string) => {
     dispatch(resetPackageProduct({ packageId, productId }));
@@ -1085,83 +433,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   // Total = Full Total + Discount Received (price before discount)
   const overviewTotal = overviewFullTotal + overviewDiscount;
 
-  const currentStep = steps[currentStepIndex] ||
-    steps[0] || { type: "confirm" as const };
-
-  // Real-time Ala Carte Products & Package Availability update via Socket.IO
-  useEffect(() => {
-    const unsubscribe = socketService.onCatalogUpdate((data) => {
-      console.log(
-        "📦 [ReviewPackageScreen] Real-time catalog update received via Socket.IO:",
-        data,
-      );
-      // Re-fetch the currently selected ala carte category (don't reset category).
-      // Keep ALL products (including newly-disabled ones) so AlacartProductCard
-      // can show them as red "No longer available" instead of silently vanishing.
-      if (mode === "flow" && currentStep.type === "alacart") {
-        productService
-          .getProductsByCategory(selectedAlaCartCategory)
-          .then((response) => {
-            if (
-              response.data?.status &&
-              Array.isArray(response.data.products)
-            ) {
-              const products = response.data.products.map((item: any) => ({
-                ...item,
-                type: "product",
-              }));
-              setAlaCartProducts(products);
-            }
-          })
-          .catch(() => { });
-      }
-      // Re-check both packages and ala carte items availability in real time via socket
-      checkAllAvailability();
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, [mode, currentStep, selectedAlaCartCategory, checkAllAvailability]);
-
-  // Check package & product availability whenever the user enters the confirm step
-  useEffect(() => {
-    if (mode === "flow" && currentStep.type === "confirm") {
-      checkAllAvailability();
-    }
-  }, [mode, currentStep, checkAllAvailability]);
-
-  // When alaCartProducts updates (initial load or socket catalog update),
-  // collect any product IDs marked as disabled (isEnable === 0 / false).
-  // These IDs are used to render "No longer available" red cards in BOTH:
-  //   • the ala carte selection grid (step: alacart)
-  //   • the ala carte items list     (step: confirm)
-  // Items are NOT auto-removed from alacartSelection so the user can see
-  // what became unavailable and decide to delete manually via the trash icon.
-  useEffect(() => {
-    if (alaCartProducts.length === 0) return;
-    const newDisabledIds = new Set(
-      alaCartProducts
-        .filter((p) => p.isEnable === 0 || p.isEnable === false)
-        .map((p) => String(p.id)),
-    );
-    setDisabledAlacartProductIds((prev) => {
-      // Merge: once a product is marked disabled it stays disabled
-      // until a fresh category load clears/replaces the set.
-      const merged = new Set([...prev, ...newDisabledIds]);
-      // If the product appears again as enabled, remove it from disabled set.
-      alaCartProducts.forEach((p) => {
-        if (
-          p.isEnable === 1 ||
-          p.isEnable === true ||
-          p.isEnable === undefined
-        ) {
-          merged.delete(String(p.id));
-        }
-      });
-      return merged;
-    });
-  }, [alaCartProducts]);
-
   const goToPrevStep = () => {
     if (currentStepIndex === 0) {
       setShowExitModal(true);
@@ -1169,7 +440,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       setCurrentStepIndex((prev) => prev - 1);
     }
   };
-
   // Builds the full confirmPackageReview payload from current Redux + component state.
   // Called from both the card-additional-payment branch and the existing direct-confirm path.
   const buildConfirmPayload = (overrideIsPaid?: boolean | number) => {
@@ -1329,7 +599,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const cleanupAfterSuccess = () => {
-    loadedOrderIdRef.current = null;
+    data.loadedOrderIdRef.current = null;
     dispatch(clearReviewData());
     setUnavailablePackageIds({});
     setAlacartNormalPriceMap({});
@@ -1341,18 +611,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     setMode("overview");
     setPendingConfirmPayload(null);
   };
-
-  // Show the success message FIRST. Home navigation happens only when the
-  // AlertModal closes (see its onClose).
-  const showSuccessMessage = (inv: string) => {
-    setSuccessInvoiceNo(inv);
-    isConfirmedRef.current = true; // stop refetch / redirects
-    requestIdRef.current += 1; // invalidate any in-flight fetch
-    setIsSubmitting(false); // close the "Confirming your order..." Modal
-    // wait for the loading Modal to finish closing before opening the next one
-    setTimeout(() => setShowSuccessOverlay(true), 350);
-  };
-
   // ─────────────────────────────────────────────────────────────────────────
   // 2) goToNextStep — full corrected function
   // ─────────────────────────────────────────────────────────────────────────
@@ -1798,54 +1056,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
   };
-  // ── Additional Card Payment Handlers ────────────────────────────────────
-
-  const handleAdditionalPaymentSuccess = async (confirmPayload?: any) => {
-    setCheckoutModalVisible(false);
-
-    const payload = confirmPayload ?? pendingConfirmPayload;
-    if (!payload) {
-      Alert.alert("Error", "Order details missing. Please contact support.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    try {
-      const confirmRes = await orderService.confirmPackageReview({
-        ...payload,
-        isPaid: 1,
-      });
-      console.log(
-        "[ReviewPackageScreen] confirmPackageReview (post-payment):",
-        confirmRes.data,
-      );
-
-      showSuccessMessage(
-        invoiceNo ||
-        routeInvoiceNo ||
-        (effectiveOrderId ? `#${effectiveOrderId}` : ""),
-      );
-    } catch (err: any) {
-      console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
-      setIsSubmitting(false);
-      Alert.alert(
-        "Order Confirmation Failed",
-        "Your payment was received but the order could not be confirmed. Please contact support.",
-      );
-    }
-  };
-
-  const handleAdditionalPaymentCancel = () => {
-    setCheckoutModalVisible(false);
-    setCheckoutSession(null);
-    setPendingConfirmPayload(null);
-    setIsSubmitting(false);
-    Alert.alert(
-      "Payment Cancelled",
-      "The payment was not completed. Your order was not confirmed. You can try again.",
-    );
-  };
-
   const onChangeProduct = (packageId: string, product: ReviewProduct) => {
     navigation.navigate("ReplaceProduct", {
       orderId: effectiveOrderId,
@@ -1984,71 +1194,6 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     (sum, item) => sum + item.currentPrice,
     0,
   );
-
-  // Helper to check if an ala carte item is currently marked disabled
-  const isItemUnavailable = useCallback(
-    (item: any) => {
-      const rawPid = item.productId ?? item.id;
-      const pidStr = String(rawPid);
-      const numericPid = String(
-        typeof rawPid === "number"
-          ? rawPid
-          : parseInt(String(rawPid).replace(/[^0-9]/g, ""), 10),
-      );
-      return (
-        disabledAlacartProductIds.has(pidStr) ||
-        disabledAlacartProductIds.has(numericPid)
-      );
-    },
-    [disabledAlacartProductIds],
-  );
-
-  // Normal (pre-discount) line price for an ala carte row.
-  //  • Saved row whose qty/unit is unchanged -> loaded normal price from marketplaceitems
-  //  • Edited or newly added row             -> perKgNormalPrice * weightKg (or basePrice)
-  const getNormalLinePrice = (item: any): number => {
-    const linePrice = item.price * item.quantity;
-
-    if (!item.isAddedNow && item.additionalItemId) {
-      const orig = originalAlacartMap[item.additionalItemId];
-      const unchanged =
-        !!orig &&
-        Number(orig.amount) === Number(item.amount) &&
-        orig.unit === item.unit;
-      if (unchanged && alacartNormalPriceMap[String(item.id)] != null) {
-        return alacartNormalPriceMap[String(item.id)];
-      }
-    }
-
-    const weightKg =
-      (item.unit === "kg" ? item.amount : item.amount / 1000) || 1;
-    const normalRate =
-      item.perKgNormalPrice ||
-      (item.basePrice && item.basePrice > 0 ? item.basePrice : 0);
-    const calcNormal =
-      normalRate > 0 ? Number((normalRate * weightKg).toFixed(2)) : linePrice;
-    return Math.max(calcNormal, linePrice);
-  };
-
-  // Strikethrough price for "Added Earlier" rows only.
-  // Returns the saved orderadditionalitems price (scaled to the current qty)
-  // when it differs from today's marketplace price; otherwise null.
-  const getSavedStrikePrice = (item: any): number | null => {
-    if (item.isAddedNow || !item.additionalItemId) return null;
-    const saved = alacartSavedPriceMap[String(item.id)];
-    const orig = originalAlacartMap[item.additionalItemId];
-    if (!saved || saved <= 0 || !orig) return null;
-
-    const toKg = (a: number, u: string) => (u === "kg" ? a : a / 1000);
-    const origKg = toKg(Number(orig.amount), orig.unit);
-    if (origKg <= 0) return null;
-
-    const scaledSaved = Number(
-      ((saved / origKg) * toKg(Number(item.amount), item.unit)).toFixed(2),
-    );
-    const current = item.price * item.quantity;
-    return Math.abs(scaledSaved - current) > 0.005 ? scaledSaved : null;
-  };
 
   // Totals for the final confirm step
   // originalPrice in packageSummaries = productPrice + fees (what was originally paid)
