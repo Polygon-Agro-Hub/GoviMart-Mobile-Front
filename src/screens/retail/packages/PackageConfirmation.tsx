@@ -28,10 +28,15 @@ interface Props {
 }
 
 const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
-  const [selectedOption, setSelectedOption] = useState<number>(0); // 0 = Finalize Immediately, 1 = Review
+  // null = nothing selected, 0 = Finalize Immediately, 1 = Review
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const orderContext = route.params?.orderContext;
 
+  const isDisabled = selectedOption === null;
+
   const handleContinue = () => {
+    if (selectedOption === null) return;
+
     navigation.navigate("OrderDeliveryMethod", {
       orderContext: {
         ...(orderContext as any),
@@ -333,23 +338,24 @@ const PackageConfirmation: React.FC<Props> = ({ navigation, route }) => {
       >
         <TouchableOpacity
           activeOpacity={0.85}
+          disabled={isDisabled}
           onPress={handleContinue}
           style={{
             height: 52,
-            backgroundColor: "#000000",
+            backgroundColor: isDisabled ? "#D1D5DB" : "#000000",
             borderRadius: 26,
             justifyContent: "center",
             alignItems: "center",
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.18,
+            shadowOpacity: isDisabled ? 0 : 0.18,
             shadowRadius: 5,
-            elevation: 4,
+            elevation: isDisabled ? 0 : 4,
           }}
         >
           <Text
             style={{
-              color: "#FFFFFF",
+              color: isDisabled ? "#9CA3AF" : "#FFFFFF",
               fontSize: 16,
               fontWeight: "700",
             }}

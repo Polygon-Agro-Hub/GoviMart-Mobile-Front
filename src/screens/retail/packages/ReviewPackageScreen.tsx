@@ -19,7 +19,7 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
@@ -399,6 +399,14 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     Record<string, number>
   >({});
 
+  // orderadditionalitems.price (what was saved earlier) per saved row
+  const [alacartSavedPriceMap, setAlacartSavedPriceMap] = useState<
+    Record<string, number>
+  >({});
+
+  // Package review window closes at 6:00 PM (18:00)
+  const REVIEW_END_HOUR = 18;
+
   // ── Additional Card Payment State ──────────────────────────────────────────
   const [activeGateway, setActiveGateway] = useState<string>("payments_lk");
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
@@ -492,7 +500,7 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   }, [scheduleDateObj]);
 
   const onSendReminderTomorrow = () => {
-   navigation.navigate("Home")
+    navigation.navigate("Home");
   };
 
   useEffect(() => {
@@ -737,6 +745,8 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
             {};
           // orderadditionalitems.normalPrice per saved row (line price before discount)
           const loadedNormalMap: Record<string, number> = {};
+          // orderadditionalitems.price per saved row (what was saved EARLIER)
+          const loadedSavedMap: Record<string, number> = {};
 
           if (Array.isArray(additionalItems) && additionalItems.length > 0) {
             additionalItems.forEach((item: any) => {
@@ -834,12 +844,20 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
                 unitType: item.unitType,
               };
 
-              // Normal line price from marketplaceitems table (used for strikethrough if discounted)
+              // Normal line price from marketplaceitems table (used by the cancel screen)
               loadedNormalMap[itemKey] = liveNormalPrice;
+
+              // Price stored in orderadditionalitems when the item was saved.
+              // Used for the strikethrough on "Added Earlier" rows when it differs
+              // from today's marketplace price.
+              // NOTE: if your API sends this under another name (e.g. savedPrice),
+              // change the field read here.
+              loadedSavedMap[itemKey] = parseFloat(item.price || 0) || 0;
             });
           }
 
           setAlacartNormalPriceMap(loadedNormalMap);
+          setAlacartSavedPriceMap(loadedSavedMap);
 
           // Remember what the customer ORIGINALLY paid for ala carte items,
           // so "Pay Additional" only counts real changes.
@@ -1570,60 +1588,91 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     };
   };
 
-const cleanupAfterSuccess = () => {
-  loadedOrderIdRef.current = null;
-  dispatch(clearReviewData());
-  setUnavailablePackageIds({});
-  setAlacartNormalPriceMap({});
-  setDisabledAlacartProductIds(new Set());
-  setOriginalAlacartTotal(0);
-  setOriginalAlacartMap({});
-  setCurrentStepIndex(0);
-  setMode("overview");
-  setPendingConfirmPayload(null);
-};
- 
-// Show the success message FIRST. Home navigation happens only when the
-// AlertModal closes (see its onClose).
-const showSuccessMessage = (inv: string) => {
-  setSuccessInvoiceNo(inv);
-  isConfirmedRef.current = true; // stop refetch / redirects
-  requestIdRef.current += 1; // invalidate any in-flight fetch
-  setIsSubmitting(false); // close the "Confirming your order..." Modal
-  // wait for the loading Modal to finish closing before opening the next one
-  setTimeout(() => setShowSuccessOverlay(true), 350);
-};
- 
-// ─────────────────────────────────────────────────────────────────────────
-// 2) goToNextStep — full corrected function
-// ─────────────────────────────────────────────────────────────────────────
- 
-const goToNextStep = async () => {
-  // Prevent double taps while the request is running
-  if (isSubmitting) return;
- 
-  // Validate packing slot remaining count: if 0, show error
-  try {
-    const orderIdParam = processOrderId || effectiveOrderId;
-    const res = await orderService.getPackingLimit(
-      rawScheduleDate || undefined,
-      orderIdParam,
-    );
-    if (res.data?.status && res.data?.data) {
-      const slotData = res.data.data;
-      const currentRemaining =
-        slotData.remaining !== undefined
-          ? slotData.remaining
-          : slotData.availableSlots;
-      dispatch(
-        setPackingSlots({
-          availableSlots: currentRemaining,
-          targetLimit: slotData.targetLimit,
-          isLimitReached: slotData.isLimitReached || currentRemaining <= 0,
-          unreadReminderDays: slotData.unreadReminderDays,
-        }),
+  const cleanupAfterSuccess = () => {
+    loadedOrderIdRef.current = null;
+    dispatch(clearReviewData());
+    setUnavailablePackageIds({});
+    setAlacartNormalPriceMap({});
+    setDisabledAlacartProductIds(new Set());
+    setOriginalAlacartTotal(0);
+    setOriginalAlacartMap({});
+    setAlacartSavedPriceMap({});
+    setCurrentStepIndex(0);
+    setMode("overview");
+    setPendingConfirmPayload(null);
+  };
+
+  // Show the success message FIRST. Home navigation happens only when the
+  // AlertModal closes (see its onClose).
+  const showSuccessMessage = (inv: string) => {
+    setSuccessInvoiceNo(inv);
+    isConfirmedRef.current = true; // stop refetch / redirects
+    requestIdRef.current += 1; // invalidate any in-flight fetch
+    setIsSubmitting(false); // close the "Confirming your order..." Modal
+    // wait for the loading Modal to finish closing before opening the next one
+    setTimeout(() => setShowSuccessOverlay(true), 350);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2) goToNextStep — full corrected function
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const goToNextStep = async () => {
+    // Prevent double taps while the request is running
+    if (isSubmitting) return;
+    const isLastStep = currentStepIndex >= steps.length - 1;
+
+    // ── Time check: final confirm is not allowed after 6:00 PM ──
+    // Evaluated fresh on every click (isTimeRanOut is memoized only on mount).
+    if (isLastStep && new Date().getHours() >= REVIEW_END_HOUR) {
+      Alert.alert(
+        "Time Ran Out",
+        "Package review is not allowed after 6:00 PM. Please try again tomorrow.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              // Back to overview, which shows the "Time Ran Out" options
+              setCurrentStepIndex(0);
+              setMode("overview");
+            },
+          },
+        ],
+        { cancelable: false },
       );
-      if (currentRemaining <= 0) {
+      return;
+    }
+
+    // Validate packing slot remaining count: if 0, show error
+    try {
+      const orderIdParam = processOrderId || effectiveOrderId;
+      const res = await orderService.getPackingLimit(
+        rawScheduleDate || undefined,
+        orderIdParam,
+      );
+      if (res.data?.status && res.data?.data) {
+        const slotData = res.data.data;
+        const currentRemaining =
+          slotData.remaining !== undefined
+            ? slotData.remaining
+            : slotData.availableSlots;
+        dispatch(
+          setPackingSlots({
+            availableSlots: currentRemaining,
+            targetLimit: slotData.targetLimit,
+            isLimitReached: slotData.isLimitReached || currentRemaining <= 0,
+            unreadReminderDays: slotData.unreadReminderDays,
+          }),
+        );
+        if (currentRemaining <= 0) {
+          Alert.alert(
+            "Packing Limit Reached",
+            "Sorry, we are not accepting any more orders for this schedule date.",
+            [{ text: "OK" }],
+          );
+          return;
+        }
+      } else if (availableSlots <= 0) {
         Alert.alert(
           "Packing Limit Reached",
           "Sorry, we are not accepting any more orders for this schedule date.",
@@ -1631,424 +1680,420 @@ const goToNextStep = async () => {
         );
         return;
       }
-    } else if (availableSlots <= 0) {
-      Alert.alert(
-        "Packing Limit Reached",
-        "Sorry, we are not accepting any more orders for this schedule date.",
-        [{ text: "OK" }],
+    } catch (valErr) {
+      console.warn(
+        "[ReviewPackageScreen] Packing limit validation error:",
+        valErr,
       );
-      return;
-    }
-  } catch (valErr) {
-    console.warn(
-      "[ReviewPackageScreen] Packing limit validation error:",
-      valErr,
-    );
-    if (availableSlots <= 0) {
-      Alert.alert(
-        "Packing Limit Reached",
-        "Sorry, we are not accepting any more orders for this schedule date.",
-        [{ text: "OK" }],
-      );
-      return;
-    }
-  }
- 
-  // Not the last step yet: just move forward
-  if (currentStepIndex < steps.length - 1) {
-    setCurrentStepIndex((prev) => prev + 1);
-    return;
-  }
- 
-  // ───────────────────────────────────────────────────────────
-  // Last step: confirm order completion & finalize review
-  // ───────────────────────────────────────────────────────────
- 
-  // Detect payment method
-  const pMethod = (paymentMethod || "").trim().toLowerCase();
-  const isCard =
-    pMethod.includes("card") ||
-    pMethod.includes("payhere") ||
-    pMethod.includes("online") ||
-    (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
- 
-  const isPaidCardOrder = isCard && Boolean(isPaid);
-  const isUnpaidCardOrder = isCard && !isPaid;
- 
-  // Invoice number shown in the success message
-  const confirmedInv =
-    invoiceNo ||
-    routeInvoiceNo ||
-    (effectiveOrderId ? `#${effectiveOrderId}` : "");
- 
-  // Show "Processing..." on the button for EVERY payment type
-  setIsSubmitting(true);
- 
-  // ── Path 1: Card order already paid, but additional payment required ───────
-  if (isPaidCardOrder && additionalDue >= 0.01) {
-    const confirmPayload = buildConfirmPayload(1);
-    setPendingConfirmPayload(confirmPayload);
-    try {
-      const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
- 
-      // Attempt 1-click saved card charge first
-      if (savedCard && adapter.chargeSavedCard) {
-        try {
-          const chargeRes = await adapter.chargeSavedCard({
-            cardId: savedCard.id,
-            amount: additionalDue,
-            paymentType: "order",
-            orderId: String(processOrderId || effectiveOrderId),
-            itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
-          });
-          if (chargeRes.success) {
-            await handleAdditionalPaymentSuccess(confirmPayload);
-            return;
-          }
-        } catch (chargeErr: any) {
-          const isInvalid =
-            chargeErr?.response?.data?.cardInvalid ||
-            chargeErr?.message?.includes("invalid") ||
-            chargeErr?.message?.includes("expired") ||
-            chargeErr?.message?.includes("No such object");
-          if (!isInvalid) {
-            setIsSubmitting(false);
-            Alert.alert(
-              "Payment Error",
-              chargeErr?.response?.data?.message ||
-                chargeErr?.message ||
-                "Payment failed. Please try again.",
-            );
-            return;
-          }
-          setSavedCard(null); // invalid/expired → fall through to hosted checkout
-        }
-      }
- 
-      // Hosted checkout (no saved card, or saved card was invalid/expired)
-      const session = await adapter.initiatePayment({
-        orderId: String(processOrderId || effectiveOrderId),
-        amount: additionalDue,
-        paymentType: "order",
-        itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
-      });
- 
-      setCheckoutSession(session);
-      setCheckoutModalVisible(true);
-      // isSubmitting stays true — button is blocked while the modal is open
-    } catch (err: any) {
-      setIsSubmitting(false);
-      Alert.alert(
-        "Payment Error",
-        err?.response?.data?.message ||
-          err?.message ||
-          "Failed to start payment. Please try again.",
-      );
-    }
-    return; // Do NOT fall through to the direct confirmPackageReview call
-  }
- 
-  // ── Path 2: Card order not yet paid (full total must be paid via gateway) ──
-  // Deduct coupon discount ONLY for the payment gateway payable value
-  const couponDeduction =
-    Number(isCoupon) === 1 && !isFreeDeliveryCoupon
-      ? Number(couponValue) || 0
-      : 0;
-  const payableNow = Math.max(
-    0,
-    Number(
-      (
-        finalOrderTotalWithDelivery -
-        (creditPaid || 0) -
-        couponDeduction
-      ).toFixed(2),
-    ),
-  );
- 
-  if (isUnpaidCardOrder && payableNow > 0) {
-    const confirmPayload = buildConfirmPayload(1);
-    setPendingConfirmPayload(confirmPayload);
-    try {
-      const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
- 
-      // Attempt 1-click saved card charge first
-      if (savedCard && adapter.chargeSavedCard) {
-        try {
-          const chargeRes = await adapter.chargeSavedCard({
-            cardId: savedCard.id,
-            amount: payableNow,
-            paymentType: "order",
-            orderId: String(processOrderId || effectiveOrderId),
-            itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
-          });
-          if (chargeRes.success) {
-            await handleAdditionalPaymentSuccess(confirmPayload);
-            return;
-          }
-        } catch (chargeErr: any) {
-          const isInvalid =
-            chargeErr?.response?.data?.cardInvalid ||
-            chargeErr?.message?.includes("invalid") ||
-            chargeErr?.message?.includes("expired") ||
-            chargeErr?.message?.includes("No such object");
-          if (!isInvalid) {
-            setIsSubmitting(false);
-            Alert.alert(
-              "Payment Error",
-              chargeErr?.response?.data?.message ||
-                chargeErr?.message ||
-                "Payment failed. Please try again.",
-            );
-            return;
-          }
-          setSavedCard(null); // invalid/expired → fall through to hosted checkout
-        }
-      }
- 
-      // Hosted checkout (no saved card, or saved card was invalid/expired)
-      const session = await adapter.initiatePayment({
-        orderId: String(processOrderId || effectiveOrderId),
-        amount: payableNow,
-        paymentType: "order",
-        itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
-      });
- 
-      setCheckoutSession(session);
-      setCheckoutModalVisible(true);
-      // isSubmitting stays true — button is blocked while the modal is open
-    } catch (err: any) {
-      setIsSubmitting(false);
-      Alert.alert(
-        "Payment Error",
-        err?.response?.data?.message ||
-          err?.message ||
-          "Failed to start payment. Please try again.",
-      );
-    }
-    return; // Do NOT fall through to the direct confirmPackageReview call
-  }
- 
-  // ── Path 3: Direct confirm (cash / credit / reduced or unchanged totals) ───
-  try {
-    const replacements: Array<{
-      orderPackageId: number;
-      replceId?: number;
-      newProductId: number;
-      productType?: string | number;
-      newQty: number;
-      newPrice: number;
-    }> = [];
- 
-    Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
-      const orderPkgId = orderPackageDbIds[pkgKey];
-      if (orderPkgId) {
-        const templateProds = productTemplatesState[pkgKey] || [];
-        prods.forEach((p) => {
-          const templateProd = templateProds.find(
-            (t) =>
-              (t.productId && p.productId && t.productId === p.productId) ||
-              String(t.itemId || t.id) === String(p.itemId || p.id),
-          );
-          const baselineQty =
-            templateProd?.quantity ??
-            p.minQuantity ??
-            p.originalProduct?.quantity;
-          const isQtyChanged =
-            baselineQty !== undefined
-              ? Number(p.quantity) !== Number(baselineQty)
-              : false;
- 
-          if (p.isReplaced || isQtyChanged) {
-            const replceId =
-              p.originalProduct?.itemId ||
-              p.itemId ||
-              (p.originalProduct?.id
-                ? parseInt(p.originalProduct.id)
-                : undefined) ||
-              p.productId ||
-              parseInt(p.id) ||
-              undefined;
-            const newProdId = p.productId || parseInt(p.id) || 0;
-            replacements.push({
-              orderPackageId: orderPkgId,
-              replceId: replceId,
-              newProductId: newProdId,
-              productType: p.productTypeId || p.productType || p.category,
-              newQty: p.quantity || 1,
-              newPrice: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
-            });
-          }
-        });
-      }
-    });
- 
-    // Ala carte items ADDED in this review session (new rows / merge by productId)
-    const additionalItemsPayload = Object.values(alacartSelection)
-      .filter((item) => item.isAddedNow)
-      .map((item) => ({
-        productId:
-          typeof item.productId === "number"
-            ? item.productId
-            : parseInt(
-                String(item.productId || item.id).replace(/[^0-9]/g, ""),
-              ) || 0,
-        qty: item.amount,
-        unit: item.unit,
-        normalPrice: item.basePrice,
-        price: item.price,
-      }));
- 
-    // Ala carte items ALREADY SAVED whose qty or unit the customer changed.
-    // Sent with their orderadditionalitems.id so the backend UPDATEs that row.
-    const updatedAdditionalItemsPayload = Object.values(alacartSelection)
-      .filter((item) => {
-        if (item.isAddedNow || !item.additionalItemId) return false;
-        if (isItemUnavailable(item)) return false;
-        const orig = originalAlacartMap[item.additionalItemId];
-        if (!orig) return false;
-        return (
-          Number(orig.amount) !== Number(item.amount) || orig.unit !== item.unit
+      if (availableSlots <= 0) {
+        Alert.alert(
+          "Packing Limit Reached",
+          "Sorry, we are not accepting any more orders for this schedule date.",
+          [{ text: "OK" }],
         );
-      })
-      .map((item) => ({
-        id: item.additionalItemId as number, // orderadditionalitems.id
-        productId:
-          typeof item.productId === "number"
-            ? item.productId
-            : parseInt(
-                String(item.productId || item.id).replace(/[^0-9]/g, ""),
-              ) || 0,
-        qty: item.amount,
-        unit: item.unit,
-        // fallback only: backend recalculates from marketplace per-kg rates
-        price: Number((item.price * item.quantity).toFixed(2)),
-      }));
- 
-    // Packages payload for initial insert into orderpackageitems
-    const packagesPayload = Object.entries(packageProducts).map(
-      ([pkgKey, prods]) => ({
-        orderPackageId: orderPackageDbIds[pkgKey],
-        packageId: pkgKey,
-        items: (prods as any[]).map((p) => {
-          const pType =
-            p.productTypeId != null && !isNaN(Number(p.productTypeId))
-              ? Number(p.productTypeId)
-              : p.productType != null && !isNaN(Number(p.productType))
-                ? Number(p.productType)
-                : null;
-          const prodId =
-            p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
-          return {
-            productType: pType,
-            productId: prodId,
-            qty: Number(p.quantity) || 1,
-            price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
-          };
-        }),
-      }),
-    );
- 
-    // Net package diff (pure package + alacart items, without delivery fee)
-    const netDiff = totalDiff;
-    const netRefundSavings =
-      Boolean(isPaid) && netDiff < 0
-        ? Number(Math.abs(netDiff).toFixed(2))
+        return;
+      }
+    }
+
+    // Not the last step yet: just move forward
+    if (currentStepIndex < steps.length - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+      return;
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // Last step: confirm order completion & finalize review
+    // ───────────────────────────────────────────────────────────
+
+    // Detect payment method
+    const pMethod = (paymentMethod || "").trim().toLowerCase();
+    const isCard =
+      pMethod.includes("card") ||
+      pMethod.includes("payhere") ||
+      pMethod.includes("online") ||
+      (isPaid && !pMethod.includes("cash") && !pMethod.includes("cod"));
+
+    const isPaidCardOrder = isCard && Boolean(isPaid);
+    const isUnpaidCardOrder = isCard && !isPaid;
+
+    // Invoice number shown in the success message
+    const confirmedInv =
+      invoiceNo ||
+      routeInvoiceNo ||
+      (effectiveOrderId ? `#${effectiveOrderId}` : "");
+
+    // Show "Processing..." on the button for EVERY payment type
+    setIsSubmitting(true);
+
+    // ── Path 1: Card order already paid, but additional payment required ───────
+    if (isPaidCardOrder && additionalDue >= 0.01) {
+      const confirmPayload = buildConfirmPayload(1);
+      setPendingConfirmPayload(confirmPayload);
+      try {
+        const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+        // Attempt 1-click saved card charge first
+        if (savedCard && adapter.chargeSavedCard) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: additionalDue,
+              paymentType: "order",
+              orderId: String(processOrderId || effectiveOrderId),
+              itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
+            });
+            if (chargeRes.success) {
+              await handleAdditionalPaymentSuccess(confirmPayload);
+              return;
+            }
+          } catch (chargeErr: any) {
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+            if (!isInvalid) {
+              setIsSubmitting(false);
+              Alert.alert(
+                "Payment Error",
+                chargeErr?.response?.data?.message ||
+                  chargeErr?.message ||
+                  "Payment failed. Please try again.",
+              );
+              return;
+            }
+            setSavedCard(null); // invalid/expired → fall through to hosted checkout
+          }
+        }
+
+        // Hosted checkout (no saved card, or saved card was invalid/expired)
+        const session = await adapter.initiatePayment({
+          orderId: String(processOrderId || effectiveOrderId),
+          amount: additionalDue,
+          paymentType: "order",
+          itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+        // isSubmitting stays true — button is blocked while the modal is open
+      } catch (err: any) {
+        setIsSubmitting(false);
+        Alert.alert(
+          "Payment Error",
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to start payment. Please try again.",
+        );
+      }
+      return; // Do NOT fall through to the direct confirmPackageReview call
+    }
+
+    // ── Path 2: Card order not yet paid (full total must be paid via gateway) ──
+    // Deduct coupon discount ONLY for the payment gateway payable value
+    const couponDeduction =
+      Number(isCoupon) === 1 && !isFreeDeliveryCoupon
+        ? Number(couponValue) || 0
         : 0;
- 
-    const confirmPayload = {
-      orderId: actualOrderId || effectiveOrderId,
-      processOrderId: processOrderId || undefined,
-      lockNow: true,
-      additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
-      newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
-      paymentMethod: paymentMethod || undefined,
-      isPaid: isUnpaidCardOrder ? 1 : isPaid ? 1 : 0,
-      newTotal: finalOrderTotalWithDelivery,
-      creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
-      replacements,
-      additionalItems: additionalItemsPayload,
-      updatedAdditionalItems:
-        updatedAdditionalItemsPayload.length > 0
-          ? updatedAdditionalItemsPayload
-          : undefined,
-      deletedAdditionalItemIds:
-        deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
-          ? deletedAdditionalItemIds
-          : undefined,
-      packages: packagesPayload,
-    };
- 
-    console.log(
-      "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
-      {
-        orderId: confirmPayload.orderId,
-        processOrderId: confirmPayload.processOrderId,
+    const payableNow = Math.max(
+      0,
+      Number(
+        (
+          finalOrderTotalWithDelivery -
+          (creditPaid || 0) -
+          couponDeduction
+        ).toFixed(2),
+      ),
+    );
+
+    if (isUnpaidCardOrder && payableNow > 0) {
+      const confirmPayload = buildConfirmPayload(1);
+      setPendingConfirmPayload(confirmPayload);
+      try {
+        const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
+
+        // Attempt 1-click saved card charge first
+        if (savedCard && adapter.chargeSavedCard) {
+          try {
+            const chargeRes = await adapter.chargeSavedCard({
+              cardId: savedCard.id,
+              amount: payableNow,
+              paymentType: "order",
+              orderId: String(processOrderId || effectiveOrderId),
+              itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
+            });
+            if (chargeRes.success) {
+              await handleAdditionalPaymentSuccess(confirmPayload);
+              return;
+            }
+          } catch (chargeErr: any) {
+            const isInvalid =
+              chargeErr?.response?.data?.cardInvalid ||
+              chargeErr?.message?.includes("invalid") ||
+              chargeErr?.message?.includes("expired") ||
+              chargeErr?.message?.includes("No such object");
+            if (!isInvalid) {
+              setIsSubmitting(false);
+              Alert.alert(
+                "Payment Error",
+                chargeErr?.response?.data?.message ||
+                  chargeErr?.message ||
+                  "Payment failed. Please try again.",
+              );
+              return;
+            }
+            setSavedCard(null); // invalid/expired → fall through to hosted checkout
+          }
+        }
+
+        // Hosted checkout (no saved card, or saved card was invalid/expired)
+        const session = await adapter.initiatePayment({
+          orderId: String(processOrderId || effectiveOrderId),
+          amount: payableNow,
+          paymentType: "order",
+          itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
+        });
+
+        setCheckoutSession(session);
+        setCheckoutModalVisible(true);
+        // isSubmitting stays true — button is blocked while the modal is open
+      } catch (err: any) {
+        setIsSubmitting(false);
+        Alert.alert(
+          "Payment Error",
+          err?.response?.data?.message ||
+            err?.message ||
+            "Failed to start payment. Please try again.",
+        );
+      }
+      return; // Do NOT fall through to the direct confirmPackageReview call
+    }
+
+    // ── Path 3: Direct confirm (cash / credit / reduced or unchanged totals) ───
+    try {
+      const replacements: Array<{
+        orderPackageId: number;
+        replceId?: number;
+        newProductId: number;
+        productType?: string | number;
+        newQty: number;
+        newPrice: number;
+      }> = [];
+
+      Object.entries(packageProducts).forEach(([pkgKey, prods]) => {
+        const orderPkgId = orderPackageDbIds[pkgKey];
+        if (orderPkgId) {
+          const templateProds = productTemplatesState[pkgKey] || [];
+          prods.forEach((p) => {
+            const templateProd = templateProds.find(
+              (t) =>
+                (t.productId && p.productId && t.productId === p.productId) ||
+                String(t.itemId || t.id) === String(p.itemId || p.id),
+            );
+            const baselineQty =
+              templateProd?.quantity ??
+              p.minQuantity ??
+              p.originalProduct?.quantity;
+            const isQtyChanged =
+              baselineQty !== undefined
+                ? Number(p.quantity) !== Number(baselineQty)
+                : false;
+
+            if (p.isReplaced || isQtyChanged) {
+              const replceId =
+                p.originalProduct?.itemId ||
+                p.itemId ||
+                (p.originalProduct?.id
+                  ? parseInt(p.originalProduct.id)
+                  : undefined) ||
+                p.productId ||
+                parseInt(p.id) ||
+                undefined;
+              const newProdId = p.productId || parseInt(p.id) || 0;
+              replacements.push({
+                orderPackageId: orderPkgId,
+                replceId: replceId,
+                newProductId: newProdId,
+                productType: p.productTypeId || p.productType || p.category,
+                newQty: p.quantity || 1,
+                newPrice: Number(
+                  ((p.price || 0) * (p.quantity || 1)).toFixed(2),
+                ),
+              });
+            }
+          });
+        }
+      });
+
+      // Ala carte items ADDED in this review session (new rows / merge by productId)
+      const additionalItemsPayload = Object.values(alacartSelection)
+        .filter((item) => item.isAddedNow)
+        .map((item) => ({
+          productId:
+            typeof item.productId === "number"
+              ? item.productId
+              : parseInt(
+                  String(item.productId || item.id).replace(/[^0-9]/g, ""),
+                ) || 0,
+          qty: item.amount,
+          unit: item.unit,
+          normalPrice: item.basePrice,
+          price: item.price,
+        }));
+
+      // Ala carte items ALREADY SAVED whose qty or unit the customer changed.
+      // Sent with their orderadditionalitems.id so the backend UPDATEs that row.
+      const updatedAdditionalItemsPayload = Object.values(alacartSelection)
+        .filter((item) => {
+          if (item.isAddedNow || !item.additionalItemId) return false;
+          if (isItemUnavailable(item)) return false;
+          const orig = originalAlacartMap[item.additionalItemId];
+          if (!orig) return false;
+          return (
+            Number(orig.amount) !== Number(item.amount) ||
+            orig.unit !== item.unit
+          );
+        })
+        .map((item) => ({
+          id: item.additionalItemId as number, // orderadditionalitems.id
+          productId:
+            typeof item.productId === "number"
+              ? item.productId
+              : parseInt(
+                  String(item.productId || item.id).replace(/[^0-9]/g, ""),
+                ) || 0,
+          qty: item.amount,
+          unit: item.unit,
+          // fallback only: backend recalculates from marketplace per-kg rates
+          price: Number((item.price * item.quantity).toFixed(2)),
+        }));
+
+      // Packages payload for initial insert into orderpackageitems
+      const packagesPayload = Object.entries(packageProducts).map(
+        ([pkgKey, prods]) => ({
+          orderPackageId: orderPackageDbIds[pkgKey],
+          packageId: pkgKey,
+          items: (prods as any[]).map((p) => {
+            const pType =
+              p.productTypeId != null && !isNaN(Number(p.productTypeId))
+                ? Number(p.productTypeId)
+                : p.productType != null && !isNaN(Number(p.productType))
+                  ? Number(p.productType)
+                  : null;
+            const prodId =
+              p.productId || (p.id && !isNaN(Number(p.id)) ? Number(p.id) : 0);
+            return {
+              productType: pType,
+              productId: prodId,
+              qty: Number(p.quantity) || 1,
+              price: Number(((p.price || 0) * (p.quantity || 1)).toFixed(2)),
+            };
+          }),
+        }),
+      );
+
+      // Net package diff (pure package + alacart items, without delivery fee)
+      const netDiff = totalDiff;
+      const netRefundSavings =
+        Boolean(isPaid) && netDiff < 0
+          ? Number(Math.abs(netDiff).toFixed(2))
+          : 0;
+
+      const confirmPayload = {
+        orderId: actualOrderId || effectiveOrderId,
+        processOrderId: processOrderId || undefined,
         lockNow: true,
-        additionalAmount: confirmPayload.additionalAmount,
-        newScheduleDate: confirmPayload.newScheduleDate,
+        additionalAmount: additionalPayAmount > 0 ? additionalPayAmount : 0,
+        newScheduleDate: (route.params as any)?.newScheduleDate || undefined,
+        paymentMethod: paymentMethod || undefined,
+        isPaid: isUnpaidCardOrder ? 1 : isPaid ? 1 : 0,
+        newTotal: finalOrderTotalWithDelivery,
+        creditToAdd: netRefundSavings > 0 ? netRefundSavings : 0,
         replacements,
         additionalItems: additionalItemsPayload,
-        updatedAdditionalItems: updatedAdditionalItemsPayload,
-        packagesCount: packagesPayload.length,
-      },
-    );
- 
-    const confirmRes = await orderService.confirmPackageReview(confirmPayload);
-    console.log(
-      "[ReviewPackageScreen] confirmPackageReview response:",
-      confirmRes.data,
-      { isCard, netRefundSavings, finalOrderTotalWithDelivery },
-    );
- 
-    // Order is saved. Show the success message FIRST.
-    // Redux cleanup + navigation to Home happen in AlertModal.onClose.
-    showSuccessMessage(confirmedInv);
-    return;
-  } catch (err) {
-    console.error("[ReviewPackageScreen] Confirm review API error:", err);
-    setIsSubmitting(false);
-    setShowSuccessOverlay(false);
-    // Stay on the confirm step so the user can retry
-    Alert.alert("Error", "Could not confirm your order. Please try again.");
-    return;
-  }
-};
+        updatedAdditionalItems:
+          updatedAdditionalItemsPayload.length > 0
+            ? updatedAdditionalItemsPayload
+            : undefined,
+        deletedAdditionalItemIds:
+          deletedAdditionalItemIds && deletedAdditionalItemIds.length > 0
+            ? deletedAdditionalItemIds
+            : undefined,
+        packages: packagesPayload,
+      };
+
+      console.log(
+        "\n[ReviewPackageScreen] Triggering confirmPackageReview with payload:",
+        {
+          orderId: confirmPayload.orderId,
+          processOrderId: confirmPayload.processOrderId,
+          lockNow: true,
+          additionalAmount: confirmPayload.additionalAmount,
+          newScheduleDate: confirmPayload.newScheduleDate,
+          replacements,
+          additionalItems: additionalItemsPayload,
+          updatedAdditionalItems: updatedAdditionalItemsPayload,
+          packagesCount: packagesPayload.length,
+        },
+      );
+
+      const confirmRes =
+        await orderService.confirmPackageReview(confirmPayload);
+      console.log(
+        "[ReviewPackageScreen] confirmPackageReview response:",
+        confirmRes.data,
+        { isCard, netRefundSavings, finalOrderTotalWithDelivery },
+      );
+
+      // Order is saved. Show the success message FIRST.
+      // Redux cleanup + navigation to Home happen in AlertModal.onClose.
+      showSuccessMessage(confirmedInv);
+      return;
+    } catch (err) {
+      console.error("[ReviewPackageScreen] Confirm review API error:", err);
+      setIsSubmitting(false);
+      setShowSuccessOverlay(false);
+      // Stay on the confirm step so the user can retry
+      Alert.alert("Error", "Could not confirm your order. Please try again.");
+      return;
+    }
+  };
   // ── Additional Card Payment Handlers ────────────────────────────────────
 
- const handleAdditionalPaymentSuccess = async (confirmPayload?: any) => {
-  setCheckoutModalVisible(false);
- 
-  const payload = confirmPayload ?? pendingConfirmPayload;
-  if (!payload) {
-    Alert.alert("Error", "Order details missing. Please contact support.");
-    setIsSubmitting(false);
-    return;
-  }
- 
-  try {
-    const confirmRes = await orderService.confirmPackageReview({
-      ...payload,
-      isPaid: 1,
-    });
-    console.log(
-      "[ReviewPackageScreen] confirmPackageReview (post-payment):",
-      confirmRes.data,
-    );
- 
-    showSuccessMessage(
-      invoiceNo ||
-        routeInvoiceNo ||
-        (effectiveOrderId ? `#${effectiveOrderId}` : ""),
-    );
-  } catch (err: any) {
-    console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
-    setIsSubmitting(false);
-    Alert.alert(
-      "Order Confirmation Failed",
-      "Your payment was received but the order could not be confirmed. Please contact support.",
-    );
-  }
-};
+  const handleAdditionalPaymentSuccess = async (confirmPayload?: any) => {
+    setCheckoutModalVisible(false);
+
+    const payload = confirmPayload ?? pendingConfirmPayload;
+    if (!payload) {
+      Alert.alert("Error", "Order details missing. Please contact support.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const confirmRes = await orderService.confirmPackageReview({
+        ...payload,
+        isPaid: 1,
+      });
+      console.log(
+        "[ReviewPackageScreen] confirmPackageReview (post-payment):",
+        confirmRes.data,
+      );
+
+      showSuccessMessage(
+        invoiceNo ||
+          routeInvoiceNo ||
+          (effectiveOrderId ? `#${effectiveOrderId}` : ""),
+      );
+    } catch (err: any) {
+      console.error("[ReviewPackageScreen] Post-payment confirm error:", err);
+      setIsSubmitting(false);
+      Alert.alert(
+        "Order Confirmation Failed",
+        "Your payment was received but the order could not be confirmed. Please contact support.",
+      );
+    }
+  };
 
   const handleAdditionalPaymentCancel = () => {
     setCheckoutModalVisible(false);
@@ -2243,6 +2288,26 @@ const goToNextStep = async () => {
     const calcNormal =
       normalRate > 0 ? Number((normalRate * weightKg).toFixed(2)) : linePrice;
     return Math.max(calcNormal, linePrice);
+  };
+
+  // Strikethrough price for "Added Earlier" rows only.
+  // Returns the saved orderadditionalitems price (scaled to the current qty)
+  // when it differs from today's marketplace price; otherwise null.
+  const getSavedStrikePrice = (item: any): number | null => {
+    if (item.isAddedNow || !item.additionalItemId) return null;
+    const saved = alacartSavedPriceMap[String(item.id)];
+    const orig = originalAlacartMap[item.additionalItemId];
+    if (!saved || saved <= 0 || !orig) return null;
+
+    const toKg = (a: number, u: string) => (u === "kg" ? a : a / 1000);
+    const origKg = toKg(Number(orig.amount), orig.unit);
+    if (origKg <= 0) return null;
+
+    const scaledSaved = Number(
+      ((saved / origKg) * toKg(Number(item.amount), item.unit)).toFixed(2),
+    );
+    const current = item.price * item.quantity;
+    return Math.abs(scaledSaved - current) > 0.005 ? scaledSaved : null;
   };
 
   // Totals for the final confirm step
@@ -3404,10 +3469,9 @@ const goToNextStep = async () => {
                   {Object.values(alacartSelection).map((item, aIdx) => {
                     const isItemDisabled = isItemUnavailable(item);
 
-                    const paidLine = item.price * item.quantity;
-                    const normalLine = getNormalLinePrice(item);
-                    const showStrike =
-                      !isItemDisabled && normalLine > paidLine + 0.001;
+                    const strikePrice = isItemDisabled
+                      ? null
+                      : getSavedStrikePrice(item);
 
                     return (
                       <View
@@ -3458,32 +3522,30 @@ const goToNextStep = async () => {
                               >
                                 {item.displayName}
                               </Text>
-
                               <View className="flex-row items-center mt-0.5">
-                                {showStrike && (
+                                <Text
+                                  className="text-[15px] font-bold"
+                                  style={{
+                                    color:
+                                      isItemDisabled || item.isAddedNow
+                                        ? "#F04438"
+                                        : "#000000",
+                                  }}
+                                >
+                                  Rs. {formatPrice(item.price * item.quantity)}
+                                </Text>
+                                {strikePrice != null && (
                                   <Text
                                     style={{
                                       fontSize: 13,
                                       color: "#9CA3AF",
                                       textDecorationLine: "line-through",
-                                      marginRight: 6,
+                                      marginLeft: 6,
                                     }}
                                   >
-                                    Rs. {formatPrice(normalLine)}
+                                    Rs. {formatPrice(strikePrice)}
                                   </Text>
                                 )}
-                                <Text
-                                  className="text-[15px] font-bold"
-                                  style={{
-                                    color: isItemDisabled
-                                      ? "#F04438"
-                                      : item.isAddedNow
-                                        ? "#F04438"
-                                        : "#000000",
-                                  }}
-                                >
-                                  Rs. {formatPrice(item.price)}
-                                </Text>
                               </View>
                             </View>
                           </View>
@@ -3504,8 +3566,8 @@ const goToNextStep = async () => {
                                 justifyContent: "center",
                               }}
                             >
-                              <Ionicons
-                                name="trash-outline"
+                              <FontAwesome6
+                                name="trash"
                                 size={16}
                                 color={isItemDisabled ? "#F04438" : "#000000"}
                               />
@@ -3515,6 +3577,15 @@ const goToNextStep = async () => {
                               <View className="mt-12">
                                 <Text className="text-[12px] font-medium text-[#F04438]">
                                   Added Now
+                                </Text>
+                              </View>
+                            ) : !isItemDisabled ? (
+                              <View className="mt-12">
+                                <Text
+                                  className="text-[12px] font-medium"
+                                  style={{ color: "#12B8A6" }}
+                                >
+                                  Added Earlier
                                 </Text>
                               </View>
                             ) : (
@@ -3941,22 +4012,22 @@ const goToNextStep = async () => {
       )}
 
       {/* Success alert — shown briefly after review package succeeds */}
-     <AlertModal
-  visible={showSuccessOverlay}
-  type="success"
-  title="Successful!"
-  message={`Your order ${successInvoiceNo || invoiceNo}\n reviewed and dispatched successfully!`}
-  autoClose={true}
-  duration={2500}
-  onClose={() => {
-    setShowSuccessOverlay(false);
-    cleanupAfterSuccess();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Home" }],
-    });
-  }}
-/>
+      <AlertModal
+        visible={showSuccessOverlay}
+        type="success"
+        title="Successful!"
+        message={`Your order ${successInvoiceNo || invoiceNo}\n reviewed and dispatched successfully!`}
+        autoClose={true}
+        duration={2500}
+        onClose={() => {
+          setShowSuccessOverlay(false);
+          cleanupAfterSuccess();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Home" }],
+          });
+        }}
+      />
 
       {/* Confirmation Modal when navigating back */}
       <ConfirmationModal

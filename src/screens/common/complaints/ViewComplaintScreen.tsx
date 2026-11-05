@@ -41,8 +41,6 @@ interface ComplaintDetail {
   images?: { id: number; image: string }[];
 }
 
-
-
 const formatDateTime = (dateString?: string | null) => {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -77,8 +75,18 @@ const formatComplaintText = (text?: string | null): string => {
 
 const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
   const complaintId = route.params?.id;
+  const fromOrderId = route.params?.orderId;
   const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Opened from Order Details => go back there, otherwise Complaint History
+  const handleBack = useCallback(() => {
+    if (fromOrderId) {
+      navigation.navigate("OrderDetails", { orderId: fromOrderId } as any);
+    } else {
+      navigation.navigate("ComplaintHistory");
+    }
+  }, [navigation, fromOrderId]);
 
   useEffect(() => {
     if (!complaintId) {
@@ -113,17 +121,17 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
   useFocusEffect(
     useCallback(() => {
       const onHardwareBack = () => {
-        navigation.navigate("ComplaintHistory");
+        handleBack();
         return true;
       };
 
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        onHardwareBack
+        onHardwareBack,
       );
 
       return () => subscription.remove();
-    }, [navigation])
+    }, [handleBack]),
   );
 
   if (loading) {
@@ -134,7 +142,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
-          onBackPress={() => navigation.navigate("ComplaintHistory")}
+          onBackPress={handleBack}
         />
         <View className="flex-1 justify-center items-center">
           <LoadingPage message="Loading..." fullScreen={false} />
@@ -151,7 +159,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
-          onBackPress={() => navigation.navigate("ComplaintHistory")}
+          onBackPress={handleBack}
         />
         <View className="flex-1 justify-center items-center px-8">
           <Text className="text-sm text-[#555555]">Complaint not found.</Text>
@@ -170,7 +178,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
-        onBackPress={() => navigation.navigate("ComplaintHistory")}
+        onBackPress={handleBack}
       />
 
       <ScrollView
@@ -203,7 +211,9 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           {/* Category */}
 
           <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
-            <Text className="text-[13px] text-[#676771] mb-[4px]">Category</Text>
+            <Text className="text-[13px] text-[#676771] mb-[4px]">
+              Category
+            </Text>
 
             <Text className="text-[15.5px] text-black font-bold mb-1">
               {complaint.categoryEnglish || "Complaint"}
@@ -213,7 +223,9 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
           {/* Description */}
 
           <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
-            <Text className="text-[13px] text-[#676771] mb-[4px]">Description</Text>
+            <Text className="text-[13px] text-[#676771] mb-[4px]">
+              Description
+            </Text>
 
             <Text className="text-[14.5px] leading-[22px] text-black font-medium">
               {formatComplaintText(complaint.complain)}
@@ -309,8 +321,9 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
 
           <View className="flex-row min-h-[64px] mb-0">
             <View
-              className={`w-[35px] h-[35px] rounded-full justify-center items-center z-10 ${isClosed ? "bg-black" : "bg-[#F0F1F4]"
-                }`}
+              className={`w-[35px] h-[35px] rounded-full justify-center items-center z-10 ${
+                isClosed ? "bg-black" : "bg-[#F0F1F4]"
+              }`}
             >
               <Ionicons
                 name="chatbubble-ellipses"

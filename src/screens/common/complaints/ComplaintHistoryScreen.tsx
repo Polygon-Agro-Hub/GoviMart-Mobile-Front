@@ -19,6 +19,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import NoDataFound from "@/component/common/NoDataFound";
 import AddButton from "@/component/common/AddButton";
+import ComplaintReply from "@/component/complaint/ComplaintReply";
 
 type ComplaintHistoryNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -42,7 +43,6 @@ interface Complaint {
   images?: { id: number; image: string }[];
   userId: number;
 }
-
 
 const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
@@ -154,11 +154,11 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
 
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        onHardwareBack
+        onHardwareBack,
       );
 
       return () => subscription.remove();
-    }, [navigation])
+    }, [navigation]),
   );
 
   return (
@@ -275,8 +275,9 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
                   activeOpacity={complaint.reply ? 0.8 : 1}
                   disabled={!complaint.reply}
                   onPress={() => handleReply(complaint)}
-                  className={`h-[25px] px-[9px] rounded-[5px] justify-center items-center shadow-md ${complaint.reply ? "bg-black" : "bg-[#9EADB5]"
-                    }`}
+                  className={`h-[25px] px-[9px] rounded-[5px] justify-center items-center shadow-md ${
+                    complaint.reply ? "bg-black" : "bg-[#9EADB5]"
+                  }`}
                   style={{
                     elevation: complaint.reply ? 3 : 0,
                   }}
@@ -294,60 +295,12 @@ const ComplaintHistory: React.FC<ComplaintHistoryProps> = ({ navigation }) => {
       {/* Floating Add Button */}
       {!loading && <AddButton onPress={handleAddComplaint} />}
 
-      {/* Reply Modal */}
-      <Modal
+      <ComplaintReply
         visible={modalVisible}
-        animationType="fade"
-        transparent={false}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View className="flex-1 mt-10 bg-white">
-          {/* Close Button */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setModalVisible(false)}
-            className="absolute top-[7px] right-2.5 w-[22px] h-[22px] rounded-full bg-black justify-center items-center z-[100]"
-          >
-            <Ionicons name="close" size={17} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          {/* Reply Content */}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 21,
-              paddingTop: 31,
-              paddingBottom: 40,
-            }}
-          >
-            <Text className="text-[15px] leading-5 text-[#111111] mb-[30px]">
-              Dear {user?.firstName} {user?.lastName},
-            </Text>
-
-            <Text className="text-[15px] leading-5 text-[#111111] mb-[30px]">
-              We are pleased to inform you that your{"\n"}
-              complaint has been resolved.
-            </Text>
-
-            <Text className="text-[15px] leading-[22px] text-[#111111] mb-[30px]">
-              {formatComplaintText(selectedComplaint?.reply)}
-            </Text>
-
-            <Text className="text-[15px] leading-5 text-[#111111] mb-[30px]">
-              If you have any further concerns or{"\n"}
-              questions, feel free to reach out.{"\n"}
-              Thank you for your patience and{"\n"}
-              understanding.
-            </Text>
-
-            <Text className="text-[15px] leading-5 text-[#111111] mb-[30px]">
-              Sincerely,{"\n"}
-              Polygon Customer Support Team{"\n"}
-              {formatReplyDate(selectedComplaint?.replyTime)}
-            </Text>
-          </ScrollView>
-        </View>
-      </Modal>
+        onClose={() => setModalVisible(false)}
+        reply={selectedComplaint?.reply}
+        replyTime={selectedComplaint?.replyTime}
+      />
     </View>
   );
 };

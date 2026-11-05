@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import {
     View,
     Text,
@@ -22,18 +24,37 @@ type BottomScreen =
 interface BottomNavigationProps {
     activeScreen: BottomScreen;
     navigation: any;
+    onRequireAuth?: () => void;
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
     activeScreen,
     navigation,
+    onRequireAuth,
 }) => {
     const isOrdersActive = activeScreen === "OrderHistory" || activeScreen === "MyCart";
     const [unreadCount, setUnreadCount] = useState<number>(0);
+    const token = useSelector((state: RootState) => state.auth.token);
+
+    const handleProtectedNavigation = (screenName: string) => {
+        if (!token) {
+            if (onRequireAuth) {
+                onRequireAuth();
+            } else {
+                navigation.navigate("ChooseAuth");
+            }
+            return;
+        }
+        navigation.navigate(screenName);
+    };
 
     useEffect(() => {
+        if (!token) {
+            setUnreadCount(0);
+            return;
+        }
+
         // ── 1. Subscribe to the global unread count store (Sales Dash pattern) ──
-        // This persists across ALL tab switches — no re-subscriptions on tab change.
         const unsubscribe = subscribeToUnreadCount((count) => {
             setUnreadCount(count);
         });
@@ -54,9 +75,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
         return () => {
             unsubscribe();
         };
-        // Intentionally run once on mount — NOT on activeScreen change.
-        // The global store handles cross-tab updates without re-subscribing.
-    }, []);
+    }, [token]);
 
     return (
         <View
@@ -134,7 +153,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* ORDERS */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("OrderHistory")}
+                onPress={() => handleProtectedNavigation("OrderHistory")}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -171,6 +190,14 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={async () => {
+                    if (!token) {
+                        if (onRequireAuth) {
+                            onRequireAuth();
+                        } else {
+                            navigation.navigate("ChooseAuth");
+                        }
+                        return;
+                    }
                     if (activeScreen === "Notification") return;
                     try {
                         const hasPerm = await pushNotificationService.hasPermission();
@@ -266,7 +293,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* PROFILE */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("Profile")}
+                onPress={() => handleProtectedNavigation("Profile")}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",

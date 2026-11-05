@@ -136,7 +136,7 @@ export type RootStackParamList = {
   AddNewAddress: { fromCheckout?: boolean } | undefined;
   ReportComplaint: undefined;
   ComplaintHistory: undefined;
-  ViewComplaint: { id: number } | undefined;
+  ViewComplaint: { id: number; orderId?: number };
   MyAccount: undefined;
   DeleteAccount: undefined;
   SavedCards: undefined;

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,8 @@ import axios from "axios";
 import { environment } from "@/environment/environment";
 import { store } from "@/store";
 import { tokenStorage } from "@/utils/tokenStorage";
+import NeedHelpModal from "@/component/help/Needhelpmodal";
+
 
 const getEffectiveToken = async (): Promise<string | null> => {
   return (
@@ -82,7 +84,12 @@ interface CropRowProps {
   onToggleExclude: (cropId: number) => void;
 }
 
-
+// Order-independent comparison of two id lists
+const sameIds = (a: number[], b: number[]) => {
+  if (a.length !== b.length) return false;
+  const setB = new Set(b);
+  return a.every((id) => setB.has(id));
+};
 
 const CropRow = React.memo(
   ({
@@ -153,6 +160,20 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   const [customerDataLoading, setCustomerDataLoading] = useState(true);
   const [listLoading, setListLoading] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+
+  // True only when the current selection differs from what was loaded from the backend
+  const hasChanges = useMemo(
+    () =>
+      !sameIds(selectedIncludeCrops, initialIncludeIds) ||
+      !sameIds(selectedExcludeCrops, initialExcludeIds),
+    [
+      selectedIncludeCrops,
+      selectedExcludeCrops,
+      initialIncludeIds,
+      initialExcludeIds,
+    ],
+  );
 
   const toggleInclude = useCallback((cropId: number) => {
     setSelectedExcludeCrops((prev) => prev.filter((id) => id !== cropId));
@@ -314,7 +335,32 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
     }, [navigation, handleBackPress]),
   );
 
+  // Shared by Save & Continue and Skip for now
+  const navigateAfterFinish = () => {
+    if (isFromAccount) {
+      navigation.navigate("Profile");
+    } else {
+      const currentData = getCurrentCustomerData();
+      navigation.navigate("ExcludeListSummery", {
+        customerId: Number(customerId),
+        name: currentData.name,
+        title: currentData.title,
+        phoneNumber: currentData.number,
+        cusId: currentData.customerId,
+        id: Number(currentData.id) || undefined,
+        fromAccount: route.params?.fromAccount,
+      });
+    }
+  };
+
+  const handleSkip = () => {
+    if (loading) return;
+    navigateAfterFinish();
+  };
+
   const handlesubmitexcludelist = async () => {
+    if (!hasChanges || loading) return;
+
     setLoading(true);
     try {
       const token = await getEffectiveToken();
@@ -357,20 +403,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         }
       }
 
-      if (isFromAccount) {
-        navigation.navigate("Profile");
-      } else {
-        const currentData = getCurrentCustomerData();
-        navigation.navigate("ExcludeListSummery", {
-          customerId: Number(customerId),
-          name: currentData.name,
-          title: currentData.title,
-          phoneNumber: currentData.number,
-          cusId: currentData.customerId,
-          id: Number(currentData.id) || undefined,
-          fromAccount: route.params?.fromAccount,
-        });
-      }
+      navigateAfterFinish();
     } catch (err: any) {
       console.error("Failed to submit excludelist changes:", err);
       Alert.alert("Submission Error", "Failed to save excludelist preferences to backend.");
@@ -457,6 +490,10 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
     );
   }
 
+  const saveDisabled = !hasChanges || loading;
+  // Skip is shown in both flows and hidden once there are changes to save
+  const showSkip = !hasChanges;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -478,6 +515,24 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
               Choose items the customer would prefer to include or exclude from
               the package. An item cannot be both preferred and excluded.
             </Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowHelp(true);
+              }}
+              activeOpacity={0.7}
+              className="flex-row items-center justify-center mt-4"
+              style={{ gap: 6 }}
+            >
+              <Ionicons name="help-circle" size={18} color="#0A84FF" />
+              <Text
+                className="text-sm font-medium"
+                style={{ color: "#0A84FF", textDecorationLine: "underline" }}
+              >
+                Need Help ?
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View className="px-6 my-6">
@@ -540,7 +595,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
                   keyboardShouldPersistTaps="handled"
                   data={filteredCrops}
                   keyExtractor={(item) => item.id.toString()}
-                  contentContainerStyle={{ paddingBottom: 100 }}
+                  contentContainerStyle={{ paddingBottom: 160 }}
                   renderItem={({ item }) => (
                     <CropRow
                       item={item}
@@ -565,27 +620,44 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
           <TouchableOpacity
             onPress={handlesubmitexcludelist}
-            disabled={loading}
+            disabled={saveDisabled}
             activeOpacity={0.8}
-            className="bg-black rounded-full items-center justify-center h-[50px] w-full max-w-[500px]"
+            className={`rounded-full items-center justify-center h-[50px] w-full max-w-[500px] ${
+              saveDisabled && !loading ? "bg-[#8A9BA8]" : "bg-black"
+            }`}
             style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.15,
+              shadowOpacity: saveDisabled && !loading ? 0 : 0.15,
               shadowRadius: 5,
-              elevation: 4,
+              elevation: saveDisabled && !loading ? 0 : 4,
             }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text className="text-white text-base font-bold">
-                {isFromAccount ? "Update" : "Save"}
+                {isFromAccount ? "Update" : "Save & Continue"}
               </Text>
             )}
           </TouchableOpacity>
+
+          {showSkip && (
+            <TouchableOpacity
+              onPress={handleSkip}
+              disabled={loading}
+              activeOpacity={0.8}
+              className="bg-black rounded-full items-center justify-center h-[50px] w-full max-w-[500px] mt-3"
+            >
+              <Text className="text-white text-base font-bold">
+                Skip for now
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
+
+      <NeedHelpModal visible={showHelp} onClose={() => setShowHelp(false)} />
     </KeyboardAvoidingView>
   );
 };
