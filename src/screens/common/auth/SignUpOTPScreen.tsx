@@ -11,6 +11,7 @@ import {
   Alert,
   Keyboard,
   BackHandler,
+  ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RouteProp } from "@react-navigation/native";
@@ -38,13 +39,16 @@ interface SignUpOTPProps {
   navigation: SignUpOTPNavigationProp;
 }
 
+const OTP_LENGTH = 5;
+const EMPTY_OTP = () => Array(OTP_LENGTH).fill("") as string[];
+
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout duration
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_TIMER_SECONDS = 240; // 4 minutes
 const LOCKOUT_SECONDS = LOCKOUT_DURATION_MS / 1000; // 900 seconds (15 minutes)
 
-// Space (px) to keep between the Verify button and the top of the keyboard.
+// Space (px) to keep between the verify area and the top of the keyboard.
 const VERIFY_EXTRA_SPACE = 16;
 
 export const getSignUpStorageKeys = (
@@ -156,7 +160,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       : `@otp_attempts_sms_${phoneNumber}`);
 
   // State Management
-  const [otp, setOtp] = useState(["", "", "", "", ""]);
+  const [otp, setOtp] = useState<string[]>(EMPTY_OTP());
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(OTP_TIMER_SECONDS);
   const [isExpired, setIsExpired] = useState(false);
@@ -177,8 +181,12 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
 
-  // Synchronous lock to block double-tap on Resend
+  // Synchronous locks (refs update immediately, state does not)
   const resendLockRef = useRef(false);
+  const verifyLockRef = useRef(false);
+
+  // When true, focus the first OTP box as soon as inputs are editable again
+  const needsRefocusRef = useRef(false);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -187,7 +195,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const scrollYRef = useRef(0);
   const keyboardTopRef = useRef(0);
 
-  // Scroll only as much as needed so the Verify button sits just above
+  // Scroll only as much as needed so the verify area sits just above
   // the keyboard.
   const ensureVisible = useCallback(() => {
     verifyWrapRef.current?.measureInWindow((_x, y, _w, h) => {
@@ -234,6 +242,22 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     };
   }, [ensureVisible]);
 
+  // Clear all boxes and re-focus the first one once inputs are editable
+  const resetOtp = () => {
+    setOtp(EMPTY_OTP());
+    needsRefocusRef.current = true;
+  };
+
+  // After a failed verification the inputs are re-enabled (isVerifying
+  // goes false). Only then can the first box actually take focus.
+  useEffect(() => {
+    if (!isVerifying && !isRateLimited && needsRefocusRef.current) {
+      needsRefocusRef.current = false;
+      const t = setTimeout(() => refs[0].current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [isVerifying, isRateLimited, otp]);
+
   // ---------- Rate limit helpers ----------
   const showLockoutAlert = () => {
     Alert.alert(
@@ -247,6 +271,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     for (const key of lockoutKeys) {
       await AsyncStorage.setItem(key, String(lockoutUntil));
     }
+    setOtp(EMPTY_OTP());
     setTimeLeft(LOCKOUT_SECONDS);
     setIsRateLimited(true);
     setIsExpired(false);
@@ -312,8 +337,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   // Wrong code: the server tracks wrong entries, so show its message.
   const handleWrongCode = async (msg: string) => {
-    setOtp(["", "", "", "", ""]);
-    refs[0].current?.focus();
+    resetOtp();
     Alert.alert("Invalid Code", msg || "Incorrect verification code.");
   };
 
@@ -368,8 +392,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   };
 
   const handleChangeText = (text: string, index: number) => {
-    // Keep only numeric inputs
     const cleanText = text.replace(/[^0-9]/g, "");
+
+    // Backspace / cleared box
     if (!cleanText) {
       const newOtp = [...otp];
       newOtp[index] = "";
@@ -377,12 +402,20 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       return;
     }
 
+    // Autofill / paste: the full code arrives in a single box
+    if (cleanText.length >= OTP_LENGTH) {
+      setOtp(cleanText.slice(0, OTP_LENGTH).split(""));
+      refs[OTP_LENGTH - 1].current?.focus();
+      return;
+    }
+
+    // Normal manual typing: keep only the last typed digit
     const newOtp = [...otp];
     newOtp[index] = cleanText.slice(-1);
     setOtp(newOtp);
 
     // Auto-focus next box
-    if (index < 4) {
+    if (index < OTP_LENGTH - 1) {
       refs[index + 1].current?.focus();
     }
   };
@@ -399,6 +432,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   };
 
   const handleSessionExpired = () => {
+    setOtp(EMPTY_OTP());
     Alert.alert(
       "Session Expired",
       "Your registration session has expired. Please sign up again to continue.",
@@ -421,8 +455,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     const is429 = data?.isRateLimited;
     const msg = data?.message || "Incorrect verification code.";
     if (is429 || /too many|15 minutes/i.test(msg)) {
+      // applyRateLimitLockout already shows the lockout alert
       await applyRateLimitLockout();
-      showLockoutAlert();
     } else if (/session.*expired|expired.*invalid/i.test(msg)) {
       handleSessionExpired();
     } else {
@@ -430,28 +464,27 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
-  const handleVerify = async () => {
-    // Check persistent lockout before verifying
+  // Called automatically once all digits are entered (no Verify button)
+  const handleVerify = async (codeOverride?: string) => {
+    if (verifyLockRef.current) return; // duplicate-request guard
+
+    const code = codeOverride ?? otp.join("");
+    if (code.length < OTP_LENGTH) return; // wait for the full code
+
+    // Persistent lockout
     for (const key of lockoutKeys) {
       try {
         const storedLockout = await AsyncStorage.getItem(key);
         if (storedLockout && parseInt(storedLockout, 10) > Date.now()) {
+          setOtp(EMPTY_OTP());
           showLockoutAlert();
           return;
         }
       } catch (e) {}
     }
 
-    const code = otp.join("");
-    if (code.length < 5) {
-      Alert.alert(
-        "Invalid Code",
-        "Please enter the full 5-digit verification code.",
-      );
-      return;
-    }
-
     if (isExpired) {
+      resetOtp();
       Alert.alert(
         "Code Expired",
         "Your verification code has expired. Please request a new code.",
@@ -459,6 +492,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       return;
     }
 
+    verifyLockRef.current = true;
+    Keyboard.dismiss();
     setIsVerifying(true);
     try {
       if (flow === "changePhone") {
@@ -547,18 +582,30 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             const isWholesale =
               (userData.buyerType || "").toLowerCase() === "wholesale";
 
-            const targetScreen: keyof RootStackParamList = isWholesale
-              ? "Home"
-              : "ExcludeListAdd";
-            const targetParams = !isWholesale
-              ? {
-                  customerId: userData.id,
-                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
-                  title: userData.title,
-                  number: userData.phoneNumber,
-                  cusId: userData.cusId,
-                }
-              : undefined;
+            if (isWholesale) {
+              Alert.alert(
+                "Registration Submitted",
+                "Your wholesale account has been created and your Business Registration (BR) is submitted for review.",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      navigation.navigate("Login");
+                    },
+                  },
+                ],
+              );
+              return;
+            }
+
+            const targetScreen: keyof RootStackParamList = "ExcludeListAdd";
+            const targetParams = {
+              customerId: userData.id,
+              name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+              title: userData.title,
+              number: userData.phoneNumber,
+              cusId: userData.cusId,
+            };
 
             Alert.alert(
               "Registration Successful",
@@ -587,11 +634,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                       );
                     }
 
-                    if (targetParams) {
-                      navigation.navigate(targetScreen as any, targetParams);
-                    } else {
-                      navigation.navigate(targetScreen as any);
-                    }
+                    navigation.navigate(targetScreen as any, targetParams);
                   },
                 },
               ],
@@ -613,23 +656,30 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       const is429 = status === 429 || err.response?.data?.isRateLimited;
       const msg =
         err.response?.data?.message || "An unexpected error occurred.";
-      const retryAfter = err.response?.data?.retryAfter || 900;
 
       if (is429 || /too many|15 minutes/i.test(msg)) {
         await applyRateLimitLockout();
-        showLockoutAlert();
       } else if (/session.*expired|expired.*invalid/i.test(msg)) {
         handleSessionExpired();
       } else if (status && [400, 401, 403, 422].includes(status)) {
         await handleWrongCode(msg);
       } else {
-        // Network / 5xx errors
+        // Network / 5xx errors: clear so the user can re-enter and retry
+        resetOtp();
         Alert.alert("Verification Error", msg);
       }
     } finally {
+      verifyLockRef.current = false;
       setIsVerifying(false);
     }
   };
+
+  // Auto-verify as soon as every digit is filled
+  useEffect(() => {
+    if (otp.length === OTP_LENGTH && otp.every((d) => d !== "")) {
+      handleVerify(otp.join(""));
+    }
+  }, [otp]);
 
   const handleResend = async () => {
     // Block double taps (ref updates synchronously, state does not)
@@ -671,7 +721,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }
 
-      setOtp(["", "", "", "", ""]);
+      setOtp(EMPTY_OTP());
       setIsResending(true);
       try {
         let response: any;
@@ -820,6 +870,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                   style={{
                     borderColor: isFocused ? "#FF9114" : "#000000",
                     borderWidth: isFocused ? 2 : 1,
+                    opacity: isVerifying ? 0.6 : 1,
                   }}
                 >
                   <TextInput
@@ -830,7 +881,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                     onFocus={() => setFocusedIndex(index)}
                     onBlur={() => setFocusedIndex(null)}
                     keyboardType="number-pad"
-                    editable={!isRateLimited}
+                    editable={!isRateLimited && !isVerifying}
+                    textContentType="oneTimeCode"
+                    autoComplete="sms-otp"
+                    importantForAutofill="yes"
+                    autoFocus={index === 0}
                     style={{
                       textAlign: "center",
                       textAlignVertical: "center",
@@ -848,7 +903,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                         ? { includeFontPadding: false }
                         : {}),
                     }}
-                    maxLength={1}
+                    // Allow the whole code in one box (autofill / paste).
+                    // handleChangeText keeps only the last digit for manual typing.
+                    maxLength={OTP_LENGTH}
                     selectTextOnFocus
                   />
                 </View>
@@ -944,30 +1001,25 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Action Buttons (inside the ScrollView so it scrolls above the keyboard) */}
+        {/* Bottom area (inside the ScrollView so it scrolls above the keyboard) */}
         <View className="bg-white">
+          {/* Verifying indicator. Replaces the old Verify button. The wrapper
+              is kept so the keyboard-scroll logic keeps working. */}
           <View
             ref={verifyWrapRef}
             collapsable={false}
             className="px-6 pt-2 pb-3"
           >
-            <TouchableOpacity
-              onPress={handleVerify}
-              disabled={isVerifying || isResending}
-              activeOpacity={0.8}
-              className="bg-black rounded-full items-center justify-center h-[50px] w-full"
-              style={{
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 6,
-                elevation: 8,
-              }}
-            >
-              <Text className="text-white text-base font-bold">
-                {isVerifying ? "Verifying..." : "Verify"}
-              </Text>
-            </TouchableOpacity>
+            <View className="h-[50px] w-full items-center justify-center">
+              {isVerifying && (
+                <View className="flex-row items-center gap-x-2">
+                  <ActivityIndicator size="small" color="#FF9114" />
+                  <Text className="text-sm font-semibold text-[#5A5859]">
+                    Verifying...
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
           {/* Bottom image: hidden while the keyboard is open */}

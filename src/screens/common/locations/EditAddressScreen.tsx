@@ -19,6 +19,8 @@ import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import axios from "axios";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 type EditAddressNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -71,6 +73,25 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
     return p;
   };
 
+  const reduxBuyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType,
+  );
+  const [storedBuyerType, setStoredBuyerType] = useState<string>("");
+
+  useEffect(() => {
+    AsyncStorage.getItem("userProfile").then((stored) => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.buyerType) setStoredBuyerType(parsed.buyerType);
+        } catch (e) {}
+      }
+    });
+  }, []);
+
+  const isWholesale =
+    (storedBuyerType || reduxBuyerType || "").toString().trim().toLowerCase() === "wholesale";
+
   const [saveAddressAs, setSaveAddressAs] = useState(
     addressParam.saveAs || addressParam.title || ""
   );
@@ -92,6 +113,12 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const [buildingType, setBuildingType] = useState(
     addressParam.buildingType || "House"
   );
+
+  useEffect(() => {
+    if (isWholesale && buildingType !== "House") {
+      setBuildingType("House");
+    }
+  }, [isWholesale]);
   const [buildingNo, setBuildingNo] = useState(
     addressParam.buildingNo || addressParam.houseNo || ""
   );
@@ -717,14 +744,14 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       }
     }
 
-    if (!buildingType.trim()) {
+    if (!isWholesale && !buildingType.trim()) {
       setBuildingTypeError(requiredMessage(FIELD_LABELS.buildingType));
       hasError = true;
       alertTitle = "Required";
       alertMessage = "Please select a building type.";
     }
 
-    if (buildingType === "House") {
+    if (isWholesale || buildingType === "House") {
       if (!buildingNo.trim()) {
         setBuildingNoError(requiredMessage(FIELD_LABELS.houseNo));
         hasError = true;
@@ -820,7 +847,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         !title.trim() ||
         !billingName.trim() ||
         !p1 ||
-        !buildingType.trim() ||
+        (!isWholesale && !buildingType.trim()) ||
         !buildingNo.trim() ||
         !streetName.trim() ||
         !city.trim() ||
@@ -841,9 +868,11 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       const cleanPhone1 = p1.startsWith("0") ? p1.slice(1) : p1;
       const cleanPhone2 = p2 ? (p2.startsWith("0") ? p2.slice(1) : p2) : "";
 
+      const finalBuildingType = isWholesale ? "House" : (buildingType || "House");
+
       const basePayload = {
-        originalBuildingType: addressParam.buildingType || "House",
-        buildingType,
+        originalBuildingType: isWholesale ? "House" : (addressParam.buildingType || "House"),
+        buildingType: finalBuildingType,
         saveAs: saveAddressAs,
         title,
         fullName: billingName,
@@ -860,8 +889,8 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       };
 
       const payload =
-        buildingType === "House"
-          ? basePayload
+        finalBuildingType === "House"
+          ? { ...basePayload, buildingType: "House" }
           : {
               ...basePayload,
               buildingName: apartmentName,
@@ -1092,95 +1121,97 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
           error={mobileNumber2Error}
         />
 
-        {/* BUILDING TYPE */}
-        <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => {
-              Keyboard.dismiss();
-              if (!buildingType.trim()) {
-                setBuildingTypeError(
-                  requiredMessage(FIELD_LABELS.buildingType)
-                );
-              }
-              setBuildingTypeModalOpen(true);
-            }}
-            style={{
-              height: 67,
-              borderWidth: buildingTypeError ? 1.5 : 1,
-              borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
-              borderRadius: 40,
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 11,
-              backgroundColor: "#FFFFFF",
-            }}
-          >
-            <View
+        {/* BUILDING TYPE (Only for non-wholesale users) */}
+        {!isWholesale && (
+          <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                Keyboard.dismiss();
+                if (!buildingType.trim()) {
+                  setBuildingTypeError(
+                    requiredMessage(FIELD_LABELS.buildingType)
+                  );
+                }
+                setBuildingTypeModalOpen(true);
+              }}
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: "#F2F2F6",
-                justifyContent: "center",
+                height: 67,
+                borderWidth: buildingTypeError ? 1.5 : 1,
+                borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
+                borderRadius: 40,
+                flexDirection: "row",
                 alignItems: "center",
+                paddingHorizontal: 11,
+                backgroundColor: "#FFFFFF",
               }}
             >
-              <FontAwesome6 name="house" solid size={14} color="#000000" />
-            </View>
-
-            <View
-              style={{
-                flex: 1,
-                marginLeft: 10,
-                justifyContent: "center",
-              }}
-            >
-              <Text
+              <View
                 style={{
-                  fontSize: 14,
-                  color: "#555555",
-                  lineHeight: 19,
-                  marginBottom: 4,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: "#F2F2F6",
+                  justifyContent: "center",
+                  alignItems: "center",
                 }}
               >
-                Building Type *
-              </Text>
-              <Text
+                <FontAwesome6 name="house" solid size={14} color="#000000" />
+              </View>
+
+              <View
                 style={{
-                  fontSize: 14,
-                  lineHeight: 18,
-                  color: buildingType ? "#111111" : "#9CA3AF",
-                  fontWeight: buildingType ? "500" : "400",
+                  flex: 1,
+                  marginLeft: 10,
+                  justifyContent: "center",
                 }}
               >
-                {buildingType || "Select From Here"}
-              </Text>
-            </View>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#555555",
+                    lineHeight: 19,
+                    marginBottom: 4,
+                  }}
+                >
+                  Building Type *
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 18,
+                    color: buildingType ? "#111111" : "#9CA3AF",
+                    fontWeight: buildingType ? "500" : "400",
+                  }}
+                >
+                  {buildingType || "Select From Here"}
+                </Text>
+              </View>
 
-            <Ionicons
-              name="chevron-down"
-              size={19}
-              color="#111111"
-              style={{ marginRight: 6 }}
-            />
-          </TouchableOpacity>
-          {buildingTypeError ? (
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#FF3B30",
-                marginTop: 4,
-                marginLeft: 16,
-              }}
-            >
-              {buildingTypeError}
-            </Text>
-          ) : null}
-        </View>
+              <Ionicons
+                name="chevron-down"
+                size={19}
+                color="#111111"
+                style={{ marginRight: 6 }}
+              />
+            </TouchableOpacity>
+            {buildingTypeError ? (
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: "#FF3B30",
+                  marginTop: 4,
+                  marginLeft: 16,
+                }}
+              >
+                {buildingTypeError}
+              </Text>
+            ) : null}
+          </View>
+        )}
 
         {/* ================= APARTMENT SPECIFIC FIELDS ================= */}
-        {buildingType === "Apartment" && (
+        {!isWholesale && buildingType === "Apartment" && (
           <>
             <InputField
               icon="building"
@@ -1271,8 +1302,8 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
           </>
         )}
 
-        {/* ================= HOUSE SPECIFIC FIELDS ================= */}
-        {buildingType === "House" && (
+        {/* ================= MAIN 3 ADDRESS LINES (Default for Wholesale or House) ================= */}
+        {(isWholesale || buildingType === "House") && (
           <>
             <InputField
               icon="house"
@@ -1485,6 +1516,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
       />
 
       {/* BUILDING TYPE SEARCH MODAL (SEARCH HIDDEN) */}
+      {!isWholesale && (
       <GlobalSearchModal
         visible={buildingTypeModalOpen}
         onClose={() => setBuildingTypeModalOpen(false)}
@@ -1500,6 +1532,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         noResultsText="No building types found"
         multiSelect={false}
       />
+      )}
 
       {/* CITY SEARCH MODAL (SEARCH ACTIVE) - never opened while city is locked */}
       <GlobalSearchModal

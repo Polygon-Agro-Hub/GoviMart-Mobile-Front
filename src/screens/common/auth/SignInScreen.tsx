@@ -10,11 +10,64 @@ import {
   Dimensions,
   BackHandler,
   Platform,
+  Modal,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "@/types/types";
-import { FontAwesome6, Ionicons, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
+import Svg, { Path } from "react-native-svg";
+
+/**
+ * Wholesale verification pending hourglass icon matching design
+ */
+const PendingHourglassIcon: React.FC<{
+  width?: number;
+  height?: number;
+  color?: string;
+}> = ({ width = 28, height = 42, color = "#D97706" }) => (
+  <Svg width={width} height={height} viewBox="0 0 41 62" fill="none">
+    <Path
+      fill={color}
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M0 0H41V12C41 18 30.5 22 30.5 26V31C30.5 35 41 39 41 45V57Q41 62 36 62H5Q0 62 0 57V45C0 39 10.5 35 10.5 31V26C10.5 22 0 18 0 12ZM6.5 6H34.5V12C34.5 17 27 25 20.5 25C14 25 6.5 17 6.5 12ZM6.5 56H34.5V50C34.5 45 27 37 20.5 37C14 37 6.5 45 6.5 50Z"
+    />
+  </Svg>
+);
+
+/**
+ * Wholesale verification pending mini shield checkmark icon matching design
+ */
+const PendingShieldCheckIcon: React.FC<{
+  size?: number;
+  color?: string;
+}> = ({ size = 16, color = "#FFFFFF" }) => (
+  <Svg width={size} height={size} viewBox="0 0 512 512" fill="none">
+    <Path
+      fill="none"
+      stroke={color}
+      strokeWidth={42}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M463.1 112.37C373.68 96.33 336.71 84.45 256 48 175.29 84.45 138.32 96.33 48.9 112.37 32.7 369.13 240.58 457.79 256 464c15.42-6.21 223.3-94.87 207.1-351.63z"
+    />
+    <Path
+      fill="none"
+      stroke={color}
+      strokeWidth={44}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="m160 256 64 64 128-128"
+    />
+  </Svg>
+);
+import {
+  FontAwesome6,
+  Ionicons,
+  FontAwesome5,
+  MaterialIcons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Checkbox from "expo-checkbox";
 import { useDispatch } from "react-redux";
@@ -64,6 +117,21 @@ const COUNTRY_DIAL_CODES = [
   { dial: "31", code: "+31", name: "Netherlands", example: "316XXXXXXXX" },
 ];
 
+/**
+ * Normalizes the login identifier.
+ * - Email (contains "@" or letters): only whitespace is removed.
+ * - Phone number: "+", spaces and hyphens are removed, so "+94 77-123 4567"
+ *   becomes "94771234567" (the format the backend expects).
+ */
+const normalizeIdentifier = (val: string): string => {
+  const trimmed = (val || "").trim();
+  if (!trimmed) return "";
+  if (trimmed.includes("@") || /[a-zA-Z]/.test(trimmed)) {
+    return trimmed.replace(/\s/g, "");
+  }
+  return trimmed.replace(/[\s\-+]/g, "");
+};
+
 const validateIdentifier = (
   val: string,
 ): { isValid: boolean; error?: string } => {
@@ -80,11 +148,9 @@ const validateIdentifier = (
     return { isValid: true };
   }
 
-  // Clean phone number (strip spaces and hyphens)
+  // Clean phone number (strip spaces, hyphens and leading +)
   const cleanPhone = trimmed.replace(/[\s-]/g, "");
-  const numWithoutPlus = cleanPhone.startsWith("+")
-    ? cleanPhone.slice(1)
-    : cleanPhone;
+  const numWithoutPlus = cleanPhone.replace(/^\+/, "");
 
   // Must contain only digits
   if (!/^\d+$/.test(numWithoutPlus)) {
@@ -98,13 +164,13 @@ const validateIdentifier = (
   if (numWithoutPlus.startsWith("0")) {
     return {
       isValid: false,
-      error: "Please enter mobile number with country code without + (e.g. 947XXXXXXXX)",
+      error: "Please enter mobile number with country code (e.g. 947XXXXXXXX)",
     };
   }
   if (numWithoutPlus.startsWith("7") && numWithoutPlus.length === 9) {
     return {
       isValid: false,
-      error: "Please enter mobile number with country code without + (e.g. 947XXXXXXXX)",
+      error: "Please enter mobile number with country code (e.g. 947XXXXXXXX)",
     };
   }
 
@@ -116,7 +182,7 @@ const validateIdentifier = (
   if (!matched) {
     return {
       isValid: false,
-      error: "Please enter mobile number with valid country code without + (e.g. 947XXXXXXXX)",
+      error: "Please enter mobile number with a valid country code (e.g. 947XXXXXXXX)",
     };
   }
 
@@ -167,6 +233,59 @@ const validateIdentifier = (
   return { isValid: true };
 };
 
+const formatSubmittedDate = (dateStr?: string | null) => {
+  if (!dateStr) return "Today, 10:42 AM";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+
+    const time = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    const now = new Date();
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    if (isToday) {
+      return `Today, ${time}`;
+    }
+
+    const day = d.getDate();
+    const ordinal = (n: number) => {
+      const s = ["th", "st", "nd", "rd"];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    };
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const month = monthNames[d.getMonth()];
+
+    return `${time}, ${ordinal(day)} ${month}`;
+  } catch {
+    return dateStr;
+  }
+};
+
+const extractDocName = (url?: string | null) => {
+  if (!url) return "BR_Certificate_Scan.jpg";
+  try {
+    const cleanUrl = url.split("?")[0];
+    const parts = cleanUrl.split("/");
+    const last = parts[parts.length - 1];
+    return decodeURIComponent(last) || "BR_Certificate_Scan.jpg";
+  } catch {
+    return "BR_Certificate_Scan.jpg";
+  }
+};
+
 const Login: React.FC<LoginProps> = ({ navigation }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [identifier, setIdentifier] = useState("");
@@ -179,6 +298,14 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
+  const [wholesalePendingModalVisible, setWholesalePendingModalVisible] = useState(false);
+  const [wholesalePendingData, setWholesalePendingData] = useState<{
+    userId?: number;
+    approveStatus?: string;
+    brImg?: string;
+    submittedDate?: string;
+    approvedAt?: string;
+  } | null>(null);
   const dispatch = useDispatch();
 
   const isValid = identifier.trim() !== "" && password.trim() !== "";
@@ -208,8 +335,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           );
           const storedPassword =
             await SecureStore.getItemAsync("rememberedPassword");
-          if (storedIdentifier) {
-            setIdentifier(storedIdentifier.replace(/\s/g, ""));
+          const normalizedStored = normalizeIdentifier(storedIdentifier || "");
+          if (normalizedStored) {
+            setIdentifier(normalizedStored);
           }
           if (storedPassword) {
             setPassword(storedPassword.replace(/\s/g, ""));
@@ -218,7 +346,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { identifier: storedIdentifier || "" },
+              rememberedDetails: { identifier: normalizedStored },
             }),
           );
         }
@@ -232,7 +360,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const handleSignIn = async () => {
     let hasError = false;
 
-    const idRes = validateIdentifier(identifier);
+    // Remove "+", spaces and hyphens from phone numbers before validating/sending
+    const normalizedIdentifier = normalizeIdentifier(identifier);
+
+    const idRes = validateIdentifier(normalizedIdentifier);
     if (!idRes.isValid) {
       setIdentifierError(
         idRes.error || "Please enter a valid mobile number or email address",
@@ -254,7 +385,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     setLoading(true);
     try {
       const response = await authService.login({
-        identifier: identifier.replace(/\s/g, "").trim(),
+        identifier: normalizedIdentifier,
         password: password.replace(/\s/g, ""),
       });
       if (response.data && response.data.success) {
@@ -317,7 +448,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
         if (rememberMe) {
           await AsyncStorage.setItem("rememberMeEnabled", "true");
-          await AsyncStorage.setItem("rememberedIdentifier", identifier.trim());
+          await AsyncStorage.setItem("rememberedIdentifier", normalizedIdentifier);
           if (refreshToken) {
             await tokenStorage.setRefreshToken(refreshToken);
           }
@@ -325,7 +456,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           dispatch(
             setRememberMeDetails({
               rememberMe: true,
-              rememberedDetails: { identifier: identifier.trim() },
+              rememberedDetails: { identifier: normalizedIdentifier },
             }),
           );
         } else {
@@ -393,6 +524,19 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         } else {
           navigation.navigate(targetScreen as any);
         }
+      } else if (response.data?.wholesaleStatus === "To Review") {
+        setWholesalePendingData(response.data.data);
+        setWholesalePendingModalVisible(true);
+        return;
+      } else if (response.data?.wholesaleStatus === "Rejected") {
+        navigation.navigate("VerificationUnsuccessful", {
+          userId: response.data.data?.userId,
+          approveStatus: response.data.data?.approveStatus,
+          brImg: response.data.data?.brImg,
+          submittedDate: response.data.data?.submittedDate,
+          approvedAt: response.data.data?.approvedAt,
+        });
+        return;
       } else {
         const msg = response.data?.message || "An error occurred during login.";
         if (
@@ -412,6 +556,24 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
       }
     } catch (error: any) {
       console.error("Login error:", error);
+      const wholesaleStatus = error.response?.data?.wholesaleStatus;
+      const wholesaleData = error.response?.data?.data;
+      if (wholesaleStatus === "To Review") {
+        setWholesalePendingData(wholesaleData);
+        setWholesalePendingModalVisible(true);
+        return;
+      }
+      if (wholesaleStatus === "Rejected") {
+        navigation.navigate("VerificationUnsuccessful", {
+          userId: wholesaleData?.userId,
+          approveStatus: wholesaleData?.approveStatus,
+          brImg: wholesaleData?.brImg,
+          submittedDate: wholesaleData?.submittedDate,
+          approvedAt: wholesaleData?.approvedAt,
+        });
+        return;
+      }
+
       const errorMsg =
         error.response?.data?.message ||
         error.message ||
@@ -502,7 +664,8 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 <TextInput
                   value={identifier}
                   onChangeText={(text) => {
-                    const clean = text.replace(/\s/g, "");
+                    // Strips "+", spaces and hyphens for phone numbers
+                    const clean = normalizeIdentifier(text);
                     setIdentifier(clean);
                     if (identifierError) {
                       const res = validateIdentifier(clean);
@@ -564,6 +727,48 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   </Text>
                 </View>
               ) : null}
+
+              {/* Username Tip Component */}
+              <View
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  marginTop: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="lightbulb-on-outline"
+                  size={16}
+                  color="#64748B"
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: "600",
+                    color: "#475569",
+                    marginRight: 6,
+                  }}
+                >
+                  Username :
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 10.5,
+                      color: "#64748B",
+                      lineHeight: 14.5,
+                    }}
+                  >
+                    Mobile number requires country code{"\n"}
+                    (e.g. 947XXXXXXXX) or use email address
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Input 2: Password */}
@@ -707,6 +912,237 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         autoClose={false}
         showOkButton={true}
       />
+
+      {/* Wholesale Verification Pending Modal */}
+      <Modal
+        visible={wholesalePendingModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWholesalePendingModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderTopLeftRadius: 36,
+              borderTopRightRadius: 36,
+              paddingHorizontal: 24,
+              paddingTop: 28,
+              paddingBottom: Platform.OS === "ios" ? 40 : 28,
+            }}
+          >
+            {/* Top Icon with Hourglass & Overlapping Mini Shield */}
+            <View style={{ alignItems: "center", marginBottom: 16 }}>
+              <View
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 24,
+                  backgroundColor: "#FFF8E6",
+                  borderWidth: 1.5,
+                  borderColor: "#FDE8AF",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                }}
+              >
+                <PendingHourglassIcon width={28} height={42} color="#D97706" />
+
+                {/* Overlapping Mini Shield Verification Badge */}
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: -5,
+                    right: -5,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: "#281E4B",
+                    borderWidth: 2.5,
+                    borderColor: "#FFFFFF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.16,
+                    shadowRadius: 3,
+                    elevation: 4,
+                  }}
+                >
+                  <PendingShieldCheckIcon size={16} color="#FFFFFF" />
+                </View>
+              </View>
+            </View>
+
+            {/* Title */}
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: "800",
+                color: "#0F172A",
+                textAlign: "center",
+                marginBottom: 10,
+              }}
+            >
+              Wholesale Verification Pending
+            </Text>
+
+            {/* Subtitle */}
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#64748B",
+                textAlign: "center",
+                lineHeight: 20,
+                marginBottom: 22,
+                paddingHorizontal: 8,
+              }}
+            >
+              Your wholesale account registration and business documents are currently being verified by our team. This process typically takes 24–48 hours to ensure all trade compliance standards are met.
+            </Text>
+
+            {/* Status Card */}
+            <View
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                borderRadius: 18,
+                padding: 16,
+                marginBottom: 24,
+              }}
+            >
+              {/* Row 1: Review Status */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 14,
+                }}
+              >
+                <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
+                  Review Status
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "#FFF5E9",
+                    borderWidth: 1,
+                    borderColor: "#FF9114",
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: "#FF9114",
+                      marginRight: 6,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: "#FF9114",
+                      fontSize: 12,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Pending Approval
+                  </Text>
+                </View>
+              </View>
+
+              {/* Row 2: Submitted Date */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 14,
+                }}
+              >
+                <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
+                  Submitted Date
+                </Text>
+                <Text
+                  style={{
+                    color: "#0F172A",
+                    fontSize: 13,
+                    fontWeight: "700",
+                  }}
+                >
+                  {formatSubmittedDate(wholesalePendingData?.submittedDate)}
+                </Text>
+              </View>
+
+              {/* Row 3: Submitted Document */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
+                  Submitted Document
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: "#00C8B3",
+                    fontSize: 13,
+                    fontWeight: "600",
+                    maxWidth: "55%",
+                    textDecorationLine: "underline",
+                    textDecorationColor: "#A7F3D0",
+                  }}
+                >
+                  {extractDocName(wholesalePendingData?.brImg)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Bottom Action Button */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setWholesalePendingModalVisible(false)}
+              style={{
+                backgroundColor: "#000000",
+                borderRadius: 999,
+                height: 52,
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 15,
+                  fontWeight: "700",
+                }}
+              >
+                Got it, check back later
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

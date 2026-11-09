@@ -24,6 +24,19 @@ class ProductService {
             },
         });
     }
+    async getPackageItemProducts(productTypeId: number | string, buyerType: string = "Retail") {
+        const url = ENDPOINTS.PRODUCT.GET_PACKAGE_ITEM_PRODUCTS.replace(":productTypeId", String(productTypeId));
+        return apiClient.get(url, {
+            params: {
+                buyerType,
+                _t: Date.now(),
+            },
+            headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+            },
+        });
+    }
     async getProductsByCategory(categoryNameId: string, buyerType: string = "Retail", search?: string) {
         return apiClient.get(ENDPOINTS.PRODUCT.GET_PRODUCTS_BY_CATEGORY, {
             params: {

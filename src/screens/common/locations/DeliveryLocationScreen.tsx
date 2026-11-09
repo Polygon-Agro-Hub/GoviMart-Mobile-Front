@@ -37,6 +37,15 @@ interface CityResult {
 
 type CityStatus = "idle" | "available" | "unavailable";
 
+// Available cities first (A-Z), then Coming Soon cities (A-Z)
+const sortCities = (cities: CityResult[]): CityResult[] =>
+  [...cities].sort((a, b) => {
+    if (a.isAvailable !== b.isAvailable) {
+      return a.isAvailable ? -1 : 1;
+    }
+    return a.city.localeCompare(b.city, undefined, { sensitivity: "base" });
+  });
+
 const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
   const [allCities, setAllCities] = useState<CityResult[]>([]);
   const [selectedCity, setSelectedCity] = useState<CityResult | null>(null);
@@ -48,21 +57,21 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
 
   const isButtonDisabled = status === "unavailable";
 
-  // Fetch all cities on mount and subscribe to real-time socket updates
+  // Fetch all cities on mount
   useEffect(() => {
     const loadCities = async () => {
       setIsLoading(true);
       try {
         const response = await axios.get(`${environment.API_BASE_URL}api/auth/cities`);
         if (response.data && response.data.status && Array.isArray(response.data.data)) {
-          const mapped = response.data.data.map((city: any) => ({
+          const mapped: CityResult[] = response.data.data.map((city: any) => ({
             id: city.id,
             city: city.city,
             district: city.district || "",
             province: city.province || "",
             isAvailable: city.isAvailable === 1 || city.isAvailable === true,
           }));
-          setAllCities(mapped);
+          setAllCities(sortCities(mapped));
         }
       } catch (err) {
         console.error("Error loading cities on mount:", err);
@@ -180,7 +189,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
                 <FontAwesome6 name="location-dot" size={18} color="black" />
               )}
             </View>
-            <Text className={`text-sm  ${selectedCity ? "text-black" : "text-black"}`}>
+            <Text className="text-sm text-black">
               {isLoading ? "Loading cities..." : (selectedCity ? selectedCity.city : "Select Your City")}
             </Text>
           </View>
@@ -223,7 +232,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
             shadowRadius: 5,
 
             elevation: 6,
-            backgroundColor: isButtonDisabled ? "#7F919C" : "#000000"
+            backgroundColor: isButtonDisabled ? "#7F919C" : "#000000",
           }}
           className="mx-6 mt-6 rounded-full items-center justify-center h-[50px]"
           activeOpacity={isButtonDisabled ? 1 : 0.8}
@@ -246,44 +255,43 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
 
         {/* Already have an account link */}
         <View className="flex-row items-center justify-center mt-6 mb-8">
-          <Text className="text-[14px] text-[#3F3F3F]" style={{fontWeight: 500}}>
+          <Text className="text-[14px] text-[#3F3F3F]" style={{ fontWeight: "500" }}>
             Already have an account?{" "}
           </Text>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => navigation.navigate("Login")}
           >
-            <Text className="text-[12px]  text-[#0085FF] underline" style={{fontWeight: 500}}>
+            <Text className="text-[12px] text-[#0085FF] underline" style={{ fontWeight: "500" }}>
               Sign in
             </Text>
           </TouchableOpacity>
         </View>
-   
 
-      {/* Fixed Bottom Lottie (city.json) */}
-      <View className="w-full h-[180px]">
-        <LottieView
-          source={require("@/assets/json/auth/city.json")}
-          autoPlay
-          loop
-          style={{ width: "100%", height: "100%" }}
-          resizeMode="cover"
-        />
-      </View>
-         </ScrollView>
+        {/* Fixed Bottom Lottie (city.json) */}
+        <View className="w-full h-[180px]">
+          <LottieView
+            source={require("@/assets/json/auth/city.json")}
+            autoPlay
+            loop
+            style={{ width: "100%", height: "100%" }}
+            resizeMode="cover"
+          />
+        </View>
+      </ScrollView>
 
-      {/* Cities GlobalSearchModal */}
+      {/* Cities GlobalSearchModal (data is already sorted: Available A-Z, then Coming Soon A-Z) */}
       <GlobalSearchModal
         visible={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Select Your City"
         searchPlaceholder="Search your city..."
         noResultsText="City not found."
-        data={allCities.map(c => ({ label: c.city, value: String(c.id), ...c }))}
+        data={allCities.map((c) => ({ label: c.city, value: String(c.id), ...c }))}
         selectedItems={selectedCity ? [String(selectedCity.id)] : []}
         onSelect={(items) => {
           if (items.length > 0) {
-            const found = allCities.find(c => String(c.id) === items[0]);
+            const found = allCities.find((c) => String(c.id) === items[0]);
             if (found) {
               setSelectedCity(found);
               setStatus(found.isAvailable ? "available" : "unavailable");
@@ -295,7 +303,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
         renderItem={renderCityItem}
       />
 
-      {/* Help Popup Modal (Glassmorphic design) */}
+      {/* Help Popup Modal */}
       <Modal
         visible={isHelpModalOpen}
         transparent={true}
@@ -306,7 +314,7 @@ const DeliveryLocation: React.FC<DeliveryLocationProps> = ({ navigation }) => {
           <View
             className="p-6 rounded-3xl items-center shadow-lg w-full max-w-sm"
             style={{
-              backgroundColor: "#FFFFFF"
+              backgroundColor: "#FFFFFF",
             }}
           >
             {/* Phone Icon */}

@@ -69,7 +69,7 @@ const PACKAGE_GAP_DAYS = 2;
 
 const CHECKOUT_PROCESSING_STEPS: ProcessingStep[] = [
   { id: "validate", label: "Validating order items & pricing" },
-  { id: "payment", label: "Processing payment" },
+  { id: "payment", label: "Awaiting Payment..." },
   { id: "create", label: "Creating order" },
   { id: "invoice", label: "Finalizing order details" },
 ];
@@ -1796,7 +1796,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                       color: "#111111",
                     }}
                   >
-                    Use Credit Balance
+                    Use My Polygon Wallet
                   </Text>
 
                   <Text
@@ -2162,7 +2162,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 <Text style={{ fontWeight: "700", color: "#1E293B" }}>
                   {getPaymentDueText()}
                 </Text>
-                after receiving your order confirmation. If paying by card or
+                {" "}after receiving your order confirmation. If paying by card or
                 using credit to cover the full order total, complete any
                 outstanding payments by the deadline.
               </Text>
@@ -2281,6 +2281,68 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onCancel={handleCheckoutCancel}
         onClose={() => setCheckoutModalVisible(false)}
       />
+
+      {/* ─── FULL SCREEN LOADING CONFIRMATION ──────────────────────────── */}
+      <Modal
+        visible={(submitting || isConfirming) && !checkoutModalVisible && !unconfirmedState}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 32,
+              paddingHorizontal: 36,
+              alignItems: "center",
+              minWidth: 230,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              elevation: 10,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              {paymentMethod === "card" &&
+              paymentAmount > 0 &&
+              (isEarliestDeliveryDate() || isPackagePayToConfirm)
+                ? "Awaiting Payment..."
+                : "Confirming your order..."}
+            </Text>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                fontWeight: "400",
+                color: "#6B7280",
+                textAlign: "center",
+              }}
+            >
+              Please do not close the app.
+            </Text>
+          </View>
+        </View>
+      </Modal>
 
       {/* ─── ENHANCED ORDER PROCESSING MODAL (PHASE 2 & PHASE 3) ───────────── */}
       <OrderProcessingModal

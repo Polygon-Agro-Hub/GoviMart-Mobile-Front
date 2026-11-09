@@ -802,7 +802,6 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
     const initialPaidAmount =
       num(order?.amount) > 0 ? num(order?.amount) : orderFullTotal;
-    const moneyPaid = num(order?.moneyPaid);
     const creditPaidVal = num(order?.creditPaid);
 
     const totalPaidCredit = creditPaidVal || 0;
@@ -812,16 +811,28 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       processOrderTotal - totalPaidCredit,
     );
 
-    // Card PAID: only when the card payment was really completed (isPaid = 1)
-    const totalPaidCard =
-      isCardOrOnline && pay.paid
-        ? moneyPaid > 0
-          ? moneyPaid
-          : initialPaidAmount
+    // Card money really paid BEFORE today's price change
+    // (already-paid amount minus the credit part). Never the price increase.
+    const cardPaidBefore =
+      pay.paid && !isCashMethod
+        ? Math.max(0, alreadyPaid - totalPaidCredit)
         : 0;
 
-    // Card DUE: card order that is not paid yet (isPaid = 0)
-    const totalCardDue = isCardOrOnline && !pay.paid ? remainingAfterCredit : 0;
+    // Card PAID: only real card money, never the unpaid price difference
+    const totalPaidCard = Math.max(
+      0,
+      Math.min(
+        cardPaidBefore,
+        remainingAfterCredit - (hasExtraDue ? extraDue : 0),
+      ),
+    );
+
+    // Card DUE:
+    //  - unpaid card order (isPaid = 0), plus
+    //  - price increase on an already-paid order (extraDue)
+    const totalCardDue =
+      (isCardOrOnline && !pay.paid ? remainingAfterCredit : 0) +
+      (hasExtraDue ? extraDue : 0);
 
     // Cash DUE
     const totalCashDue = isCashMethod && !pay.paid ? remainingAfterCredit : 0;
@@ -861,7 +872,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       processOrderTotal,
       paymentMethod: order?.paymentMethod || "cash",
       refundCreditAmount,
-      serviceFee, // DASH: 0 when not a Dash order
+      serviceFee,
     });
   };
 
@@ -1326,7 +1337,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
           {hasExtraDue && (
             <SummaryRow
-              label="Pay by Card"
+              label="Pay with Card"
               value={`Rs. ${formatAmount(extraDue)}`}
               icon="credit-card"
               iconColor="#0088FF"

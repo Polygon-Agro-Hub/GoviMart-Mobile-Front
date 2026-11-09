@@ -1,3 +1,4 @@
+import type { PackageMeta } from "@/store/packageReviewSlice";
 // ─── Navigation Route Params ─────────────────────────────────────────────────
 
 export interface CheckoutDetails {
@@ -94,6 +95,13 @@ export type RootStackParamList = {
   };
   ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
+  VerificationUnsuccessful: {
+    userId: number;
+    approveStatus?: string;
+    brImg?: string;
+    submittedDate?: string;
+    approvedAt?: string;
+  };
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   PrivacyPolicy: undefined;
   Home: undefined;
@@ -129,7 +137,7 @@ export type RootStackParamList = {
   AddNewAddress: { fromCheckout?: boolean } | undefined;
   ReportComplaint: undefined;
   ComplaintHistory: undefined;
-  ViewComplaint: { id: number } | undefined;
+  ViewComplaint: { id: number; orderId?: number };
   MyAccount: undefined;
   DeleteAccount: undefined;
   SavedCards: undefined;
@@ -322,7 +330,9 @@ export interface SignUpPayload {
   phoneNumber: string;
   buyerType: string;
   email: string;
+  docType?: string;
   nic: string;
+  brImg?: string | null;
   password: string;
   confirmPassword: string;
   agreeToMarketing?: boolean;
@@ -386,13 +396,34 @@ export interface VerifyPhoneChangePayload {
 }
 
 //___________Review Package screen types________________
-export type PackageSummary = {
-    id: string;
-    name: string;
-    icon: string; // emoji placeholder — swap for an <Image> when you have assets
-    qty: number;
-    unitPrice: number;
-};
+export type ScreenMode = "overview" | "flow";
+
+export type FlowStep =
+  | { type: "package"; packageId: string }
+  | { type: "alacart" }
+  | { type: "confirm" };
+
+export interface Category {
+  id: string;
+  name: string;
+  circleBg: string;
+  borderColor: string;
+  activeBg: string;
+  active: boolean;
+}
+
+export type OriginalAlacartEntry = { amount: number; unit: string };
+
+export interface PackageSummary {
+  pkg: PackageMeta;
+  stepIndex: number;
+  originalPrice: number; // total (x qty) - still used for totals
+  unitOriginalPrice: number; // price of ONE package
+  unitCurrentPrice: number; // price of ONE package incl. changes
+  diff: number; // change for ONE package
+  additionalChanges: number;
+  currentPrice: number; // total (x qty)
+}
  
 export type ReviewProduct = {
     id: string;

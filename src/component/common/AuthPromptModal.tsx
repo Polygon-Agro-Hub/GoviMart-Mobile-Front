@@ -7,7 +7,7 @@ import {
   TouchableWithoutFeedback,
   Dimensions,
 } from "react-native";
-import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 
 interface AuthPromptModalProps {
   visible: boolean;
@@ -17,23 +17,21 @@ interface AuthPromptModalProps {
   subtitle?: string;
 }
 
-const { width } = Dimensions.get("window");
-
 export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
   visible,
   onClose,
   navigation,
-  title = "Sign In to Continue",
-  subtitle = "Please sign in or create an account to add items to your cart and proceed with your order.",
+  title = "Welcome, Guest!",
+  subtitle = "We're excited to have you here!\nTo unlock the best experience,\nplease log in or create a new account.",
 }) => {
-  const handleSignIn = () => {
+  const handleRegister = () => {
     onClose();
-    navigation.navigate("Login");
+    navigation.navigate("ChooseAuth");
   };
 
-  const handleSignUp = () => {
+  const handleLogin = () => {
     onClose();
-    navigation.navigate("DeliveryLocation");
+    navigation.navigate("Login");
   };
 
   return (
@@ -117,8 +115,8 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
                   }}
                 >
                   <Ionicons
-                    name="bag-handle-outline"
-                    size={32}
+                    name="person-circle-outline"
+                    size={36}
                     color="#FF9114"
                   />
                 </View>
@@ -126,11 +124,11 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
                 {/* Title */}
                 <Text
                   style={{
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: "800",
                     color: "#0F172A",
                     textAlign: "center",
-                    marginBottom: 6,
+                    marginBottom: 8,
                   }}
                 >
                   {title}
@@ -139,18 +137,18 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
                 {/* Subtitle */}
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     color: "#64748B",
                     textAlign: "center",
-                    lineHeight: 19,
-                    paddingHorizontal: 12,
+                    lineHeight: 20,
+                    paddingHorizontal: 8,
                   }}
                 >
                   {subtitle}
                 </Text>
               </View>
 
-              {/* Mini Highlights */}
+              {/* Highlights */}
               <View
                 style={{
                   backgroundColor: "#F8FAFC",
@@ -205,38 +203,10 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
 
               {/* Action Buttons */}
               <View style={{ gap: 10 }}>
-                {/* Sign In Button (Orange) */}
+                {/* Register Button */}
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={handleSignIn}
-                  style={{
-                    backgroundColor: "#FF9114",
-                    borderRadius: 28,
-                    height: 50,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    shadowColor: "#FF9114",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 8,
-                    elevation: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: 16,
-                      fontWeight: "700",
-                    }}
-                  >
-                    Sign In
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Sign Up Button (Black) */}
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={handleSignUp}
+                  onPress={handleRegister}
                   style={{
                     backgroundColor: "#000000",
                     borderRadius: 28,
@@ -257,11 +227,39 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
                       fontWeight: "700",
                     }}
                   >
-                    Create an Account
+                    Register
                   </Text>
                 </TouchableOpacity>
 
-                {/* Maybe Later Link */}
+                {/* Login Button */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={handleLogin}
+                  style={{
+                    backgroundColor: "#FF9114",
+                    borderRadius: 28,
+                    height: 50,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    shadowColor: "#FF9114",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 16,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Login
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Continue Browsing */}
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={onClose}

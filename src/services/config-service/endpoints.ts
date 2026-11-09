@@ -10,6 +10,8 @@ export const ENDPOINTS = {
     FORGOT_PASSWORD_RESEND_OTP: "api/auth/forgot-password/resend-otp",
     FORGOT_PASSWORD_VERIFY_OTP: "api/auth/forgot-password/verify-otp",
     FORGOT_PASSWORD_RESET: "api/auth/forgot-password/reset-password",
+    RESUBMIT_WHOLESALE_BR: "api/auth/resubmit-wholesale-br",
+    UPLOAD_WHOLESALE_BR: "api/auth/upload-wholesale-br",
   },
 
   CUSTOMER: {
@@ -39,6 +41,7 @@ export const ENDPOINTS = {
   PRODUCT: {
     GET_ALL_PRODUCTS: "api/product/all-product",
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
+    GET_PACKAGE_ITEM_PRODUCTS: "api/product/package-item-products/:productTypeId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
     GET_PRODUCTS_BY_PRODUCT_TYPE: "api/product/by-product-type/:productTypeId",
     GET_BANNERS: "api/product/slides",
