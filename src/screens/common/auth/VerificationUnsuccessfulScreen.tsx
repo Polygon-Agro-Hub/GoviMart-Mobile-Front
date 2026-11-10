@@ -50,7 +50,10 @@ const formatReviewDate = (dateStr?: string | null) => {
     ];
     const month = monthNames[d.getMonth()];
 
-    return `${time}, ${ordinal(day)} ${month}`;
+    const isCurrentYear = d.getFullYear() === new Date().getFullYear();
+    const yearStr = isCurrentYear ? "" : ` ${d.getFullYear()}`;
+
+    return `${time}, ${ordinal(day)} ${month}${yearStr}`;
   } catch {
     return dateStr;
   }
@@ -319,8 +322,15 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
-              Submitted Document
+            <Text
+              style={{
+                color: "#64748B",
+                fontSize: 13,
+                fontWeight: "500",
+                lineHeight: 18,
+              }}
+            >
+              {"Submitted\nDocument"}
             </Text>
             <Text
               numberOfLines={1}
