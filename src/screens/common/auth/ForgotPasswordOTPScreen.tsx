@@ -357,9 +357,13 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         if (is429 || msg.toLowerCase().includes("too many")) {
           await applyRateLimitLockout();
         } else {
+          const displayMsg =
+            !msg || /incorrect|invalid|remaining/i.test(msg)
+              ? "Incorrect verification code. Please try again."
+              : msg;
           setAlertType("error");
-          setAlertTitle("Verification Failed");
-          setAlertMessage(msg);
+          setAlertTitle("Invalid Code");
+          setAlertMessage(displayMsg);
           setAlertVisible(true);
           setOtp(["", "", "", "", ""]);
           refs[0].current?.focus();
@@ -373,9 +377,12 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       if (is429 || msg.toLowerCase().includes("too many")) {
         await applyRateLimitLockout();
       } else {
+        const isWrongCode = !msg || /incorrect|invalid|remaining/i.test(msg);
         setAlertType("error");
-        setAlertTitle("Verification Error");
-        setAlertMessage(msg);
+        setAlertTitle(isWrongCode ? "Invalid Code" : "Verification Error");
+        setAlertMessage(
+          isWrongCode ? "Incorrect verification code. Please try again." : msg
+        );
         setAlertVisible(true);
         setOtp(["", "", "", "", ""]);
         refs[0].current?.focus();
