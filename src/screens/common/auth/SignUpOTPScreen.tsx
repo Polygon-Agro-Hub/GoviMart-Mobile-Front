@@ -338,7 +338,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // Wrong code: the server tracks wrong entries, so show its message.
   const handleWrongCode = async (msg: string) => {
     resetOtp();
-    Alert.alert("Invalid Code", msg || "Incorrect verification code.");
+    const displayMsg =
+      !msg || /incorrect|invalid|remaining/i.test(msg)
+        ? "Incorrect verification code. Please try again."
+        : msg;
+    Alert.alert("Invalid Code", displayMsg);
   };
 
   const handleBackPress = useCallback(() => {
