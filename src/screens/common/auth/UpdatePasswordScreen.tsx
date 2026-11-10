@@ -370,8 +370,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             <View ref={currentWrapRef} collapsable={false}>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.currentPassword
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-[#C5D2DB]"
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-[#C5D2DB]"
                   }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -398,9 +398,9 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       }}
                       autoCapitalize="none"
                       style={{
-                        fontSize: 14,
+                        fontSize: currentPassword ? 14 : 12,
                         color: "#000",
-                        fontWeight: "600",
+                        fontWeight: currentPassword ? "600" : "400",
                         padding: 0,
                         height: 36,
                       }}
@@ -440,8 +440,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             <View ref={newWrapRef} collapsable={false}>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.newPassword
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-[#C5D2DB]"
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-[#C5D2DB]"
                   }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -465,9 +465,9 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       }}
                       autoCapitalize="none"
                       style={{
-                        fontSize: 14,
+                        fontSize: newPassword ? 14 : 12,
                         color: "#000",
-                        fontWeight: "600",
+                        fontWeight: newPassword ? "600" : "400",
                         padding: 0,
                         height: 36,
                       }}
@@ -507,8 +507,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             <View ref={confirmWrapRef} collapsable={false}>
               <View
                 className={`border px-4 rounded-full flex-row items-center justify-between bg-white ${errors.confirmNewPassword
-                    ? "border-red-500 bg-red-50/10"
-                    : "border-[#C5D2DB]"
+                  ? "border-red-500 bg-red-50/10"
+                  : "border-[#C5D2DB]"
                   }`}
               >
                 <View className="flex-row items-center flex-1 gap-x-3 h-20">
@@ -535,9 +535,9 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
                       }}
                       autoCapitalize="none"
                       style={{
-                        fontSize: 14,
+                        fontSize: confirmNewPassword ? 14 : 12,
                         color: "#000",
-                        fontWeight: "600",
+                        fontWeight: confirmNewPassword ? "600" : "400",
                         padding: 0,
                         height: 36,
                       }}
@@ -602,9 +602,8 @@ const UpdatePassword: React.FC<UpdatePasswordProps> = ({
             onPress={handleUpdatePassword}
             disabled={loading || !isValid}
             activeOpacity={isValid ? 0.8 : 1}
-            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${
-              isValid ? "bg-black" : "bg-[#7F919C]"
-            }`}
+            className={`rounded-full items-center justify-center h-[50px] shadow-sm ${isValid ? "bg-black" : "bg-[#7F919C]"
+              }`}
             style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
