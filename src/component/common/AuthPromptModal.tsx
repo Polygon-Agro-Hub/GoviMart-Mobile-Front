@@ -3,27 +3,38 @@ import {
   View,
   Text,
   Modal,
+  Image,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface AuthPromptModalProps {
+export interface AuthPromptModalProps {
   visible: boolean;
   onClose: () => void;
   navigation: any;
   title?: string;
   subtitle?: string;
+  description?: string;
+  getStartedText?: string;
+  continueText?: string;
 }
+
+const polygonLeafImage = require("@/assets/images/public/polygon-leaf.png");
 
 export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
   visible,
   onClose,
   navigation,
   title = "Welcome, Guest!",
-  subtitle = "We're excited to have you here!\nTo unlock the best experience,\nplease log in or create a new account.",
+  subtitle,
+  description,
+  getStartedText = "Get Started",
+  continueText = "Continue Browsing",
 }) => {
+  const insets = useSafeAreaInsets();
+
   const handleRegister = () => {
     onClose();
     navigation.navigate("ChooseAuth");
@@ -34,18 +45,27 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
     navigation.navigate("Login");
   };
 
+  const displayText =
+    description ||
+    subtitle ||
+    "We're excited to have you here! To unlock the best experience, please log in or create a new account.";
+
+  // Safe bottom padding to ensure the continue button is never cut off or cramped on any phone screen
+  const safeBottomPadding = Math.max(insets.bottom, 16) + 16;
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
             justifyContent: "flex-end",
           }}
         >
@@ -55,228 +75,152 @@ export const AuthPromptModal: React.FC<AuthPromptModalProps> = ({
                 backgroundColor: "#FFFFFF",
                 borderTopLeftRadius: 32,
                 borderTopRightRadius: 32,
-                paddingHorizontal: 24,
-                paddingTop: 16,
-                paddingBottom: 36,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: -4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 12,
-                elevation: 20,
+                paddingTop: 12,
+                paddingBottom: safeBottomPadding,
+                shadowColor: "#000000",
+                shadowOffset: { width: 0, height: -6 },
+                shadowOpacity: 0.12,
+                shadowRadius: 16,
+                elevation: 24,
               }}
             >
-              {/* Top Handle Bar */}
+              {/* Top Handle / Drag Bar */}
               <View
                 style={{
-                  width: 40,
+                  width: 44,
                   height: 4,
                   borderRadius: 2,
-                  backgroundColor: "#E2E8F0",
+                  backgroundColor: "#D9DFE8",
                   alignSelf: "center",
-                  marginBottom: 16,
+                  marginBottom: 8,
                 }}
               />
 
-              {/* Top Close Button */}
+              {/* Close Button ("✕") on top right */}
               <View
                 style={{
                   flexDirection: "row",
                   justifyContent: "flex-end",
-                  marginBottom: 6,
+                  paddingHorizontal: 20,
+                  marginBottom: 4,
                 }}
               >
                 <TouchableOpacity
                   onPress={onClose}
                   activeOpacity={0.7}
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
                     backgroundColor: "#F1F5F9",
                     justifyContent: "center",
                     alignItems: "center",
                   }}
+                  accessibilityLabel="Close"
+                  accessibilityRole="button"
                 >
-                  <Ionicons name="close" size={18} color="#0F172A" />
+                  <Ionicons name="close" size={16} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
-              {/* Centered Graphic Badge */}
-              <View style={{ alignItems: "center", marginBottom: 14 }}>
-                <View
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 32,
-                    backgroundColor: "#FFF3E0",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginBottom: 12,
-                  }}
-                >
-                  <Ionicons
-                    name="person-circle-outline"
-                    size={36}
-                    color="#FF9114"
-                  />
-                </View>
+              {/* Centered Polygon Leaf Emblem */}
+              <View
+                style={{
+                  alignItems: "center",
+                  marginTop: 2,
+                  marginBottom: 18,
+                }}
+              >
+                <Image
+                  source={polygonLeafImage}
+                  style={{ width: 62, height: 74 }}
+                  resizeMode="contain"
+                />
+              </View>
 
-                {/* Title */}
+              {/* Welcome Text Section */}
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingHorizontal: 28,
+                  marginBottom: 26,
+                }}
+              >
                 <Text
                   style={{
-                    fontSize: 22,
-                    fontWeight: "800",
-                    color: "#0F172A",
+                    color: "#000000",
+                    fontSize: 24,
+                    fontWeight: "700",
                     textAlign: "center",
-                    marginBottom: 8,
+                    marginBottom: 10,
                   }}
                 >
                   {title}
                 </Text>
 
-                {/* Subtitle */}
                 <Text
                   style={{
-                    fontSize: 14,
-                    color: "#64748B",
+                    fontSize: 13,
+                    color: "#494A65",
+                    fontWeight: "400",
                     textAlign: "center",
                     lineHeight: 20,
-                    paddingHorizontal: 8,
                   }}
                 >
-                  {subtitle}
+                  {displayText}
                 </Text>
               </View>
 
-              {/* Highlights */}
-              <View
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderRadius: 16,
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  marginBottom: 20,
-                  flexDirection: "row",
-                  justifyContent: "space-around",
-                }}
-              >
-                <View style={{ alignItems: "center", flexDirection: "row" }}>
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={16}
-                    color="#10B981"
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}
-                  >
-                    Secure
-                  </Text>
-                </View>
-                <View style={{ alignItems: "center", flexDirection: "row" }}>
-                  <Ionicons
-                    name="flash"
-                    size={16}
-                    color="#F59E0B"
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}
-                  >
-                    Fast Delivery
-                  </Text>
-                </View>
-                <View style={{ alignItems: "center", flexDirection: "row" }}>
-                  <Ionicons
-                    name="pricetag"
-                    size={16}
-                    color="#6366F1"
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}
-                  >
-                    Best Deals
-                  </Text>
-                </View>
-              </View>
-
-              {/* Action Buttons */}
-              <View style={{ gap: 10 }}>
-                {/* Register Button */}
+              {/* Action Buttons Section */}
+              <View style={{ paddingHorizontal: 24 }}>
+                {/* Get Started Button */}
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={handleRegister}
                   style={{
-                    backgroundColor: "#000000",
-                    borderRadius: 28,
-                    height: 50,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 6,
-                    elevation: 3,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: 16,
-                      fontWeight: "700",
-                    }}
-                  >
-                    Register
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Login Button */}
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={handleLogin}
-                  style={{
                     backgroundColor: "#FF9114",
-                    borderRadius: 28,
+                    borderRadius: 26,
                     height: 50,
                     justifyContent: "center",
                     alignItems: "center",
                     shadowColor: "#FF9114",
                     shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.25,
+                    shadowOpacity: 0.28,
                     shadowRadius: 8,
                     elevation: 4,
+                    marginBottom: 16,
                   }}
                 >
                   <Text
                     style={{
                       color: "#FFFFFF",
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: "700",
                     }}
                   >
-                    Login
+                    {getStartedText}
                   </Text>
                 </TouchableOpacity>
 
-                {/* Continue Browsing */}
+                {/* Continue Browsing Button */}
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={onClose}
                   style={{
                     paddingVertical: 8,
                     alignItems: "center",
-                    marginTop: 2,
+                    justifyContent: "center",
                   }}
                 >
                   <Text
                     style={{
                       color: "#64748B",
+                      fontWeight: "500",
                       fontSize: 13,
-                      fontWeight: "600",
+                      textDecorationLine: "underline",
                     }}
                   >
-                    Continue Browsing
+                    {continueText}
                   </Text>
                 </TouchableOpacity>
               </View>

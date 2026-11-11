@@ -336,8 +336,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const scheduledDate = getScheduledDeliveryDate();
     if (!scheduledDate) return false;
 
-    // 3. System Earliest Possible Schedule Date (e.g. today is 12 -> 15)
-    const sysEarliestDate = getMinDeliveryDate();
+    // 3. System Earliest Possible Schedule Date
+    const buyerType = userProfile?.buyerType || orderContext?.buyerType;
+    const sysEarliestDate = getMinDeliveryDate(buyerType);
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() === sysEarliestDate.getTime();

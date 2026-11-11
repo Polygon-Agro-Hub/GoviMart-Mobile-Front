@@ -75,7 +75,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Recurring: default to earliest available delivery day
   const [selectedDays, setSelectedDays] = useState<string[]>(() => [
-    getEarliestDayId(getMinDeliveryDate()),
+    getEarliestDayId(getMinDeliveryDate(orderContext?.buyerType)),
   ]);
   const [selectedWeeks, setSelectedWeeks] = useState<string>("02");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
@@ -118,6 +118,11 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const cartPackages = useSelector((state: RootState) => state.cart.packages);
+  const userProfile = useSelector(
+    (state: RootState) => (state as RootState & { auth: any }).auth?.userProfile,
+  );
+  const buyerType = userProfile?.buyerType || orderContext?.buyerType || "Retail";
+  const isWholesale = buyerType.toLowerCase() === "wholesale";
 
   const [livePackageDates, setLivePackageDates] = useState<
     Record<
@@ -236,12 +241,12 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (!earliestExpiryDate && !hasStartDate) return null;
 
-    // Current hour gap check (6:00 PM cutoff)
+    // Current hour gap check (6:00 PM cutoff for Retail; 1 day gap for Wholesale)
     const now = new Date();
     const isAfter6PM = now.getHours() >= 18;
-    const gapDays = isAfter6PM ? 3 : 2;
+    const gapDays = isWholesale ? 1 : isAfter6PM ? 3 : 2;
 
-    const minAvailDate = getMinDeliveryDate(); // today + (>=18 ? 4 : 3) days
+    const minAvailDate = getMinDeliveryDate(buyerType);
     minAvailDate.setHours(0, 0, 0, 0);
 
     // Rule: Do not count package start date for scheduling availability.
@@ -321,12 +326,12 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       startDateFormatted: `${startMonth} ${startDay}, ${startYear}`,
       isAvailableNow,
     };
-  }, [cartPackages, orderContext, livePackageDates]);
+  }, [cartPackages, orderContext, livePackageDates, buyerType, isWholesale]);
 
   // Keep selectedDate and selectedDays aligned with earliest possible delivery date
   useEffect(() => {
     const earliestDate =
-      seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
+      seasonalInfo?.effectiveStartDate || getMinDeliveryDate(buyerType);
     if (scheduleType === "Once a Week") {
       setSelectedDays([getEarliestDayId(earliestDate)]);
     } else if (scheduleType === "Twice a Week") {
@@ -365,7 +370,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     const numWeeks = parseInt(selectedWeeks, 10) || 2;
     const minDate = seasonalInfo?.effectiveStartDate
       ? new Date(seasonalInfo.effectiveStartDate)
-      : getMinDeliveryDate();
+      : getMinDeliveryDate(buyerType);
     minDate.setHours(0, 0, 0, 0);
 
     const dayIndices = selectedDays.map((id) => {
@@ -558,7 +563,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         ? selectedDate?.replace(/\//g, "-")
         : calculatedOrders[0]?.isoDate || "";
 
-    const sysEarliestDate = getMinDeliveryDate();
+    const sysEarliestDate = getMinDeliveryDate(buyerType);
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     const hasPackageUnavailableOnEarliest = Boolean(
@@ -667,11 +672,11 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const now = new Date();
     const isAfter6PM = now.getHours() >= 18;
-    const gapDays = seasonalInfo?.gapDays ?? (isAfter6PM ? 3 : 2);
+    const gapDays = seasonalInfo?.gapDays ?? (isWholesale ? 1 : isAfter6PM ? 3 : 2);
     const startDateStr =
       seasonalInfo?.startDateFormatted ||
       (() => {
-        const minDate = getMinDeliveryDate();
+        const minDate = getMinDeliveryDate(buyerType);
         return `${MONTH_SHORT[minDate.getMonth()]} ${minDate.getDate()}, ${minDate.getFullYear()}`;
       })();
 
@@ -1097,7 +1102,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
             const newType = selectedValues[0] as ScheduleType;
             setScheduleType(newType);
             const earliestDate =
-              seasonalInfo?.effectiveStartDate || getMinDeliveryDate();
+              seasonalInfo?.effectiveStartDate || getMinDeliveryDate(buyerType);
             if (newType === "Once a Week" && selectedDays.length !== 1) {
               setSelectedDays([getEarliestDayId(earliestDate)]);
             } else if (
@@ -1115,6 +1120,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         visible={dateModalVisible}
         onClose={() => setDateModalVisible(false)}
         selectedDate={selectedDate}
+        buyerType={buyerType}
         minDate={
           seasonalInfo?.effectiveStartDate
             ? seasonalInfo.effectiveStartDate
@@ -1283,7 +1289,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
                   {/* Badge for 1st order: only when it falls on the system earliest date */}
                   {order.index === 1 &&
                     (() => {
-                      const sysEarliestDate = getMinDeliveryDate();
+                      const sysEarliestDate = getMinDeliveryDate(buyerType);
                       sysEarliestDate.setHours(0, 0, 0, 0);
 
                       const hasPackageUnavailableOnEarliest = Boolean(

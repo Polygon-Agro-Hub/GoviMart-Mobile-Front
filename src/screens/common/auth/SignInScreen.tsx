@@ -268,7 +268,10 @@ const formatSubmittedDate = (dateStr?: string | null) => {
     ];
     const month = monthNames[d.getMonth()];
 
-    return `${time}, ${ordinal(day)} ${month}`;
+    const isCurrentYear = d.getFullYear() === now.getFullYear();
+    const yearStr = isCurrentYear ? "" : ` ${d.getFullYear()}`;
+
+    return `${time}, ${ordinal(day)} ${month}${yearStr}`;
   } catch {
     return dateStr;
   }
@@ -321,41 +324,77 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         onBackPress,
       );
 
+      const loadRemembered = async () => {
+        try {
+          const isRemembered = await AsyncStorage.getItem("rememberMeEnabled");
+          if (isRemembered === "true") {
+            const storedIdentifier = await AsyncStorage.getItem(
+              "rememberedIdentifier",
+            );
+            const storedPassword =
+              await SecureStore.getItemAsync("rememberedPassword");
+            const normalizedStored = normalizeIdentifier(storedIdentifier || "");
+            if (normalizedStored) {
+              setIdentifier(normalizedStored);
+            }
+            if (storedPassword) {
+              setPassword(storedPassword.replace(/\s/g, ""));
+            }
+            setRememberMe(true);
+            dispatch(
+              setRememberMeDetails({
+                rememberMe: true,
+                rememberedDetails: { identifier: normalizedStored },
+              }),
+            );
+          }
+        } catch (e) {
+          console.error("Failed to load remembered credentials:", e);
+        }
+      };
+
+      loadRemembered();
+
       return () => subscription.remove();
-    }, []),
+    }, [dispatch]),
   );
 
-  useEffect(() => {
-    const loadRemembered = async () => {
-      try {
-        const isRemembered = await AsyncStorage.getItem("rememberMeEnabled");
-        if (isRemembered === "true") {
-          const storedIdentifier = await AsyncStorage.getItem(
-            "rememberedIdentifier",
-          );
-          const storedPassword =
-            await SecureStore.getItemAsync("rememberedPassword");
-          const normalizedStored = normalizeIdentifier(storedIdentifier || "");
-          if (normalizedStored) {
-            setIdentifier(normalizedStored);
-          }
-          if (storedPassword) {
-            setPassword(storedPassword.replace(/\s/g, ""));
-          }
-          setRememberMe(true);
-          dispatch(
-            setRememberMeDetails({
-              rememberMe: true,
-              rememberedDetails: { identifier: normalizedStored },
-            }),
-          );
+  const syncRememberMe = async (
+    normId: string,
+    pwd: string,
+    shouldRemember: boolean,
+    refreshToken?: string,
+  ) => {
+    try {
+      if (shouldRemember) {
+        await AsyncStorage.setItem("rememberMeEnabled", "true");
+        await AsyncStorage.setItem("rememberedIdentifier", normId);
+        if (refreshToken) {
+          await tokenStorage.setRefreshToken(refreshToken);
         }
-      } catch (e) {
-        console.error("Failed to load remembered credentials:", e);
+        await SecureStore.setItemAsync("rememberedPassword", pwd.trim());
+        dispatch(
+          setRememberMeDetails({
+            rememberMe: true,
+            rememberedDetails: { identifier: normId },
+          }),
+        );
+      } else {
+        await AsyncStorage.removeItem("rememberMeEnabled");
+        await AsyncStorage.removeItem("rememberedIdentifier");
+        await AsyncStorage.removeItem("userRefreshToken");
+        await SecureStore.deleteItemAsync("rememberedPassword");
+        dispatch(
+          setRememberMeDetails({
+            rememberMe: false,
+            rememberedDetails: null,
+          }),
+        );
       }
-    };
-    loadRemembered();
-  }, [dispatch]);
+    } catch (e) {
+      console.error("Failed to sync rememberMe details:", e);
+    }
+  };
 
   const handleSignIn = async () => {
     let hasError = false;
@@ -446,31 +485,12 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           console.log("Failed to sync cart on login:", cartErr);
         }
 
-        if (rememberMe) {
-          await AsyncStorage.setItem("rememberMeEnabled", "true");
-          await AsyncStorage.setItem("rememberedIdentifier", normalizedIdentifier);
-          if (refreshToken) {
-            await tokenStorage.setRefreshToken(refreshToken);
-          }
-          await SecureStore.setItemAsync("rememberedPassword", password.trim());
-          dispatch(
-            setRememberMeDetails({
-              rememberMe: true,
-              rememberedDetails: { identifier: normalizedIdentifier },
-            }),
-          );
-        } else {
-          await AsyncStorage.removeItem("rememberMeEnabled");
-          await AsyncStorage.removeItem("rememberedIdentifier");
-          await AsyncStorage.removeItem("userRefreshToken");
-          await SecureStore.deleteItemAsync("rememberedPassword");
-          dispatch(
-            setRememberMeDetails({
-              rememberMe: false,
-              rememberedDetails: null,
-            }),
-          );
-        }
+        await syncRememberMe(
+          normalizedIdentifier,
+          password,
+          rememberMe,
+          refreshToken,
+        );
 
         const isWholesale =
           (buyerType || "").toLowerCase() === "wholesale";
@@ -525,10 +545,12 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           navigation.navigate(targetScreen as any);
         }
       } else if (response.data?.wholesaleStatus === "To Review") {
+        await syncRememberMe(normalizedIdentifier, password, rememberMe);
         setWholesalePendingData(response.data.data);
         setWholesalePendingModalVisible(true);
         return;
       } else if (response.data?.wholesaleStatus === "Rejected") {
+        await syncRememberMe(normalizedIdentifier, password, rememberMe);
         navigation.navigate("VerificationUnsuccessful", {
           userId: response.data.data?.userId,
           approveStatus: response.data.data?.approveStatus,
@@ -559,11 +581,13 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
       const wholesaleStatus = error.response?.data?.wholesaleStatus;
       const wholesaleData = error.response?.data?.data;
       if (wholesaleStatus === "To Review") {
+        await syncRememberMe(normalizedIdentifier, password, rememberMe);
         setWholesalePendingData(wholesaleData);
         setWholesalePendingModalVisible(true);
         return;
       }
       if (wholesaleStatus === "Rejected") {
+        await syncRememberMe(normalizedIdentifier, password, rememberMe);
         navigation.navigate("VerificationUnsuccessful", {
           userId: wholesaleData?.userId,
           approveStatus: wholesaleData?.approveStatus,
@@ -1094,8 +1118,15 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
-                  Submitted Document
+                <Text
+                  style={{
+                    color: "#64748B",
+                    fontSize: 13,
+                    fontWeight: "500",
+                    lineHeight: 18,
+                  }}
+                >
+                  {"Submitted\nDocument"}
                 </Text>
                 <Text
                   numberOfLines={1}

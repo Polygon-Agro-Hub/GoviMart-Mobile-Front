@@ -26,6 +26,7 @@ export interface CheckoutDetails {
   // Schedule fields
   scheduleType?: string;
   deliveryDate?: string;
+  buyerType?: string;
   earliestDeliveryDate?: string | null;
   hasPackageUnavailableOnEarliest?: boolean;
   timeSlot?: string;
@@ -50,6 +51,7 @@ export interface OrderContext {
   packages?: any[];
   additionalItems?: any[];
   deliveryCharge?: number;
+  buyerType?: string;
   isFinalizeImdt?: number;
   deliveryMethod?: "home" | "pickup";
   checkoutDetails?: CheckoutDetails;
