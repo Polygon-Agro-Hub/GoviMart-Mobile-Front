@@ -11,7 +11,7 @@ import {
   Keyboard,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
@@ -63,8 +63,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const storageKey = attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
 
   // State Management
-  const [otp, setOtp] = useState(["", "", "", "", ""]);
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [otp, setOtp] = useState<string>("");
+  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
+  const [otpSessionKey, setOtpSessionKey] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState(OTP_TIMER_SECONDS);
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -81,14 +82,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"error" | "success">("error");
 
-  // Input Refs
-  const ref_1 = useRef<TextInput>(null);
-  const ref_2 = useRef<TextInput>(null);
-  const ref_3 = useRef<TextInput>(null);
-  const ref_4 = useRef<TextInput>(null);
-  const ref_5 = useRef<TextInput>(null);
-
-  const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
+  // Master Input Ref
+  const inputRef = useRef<TextInput>(null);
 
   // Synchronous lock to block double-tap on Resend (state updates too late)
   const resendLockRef = useRef(false);
@@ -271,34 +266,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  const handleChangeText = (text: string, index: number) => {
-    const cleanText = text.replace(/[^0-9]/g, "");
-    if (!cleanText) {
-      const newOtp = [...otp];
-      newOtp[index] = "";
-      setOtp(newOtp);
-      return;
-    }
-
-    const newOtp = [...otp];
-    newOtp[index] = cleanText.slice(-1);
-    setOtp(newOtp);
-
-    // Auto-focus next box
-    if (index < 4) {
-      refs[index + 1].current?.focus();
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace") {
-      if (!otp[index] && index > 0) {
-        const newOtp = [...otp];
-        newOtp[index - 1] = "";
-        setOtp(newOtp);
-        refs[index - 1].current?.focus();
-      }
-    }
+  const handleOtpChange = (text: string) => {
+    const cleanText = text.replace(/[^0-9]/g, "").slice(0, 5);
+    setOtp(cleanText);
   };
 
   const applyRateLimitLockout = async () => {
@@ -314,7 +284,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const handleVerify = async () => {
-    const code = otp.join("");
+    const code = otp;
     if (code.length < 5) {
       setAlertType("error");
       setAlertTitle("Invalid Code");
@@ -365,8 +335,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           setAlertTitle("Invalid Code");
           setAlertMessage(displayMsg);
           setAlertVisible(true);
-          setOtp(["", "", "", "", ""]);
-          refs[0].current?.focus();
+          setOtp("");
+          inputRef.current?.focus();
         }
       }
     } catch (err: any) {
@@ -384,8 +354,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           isWrongCode ? "Incorrect verification code. Please try again." : msg
         );
         setAlertVisible(true);
-        setOtp(["", "", "", "", ""]);
-        refs[0].current?.focus();
+        setOtp("");
+        inputRef.current?.focus();
       }
     } finally {
       setIsVerifying(false);
@@ -432,7 +402,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         }
       }
 
-      setOtp(["", "", "", "", ""]);
+      setOtp("");
+      setOtpSessionKey((prev) => prev + 1);
       setIsResending(true);
       try {
         const response = await authService.resendForgotPasswordOtp({
@@ -566,51 +537,79 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             </Text>
           </View>
 
-          {/* 5 OTP Digit Input Boxes */}
-          <View className="flex-row justify-between my-8 px-2">
-            {otp.map((digit, index) => {
-              const isFocused = focusedIndex === index;
-              return (
-                <View
-                  key={index}
-                  className="w-[50px] h-[50px] border rounded-xl justify-center items-center bg-white"
-                  style={{
-                    borderColor: isFocused ? "#FF9114" : "#000000",
-                    borderWidth: isFocused ? 2 : 1,
-                  }}
-                >
-                  <TextInput
-                    ref={refs[index]}
-                    value={digit}
-                    onChangeText={(text) => handleChangeText(text, index)}
-                    onKeyPress={(e) => handleKeyPress(e, index)}
-                    onFocus={() => setFocusedIndex(index)}
-                    onBlur={() => setFocusedIndex(null)}
-                    keyboardType="number-pad"
+          {/* 5 OTP Digit Input Boxes Container */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => inputRef.current?.focus()}
+            className="relative my-8 px-2"
+          >
+            {/* Master TextInput for 100% reliable SMS autofill & keyboard input */}
+            <TextInput
+              key={`forgot_otp_${otpSessionKey}`}
+              ref={inputRef}
+              value={otp}
+              onChangeText={handleOtpChange}
+              keyboardType="number-pad"
+              maxLength={5}
+              textContentType="oneTimeCode"
+              autoComplete="sms-otp"
+              importantForAutofill="yes"
+              editable={!isRateLimited && !isVerifying}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              autoFocus
+              caretHidden
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: "100%",
+                height: "100%",
+                opacity: 0.01,
+                color: "transparent",
+                backgroundColor: "transparent",
+                zIndex: 10,
+              }}
+            />
+
+            {/* Visual 5-box display */}
+            <View pointerEvents="none" className="flex-row justify-between w-full">
+              {Array.from({ length: 5 }).map((_, index) => {
+                const digit = otp[index] || "";
+                const isFocused =
+                  isInputFocused &&
+                  (otp.length === index ||
+                    (otp.length === 5 && index === 4));
+
+                return (
+                  <View
+                    key={index}
+                    className="w-[50px] h-[50px] border rounded-xl justify-center items-center bg-white"
                     style={{
-                      textAlign: "center",
-                      textAlignVertical: "center",
-                      fontSize: 20,
-                      fontWeight: "bold",
-                      color: "#000000",
-                      paddingTop: 0,
-                      paddingBottom: 0,
-                      paddingVertical: 0,
-                      paddingHorizontal: 0,
-                      margin: 0,
-                      width: "100%",
-                      height: "100%",
-                      ...(Platform.OS === "android"
-                        ? { includeFontPadding: false }
-                        : {}),
+                      borderColor: isFocused ? "#FF9114" : "#000000",
+                      borderWidth: isFocused ? 2 : 1,
                     }}
-                    maxLength={1}
-                    selectTextOnFocus
-                  />
-                </View>
-              );
-            })}
-          </View>
+                  >
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: "#000000",
+                        ...(Platform.OS === "android"
+                          ? { includeFontPadding: false }
+                          : {}),
+                      }}
+                    >
+                      {digit}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
 
           {/* Rate Limit / Code Expired Banner */}
           {isRateLimited && timeLeft > 0 ? (
@@ -745,14 +744,14 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         type={alertType}
         onClose={() => {
           setAlertVisible(false);
-          refs[0].current?.focus();
+          inputRef.current?.focus();
         }}
         autoClose={false}
         showOkButton={true}
         okButtonText="OK"
         onOkPress={() => {
           setAlertVisible(false);
-          refs[0].current?.focus();
+          inputRef.current?.focus();
         }}
       />
     </View>
