@@ -1187,6 +1187,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     onSelect={() => {}}
                     icon="user"
                     error={titleError}
+                    showArrow={!isWholesale}
                   />
                 </View>
 
@@ -1276,6 +1277,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     marginLeft={6}
                     arrowSize={16}
                     error={codeError}
+                    showArrow={!isWholesale}
                   />
                 </View>
 

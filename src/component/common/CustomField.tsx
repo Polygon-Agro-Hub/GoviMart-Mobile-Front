@@ -274,6 +274,7 @@ export const DropdownField = ({
     marginLeft = 10,
     arrowSize = 19,
     disabled = false,
+    showArrow = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -291,6 +292,7 @@ export const DropdownField = ({
     marginLeft?: number;
     arrowSize?: number;
     disabled?: boolean;
+    showArrow?: boolean;
 }) => {
     return (
         <View
@@ -371,15 +373,17 @@ export const DropdownField = ({
 
                 {/* Arrow */}
 
-                <Ionicons
-                    name={
-                        open
-                            ? "chevron-up"
-                            : "chevron-down"
-                    }
-                    size={arrowSize}
-                    color="#111"
-                />
+                {showArrow && (
+                    <Ionicons
+                        name={
+                            open
+                                ? "chevron-up"
+                                : "chevron-down"
+                        }
+                        size={arrowSize}
+                        color="#111"
+                    />
+                )}
             </TouchableOpacity>
 
             {/* Dropdown Options */}

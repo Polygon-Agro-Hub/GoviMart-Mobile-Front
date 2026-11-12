@@ -121,7 +121,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState<"confirm" | "cancel" | null>(
     null,
   );
-const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
+  const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
   // ─── SHARED TOTALS (same formula as OrderConfirmation screen) ──────────────
   // Everything is calculated from today's marketplace prices.
   // The stored order.fullTotal / order.discount are only fallbacks.
@@ -218,8 +218,6 @@ const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
       hasData,
     };
   };
-
-
 
   // ─── SCHEDULE DATE + TIME (all orders) ─────────────────────────────────────
   const scheduleDateRaw = order?.sheduleDate || order?.scheduleDate;
@@ -1455,8 +1453,8 @@ const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
           const orderFullTotal = t.total;
           const isPickup = t.isPickup;
 
-          const creditPaid = parseFloat(order?.creditPaid || 0);
-          const moneyPaid = parseFloat(order?.moneyPaid || 0);
+          const creditPaid = parseFloat(order?.creditPaid || 0) || 0;
+          const moneyPaid = parseFloat(order?.moneyPaid || 0) || 0;
           const paymentMethodLower = (order?.paymentMethod || "").toLowerCase();
           const isCashOrder = paymentMethodLower === "cash";
           const isCardOrder =
@@ -1469,12 +1467,6 @@ const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
           // Remaining cash amount: total - creditPaid
           const cashRemainingAmount = Math.max(0, orderFullTotal - creditPaid);
 
-          // Remaining card amount: moneyPaid if > 0, else total - creditPaid
-          const cardRemainingAmount =
-            moneyPaid > 0
-              ? moneyPaid
-              : Math.max(0, orderFullTotal - creditPaid);
-
           // Return calculations
           const status = order?.processStatus || order?.status || "Pending";
           const isOrderCancelled =
@@ -1484,6 +1476,35 @@ const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
             (order?.status || "").toLowerCase() === "cancelled";
           const isOrderReturned =
             status === "Return" || status === "Return Received";
+
+          // ─── CARD PAYMENT BREAKDOWN ───────────────────────────────────────
+          // "Paid with Card" = money REALLY received by card.
+          // "Pay with Card"  = card amount still to be paid, e.g. a product
+          //                    price increased on an order that was already
+          //                    fully paid by credit. isPaid can be 1 only
+          //                    because credit covered the old total, so it
+          //                    must never make the extra amount "paid".
+          const cardPaidAmount = isOrderReturned
+            ? isCardOrder
+              ? Math.max(0, orderFullTotal - creditPaid)
+              : 0
+            : isPaid
+              ? moneyPaid > 0
+                ? moneyPaid
+                : isCardOrder && creditPaid === 0
+                  ? orderFullTotal // legacy: card order marked paid, no split stored
+                  : 0
+              : 0;
+
+          const cardDueAmount = isOrderReturned
+            ? 0
+            : Math.max(0, orderFullTotal - creditPaid - cardPaidAmount);
+
+          // Card rows apply to card orders and to credit-paid orders whose
+          // extra amount has to be paid by card (never cash orders).
+          const showCardRows =
+            !isCashOrder && (isCardOrder || isCreditOrder || creditPaid > 0);
+
           const totalPaidByCustomer = isCardOrder ? orderFullTotal : creditPaid;
           const handlingFee = parseFloat(order?.returnHandlingFee || 350);
           const deliveryFeeDeduction = parseFloat(
@@ -1680,13 +1701,25 @@ const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
                     />
                   )}
 
-                  {/* Paid with Card */}
-                  {isCardOrder && cardRemainingAmount > 0 && (
+                  {/* Paid with Card: only money really received by card */}
+                  {showCardRows && cardPaidAmount > 0 && (
                     <SummaryRow
-                      label={isPaid ? "Paid with Card" : "Pay with Card"}
-                      value={`Rs. ${formatAmount(cardRemainingAmount)}`}
+                      label="Paid with Card"
+                      value={`Rs. ${formatAmount(cardPaidAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"
+                    />
+                  )}
+
+                  {/* Pay with Card: extra / unpaid amount, stays "Pay" until
+                      the card payment is completed */}
+                  {showCardRows && cardDueAmount > 0 && (
+                    <SummaryRow
+                      label="Pay with Card"
+                      value={`Rs. ${formatAmount(cardDueAmount)}`}
+                      icon="credit-card"
+                      iconColor="#0088FF"
+                      valueColor="#FF9114"
                     />
                   )}
 

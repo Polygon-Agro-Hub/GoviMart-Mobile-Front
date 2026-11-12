@@ -73,6 +73,9 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
   // Complaint linked to this order (null when none)
   const [complaint, setComplaint] = useState<any>(null);
+  // True until the complaint lookup for this focus has finished. The complaint
+  // button is hidden while true so the wrong status is never shown first.
+  const [complaintLoading, setComplaintLoading] = useState(true);
   const [replyModalVisible, setReplyModalVisible] = useState(false);
 
   const formatAmount = (amount: number | string) => {
@@ -201,21 +204,21 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const handleBack = useCallback(() => {
-  navigation.navigate("OrderHistory");
-}, [navigation]);
+    navigation.navigate("OrderHistory");
+  }, [navigation]);
 
-useFocusEffect(
-  useCallback(() => {
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        handleBack();
-        return true;
-      },
-    );
-    return () => subscription.remove();
-  }, [handleBack]),
-);
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          handleBack();
+          return true;
+        },
+      );
+      return () => subscription.remove();
+    }, [handleBack]),
+  );
 
   const handleViewComplaint = () => {
     if (!complaint?.id) return;
@@ -336,12 +339,24 @@ useFocusEffect(
     fetchAllOrderDetails();
   }, [orderId]);
 
-  // Re-fetch the complaint every time this screen gains focus so the button
-  // updates right after a complaint is submitted / closed.
+  // Look up the complaint every time this screen gains focus so the button
+  // reflects a complaint that was just submitted / closed. The button stays
+  // hidden (complaintLoading) until the lookup finishes, so "Report an Issue"
+  // never flashes before "Complaint Under Review".
   useFocusEffect(
     useCallback(() => {
-      if (!invoiceNo) return;
+      // Wait for the order (and its invoiceNo) to load first
+      if (loading) return;
+
+      if (!invoiceNo) {
+        setComplaint(null);
+        setComplaintLoading(false);
+        return;
+      }
+
       let active = true;
+      setComplaintLoading(true);
+
       (async () => {
         try {
           // Uses the existing my-complaints API (newest first) and matches the
@@ -359,12 +374,15 @@ useFocusEffect(
           if (active) setComplaint(found);
         } catch (e) {
           if (active) setComplaint(null);
+        } finally {
+          if (active) setComplaintLoading(false);
         }
       })();
+
       return () => {
         active = false;
       };
-    }, [invoiceNo]),
+    }, [invoiceNo, loading]),
   );
 
   const NORMAL_STAGES = [
@@ -792,11 +810,11 @@ useFocusEffect(
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
         <CustomHeader
-  showBackButton
-  navigation={navigation}
-  title="Order Details"
-  onBackPress={handleBack}
-/>
+          showBackButton
+          navigation={navigation}
+          title="Order Details"
+          onBackPress={handleBack}
+        />
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
@@ -816,11 +834,11 @@ useFocusEffect(
       {/* HEADER */}
 
       <CustomHeader
-  showBackButton
-  navigation={navigation}
-  title="Order Details"
-  onBackPress={handleBack}
-/>
+        showBackButton
+        navigation={navigation}
+        title="Order Details"
+        onBackPress={handleBack}
+      />
 
       {/* CONTENT */}
       <ScrollView
@@ -866,8 +884,10 @@ useFocusEffect(
               </Text>
             </View>
 
+            {/* Complaint buttons are hidden until the complaint lookup is done */}
+
             {/* 1) No complaint yet + Delivered/Picked up within 24h */}
-            {!hasComplaint && canReportIssue && (
+            {!complaintLoading && !hasComplaint && canReportIssue && (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleReportIssue}
@@ -900,7 +920,7 @@ useFocusEffect(
             )}
 
             {/* 2) Complaint opened (not closed) */}
-            {isComplaintOpen && (
+            {!complaintLoading && isComplaintOpen && (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleViewComplaint}
@@ -928,7 +948,7 @@ useFocusEffect(
             )}
 
             {/* 3) Complaint closed */}
-            {isComplaintClosed && (
+            {!complaintLoading && isComplaintClosed && (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setReplyModalVisible(true)}

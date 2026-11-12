@@ -170,7 +170,7 @@ export function detectPaymentType(
   const fullyCoveredByCredit = hasCredit && creditPaid >= grandTotal - 0.01;
 
   if (fullyCoveredByCredit) {
-    return "Credit Balance";
+    return "Polygon Wallet";
   }
 
   if (payType === "Card" || payType.toLowerCase() === "card") {
@@ -227,7 +227,7 @@ export function getPaymentStatusInfo(
   };
 
   if (hasCreditPaid) {
-    push("Credit Balance Used", creditPaidNum, "paid");
+    push("Polygon Wallet Used", creditPaidNum, "paid");
 
     if (remainingAfterCredit > 0.01) {
       if (isPaid) {

@@ -310,7 +310,21 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     }
 
     try {
-      const scheduleRes = await orderService.getScheduleOrders();
+      // Wholesale orders get 2-day gap (today 12 -> 14)
+      // Retail orders get 3-day gap (today 12 -> 15)
+      const currentBuyerType = userProfileRef.current?.buyerType || buyerType;
+      const isWholesale =
+        String(currentBuyerType || "").trim().toLowerCase() === "wholesale";
+      const gapDays = isWholesale ? 2 : 3;
+
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + gapDays);
+      const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+      const sheduleDateStr = `${targetDate.getFullYear()}-${pad(
+        targetDate.getMonth() + 1,
+      )}-${pad(targetDate.getDate())}`;
+
+      const scheduleRes = await orderService.getScheduleOrders(sheduleDateStr);
 
       const ord = scheduleRes.data?.order;
 
@@ -334,7 +348,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       console.warn("[HomeScreen] getScheduleOrders error:", err);
       setReadyOrder(null);
     }
-  }, []);
+  }, [buyerType]);
 
   // Children order inside the ScrollView:
   // HomeHeader (0), ReadyBanner (optional), Banner/Skeleton, SearchBar

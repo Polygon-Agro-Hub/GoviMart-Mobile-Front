@@ -64,6 +64,8 @@ let paymentSessionEndTime: number | null = null;
 // ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
 // Normal orders: pay-by date = delivery - 3 (18 -> 15)
 const NORMAL_GAP_DAYS = 3;
+// Wholesale orders: pay-by date = delivery - 2 (20 -> 18)
+const WHOLESALE_GAP_DAYS = 2;
 // Package orders with isFinalizeImdt = 0: delivery - 2 (18 -> 16)
 const PACKAGE_GAP_DAYS = 2;
 
@@ -352,7 +354,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
     const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
 
-    const offset = isPackageFlow ? PACKAGE_GAP_DAYS : NORMAL_GAP_DAYS;
+    const buyerType = userProfile?.buyerType || orderContext?.buyerType;
+    const isWholesale = String(buyerType || "").toLowerCase() === "wholesale";
+
+    const offset = isPackageFlow
+      ? PACKAGE_GAP_DAYS
+      : isWholesale
+        ? WHOLESALE_GAP_DAYS
+        : NORMAL_GAP_DAYS;
     const due = new Date(scheduledDate);
     due.setDate(due.getDate() - offset);
 
