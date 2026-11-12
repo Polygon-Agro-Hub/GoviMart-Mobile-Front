@@ -1830,7 +1830,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                       marginTop: 4,
                     }}
                   >
-                    Pay with your credit balance and pay the rest with cash or
+                    Pay with your Polygon Wallet and pay the rest with cash or
                     card.
                   </Text>
                 </View>

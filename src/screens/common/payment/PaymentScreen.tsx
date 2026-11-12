@@ -281,7 +281,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
               amount: fullTotal,
               paymentType: isClearBalanceFlow ? "clear_balance" : "order",
               itemsDescription: isClearBalanceFlow
-                ? "Clear Negative Credit Balance"
+                ? "Clear Negative Polygon Wallet"
                 : "Polygon Order Payment",
             });
 
@@ -345,11 +345,11 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         setCheckoutSession(session);
         setCheckoutModalVisible(true);
       } else if (isClearBalanceFlow) {
-        // Clear negative balance flow with hosted checkout
+        // Clear negative Polygon Wallet flow with hosted checkout
         const session = await adapter.initiatePayment({
           amount: subTotal,
           paymentType: "clear_balance",
-          itemsDescription: "Clear Negative Credit Balance",
+          itemsDescription: "Clear Negative Polygon Wallet",
           saveCard: saveCardForFuture,
         });
 

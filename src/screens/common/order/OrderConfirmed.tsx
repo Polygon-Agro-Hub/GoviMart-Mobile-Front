@@ -1319,7 +1319,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
           {creditApplied > 0 && (
             <SummaryRow
-              label="Paid By Credit"
+              label="Paid By Polygon Wallet"
               value={`Rs. ${formatAmount(creditApplied)}`}
               icon="wallet"
               iconColor="#8D5B4C"

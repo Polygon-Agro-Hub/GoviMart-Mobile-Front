@@ -1672,7 +1672,7 @@ useFocusEffect(
 
                   {(creditPaid > 0 || isCreditOrder) && (
                     <SummaryRow
-                      label="Paid By Credit"
+                      label="Paid By Polygon Wallet"
                       value={`Rs. ${formatAmount(creditPaid > 0 ? creditPaid : orderFullTotal)}`}
                       icon="wallet"
                       iconColor="#8D5B4C"

@@ -820,8 +820,8 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
 
       <ConfirmationModal
         visible={isNegativeCreditModalVisible}
-        title="Negative Credit Balance"
-        message="You have an outstanding negative credit balance. Please settle your balance in your account before placing an order."
+        title="Negative Polygon Wallet"
+        message="You have an outstanding negative Polygon Wallet. Please settle your balance in your account before placing an order."
         confirmLabel="Go to Account"
         cancelLabel="Cancel"
         confirmButtonColor="#FF9114"

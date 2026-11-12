@@ -1052,7 +1052,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </View>
 
-          {/* Paid using Credit (only if > 0) */}
+          {/* Paid using Polygon Wallet (only if > 0) */}
           {creditPaid > 0 && (
             <>
               <View
@@ -1064,7 +1064,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
                 }}
               >
                 <Text style={{ fontSize: 13, color: "#60647A" }}>
-                  Paid using Credit
+                  Paid using Polygon Wallet
                 </Text>
                 <Text
                   style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
