@@ -12,6 +12,7 @@ import {
   Keyboard,
   BackHandler,
   ActivityIndicator,
+  AppState,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
@@ -19,6 +20,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import * as Clipboard from "expo-clipboard";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
@@ -179,6 +181,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // Synchronous locks (refs update immediately, state does not)
   const resendLockRef = useRef(false);
   const verifyLockRef = useRef(false);
+  const lastUsedClipboardRef = useRef<string>("");
+  const appStateRef = useRef(AppState.currentState);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -263,6 +267,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   useEffect(() => {
     setOtpSessionKey((prev) => prev + 1);
     setOtp("");
+    lastUsedClipboardRef.current = "";
     const t = setTimeout(() => {
       if (!isRateLimited && !isVerifying) {
         inputRef.current?.focus();
@@ -270,6 +275,46 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }, 200);
     return () => clearTimeout(t);
   }, [signupToken, referenceId]);
+
+  // Check clipboard for 5-digit OTP
+  const checkClipboardForOtp = useCallback(async () => {
+    try {
+      if (isRateLimited || isVerifying || isExpired) return;
+      const hasString = await Clipboard.hasStringAsync();
+      if (!hasString) return;
+      const content = await Clipboard.getStringAsync();
+      if (!content) return;
+      const trimmed = content.trim();
+
+      const match = trimmed.match(/\b\d{5}\b/);
+      if (match && match[0]) {
+        const foundOtp = match[0];
+        if (foundOtp !== lastUsedClipboardRef.current && foundOtp !== otp) {
+          lastUsedClipboardRef.current = foundOtp;
+          setOtp(foundOtp);
+        }
+      }
+    } catch {
+      // Ignore clipboard read errors
+    }
+  }, [isRateLimited, isVerifying, isExpired, otp]);
+
+  // When app returns to foreground from SMS / Mail app, refocus input and check clipboard
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+      if (prev && prev.match(/inactive|background/) && nextState === "active") {
+        setTimeout(() => {
+          if (!isRateLimited && !isVerifying) {
+            inputRef.current?.focus();
+          }
+        }, 150);
+        checkClipboardForOtp();
+      }
+    });
+    return () => sub.remove();
+  }, [checkClipboardForOtp, isRateLimited, isVerifying]);
 
   // ---------- Rate limit helpers ----------
   const showLockoutAlert = () => {
@@ -867,9 +912,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               value={otp}
               onChangeText={handleOtpChange}
               keyboardType="number-pad"
-              maxLength={OTP_LENGTH}
               textContentType="oneTimeCode"
-              autoComplete="sms-otp"
+              autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
               importantForAutofill="yes"
               editable={!isRateLimited && !isVerifying}
               onFocus={() => setIsInputFocused(true)}
@@ -884,7 +928,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                 bottom: 0,
                 width: "100%",
                 height: "100%",
-                opacity: 0.01,
+                opacity: 1,
                 color: "transparent",
                 backgroundColor: "transparent",
                 zIndex: 10,
