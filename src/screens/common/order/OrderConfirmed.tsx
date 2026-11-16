@@ -450,19 +450,31 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       : order?.deliveryCharge,
   );
 
-  // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0 adds a fixed
-  // "Service Fee" (Rs. 180) ON TOP of the normal delivery fee. It is always
-  // charged (no pickup / free-delivery-coupon waiver) and is part of the total.
-  // Display condition only (no extra fetch): uses order.orderApp and order.isPackage.
+  // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0
+  // Service Fee = processorders.fullTotal - processorders.deliveryCharge - total(orderadditionalitems.price)
   const isPackageValue = order?.isPackage;
+  const isZeroPackage =
+    isPackageValue != null && String(isPackageValue).trim() !== ""
+      ? Number(isPackageValue) === 0
+      : packagesTotal === 0;
   const isDashServiceFee =
-    String(order?.orderApp || "")
+    String(order?.orderApp || order?.appName || "")
       .trim()
-      .toLowerCase() === "dash" &&
-    isPackageValue != null &&
-    String(isPackageValue).trim() !== "" &&
-    Number(isPackageValue) === 0;
-  const serviceFee = isDashServiceFee ? DASH_SERVICE_FEE : 0;
+      .toLowerCase() === "dash" && isZeroPackage;
+
+  const fullTotalVal = num(order?.fullTotal ?? order?.total);
+  const deliveryChargeForCalc = deliveryFee;
+  const additionalItemsTotal =
+    rawItemsData.length > 0
+      ? rawItemsData.reduce(
+          (acc: number, it: any) => acc + (parseFloat(it.price) || 0),
+          0,
+        )
+      : itemsTotal;
+
+  const serviceFee = isDashServiceFee
+    ? Math.max(0, fullTotalVal - deliveryChargeForCalc - additionalItemsTotal)
+    : 0;
   // Delivery fee keeps its normal rules for every order
   const deliveryFeeCharged =
     !isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0;
@@ -1027,7 +1039,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               value={`+ Rs. ${formatAmount(isFreeDeliveryCoupon ? 0 : deliveryFee)}`}
             />
           )}
-          {serviceFee > 0 && (
+          {isDashServiceFee && (
             <SummaryRow
               label="Service Fee"
               value={`+ Rs. ${formatAmount(serviceFee)}`}

@@ -11,6 +11,8 @@ import {
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import InfoNoticeCard from "@/component/common/InfoNoticeCard";
@@ -1540,6 +1542,31 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
               ""
             ).toUpperCase() === "PICKUP";
 
+          // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0
+          // Service Fee = processorders.fullTotal - processorders.deliveryCharge - total(orderadditionalitems.price)
+          const isPackageValue = order?.isPackage;
+          const isZeroPackage =
+            isPackageValue != null && String(isPackageValue).trim() !== ""
+              ? Number(isPackageValue) === 0
+              : packages.length === 0;
+          const isDashServiceFee =
+            String(order?.orderApp || order?.appName || "")
+              .trim()
+              .toLowerCase() === "dash" && isZeroPackage;
+          const deliveryChargeForCalc = parseFloat(
+            order?.delivaryCharge || order?.deliveryCharge || 0,
+          ) || 0;
+          const additionalItemsTotal = cartItems.reduce(
+            (acc, item) => acc + item.price,
+            0,
+          );
+          const serviceFee = isDashServiceFee
+            ? Math.max(
+                0,
+                orderFullTotal - deliveryChargeForCalc - additionalItemsTotal,
+              )
+            : 0;
+
           return (
             <>
               <View
@@ -1651,6 +1678,23 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                       </Text>
                     )}
 
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: "#E1E7EE",
+                        marginVertical: 6,
+                      }}
+                    />
+                  </>
+                )}
+
+                {/* DASH: Service Fee (orderApp = Dash AND isPackage = 0) */}
+                {isDashServiceFee && (
+                  <>
+                    <SummaryRow
+                      label="Service Fee"
+                      value={`+ Rs. ${formatAmount(serviceFee)}`}
+                    />
                     <View
                       style={{
                         height: 1,

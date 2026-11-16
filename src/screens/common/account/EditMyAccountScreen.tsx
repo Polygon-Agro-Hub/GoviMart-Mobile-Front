@@ -136,6 +136,18 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
+const isValidNic = (value: string): boolean =>
+  /^[0-9]{9}[vVxX]$/.test(value) || /^[0-9]{12}$/.test(value);
+
+const validateDocNumber = (value: string): string => {
+  const clean = value.trim();
+  if (!clean) return "NIC or Passport Number is required";
+  if (/\s/.test(clean)) return "Cannot contain spaces";
+  if (clean.length > 12) return "Cannot exceed 12 characters";
+  if (!/^[a-zA-Z0-9]+$/.test(clean)) return "Must contain only letters and numbers";
+  return "";
+};
+
 type MyAccountNavigationProp = StackNavigationProp<
   RootStackParamList,
   "MyAccount"
@@ -153,11 +165,19 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
   );
+  const reduxNic = useSelector(
+    (state: RootState) => (state.auth.userProfile as any)?.nic,
+  );
+  const reduxDocType = useSelector(
+    (state: RootState) => (state.auth.userProfile as any)?.docType,
+  );
   const [buyerType, setBuyerType] = useState("");
 
   const [title, setTitle] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nic, setNic] = useState(reduxNic || "");
+  const [docType, setDocType] = useState(reduxDocType || "");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
@@ -179,6 +199,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [titleError, setTitleError] = useState("");
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [nicError, setNicError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
   const [companyNameError, setCompanyNameError] = useState("");
   const [profileImageError, setProfileImageError] = useState<string | null>(
@@ -248,6 +269,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     companyMobileCode: string;
     companyMobile: string;
     image: string;
+    nic?: string;
+    docType?: string;
   } | null>(null);
 
   const isWholesale =
@@ -281,6 +304,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
             if (data.email) setEmail(data.email);
+            if (data.nic) setNic(data.nic);
+            if (data.docType) setDocType(data.docType);
             if (data.companyName) {
               setCompanyName(capitalizeFirst(data.companyName));
             }
@@ -306,6 +331,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               ).trim(),
               companyMobile: (data.companyPhone || "").trim(),
               image: fetchedImage,
+              nic: (data.nic || "").trim(),
+              docType: (data.docType || "").trim(),
             });
           }
           console.log("acc details fetching success: ", response.data.data);
@@ -454,6 +481,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
+    const cleanedNic = nic.trim().toUpperCase();
+    if (!cleanedNic) {
+      setNicError("NIC or Passport Number is required");
+      hasError = true;
+    } else {
+      const docErr = validateDocNumber(cleanedNic);
+      if (docErr) {
+        setNicError(docErr);
+        hasError = true;
+      }
+    }
+
     // Company name & number (wholesale only, required) – country specific
     if (isWholesale) {
       if (!companyName.trim()) {
@@ -494,6 +533,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           ) &&
         email.trim().toLowerCase() ===
           originalAccountData.email.toLowerCase() &&
+        cleanedNic === (originalAccountData.nic || "").trim().toUpperCase() &&
         (!isWholesale ||
           (companyName.trim() === originalAccountData.companyName &&
             (companyMobileCode || mobileCode).trim() ===
@@ -525,6 +565,13 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const formattedLastName = capitalizeName(lastName.trim());
       const formattedCompanyName = capitalizeFirst(companyName);
 
+      let determinedDocType = docType || "NIC";
+      if (isValidNic(cleanedNic)) {
+        determinedDocType = "NIC";
+      } else {
+        determinedDocType = "PASS";
+      }
+
       const payload: any = {
         title: (title || "Mr").trim(),
         firstName: formattedFirstName,
@@ -532,6 +579,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         phoneCode: mobileCode.trim(),
         phoneNumber: cleanedMobile,
         email: email.trim(),
+        nic: cleanedNic,
+        docType: determinedDocType,
         image: finalImage,
       };
 
@@ -682,6 +731,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (msg.toLowerCase().includes("email")) {
               setEmailError(msg);
             }
+            if (msg.toLowerCase().includes("nic") || msg.toLowerCase().includes("passport")) {
+              setNicError(msg);
+            }
             delayedAlert("Error", msg);
           }
         }
@@ -691,6 +743,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         if (response.data) {
           setMobileNumber(cleanedMobile);
           setCompanyMobile(cleanedCompanyMobile);
+          setNic(cleanedNic);
+          setDocType(determinedDocType);
           const updatedImageStr = profileImage ? profileImage.trim() : "";
           setOriginalAccountData({
             title: title.trim(),
@@ -703,6 +757,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             companyMobileCode: (companyMobileCode || mobileCode).trim(),
             companyMobile: cleanedCompanyMobile,
             image: updatedImageStr,
+            nic: nic.trim(),
+            docType: docType.trim(),
           });
 
           dispatch(updateUserProfileImage({ image: updatedImageStr }));
@@ -716,6 +772,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               phoneCode: mobileCode.trim(),
               image: updatedImageStr,
               companyName: isWholesale ? companyName.trim() : undefined,
+              nic: nic.trim() || undefined,
+              docType: docType.trim() || undefined,
             }),
           );
 
@@ -735,6 +793,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 companyName: isWholesale
                   ? companyName.trim()
                   : parsed.companyName,
+                nic: nic.trim() || parsed.nic,
+                docType: docType.trim() || parsed.docType,
               };
               await AsyncStorage.setItem("userProfile", JSON.stringify(merged));
             }
@@ -765,6 +825,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         setEmailError(errorMessage);
       } else if (lower.includes("phone") || lower.includes("mobile")) {
         setMobileNumberError(errorMessage);
+      } else if (lower.includes("nic") || lower.includes("passport")) {
+        setNicError(errorMessage);
       }
       delayedAlert("Error", errorMessage);
     } finally {
@@ -970,8 +1032,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         <View
           style={{
             position: "absolute",
-            top: 38,
-            right: 5,
+            top: 43,
+            right: 15,
             width: 130,
             backgroundColor: "#FFFFFF",
             borderRadius: 12,
@@ -1194,6 +1256,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 {/* First Name */}
                 <View style={{ flex: 1 }}>
                   <InputField
+                    isIconThemeDark={false}
                     icon="user"
                     label="First Name"
                     placeholder="First Name"
@@ -1226,6 +1289,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               {/* LAST NAME */}
               <View style={{ marginBottom: 14 }}>
                 <InputField
+                  isIconThemeDark={false}
                   icon="user"
                   label="Last Name"
                   placeholder="Last Name"
@@ -1284,6 +1348,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 {/* Mobile Number */}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <InputField
+                    isIconThemeDark={false}
                     icon="phone"
                     label="Mobile Number"
                     placeholder="Mobile Number"
@@ -1316,8 +1381,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               </View>
 
               {/* EMAIL */}
-              <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
+              <View style={{ marginBottom: 14 }}>
                 <InputField
+                  isIconThemeDark={false}
                   icon="house"
                   label="Email"
                   placeholder="Email Address"
@@ -1343,12 +1409,42 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 />
               </View>
 
+              {/* NIC / PASSPORT ID */}
+              <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
+                <InputField
+                  isIconThemeDark={false}
+                  icon="passport"
+                  label="NIC Number / Passport ID"
+                  placeholder="NIC Number / Passport ID"
+                  editable={!isWholesale}
+                  value={nic}
+                  autoCapitalize="characters"
+                  maxLength={12}
+                  error={nicError}
+                  onChangeText={(text) => {
+                    const clean = text.replace(/\s/g, "").toUpperCase();
+                    setNic(clean);
+                    if (nicError && clean.length > 0) {
+                      setNicError(validateDocNumber(clean));
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!nic.trim()) {
+                      setNicError("NIC or Passport Number is required");
+                    } else {
+                      setNicError(validateDocNumber(nic));
+                    }
+                  }}
+                />
+              </View>
+
               {/* WHOLESALE ONLY FIELDS */}
               {isWholesale && (
                 <>
                   {/* Company name */}
                   <View style={{ marginBottom: 14 }}>
                     <InputField
+                      isIconThemeDark={false}
                       icon="building"
                       label="Company Name"
                       placeholder="Company Name"
@@ -1403,6 +1499,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     {/* Company Mobile Number */}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <InputField
+                        isIconThemeDark={false}
                         icon="phone"
                         label="Company Mobile"
                         placeholder="Company Mobile"

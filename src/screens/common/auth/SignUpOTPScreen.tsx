@@ -180,9 +180,6 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const resendLockRef = useRef(false);
   const verifyLockRef = useRef(false);
 
-  // When true, focus the first OTP box as soon as inputs are editable again
-  const needsRefocusRef = useRef(false);
-
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
   const rootRef = useRef<View>(null);
@@ -237,10 +234,17 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     };
   }, [ensureVisible]);
 
-  // Clear all boxes and re-focus the input once inputs are editable
+  // Clear all boxes. Focus is NOT restored here: the keyboard must stay
+  // closed while an alert is on screen, otherwise it covers the OK button.
   const resetOtp = () => {
     setOtp("");
-    needsRefocusRef.current = true;
+  };
+
+  // Re-focus the OTP input only AFTER the user dismisses an alert (taps OK).
+  const focusInputAfterAlert = () => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 150);
   };
 
   // Ensure master input focuses automatically when screen mounts or returns to focus
@@ -252,7 +256,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }, 250);
       return () => clearTimeout(t);
-    }, [isRateLimited, isVerifying])
+    }, [isRateLimited, isVerifying]),
   );
 
   // Restart autofill session on fresh signup token / reference ID
@@ -267,18 +271,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     return () => clearTimeout(t);
   }, [signupToken, referenceId]);
 
-  // After a failed verification the inputs are re-enabled (isVerifying
-  // goes false). Only then can the input take focus again.
-  useEffect(() => {
-    if (!isVerifying && !isRateLimited && needsRefocusRef.current) {
-      needsRefocusRef.current = false;
-      const t = setTimeout(() => inputRef.current?.focus(), 150);
-      return () => clearTimeout(t);
-    }
-  }, [isVerifying, isRateLimited]);
-
   // ---------- Rate limit helpers ----------
   const showLockoutAlert = () => {
+    Keyboard.dismiss();
     Alert.alert(
       "Too Many Attempts",
       "Too many verification attempts. Please try again after 15 minutes.",
@@ -355,13 +350,18 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   }, [phoneCode, phoneNumber, email, method]);
 
   // Wrong code: the server tracks wrong entries, so show its message.
+  // The keyboard stays closed while the alert is visible and the input is
+  // re-focused only after OK is tapped.
   const handleWrongCode = async (msg: string) => {
     resetOtp();
+    Keyboard.dismiss();
     const displayMsg =
       !msg || /incorrect|invalid|remaining/i.test(msg)
         ? "Incorrect verification code. Please try again."
         : msg;
-    Alert.alert("Invalid Code", displayMsg);
+    Alert.alert("Invalid Code", displayMsg, [
+      { text: "OK", onPress: focusInputAfterAlert },
+    ]);
   };
 
   const handleBackPress = useCallback(() => {
@@ -421,6 +421,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   const handleSessionExpired = () => {
     setOtp("");
+    Keyboard.dismiss();
     Alert.alert(
       "Session Expired",
       "Your registration session has expired. Please sign up again to continue.",
@@ -473,9 +474,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
     if (isExpired) {
       resetOtp();
+      Keyboard.dismiss();
       Alert.alert(
         "Code Expired",
         "Your verification code has expired. Please request a new code.",
+        [{ text: "OK", onPress: focusInputAfterAlert }],
       );
       return;
     }
@@ -654,7 +657,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       } else {
         // Network / 5xx errors: clear so the user can re-enter and retry
         resetOtp();
-        Alert.alert("Verification Error", msg);
+        Keyboard.dismiss();
+        Alert.alert("Verification Error", msg, [
+          { text: "OK", onPress: focusInputAfterAlert },
+        ]);
       }
     } finally {
       verifyLockRef.current = false;

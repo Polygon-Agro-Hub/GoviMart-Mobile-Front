@@ -25,7 +25,7 @@ import orderService from "@/services/order/order.service";
   NOTE: add these to the "OrderConfirmedOrderCancelScreen" params in
   RootStackParamList:
     serviceFee?: number;
-    totalCardDue?: number;
+    hasAlaCarte?: boolean;
 */
 type Props = StackScreenProps<
   RootStackParamList,
@@ -42,8 +42,8 @@ type PackageItem = {
   icon?: string;
   image?: string;
   qty: number;
-  productPrice?: number;
-  unitPrice?: number; // base product price when productPrice isn't passed
+  productPrice?: number; // price stored on the order (order-time)
+  unitPrice?: number; // fallback only - make sure caller passes order-time value
   packingFee?: number;
   serviceFee?: number;
 };
@@ -162,8 +162,6 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     totalPaid: passedTotalPaid,
     totalPaidCard: passedTotalPaidCard,
     totalPaidCredit: passedTotalPaidCredit,
-    totalCashDue: passedTotalCashDue,
-    totalCardDue: passedTotalCardDue,
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
@@ -173,8 +171,8 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   // Order has ala carte items check
   const hasAlaCarte = Boolean(
     passedHasAlaCarte ||
-    passedHasAlacart ||
-    (passedAlaCarte && passedAlaCarte.length > 0)
+      passedHasAlacart ||
+      (passedAlaCarte && passedAlaCarte.length > 0),
   );
 
   // DASH service fee (only passed for orderApp = "Dash")
@@ -189,13 +187,23 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     [passedPackages],
   );
 
-  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>(
-    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [],
+  // Passed ala carte items may carry live marketplace prices, so they are NOT
+  // used while we wait for the order-time prices from the server.
+  // They are only used as a fallback if the fetch fails.
+  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>([]);
+
+  // True until the order-time ala carte items are loaded (or the fetch fails).
+  // The summary stays hidden meanwhile so it never flashes wrong numbers.
+  const [alaCarteLoading, setAlaCarteLoading] = useState<boolean>(
+    hasAlaCarte && Boolean(orderId),
   );
 
   // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
   useEffect(() => {
-    if (!hasAlaCarte || !orderId) return;
+    if (!hasAlaCarte || !orderId) {
+      setAlaCarteLoading(false);
+      return;
+    }
 
     let isMounted = true;
     const fetchCancelAlaCarte = async () => {
@@ -204,7 +212,9 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           orderId,
           processOrderId,
         );
-        if (isMounted && res.data?.status && Array.isArray(res.data.data)) {
+        if (!isMounted) return;
+
+        if (res.data?.status && Array.isArray(res.data.data)) {
           const items: AlaCarteItem[] = res.data.data.map((it: any) => {
             const linePrice = parseFloat(it.price) || 0;
             const lineNormal = parseFloat(it.normalPrice) || 0;
@@ -220,9 +230,17 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
             };
           });
           setAlaCarteItems(items);
+        } else if (passedAlaCarte && passedAlaCarte.length > 0) {
+          // Fallback: server returned nothing usable
+          setAlaCarteItems(passedAlaCarte);
         }
       } catch (err) {
         console.error("Failed to fetch cancel order additional items:", err);
+        if (isMounted && passedAlaCarte && passedAlaCarte.length > 0) {
+          setAlaCarteItems(passedAlaCarte);
+        }
+      } finally {
+        if (isMounted) setAlaCarteLoading(false);
       }
     };
 
@@ -231,6 +249,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAlaCarte, orderId, processOrderId]);
 
   const [confirmText, setConfirmText] = useState("");
@@ -314,22 +333,23 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   // DASH: the service fee is part of the order total
   const calculatedOrderTotal = packagesTotal + alaCarteTotal + serviceFee;
 
+  // The items list (order-time prices) is the single source of truth, so the
+  // list and the summary always match. Passed totals are only a fallback when
+  // there are no items to sum.
   const processOrderTotal =
-    passedProcessOrderTotal !== undefined && passedProcessOrderTotal > 0
-      ? passedProcessOrderTotal
-      : passedTotalPaid !== undefined && passedTotalPaid > 0
-        ? passedTotalPaid
-        : calculatedOrderTotal;
+    calculatedOrderTotal > 0
+      ? calculatedOrderTotal
+      : Number(passedProcessOrderTotal ?? passedTotalPaid ?? 0);
 
   /* ---------------------------------------------------------
      Payment breakdown
      An order can be split: Credit + Card, or Credit + Cash.
      Each part is shown on its own line.
-       - Credit:     as passed (DB creditPaid).
-       - Card PAID:  only when the caller says card was actually paid.
-       - Card DUE:   card order that is not paid yet (the card is only
+       - Credit:     as passed (DB creditPaid) - historical, not price based.
+       - Card PAID:  as passed (actual payment) - historical.
+       - Card DUE:   derived from the order-time total (the card is only
                      charged when the customer confirms the order).
-       - Cash DUE:   cash / COD amount, not paid yet.
+       - Cash DUE:   derived from the order-time total.
   --------------------------------------------------------- */
 
   const method = (paymentMethod || "").toLowerCase();
@@ -352,23 +372,19 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     ? 0
     : Math.min(Number(passedTotalPaidCard ?? 0), remainingAfterCredit);
 
-  // Card DUE (card order that is not paid yet)
+  // Card DUE (card order that is not paid yet) - derived, not passed
   const totalCardDue = isFullyPaidByCredit
     ? 0
-    : passedTotalCardDue !== undefined
-      ? Math.min(Number(passedTotalCardDue), remainingAfterCredit)
-      : method === "card" && totalPaidCard === 0
-        ? remainingAfterCredit
-        : 0;
+    : method === "card"
+      ? Math.max(0, remainingAfterCredit - totalPaidCard)
+      : 0;
 
-  // Cash DUE
+  // Cash DUE - derived, not passed
   const totalCashDue = isFullyPaidByCredit
     ? 0
-    : passedTotalCashDue !== undefined
-      ? Math.min(Number(passedTotalCashDue), remainingAfterCredit)
-      : method.includes("cash") || method === "cod"
-        ? remainingAfterCredit
-        : 0;
+    : method.includes("cash") || method === "cod"
+      ? remainingAfterCredit
+      : 0;
 
   // Only the credit that was already paid goes back to the credit balance.
   // The card amount is NOT refunded as credit (the card is only charged when
@@ -382,7 +398,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   );
 
   const onCancelOrder = async () => {
-    if (!isConfirmed || loading) return;
+    if (!isConfirmed || loading || alaCarteLoading) return;
     setLoading(true);
     try {
       if (orderId) {
@@ -418,6 +434,8 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     }
   };
 
+  const canCancel = isConfirmed && !loading && !alaCarteLoading;
+
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
@@ -432,7 +450,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
         </TouchableOpacity>
 
         <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
-          Order Cancel Confirmation  
+          Order Cancel Confirmation
         </Text>
       </View>
 
@@ -549,53 +567,56 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
               </SectionCard>
             )}
 
-            {/* Totals Summary (flat rows with dividers) */}
-            <View className="mx-5 mt-6">
-              {totalPaidCard > 0 && (
-                <SummaryRow
-                  label="Total Paid with Card"
-                  value={`Rs. ${formatPrice(totalPaidCard)}`}
-                />
-              )}
+            {/* Totals Summary (flat rows with dividers) - shown only after
+                order-time items are loaded so wrong numbers never flash */}
+            {!alaCarteLoading && (
+              <View className="mx-5 mt-6">
+                {totalPaidCard > 0 && (
+                  <SummaryRow
+                    label="Total Paid with Card"
+                    value={`Rs. ${formatPrice(totalPaidCard)}`}
+                  />
+                )}
 
-              {totalCardDue > 0 && (
-                <SummaryRow
-                  label="Total Pay with Card (Due)"
-                  value={`Rs. ${formatPrice(totalCardDue)}`}
-                />
-              )}
+                {totalCardDue > 0 && (
+                  <SummaryRow
+                    label="Total Pay with Card (Due)"
+                    value={`Rs. ${formatPrice(totalCardDue)}`}
+                  />
+                )}
 
-              {totalPaidCredit > 0 && (
-                <SummaryRow
-                  label="Total Paid with Credit"
-                  value={`Rs. ${formatPrice(totalPaidCredit)}`}
-                />
-              )}
+                {totalPaidCredit > 0 && (
+                  <SummaryRow
+                    label="Total Paid with Credit"
+                    value={`Rs. ${formatPrice(totalPaidCredit)}`}
+                  />
+                )}
 
-              {totalCashDue > 0 && (
-                <SummaryRow
-                  label="Total Cash (Due)"
-                  value={`Rs. ${formatPrice(totalCashDue)}`}
-                />
-              )}
+                {totalCashDue > 0 && (
+                  <SummaryRow
+                    label="Total Cash (Due)"
+                    value={`Rs. ${formatPrice(totalCashDue)}`}
+                  />
+                )}
 
-              {/* DASH: Service Fee (only for Dash orders) */}
-              {serviceFee > 0 && (
-                <SummaryRow
-                  label="Service Fee"
-                  value={`+ Rs. ${formatPrice(serviceFee)}`}
-                />
-              )}
+                {/* DASH: Service Fee (only for Dash orders) */}
+                {serviceFee > 0 && (
+                  <SummaryRow
+                    label="Service Fee"
+                    value={`+ Rs. ${formatPrice(serviceFee)}`}
+                  />
+                )}
 
-              <SummaryRow
-                label="Total"
-                value={`Rs. ${formatPrice(processOrderTotal)}`}
-                bold
-              />
-            </View>
+                <SummaryRow
+                  label="Total"
+                  value={`Rs. ${formatPrice(processOrderTotal)}`}
+                  bold
+                />
+              </View>
+            )}
 
             {/* Credit info component (only the credit that was paid) */}
-            {refundCreditAmount > 0 && (
+            {!alaCarteLoading && refundCreditAmount > 0 && (
               <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
                 <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
                   <Ionicons name="wallet" size={22} color="#fff" />
@@ -658,10 +679,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
         >
           <TouchableOpacity
             onPress={onCancelOrder}
-            disabled={!isConfirmed || loading}
+            disabled={!canCancel}
             activeOpacity={0.85}
             className={`rounded-full py-4 items-center ${
-              isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
+              canCancel ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
             style={{
               shadowColor: "#000000",
