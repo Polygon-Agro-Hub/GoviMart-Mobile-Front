@@ -5,11 +5,10 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Image,
   ActivityIndicator,
 } from "react-native";
 import { MaterialCommunityIcons, FontAwesome5 } from "@expo/vector-icons";
-import CustomHeader from "@/component/common/CustomHeader";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Props {
   deviceTime: Date;
@@ -40,28 +39,27 @@ const DateInaccurateScreen: React.FC<Props> = ({
   onAdjustDate,
   onCheckAgain,
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
-
-      {/* App Header with Logo */}
-      <CustomHeader
-        showLogo={true}
-        showBackButton={false}
-        showUnstableBanner={false}
-      />
 
       <ScrollView
         className="flex-1 bg-white"
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "space-between",
-          paddingHorizontal: 24,
-          paddingVertical: 20,
+          paddingTop: Math.max(insets.top, 24),
+          paddingBottom: Math.max(insets.bottom, 24),
+          paddingLeft: Math.max(insets.left, 24),
+          paddingRight: Math.max(insets.right, 24),
         }}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <View className="items-center justify-center pt-6">
+        {/* Main Content Area */}
+        <View className="items-center justify-center pt-8">
           {/* WhatsApp-style Clock Alert Badge */}
           <View className="w-24 h-24 rounded-full bg-[#FFF5E9] items-center justify-center mb-6">
             <MaterialCommunityIcons
@@ -100,8 +98,8 @@ const DateInaccurateScreen: React.FC<Props> = ({
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View className="w-full pb-4">
+        {/* Action Buttons Area */}
+        <View className="w-full pt-4">
           {/* Primary: Adjust Date (Opens OS Date & Time Settings) */}
           <TouchableOpacity
             onPress={onAdjustDate}
@@ -140,14 +138,6 @@ const DateInaccurateScreen: React.FC<Props> = ({
               </Text>
             )}
           </TouchableOpacity>
-
-          {/* Bottom decorative image */}
-          <View className="h-12 mt-6 w-full">
-            <Image
-              source={require("@/assets/images/auth/bottom-line.webp")}
-              style={{ width: "100%", height: "100%", resizeMode: "stretch" }}
-            />
-          </View>
         </View>
       </ScrollView>
     </View>
