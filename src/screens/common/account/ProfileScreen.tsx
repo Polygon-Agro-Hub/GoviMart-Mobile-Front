@@ -95,6 +95,8 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           email: email || user?.email || "",
           phoneNumber: phoneNumber || user?.phoneNumber || "",
           cusId: cusId || user?.cusId,
+          nic: data.nic || user?.nic,
+          docType: data.docType || user?.docType,
           firstTimeUser: user?.firstTimeUser ?? 0,
           id: data.id || user?.id,
         };

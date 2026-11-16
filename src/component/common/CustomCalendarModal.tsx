@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  Platform,
-} from "react-native";
+import { View, Text, TouchableOpacity, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 interface CustomCalendarModalProps {
@@ -20,15 +14,30 @@ interface CustomCalendarModalProps {
   buyerType?: string;
 }
 
-// ─── WEB VALIDATION LOGIC REPLICATED ──────────────────────────────────────────
-export const getMinDeliveryDate = (buyerType?: string): Date => {
-  const isWholesale = buyerType?.toLowerCase() === "wholesale";
-  const now = new Date();
-  const isAfterCutoff = now.getHours() >= 18; // 6:00 PM cutoff
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const CUTOFF_HOUR = 18; // 6:00 PM
 
-  // Wholesale buyers select a day ahead from order date (e.g. 10th Nov -> 12th Nov: extraDays = 2)
-  // Retail buyers: 2-day gap (extraDays = 3) or 3-day gap after 6:00 PM (extraDays = 4)
-  const extraDays = isWholesale ? 2 : isAfterCutoff ? 4 : 3;
+export const isWholesaleBuyer = (buyerType?: string): boolean =>
+  !!buyerType && buyerType.toLowerCase().includes("wholesale");
+
+/**
+ * Required gap in days from today:
+ *  Wholesale: 2 days (before 6 PM), 3 days (after 6 PM)
+ *  Retail:    3 days (before 6 PM), 4 days (after 6 PM)
+ *
+ * Example (today = Nov 12):
+ *  Wholesale before 6 PM -> Nov 14 | after 6 PM -> Nov 15
+ *  Retail    before 6 PM -> Nov 15 | after 6 PM -> Nov 16
+ */
+export const getRequiredDays = (buyerType?: string, now: Date = new Date()): number => {
+  const isAfterCutoff = now.getHours() >= CUTOFF_HOUR;
+  const baseDays = isWholesaleBuyer(buyerType) ? 2 : 3;
+  return isAfterCutoff ? baseDays + 1 : baseDays;
+};
+
+export const getMinDeliveryDate = (buyerType?: string): Date => {
+  const now = new Date();
+  const extraDays = getRequiredDays(buyerType, now);
 
   const minDate = new Date(
     now.getFullYear(),
@@ -37,6 +46,20 @@ export const getMinDeliveryDate = (buyerType?: string): Date => {
   );
   minDate.setHours(0, 0, 0, 0);
   return minDate;
+};
+
+// Parses "YYYY/MM/DD" or "YYYY-MM-DD" as a LOCAL date (avoids UTC day-shift bugs)
+const parseLocalDate = (dateStr: string): Date | null => {
+  const match = dateStr.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (match) {
+    const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    d.setHours(0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const fallback = new Date(dateStr);
+  if (isNaN(fallback.getTime())) return null;
+  fallback.setHours(0, 0, 0, 0);
+  return fallback;
 };
 
 export const validateDeliveryDate = (
@@ -48,21 +71,21 @@ export const validateDeliveryDate = (
     return { isValid: false, error: "Delivery date is required." };
   }
 
-  const normalized = dateStr.replace(/\//g, "-");
-  const selected = new Date(normalized);
-  selected.setHours(0, 0, 0, 0);
+  const selected = parseLocalDate(dateStr);
+  if (!selected) {
+    return { isValid: false, error: "Invalid delivery date." };
+  }
 
-  const minDate = minDeliveryDate ? new Date(minDeliveryDate) : getMinDeliveryDate(buyerType);
+  const minDate = minDeliveryDate
+    ? new Date(minDeliveryDate)
+    : getMinDeliveryDate(buyerType);
   minDate.setHours(0, 0, 0, 0);
-  const now = new Date();
-  const isAfterCutoff = now.getHours() >= 18;
-  const isWholesale = buyerType?.toLowerCase() === "wholesale";
 
   if (selected < minDate) {
     if (minDeliveryDate) {
       const monthNames = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
       ];
       const minFormatted = `${monthNames[minDate.getMonth()]} ${minDate.getDate()}, ${minDate.getFullYear()}`;
       return {
@@ -70,13 +93,16 @@ export const validateDeliveryDate = (
         error: `Earliest delivery date available is ${minFormatted}.`,
       };
     }
+
+    const now = new Date();
+    const isAfterCutoff = now.getHours() >= CUTOFF_HOUR;
+    const requiredDays = getRequiredDays(buyerType, now);
+
     return {
       isValid: false,
-      error: isWholesale
-        ? "Please select a date starting from the earliest available delivery date."
-        : isAfterCutoff
-        ? "Please select a date at least 4 days from today after 6:00 PM cutoff."
-        : "Please select a date at least 3 days from today.",
+      error: isAfterCutoff
+        ? `Please select a date at least ${requiredDays} days from today after 6:00 PM cutoff.`
+        : `Please select a date at least ${requiredDays} days from today.`,
     };
   }
 
@@ -110,27 +136,38 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   showPreparationNotice,
   buyerType,
 }) => {
-  const minDate = useMemo(() => customMinDate || getMinDeliveryDate(buyerType), [customMinDate, buyerType]);
+  const wholesale = isWholesaleBuyer(buyerType);
+
+  // Recomputed every time the modal opens so the 6 PM cutoff is always current
+  const minDate = useMemo(
+    () => customMinDate || getMinDeliveryDate(buyerType),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customMinDate, buyerType, visible]
+  );
+
   const maxDate = useMemo(() => {
     if (customMaxDate) return customMaxDate;
     const max = new Date();
     max.setDate(max.getDate() + 60); // 60 days in advance
     max.setHours(23, 59, 59, 999);
     return max;
-  }, [customMaxDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customMaxDate, visible]);
 
   const shouldShowNotice =
-    showPreparationNotice !== undefined
-      ? showPreparationNotice
-      : !customMinDate;
+    showPreparationNotice !== undefined ? showPreparationNotice : !customMinDate;
+
+  const noticeText = wholesale
+    ? "Orders require 2 days preparation (3 days after 6:00 PM cutoff)."
+    : "Orders require 3 days preparation (4 days after 6:00 PM cutoff).";
 
   const modalTitle = title || "Select Schedule Date";
 
-  // Determine default display date (selectedDate -> today if valid -> fallback)
+  // Default display date (selectedDate -> today if valid -> fallback)
   const getDefaultDate = useCallback(() => {
     if (selectedDate) {
-      const parsed = new Date(selectedDate.replace(/\//g, "-"));
-      if (!isNaN(parsed.getTime())) return parsed;
+      const parsed = parseLocalDate(selectedDate);
+      if (parsed) return parsed;
     }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -146,14 +183,14 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   const [currentYear, setCurrentYear] = useState<number>(initialDate.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(initialDate.getMonth());
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date | null>(
-    selectedDate ? new Date(selectedDate.replace(/\//g, "-")) : null
+    selectedDate ? parseLocalDate(selectedDate) : null
   );
 
   useEffect(() => {
     if (visible) {
       if (selectedDate) {
-        const d = new Date(selectedDate.replace(/\//g, "-"));
-        if (!isNaN(d.getTime())) {
+        const d = parseLocalDate(selectedDate);
+        if (d) {
           setInternalSelectedDate(d);
           setCurrentYear(d.getFullYear());
           setCurrentMonth(d.getMonth());
@@ -211,7 +248,6 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
       isToday: boolean;
     }> = [];
 
-    // Empty spaces before first day
     for (let i = 0; i < firstDayOfWeek; i++) {
       days.push({
         day: 0,
@@ -252,7 +288,6 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
       });
     }
 
-    // Trailing empty spaces so the last row completes the 7-day week without gaps
     const remainingDays = (7 - (days.length % 7)) % 7;
     for (let i = 0; i < remainingDays; i++) {
       days.push({
@@ -324,13 +359,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
               marginBottom: 12,
             }}
           >
-            <Text
-              style={{
-                fontSize: 17,
-                fontWeight: "800",
-                color: "#111827",
-              }}
-            >
+            <Text style={{ fontSize: 17, fontWeight: "800", color: "#111827" }}>
               {modalTitle}
             </Text>
 
@@ -350,7 +379,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Web Validation Info Badge */}
+          {/* Preparation Notice */}
           {shouldShowNotice && (
             <View
               style={{
@@ -380,7 +409,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                   fontWeight: "500",
                 }}
               >
-                Orders require 3 days preparation (4 days after 6:00 PM cutoff).
+                {noticeText}
               </Text>
             </View>
           )}
@@ -414,13 +443,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
               />
             </TouchableOpacity>
 
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: "700",
-                color: "#111827",
-              }}
-            >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#111827" }}>
               {`${MONTH_NAMES[currentMonth]} ${currentYear}`}
             </Text>
 
@@ -445,12 +468,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           </View>
 
           {/* Days of Week Row */}
-          <View
-            style={{
-              flexDirection: "row",
-              marginBottom: 8,
-            }}
-          >
+          <View style={{ flexDirection: "row", marginBottom: 8 }}>
             {DAYS_OF_WEEK.map((d) => (
               <View
                 key={d}
@@ -460,13 +478,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                   justifyContent: "center",
                 }}
               >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: "#9CA3AF",
-                  }}
-                >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#9CA3AF" }}>
                   {d}
                 </Text>
               </View>
@@ -474,22 +486,13 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           </View>
 
           {/* Calendar Grid */}
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-            }}
-          >
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {calendarDays.map((item, index) => {
               if (!item.isCurrentMonth) {
                 return (
                   <View
                     key={`blank-${index}`}
-                    style={{
-                      width: "14.285%",
-                      height: 40,
-                      marginVertical: 2,
-                    }}
+                    style={{ width: "14.285%", height: 40, marginVertical: 2 }}
                   />
                 );
               }
@@ -515,9 +518,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
                       borderRadius: 18,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: item.isSelected
-                        ? "#000000"
-                        : "transparent",
+                      backgroundColor: item.isSelected ? "#000000" : "transparent",
                       borderWidth: item.isToday && !item.isSelected ? 1 : 0,
                       borderColor: "#111827",
                     }}
@@ -560,13 +561,7 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
               elevation: internalSelectedDate ? 3 : 0,
             }}
           >
-            <Text
-              style={{
-                color: "#FFFFFF",
-                fontSize: 15,
-                fontWeight: "700",
-              }}
-            >
+            <Text style={{ color: "#FFFFFF", fontSize: 15, fontWeight: "700" }}>
               Confirm Date
             </Text>
           </TouchableOpacity>

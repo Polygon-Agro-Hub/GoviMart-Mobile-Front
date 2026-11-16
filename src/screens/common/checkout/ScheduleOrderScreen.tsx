@@ -18,6 +18,8 @@ import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomCalendarModal, {
   validateDeliveryDate,
   getMinDeliveryDate,
+  getRequiredDays,
+  isWholesaleBuyer,
 } from "@/component/common/CustomCalendarModal";
 import CustomHeader from "@/component/common/CustomHeader";
 import OrderSummary from "@/component/common/OrderSummary";
@@ -122,7 +124,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     (state: RootState) => (state as RootState & { auth: any }).auth?.userProfile,
   );
   const buyerType = userProfile?.buyerType || orderContext?.buyerType || "Retail";
-  const isWholesale = buyerType.toLowerCase() === "wholesale";
+  const isWholesale = isWholesaleBuyer(buyerType);
 
   const [livePackageDates, setLivePackageDates] = useState<
     Record<
@@ -241,10 +243,9 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     if (!earliestExpiryDate && !hasStartDate) return null;
 
-    // Current hour gap check (6:00 PM cutoff for Retail; 1 day gap for Wholesale)
-    const now = new Date();
-    const isAfter6PM = now.getHours() >= 18;
-    const gapDays = isWholesale ? 1 : isAfter6PM ? 3 : 2;
+    // Gap shown to the user = required days - 1
+    // Wholesale: 1 (2 after 6 PM) | Retail: 2 (3 after 6 PM)
+    const gapDays = getRequiredDays(buyerType) - 1;
 
     const minAvailDate = getMinDeliveryDate(buyerType);
     minAvailDate.setHours(0, 0, 0, 0);
@@ -427,7 +428,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       calculatedOrders: formattedOrders,
       unfilteredFirstScheduledDate: rawFirstDate,
     };
-  }, [scheduleType, selectedDays, selectedWeeks, seasonalInfo]);
+  }, [scheduleType, selectedDays, selectedWeeks, seasonalInfo, buyerType]);
 
   const handleOpenViewOrders = () => {
     if (calculatedOrders.length === 0) {
@@ -506,6 +507,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
         seasonalInfo?.effectiveStartDate
           ? seasonalInfo.effectiveStartDate
           : undefined,
+        buyerType, // FIX: buyerType was missing, so wholesale was validated as retail
       );
       if (!dateValidation.isValid) {
         Alert.alert("Invalid Date", dateValidation.error);
@@ -577,6 +579,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const updatedContext = {
       ...orderContext,
+      buyerType: buyerType,
       grandTotal: finalTotal,
       deliveryCharge: deliveryFee,
       checkoutDetails: {
@@ -670,9 +673,7 @@ const ScheduleOrderScreen: React.FC<Props> = ({ navigation, route }) => {
       );
     }
 
-    const now = new Date();
-    const isAfter6PM = now.getHours() >= 18;
-    const gapDays = seasonalInfo?.gapDays ?? (isWholesale ? 1 : isAfter6PM ? 3 : 2);
+    const gapDays = seasonalInfo?.gapDays ?? getRequiredDays(buyerType) - 1;
     const startDateStr =
       seasonalInfo?.startDateFormatted ||
       (() => {

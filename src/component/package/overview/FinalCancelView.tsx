@@ -90,7 +90,7 @@ export const FinalCancelView: React.FC<FinalCancelViewProps> = ({
           <Ionicons name="wallet" size={20} color="#FFFFFF" />
         </View>
         <Text className="text-[15px] font-bold text-black text-center">
-          Amount will be credited to your credit balance.
+          Amount will be credited to your Polygon Wallet.
         </Text>
         <Text className="text-[13px] text-[#475467] text-center mt-2 leading-5">
           After canceling, the full amount of{" "}

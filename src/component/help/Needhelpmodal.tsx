@@ -259,7 +259,7 @@ const NeedHelpModal: React.FC<NeedHelpModalProps> = ({ visible, onClose }) => {
           </ScrollView>
 
           {/* Got it */}
-          <View className="px-5 pt-3">
+          <View className="px-5 mb-10 pt-3">
             <TouchableOpacity
               onPress={onClose}
               activeOpacity={0.8}

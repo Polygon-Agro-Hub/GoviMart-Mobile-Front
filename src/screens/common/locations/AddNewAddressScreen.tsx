@@ -51,7 +51,7 @@ const FIELD_LABELS = {
   mobileNumber1: "Mobile Number 1",
   mobileNumber2: "Mobile Number 2",
   buildingType: "Building Type",
-  houseNo: "Building / House No",
+  houseNo: "Building / Plot No",
   streetName: "Street Name",
   city: "Your City",
   buildingNo: "Apartment / Building No",
@@ -1266,12 +1266,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 placeholder="e.g. 3rd Floor"
                 error={floorNoError}
               />
-              {/* NEW: Building / House No for Apartment */}
+              {/* NEW: Building / Plot No for Apartment */}
               <InputField
                 icon="house"
                 circleSize={30}
                 iconSize={14}
-                label="Building / House No *"
+                label="Building / Plot No *"
                 value={houseNo}
                 onChangeText={handleHouseNoChange}
                 onBlur={() =>
@@ -1312,7 +1312,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 icon="house"
                 circleSize={30}
                 iconSize={14}
-                label="Building / House No *"
+                label="Building / Plot No *"
                 value={buildingNo}
                 onChangeText={handleBuildingNoChange}
                 onBlur={() =>

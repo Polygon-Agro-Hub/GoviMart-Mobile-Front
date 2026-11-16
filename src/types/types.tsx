@@ -356,6 +356,8 @@ export interface UpdateUserDetailsPayload {
   phoneCode?: string;
   phoneNumber?: string;
   email?: string;
+  nic?: string;
+  docType?: string;
   companyName?: string;
   companyPhoneCode?: string;
   companyPhone?: string;

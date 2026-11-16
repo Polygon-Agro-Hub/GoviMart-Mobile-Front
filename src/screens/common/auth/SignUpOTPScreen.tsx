@@ -12,6 +12,7 @@ import {
   Keyboard,
   BackHandler,
   ActivityIndicator,
+  AppState,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
@@ -19,6 +20,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import * as Clipboard from "expo-clipboard";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
@@ -179,9 +181,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // Synchronous locks (refs update immediately, state does not)
   const resendLockRef = useRef(false);
   const verifyLockRef = useRef(false);
-
-  // When true, focus the first OTP box as soon as inputs are editable again
-  const needsRefocusRef = useRef(false);
+  const lastUsedClipboardRef = useRef<string>("");
+  const appStateRef = useRef(AppState.currentState);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -237,10 +238,17 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     };
   }, [ensureVisible]);
 
-  // Clear all boxes and re-focus the input once inputs are editable
+  // Clear all boxes. Focus is NOT restored here: the keyboard must stay
+  // closed while an alert is on screen, otherwise it covers the OK button.
   const resetOtp = () => {
     setOtp("");
-    needsRefocusRef.current = true;
+  };
+
+  // Re-focus the OTP input only AFTER the user dismisses an alert (taps OK).
+  const focusInputAfterAlert = () => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 150);
   };
 
   // Ensure master input focuses automatically when screen mounts or returns to focus
@@ -252,13 +260,14 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }, 250);
       return () => clearTimeout(t);
-    }, [isRateLimited, isVerifying])
+    }, [isRateLimited, isVerifying]),
   );
 
   // Restart autofill session on fresh signup token / reference ID
   useEffect(() => {
     setOtpSessionKey((prev) => prev + 1);
     setOtp("");
+    lastUsedClipboardRef.current = "";
     const t = setTimeout(() => {
       if (!isRateLimited && !isVerifying) {
         inputRef.current?.focus();
@@ -267,18 +276,49 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     return () => clearTimeout(t);
   }, [signupToken, referenceId]);
 
-  // After a failed verification the inputs are re-enabled (isVerifying
-  // goes false). Only then can the input take focus again.
-  useEffect(() => {
-    if (!isVerifying && !isRateLimited && needsRefocusRef.current) {
-      needsRefocusRef.current = false;
-      const t = setTimeout(() => inputRef.current?.focus(), 150);
-      return () => clearTimeout(t);
+  // Check clipboard for 5-digit OTP
+  const checkClipboardForOtp = useCallback(async () => {
+    try {
+      if (isRateLimited || isVerifying || isExpired) return;
+      const hasString = await Clipboard.hasStringAsync();
+      if (!hasString) return;
+      const content = await Clipboard.getStringAsync();
+      if (!content) return;
+      const trimmed = content.trim();
+
+      const match = trimmed.match(/\b\d{5}\b/);
+      if (match && match[0]) {
+        const foundOtp = match[0];
+        if (foundOtp !== lastUsedClipboardRef.current && foundOtp !== otp) {
+          lastUsedClipboardRef.current = foundOtp;
+          setOtp(foundOtp);
+        }
+      }
+    } catch {
+      // Ignore clipboard read errors
     }
-  }, [isVerifying, isRateLimited]);
+  }, [isRateLimited, isVerifying, isExpired, otp]);
+
+  // When app returns to foreground from SMS / Mail app, refocus input and check clipboard
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+      if (prev && prev.match(/inactive|background/) && nextState === "active") {
+        setTimeout(() => {
+          if (!isRateLimited && !isVerifying) {
+            inputRef.current?.focus();
+          }
+        }, 150);
+        checkClipboardForOtp();
+      }
+    });
+    return () => sub.remove();
+  }, [checkClipboardForOtp, isRateLimited, isVerifying]);
 
   // ---------- Rate limit helpers ----------
   const showLockoutAlert = () => {
+    Keyboard.dismiss();
     Alert.alert(
       "Too Many Attempts",
       "Too many verification attempts. Please try again after 15 minutes.",
@@ -355,13 +395,18 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   }, [phoneCode, phoneNumber, email, method]);
 
   // Wrong code: the server tracks wrong entries, so show its message.
+  // The keyboard stays closed while the alert is visible and the input is
+  // re-focused only after OK is tapped.
   const handleWrongCode = async (msg: string) => {
     resetOtp();
+    Keyboard.dismiss();
     const displayMsg =
       !msg || /incorrect|invalid|remaining/i.test(msg)
         ? "Incorrect verification code. Please try again."
         : msg;
-    Alert.alert("Invalid Code", displayMsg);
+    Alert.alert("Invalid Code", displayMsg, [
+      { text: "OK", onPress: focusInputAfterAlert },
+    ]);
   };
 
   const handleBackPress = useCallback(() => {
@@ -421,6 +466,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   const handleSessionExpired = () => {
     setOtp("");
+    Keyboard.dismiss();
     Alert.alert(
       "Session Expired",
       "Your registration session has expired. Please sign up again to continue.",
@@ -473,9 +519,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
     if (isExpired) {
       resetOtp();
+      Keyboard.dismiss();
       Alert.alert(
         "Code Expired",
         "Your verification code has expired. Please request a new code.",
+        [{ text: "OK", onPress: focusInputAfterAlert }],
       );
       return;
     }
@@ -654,7 +702,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       } else {
         // Network / 5xx errors: clear so the user can re-enter and retry
         resetOtp();
-        Alert.alert("Verification Error", msg);
+        Keyboard.dismiss();
+        Alert.alert("Verification Error", msg, [
+          { text: "OK", onPress: focusInputAfterAlert },
+        ]);
       }
     } finally {
       verifyLockRef.current = false;
@@ -861,9 +912,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               value={otp}
               onChangeText={handleOtpChange}
               keyboardType="number-pad"
-              maxLength={OTP_LENGTH}
               textContentType="oneTimeCode"
-              autoComplete="sms-otp"
+              autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
               importantForAutofill="yes"
               editable={!isRateLimited && !isVerifying}
               onFocus={() => setIsInputFocused(true)}
@@ -878,7 +928,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                 bottom: 0,
                 width: "100%",
                 height: "100%",
-                opacity: 0.01,
+                opacity: 1,
                 color: "transparent",
                 backgroundColor: "transparent",
                 zIndex: 10,

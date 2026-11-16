@@ -14,6 +14,7 @@ import pushNotificationService from "@/services/notification/pushNotification.se
 import socketService from "@/services/socket/socket.service";
 import { updateGlobalUnreadCount } from "@/store/notificationStore";
 import { AppUpdateProvider } from "@/features/app-update";
+import { TimeValidationProvider } from "@/features/time-validation";
 
 LogBox.ignoreLogs([
   "`expo-notifications` functionality is not fully supported in Expo Go",
@@ -103,9 +104,11 @@ export default function App() {
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <SafeAreaProvider>
-          <AppUpdateProvider>
-            <AppContent />
-          </AppUpdateProvider>
+          <TimeValidationProvider>
+            <AppUpdateProvider>
+              <AppContent />
+            </AppUpdateProvider>
+          </TimeValidationProvider>
         </SafeAreaProvider>
       </PersistGate>
     </Provider>
