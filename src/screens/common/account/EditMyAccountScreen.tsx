@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -136,15 +136,42 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
+const isPassportDocType = (type?: string): boolean =>
+  String(type || "").trim().toUpperCase() === "PASS" ||
+  String(type || "").trim().toUpperCase() === "PASSPORT";
+
 const isValidNic = (value: string): boolean =>
   /^[0-9]{9}[vVxX]$/.test(value) || /^[0-9]{12}$/.test(value);
 
-const validateDocNumber = (value: string): string => {
+const validateDocNumber = (value: string, currentDocType?: string): string => {
   const clean = value.trim();
-  if (!clean) return "NIC or Passport Number is required";
-  if (/\s/.test(clean)) return "Cannot contain spaces";
-  if (clean.length > 12) return "Cannot exceed 12 characters";
-  if (!/^[a-zA-Z0-9]+$/.test(clean)) return "Must contain only letters and numbers";
+  const isPass = isPassportDocType(currentDocType);
+
+  if (!clean) {
+    return isPass ? "Passport ID is required" : "NIC number is required";
+  }
+  if (/\s/.test(clean)) {
+    return isPass
+      ? "Passport ID cannot contain spaces"
+      : "NIC number cannot contain spaces";
+  }
+  if (!/^[a-zA-Z0-9]+$/.test(clean)) {
+    return "Must contain only letters and numbers";
+  }
+
+  // When docType is "PASS" (Passport), the length validation should not be applied
+  if (isPass) {
+    return "";
+  }
+
+  // When docType is "NIC", apply NIC format and length checks
+  if (clean.length > 12) {
+    return "NIC cannot exceed 12 characters";
+  }
+  if (!isValidNic(clean)) {
+    return "Please enter a valid NIC (9 digits + V/X, or 12 digits)";
+  }
+
   return "";
 };
 
@@ -162,6 +189,38 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const scrollRef = useRef<any>(null);
   const scrollToTop = () =>
     scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      if (scrollRef.current?.scrollToEnd) {
+        scrollRef.current.scrollToEnd({ animated: true });
+      } else if (scrollRef.current?.scrollTo) {
+        scrollRef.current.scrollTo({ y: 99999, animated: true });
+      }
+    }, 250);
+  };
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
   );
@@ -483,10 +542,14 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
 
     const cleanedNic = nic.trim().toUpperCase();
     if (!cleanedNic) {
-      setNicError("NIC or Passport Number is required");
+      setNicError(
+        isPassportDocType(docType)
+          ? "Passport ID is required"
+          : "NIC number is required",
+      );
       hasError = true;
     } else {
-      const docErr = validateDocNumber(cleanedNic);
+      const docErr = validateDocNumber(cleanedNic, docType);
       if (docErr) {
         setNicError(docErr);
         hasError = true;
@@ -565,12 +628,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const formattedLastName = capitalizeName(lastName.trim());
       const formattedCompanyName = capitalizeFirst(companyName);
 
-      let determinedDocType = docType || "NIC";
-      if (isValidNic(cleanedNic)) {
-        determinedDocType = "NIC";
-      } else {
-        determinedDocType = "PASS";
-      }
+      let determinedDocType = docType
+        ? (isPassportDocType(docType) ? "PASS" : "NIC")
+        : (isValidNic(cleanedNic) ? "NIC" : "PASS");
 
       const payload: any = {
         title: (title || "Mr").trim(),
@@ -1101,16 +1161,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         </View>
       ) : (
         <KeyboardAwareScrollView
+          style={{ flex: 1 }}
           innerRef={(ref) => (scrollRef.current = ref)}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
           enableAutomaticScroll={true}
-          keyboardOpeningTime={0}
+          extraScrollHeight={Platform.select({ ios: 40, android: 120 })}
+          extraHeight={Platform.select({ ios: 40, android: 120 })}
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: 20,
+            paddingBottom:
+              keyboardHeight > 0
+                ? Platform.OS === "ios"
+                  ? 40
+                  : 140
+                : Platform.OS === "ios"
+                  ? 16
+                  : 20,
             flexGrow: 1,
             justifyContent: "space-between",
           }}
@@ -1414,25 +1483,38 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 <InputField
                   isIconThemeDark={false}
                   icon="passport"
-                  label="NIC Number / Passport ID"
-                  placeholder="NIC Number / Passport ID"
+                  label={
+                    isPassportDocType(docType)
+                      ? "Passport ID"
+                      : (docType === "NIC" ? "NIC Number" : "NIC Number / Passport ID")
+                  }
+                  placeholder={
+                    isPassportDocType(docType)
+                      ? "Passport ID"
+                      : (docType === "NIC" ? "NIC Number" : "NIC Number / Passport ID")
+                  }
                   editable={!isWholesale}
                   value={nic}
                   autoCapitalize="characters"
-                  maxLength={12}
+                  maxLength={isPassportDocType(docType) ? undefined : 12}
                   error={nicError}
+                  onFocus={scrollToBottom}
                   onChangeText={(text) => {
                     const clean = text.replace(/\s/g, "").toUpperCase();
                     setNic(clean);
                     if (nicError && clean.length > 0) {
-                      setNicError(validateDocNumber(clean));
+                      setNicError(validateDocNumber(clean, docType));
                     }
                   }}
                   onBlur={() => {
                     if (!nic.trim()) {
-                      setNicError("NIC or Passport Number is required");
+                      setNicError(
+                        isPassportDocType(docType)
+                          ? "Passport ID is required"
+                          : "NIC number is required",
+                      );
                     } else {
-                      setNicError(validateDocNumber(nic));
+                      setNicError(validateDocNumber(nic, docType));
                     }
                   }}
                 />
@@ -1509,6 +1591,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         paddingHorizontal={8}
                         marginLeft={6}
                         value={companyMobile}
+                        onFocus={scrollToBottom}
                         onChangeText={(text) => {
                           const clean = cleanPhoneInput(
                             text,

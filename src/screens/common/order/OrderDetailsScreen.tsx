@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -230,22 +230,51 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     });
   };
 
+  const isInitialMount = useRef(true);
+
   useEffect(() => {
     const fetchAllOrderDetails = async () => {
       if (!orderId) {
         setLoading(false);
+        setComplaintLoading(false);
         return;
       }
       try {
         setLoading(true);
-        const [orderRes, packagesRes, itemsRes] = await Promise.all([
-          orderService.getOrderById(orderId),
-          orderService.getOrderPackages(orderId),
-          orderService.getOrderAdditionalItems(orderId),
-        ]);
+        setComplaintLoading(true);
+        const [orderRes, packagesRes, itemsRes, complaintsRes] =
+          await Promise.all([
+            orderService.getOrderById(orderId),
+            orderService.getOrderPackages(orderId),
+            orderService.getOrderAdditionalItems(orderId),
+            complaintService.getMyComplaints().catch(() => null),
+          ]);
 
-        if (orderRes.data && orderRes.data.status) {
-          setOrder(orderRes.data.order);
+        const fetchedOrder =
+          orderRes.data && orderRes.data.status ? orderRes.data.order : null;
+        if (fetchedOrder) {
+          setOrder(fetchedOrder);
+        }
+
+        const invNo =
+          fetchedOrder?.invoiceNo ||
+          fetchedOrder?.invoiceNumber ||
+          fetchedOrder?.invNo ||
+          undefined;
+
+        if (invNo && complaintsRes?.data?.status) {
+          const prefix = `Complaint regarding Invoice No : ${invNo}\n`;
+          const list: any[] = complaintsRes.data.data || [];
+          const found =
+            list.find((c) =>
+              String(c?.complain || "")
+                .replace(/<br\s*\/?>/gi, "\n")
+                .replace(/\r\n/g, "\n")
+                .startsWith(prefix),
+            ) || null;
+          setComplaint(found);
+        } else {
+          setComplaint(null);
         }
 
         if (packagesRes.data && packagesRes.data.status) {
@@ -335,56 +364,47 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         console.error("Error fetching order details:", err);
       } finally {
         setLoading(false);
+        setComplaintLoading(false);
       }
     };
 
     fetchAllOrderDetails();
   }, [orderId]);
 
-  // Look up the complaint every time this screen gains focus so the button
-  // reflects a complaint that was just submitted / closed. The button stays
-  // hidden (complaintLoading) until the lookup finishes, so "Report an Issue"
-  // never flashes before "Complaint Under Review".
+  // Look up the complaint when this screen gains focus (e.g. returning from Report Complaint)
   useFocusEffect(
     useCallback(() => {
-      // Wait for the order (and its invoiceNo) to load first
-      if (loading) return;
-
-      if (!invoiceNo) {
-        setComplaint(null);
-        setComplaintLoading(false);
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
         return;
       }
 
+      if (!invoiceNo) return;
+
       let active = true;
-      setComplaintLoading(true);
 
       (async () => {
         try {
-          // Uses the existing my-complaints API (newest first) and matches the
-          // saved description prefix: "Complaint regarding Invoice No : INV<br/>"
           const res = await complaintService.getMyComplaints();
           const prefix = `Complaint regarding Invoice No : ${invoiceNo}\n`;
           const list: any[] = res.data?.status ? res.data.data || [] : [];
           const found =
             list.find((c) =>
               String(c?.complain || "")
-                .replace(/<br\s*\/?>/gi, "\n") // legacy rows saved with <br/>
+                .replace(/<br\s*\/?>/gi, "\n")
                 .replace(/\r\n/g, "\n")
                 .startsWith(prefix),
             ) || null;
           if (active) setComplaint(found);
         } catch (e) {
-          if (active) setComplaint(null);
-        } finally {
-          if (active) setComplaintLoading(false);
+          // keep existing complaint state
         }
       })();
 
       return () => {
         active = false;
       };
-    }, [invoiceNo, loading]),
+    }, [invoiceNo]),
   );
 
   const NORMAL_STAGES = [
@@ -808,7 +828,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     ];
   };
 
-  if (loading) {
+  if (loading || complaintLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
         <CustomHeader
@@ -901,8 +921,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   paddingHorizontal: 10,
                   paddingVertical: 6,
                   shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.08,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
                   shadowRadius: 3,
                   elevation: 2,
                 }}
@@ -933,6 +953,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   borderRadius: 99,
                   paddingHorizontal: 10,
                   paddingVertical: 6,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 3,
+                  elevation: 2,
                 }}
               >
                 <Ionicons name="hourglass" size={12} color="#000" />
@@ -961,6 +986,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   borderRadius: 99,
                   paddingHorizontal: 10,
                   paddingVertical: 6,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 3,
+                  elevation: 2,
                 }}
               >
                 <Ionicons name="information-circle" size={13} color="#FFF" />
