@@ -89,12 +89,12 @@ const formatAmount = (amount: number | string) => {
     typeof amount === "number"
       ? amount
       : parseFloat(
-          String(amount || "")
-            .replace(/Rs\.?/gi, "")
-            .replace(/LKR/gi, "")
-            .replace(/,/g, "")
-            .trim(),
-        ) || 0;
+        String(amount || "")
+          .replace(/Rs\.?/gi, "")
+          .replace(/LKR/gi, "")
+          .replace(/,/g, "")
+          .trim(),
+      ) || 0;
   return n.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -300,7 +300,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       try {
         const card = await cardStorageService.getSavedCard(userProfile?.id);
         if (isMounted) setSavedCard(card);
-      } catch {}
+      } catch { }
     };
     loadCard();
     return () => {
@@ -467,9 +467,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const additionalItemsTotal =
     rawItemsData.length > 0
       ? rawItemsData.reduce(
-          (acc: number, it: any) => acc + (parseFloat(it.price) || 0),
-          0,
-        )
+        (acc: number, it: any) => acc + (parseFloat(it.price) || 0),
+        0,
+      )
       : itemsTotal;
 
   const serviceFee = isDashServiceFee
@@ -484,11 +484,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const calculatedTotal = Math.max(
     0,
     packagesTotal +
-      itemsTotal -
-      productDiscount -
-      couponDiscount +
-      deliveryFeeCharged +
-      serviceFee,
+    itemsTotal -
+    productDiscount -
+    couponDiscount +
+    deliveryFeeCharged +
+    serviceFee,
   );
   const orderFullTotal = hasLiveData
     ? calculatedTotal
@@ -700,8 +700,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               Alert.alert(
                 "Payment Error",
                 chargeErr?.response?.data?.message ||
-                  chargeErr?.message ||
-                  "Payment failed. Please try again.",
+                chargeErr?.message ||
+                "Payment failed. Please try again.",
               );
               return;
             }
@@ -724,8 +724,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         Alert.alert(
           "Payment Error",
           err?.response?.data?.message ||
-            err?.message ||
-            "Failed to start payment. Please try again.",
+          err?.message ||
+          "Failed to start payment. Please try again.",
         );
       }
       return;
@@ -885,6 +885,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       paymentMethod: order?.paymentMethod || "cash",
       refundCreditAmount,
       serviceFee,
+      // new: shown as rows on the cancel screen
+      couponDiscount,
+      deliveryFee,
+      isFreeDeliveryCoupon,
+      isPickup,
     });
   };
 

@@ -25,6 +25,10 @@ import orderService from "@/services/order/order.service";
   NOTE: add these to RootStackParamList -> "OrderCancelConfirmation" params:
     totalCardDue?: number;
     hasAlaCarte?: boolean;
+    couponDiscount?: number;        // money-off coupon (not free delivery)
+    deliveryFee?: number;           // original delivery fee (0 for pickup)
+    isFreeDeliveryCoupon?: boolean; // true => "Delivery Fee Coupon Applied!"
+    isPickup?: boolean;
 */
 type Props = StackScreenProps<RootStackParamList, "OrderCancelConfirmation">;
 
@@ -102,19 +106,36 @@ const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({
 );
 
 // Flat summary row with a divider line underneath (matches the design)
+//  - light: regular-weight order breakdown rows (For Packages, Delivery Fee ...)
+//  - bold:  Total row
+//  - default: semi-bold payment rows (Total Pay with Card (Due) ...)
+//  - valueClassName: overrides the value text style (e.g. green coupon message)
 const SummaryRow: React.FC<{
   label: string;
   value: string;
   bold?: boolean;
-}> = ({ label, value, bold }) => (
-  <View className="flex-row justify-between items-center py-3 border-b border-[#D9D9D9]">
-    <Text className={`text-[14px] text-black ${bold ? "font-bold" : ""}`}>
+  light?: boolean;
+  valueClassName?: string;
+}> = ({ label, value, bold, light, valueClassName }) => (
+  <View
+    className={`flex-row justify-between items-center py-3 border-b ${
+      light ? "border-[#ECECEC]" : "border-[#D9D9D9]"
+    }`}
+  >
+    <Text
+      className={`text-[14px] ${light ? "text-[#4B4F6B]" : "text-black"} ${
+        bold ? "font-bold" : light ? "" : "font-semibold"
+      }`}
+    >
       {label}
     </Text>
     <Text
-      className={`text-[14px] text-black ${
-        bold ? "font-bold" : "font-semibold"
-      }`}
+      className={
+        valueClassName ??
+        `text-[14px] ${light ? "text-[#4B4F6B]" : "text-black"} ${
+          bold ? "font-bold" : light ? "" : "font-semibold"
+        }`
+      }
     >
       {value}
     </Text>
@@ -141,6 +162,10 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
+    couponDiscount: passedCouponDiscount,
+    deliveryFee: passedDeliveryFee,
+    isFreeDeliveryCoupon: passedIsFreeDeliveryCoupon,
+    isPickup: passedIsPickup,
   } = (route.params || {}) as any;
 
   // Order has ala carte items check
@@ -149,6 +174,17 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       passedHasAlacart ||
       (passedAlaCarte && passedAlaCarte.length > 0),
   );
+
+  // Coupon / delivery details passed from the review screen
+  const couponDiscount = Number(passedCouponDiscount ?? 0);
+  const isPickup = Boolean(passedIsPickup);
+  const isFreeDeliveryCoupon = Boolean(passedIsFreeDeliveryCoupon);
+  const deliveryFee = isPickup ? 0 : Number(passedDeliveryFee ?? 0);
+  // Free-delivery coupon => nothing is charged for delivery
+  const deliveryFeeCharged = isFreeDeliveryCoupon ? 0 : deliveryFee;
+  // Show the Delivery Fee row for delivery orders (not for pickup)
+  const showDeliveryRow =
+    !isPickup && (isFreeDeliveryCoupon || deliveryFee > 0);
 
   const packages: PackageItem[] =
     passedPackages && passedPackages.length > 0 ? passedPackages : [];
@@ -276,7 +312,13 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     0,
   );
   const alaCarteTotal = alaCarteItems.reduce((sum, i) => sum + i.price, 0);
-  const calculatedOrderTotal = packagesTotal + alaCarteTotal;
+
+  // Fallback total = packages + ala carte - coupon + delivery fee (0 when a
+  // free-delivery coupon is applied)
+  const calculatedOrderTotal = Math.max(
+    0,
+    packagesTotal + alaCarteTotal - couponDiscount + deliveryFeeCharged,
+  );
 
   const processOrderTotal =
     passedProcessOrderTotal !== undefined && passedProcessOrderTotal > 0
@@ -510,6 +552,48 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
             {/* Totals Summary (flat rows with dividers) */}
             <View className="mx-5 mt-6">
+              {/* ── Order breakdown ── */}
+              {packagesTotal > 0 && (
+                <SummaryRow
+                  light
+                  label="For Packages"
+                  value={`Rs. ${formatPrice(packagesTotal)}`}
+                />
+              )}
+
+              {alaCarteTotal > 0 && (
+                <SummaryRow
+                  light
+                  label="For Ala Carte"
+                  value={`Rs. ${formatPrice(alaCarteTotal)}`}
+                />
+              )}
+
+              {couponDiscount > 0 && (
+                <SummaryRow
+                  light
+                  label="Coupon Discount"
+                  value={`- Rs. ${formatPrice(couponDiscount)}`}
+                />
+              )}
+
+              {showDeliveryRow &&
+                (isFreeDeliveryCoupon ? (
+                  <SummaryRow
+                    light
+                    label="Delivery Fee"
+                    value="Delivery Fee Coupon Applied!"
+                    valueClassName="text-[11px] text-[#1F7A3A]"
+                  />
+                ) : (
+                  <SummaryRow
+                    light
+                    label="Delivery Fee"
+                    value={`+ Rs. ${formatPrice(deliveryFee)}`}
+                  />
+                ))}
+
+              {/* ── Payment breakdown ── */}
               {totalPaidCard > 0 && (
                 <SummaryRow
                   label="Total Paid with Card"
