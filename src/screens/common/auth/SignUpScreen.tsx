@@ -561,12 +561,18 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           }
         } catch (uploadErr: any) {
           console.error("BR upload error:", uploadErr);
-          Alert.alert(
-            "Upload Error",
+          const status = uploadErr.response?.status;
+          let errorMsg =
             uploadErr.response?.data?.message ||
-              uploadErr.message ||
-              "Failed to upload Business Registration document.",
-          );
+            uploadErr.message ||
+            "Failed to upload Business Registration document.";
+
+          if (status === 413 || String(uploadErr.message || "").includes("413")) {
+            errorMsg =
+              "The file size is too large to upload. Please upload an image or a document smaller than 4.5MB.";
+          }
+
+          Alert.alert("Upload Error", errorMsg);
           return;
         }
       }
