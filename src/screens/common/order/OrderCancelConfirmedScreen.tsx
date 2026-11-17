@@ -552,14 +552,14 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                   <Ionicons name="wallet" size={22} color="#fff" />
                 </View>
                 <Text className="text-[15px] font-bold text-[#15803D] mt-3 text-center">
-                  Amount will be credited to your credit balance
+                  Amount will be credited to your Polygon Wallet
                 </Text>
                 <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
                   After canceling, the full converted amount of{" "}
                   <Text className="font-bold text-[#15803D]">
                     Rs. {formatPrice(refundCreditAmount)}
                   </Text>{" "}
-                  will be added to your credit balance. You can use it for your
+                  will be added to your Polygon Wallet. You can use it for your
                   next purchase.
                 </Text>
               </View>

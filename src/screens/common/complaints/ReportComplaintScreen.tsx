@@ -225,6 +225,16 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     }
   };
 
+  const getAssetSize = async (asset: ImagePicker.ImagePickerAsset) => {
+    if (asset.fileSize) return asset.fileSize; // fast path, no file I/O
+    try {
+      const info: any = await FileSystem.getInfoAsync(asset.uri);
+      return info?.exists && typeof info.size === "number" ? info.size : 0;
+    } catch {
+      return 0;
+    }
+  };
+
   const pickImage = async () => {
     if (Platform.OS === "ios") {
       const { status } =
@@ -245,15 +255,15 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_IMAGES - images.length,
-      aspect: [4, 3],
+      // Let the picker return more than the remaining slots so WE can warn
+      // immediately instead of the native picker silently blocking the user.
+      selectionLimit: MAX_IMAGES,
       quality: 0.7,
     });
 
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      return;
-    }
+    if (result.canceled || !result.assets?.length) return;
 
+    // 1) Limit check: instant, before any async work
     if (images.length + result.assets.length > MAX_IMAGES) {
       showAlert(
         "Limit Reached",
@@ -263,63 +273,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       return;
     }
 
-    let hasOversized = false;
-    const validPhotos: { uri: string; name: string; type: string }[] = [];
+    // 2) Read all sizes in parallel (not one by one)
+    const sizes = await Promise.all(result.assets.map(getAssetSize));
 
-    for (let i = 0; i < result.assets.length; i++) {
-      const asset = result.assets[i];
-      let size = asset.fileSize || 0;
-      if (!size) {
-        try {
-          const info = await FileSystem.getInfoAsync(asset.uri);
-          if (info.exists && typeof (info as any).size === "number") {
-            size = (info as any).size;
-          }
-        } catch (e) {
-          console.log("Failed to get asset size:", e);
-        }
-      }
-
-      if (size > MAX_IMAGE_SIZE) {
-        hasOversized = true;
-      } else {
-        const uri = asset.uri;
-        let fileName = asset.fileName;
-        if (!fileName) {
-          const uriParts = uri.split("/");
-          fileName =
-            uriParts[uriParts.length - 1] || `image_${Date.now()}_${i}.jpg`;
-        }
-
-        const ext = (fileName.split(".").pop() || "").toLowerCase();
-        let mimeType = asset.mimeType;
-
-        if (!mimeType) {
-          if (ext === "heic" || ext === "heif") {
-            mimeType = `image/${ext}`;
-          } else if (ext === "png") {
-            mimeType = "image/png";
-          } else if (ext === "webp") {
-            mimeType = "image/webp";
-          } else {
-            mimeType = "image/jpeg";
-          }
-        } else if (
-          (mimeType === "image/heic" || mimeType === "image/heif") &&
-          !fileName.toLowerCase().endsWith(".heic") &&
-          !fileName.toLowerCase().endsWith(".heif")
-        ) {
-          fileName = `${fileName}.${mimeType.replace("image/", "")}`;
-        }
-
-        validPhotos.push({
-          uri: asset.uri,
-          name: fileName,
-          type: mimeType,
-        });
-      }
-    }
-
+    // 3) Oversize check: show the popup right away
+    const hasOversized = sizes.some((s) => s > MAX_IMAGE_SIZE);
     if (hasOversized) {
       setImageError("Image size must not exceed 5MB");
       showAlert(
@@ -330,6 +288,37 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     } else {
       setImageError(null);
     }
+
+    // 4) Build the valid photos (pure sync work, no awaits)
+    const validPhotos: { uri: string; name: string; type: string }[] = [];
+
+    result.assets.forEach((asset, i) => {
+      if (sizes[i] > MAX_IMAGE_SIZE) return;
+
+      let fileName = asset.fileName;
+      if (!fileName) {
+        const parts = asset.uri.split("/");
+        fileName = parts[parts.length - 1] || `image_${Date.now()}_${i}.jpg`;
+      }
+
+      const ext = (fileName.split(".").pop() || "").toLowerCase();
+      let mimeType = asset.mimeType;
+
+      if (!mimeType) {
+        if (ext === "heic" || ext === "heif") mimeType = `image/${ext}`;
+        else if (ext === "png") mimeType = "image/png";
+        else if (ext === "webp") mimeType = "image/webp";
+        else mimeType = "image/jpeg";
+      } else if (
+        (mimeType === "image/heic" || mimeType === "image/heif") &&
+        !fileName.toLowerCase().endsWith(".heic") &&
+        !fileName.toLowerCase().endsWith(".heif")
+      ) {
+        fileName = `${fileName}.${mimeType.replace("image/", "")}`;
+      }
+
+      validPhotos.push({ uri: asset.uri, name: fileName, type: mimeType });
+    });
 
     if (validPhotos.length > 0) {
       setImages((prev) => [...prev, ...validPhotos]);

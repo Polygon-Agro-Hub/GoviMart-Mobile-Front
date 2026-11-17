@@ -9,6 +9,7 @@ import { networkSimulator, ENABLE_NETWORK_SIMULATOR } from "@/services/network/n
 import { connectionStatusService } from "@/services/network/connectionStatus.service";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import socketService from "@/services/socket/socket.service";
+import { timeValidationService } from "@/services/time/timeValidation.service";
 
 const apiClient = axios.create({
   baseURL: environment.API_BASE_URL,
@@ -71,11 +72,23 @@ apiClient.interceptors.response.use(
     } else {
       connectionStatusService.reportFastSuccess();
     }
+
+    // Check server date header for device clock validation
+    const serverDateHeader = response.headers?.["date"] || response.headers?.["Date"];
+    if (typeof serverDateHeader === "string") {
+      timeValidationService.reportServerDateHeader(serverDateHeader);
+    }
+
     return response;
   },
   async (error: AxiosError) => {
     if (networkSimulator.isEnabled()) {
       networkSimulator.handleResponseComplete();
+    }
+
+    const errServerDate = error.response?.headers?.["date"] || error.response?.headers?.["Date"];
+    if (typeof errServerDate === "string") {
+      timeValidationService.reportServerDateHeader(errServerDate);
     }
     if (
       error.code === "ECONNABORTED" ||

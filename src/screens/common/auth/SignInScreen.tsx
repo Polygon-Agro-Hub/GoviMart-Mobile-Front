@@ -182,7 +182,8 @@ const validateIdentifier = (
   if (!matched) {
     return {
       isValid: false,
-      error: "Please enter mobile number with a valid country code (e.g. 947XXXXXXXX)",
+      error:
+        "Please enter mobile number with a valid country code (e.g. 947XXXXXXXX)",
     };
   }
 
@@ -207,7 +208,8 @@ const validateIdentifier = (
     if (nationalNumber.length !== 9) {
       return {
         isValid: false,
-        error: "Sri Lanka mobile number must be 9 digits after 94 (e.g. 947XXXXXXXX)",
+        error:
+          "Sri Lanka mobile number must be 9 digits after 94 (e.g. 947XXXXXXXX)",
       };
     }
     return { isValid: true };
@@ -263,15 +265,30 @@ const formatSubmittedDate = (dateStr?: string | null) => {
     };
 
     const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
     ];
     const month = monthNames[d.getMonth()];
 
     const isCurrentYear = d.getFullYear() === now.getFullYear();
-    const yearStr = isCurrentYear ? "" : ` ${d.getFullYear()}`;
 
-    return `${time}, ${ordinal(day)} ${month}${yearStr}`;
+    // Year is shown: time on the first line, date + year on the second line
+    if (!isCurrentYear) {
+      return `${time}\n${ordinal(day)} ${month} ${d.getFullYear()}`;
+    }
+
+    // Current year: keep everything on a single line
+    return `${time}, ${ordinal(day)} ${month}`;
   } catch {
     return dateStr;
   }
@@ -301,7 +318,8 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
-  const [wholesalePendingModalVisible, setWholesalePendingModalVisible] = useState(false);
+  const [wholesalePendingModalVisible, setWholesalePendingModalVisible] =
+    useState(false);
   const [wholesalePendingData, setWholesalePendingData] = useState<{
     userId?: number;
     approveStatus?: string;
@@ -333,7 +351,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
             );
             const storedPassword =
               await SecureStore.getItemAsync("rememberedPassword");
-            const normalizedStored = normalizeIdentifier(storedIdentifier || "");
+            const normalizedStored = normalizeIdentifier(
+              storedIdentifier || "",
+            );
             if (normalizedStored) {
               setIdentifier(normalizedStored);
             }
@@ -464,7 +484,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         dispatch(loginSuccess({ token, userProfile, loginTime }));
         if (userProfile.id) {
           socketService.registerUser(userProfile.id, token);
-          pushNotificationService.registerPushToken().catch(() => { });
+          pushNotificationService.registerPushToken().catch(() => {});
         }
 
         // Fetch this logged-in user's cart from backend
@@ -478,7 +498,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 products: dbProducts,
                 packages: dbPackages,
                 cartUserId: userProfile.id,
-              })
+              }),
             );
           }
         } catch (cartErr) {
@@ -492,8 +512,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           refreshToken,
         );
 
-        const isWholesale =
-          (buyerType || "").toLowerCase() === "wholesale";
+        const isWholesale = (buyerType || "").toLowerCase() === "wholesale";
 
         let targetScreen: keyof RootStackParamList = "Home";
         let targetParams: any = undefined;
@@ -563,11 +582,12 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         const msg = response.data?.message || "An error occurred during login.";
         if (
           msg.toLowerCase().includes("the password you entered is incorrect") ||
-          (msg.toLowerCase().includes("password") && msg.toLowerCase().includes("incorrect"))
+          (msg.toLowerCase().includes("password") &&
+            msg.toLowerCase().includes("incorrect"))
         ) {
           setAlertTitle("Incorrect Password");
           setAlertMessage(
-            "The password you entered is incorrect.\nPlease check and re-enter."
+            "The password you entered is incorrect.\nPlease check and re-enter.",
           );
           setAlertVisible(true);
         } else {
@@ -603,12 +623,15 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         error.message ||
         "Failed to connect to server.";
       if (
-        errorMsg.toLowerCase().includes("the password you entered is incorrect") ||
-        (errorMsg.toLowerCase().includes("password") && errorMsg.toLowerCase().includes("incorrect"))
+        errorMsg
+          .toLowerCase()
+          .includes("the password you entered is incorrect") ||
+        (errorMsg.toLowerCase().includes("password") &&
+          errorMsg.toLowerCase().includes("incorrect"))
       ) {
         setAlertTitle("Incorrect Password");
         setAlertMessage(
-          "The password you entered is incorrect.\nPlease check and re-enter."
+          "The password you entered is incorrect.\nPlease check and re-enter.",
         );
         setAlertVisible(true);
       } else {
@@ -679,11 +702,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 }`}
               >
                 <View className="mr-3">
-                  <FontAwesome5
-                    name="user-alt"
-                    size={20}
-                    color="black"
-                  />
+                  <FontAwesome5 name="user-alt" size={20} color="black" />
                 </View>
                 <TextInput
                   value={identifier}
@@ -806,11 +825,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 }`}
               >
                 <View className="mr-3 ml-1">
-                  <FontAwesome6
-                    name="lock"
-                    size={18}
-                    color="black"
-                  />
+                  <FontAwesome6 name="lock" size={18} color="black" />
                 </View>
                 <TextInput
                   value={password}
@@ -1028,7 +1043,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 paddingHorizontal: 8,
               }}
             >
-              Your wholesale account registration and business documents are currently being verified by our team. This process typically takes 24–48 hours to ensure all trade compliance standards are met.
+              Your wholesale account registration and business documents are
+              currently being verified by our team. This process typically takes
+              24–48 hours to ensure all trade compliance standards are met.
             </Text>
 
             {/* Status Card */}
@@ -1051,7 +1068,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   marginBottom: 14,
                 }}
               >
-                <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
+                <Text
+                  style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}
+                >
                   Review Status
                 </Text>
                 <View
@@ -1096,7 +1115,9 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                   marginBottom: 14,
                 }}
               >
-                <Text style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}>
+                <Text
+                  style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}
+                >
                   Submitted Date
                 </Text>
                 <Text
@@ -1104,6 +1125,10 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                     color: "#0F172A",
                     fontSize: 13,
                     fontWeight: "700",
+                    textAlign: "right",
+                    flexShrink: 1,
+                    marginLeft: 12,
+                    lineHeight: 18,
                   }}
                 >
                   {formatSubmittedDate(wholesalePendingData?.submittedDate)}
@@ -1159,6 +1184,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 shadowOpacity: 0.2,
                 shadowRadius: 8,
                 elevation: 4,
+                marginBottom:10
               }}
             >
               <Text

@@ -12,13 +12,15 @@ import {
   Keyboard,
   BackHandler,
   ActivityIndicator,
+  AppState,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import * as Clipboard from "expo-clipboard";
 import axios from "axios";
 import { environment } from "@/environment/environment";
 import customerService from "@/services/customer/customer.service";
@@ -40,7 +42,7 @@ interface SignUpOTPProps {
 }
 
 const OTP_LENGTH = 5;
-const EMPTY_OTP = () => Array(OTP_LENGTH).fill("") as string[];
+const EMPTY_OTP = () => "";
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 60 minutes window to count attempts
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout duration
@@ -160,8 +162,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       : `@otp_attempts_sms_${phoneNumber}`);
 
   // State Management
-  const [otp, setOtp] = useState<string[]>(EMPTY_OTP());
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [otp, setOtp] = useState<string>("");
+  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
+  const [otpSessionKey, setOtpSessionKey] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState<number>(OTP_TIMER_SECONDS);
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -172,21 +175,14 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [attemptsCount, setAttemptsCount] = useState<number>(1);
   const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
-  // Input Refs
-  const ref_1 = useRef<TextInput>(null);
-  const ref_2 = useRef<TextInput>(null);
-  const ref_3 = useRef<TextInput>(null);
-  const ref_4 = useRef<TextInput>(null);
-  const ref_5 = useRef<TextInput>(null);
-
-  const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
+  // Master Input Ref
+  const inputRef = useRef<TextInput>(null);
 
   // Synchronous locks (refs update immediately, state does not)
   const resendLockRef = useRef(false);
   const verifyLockRef = useRef(false);
-
-  // When true, focus the first OTP box as soon as inputs are editable again
-  const needsRefocusRef = useRef(false);
+  const lastUsedClipboardRef = useRef<string>("");
+  const appStateRef = useRef(AppState.currentState);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -242,24 +238,87 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     };
   }, [ensureVisible]);
 
-  // Clear all boxes and re-focus the first one once inputs are editable
+  // Clear all boxes. Focus is NOT restored here: the keyboard must stay
+  // closed while an alert is on screen, otherwise it covers the OK button.
   const resetOtp = () => {
-    setOtp(EMPTY_OTP());
-    needsRefocusRef.current = true;
+    setOtp("");
   };
 
-  // After a failed verification the inputs are re-enabled (isVerifying
-  // goes false). Only then can the first box actually take focus.
-  useEffect(() => {
-    if (!isVerifying && !isRateLimited && needsRefocusRef.current) {
-      needsRefocusRef.current = false;
-      const t = setTimeout(() => refs[0].current?.focus(), 150);
+  // Re-focus the OTP input only AFTER the user dismisses an alert (taps OK).
+  const focusInputAfterAlert = () => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 150);
+  };
+
+  // Ensure master input focuses automatically when screen mounts or returns to focus
+  useFocusEffect(
+    useCallback(() => {
+      const t = setTimeout(() => {
+        if (!isRateLimited && !isVerifying) {
+          inputRef.current?.focus();
+        }
+      }, 250);
       return () => clearTimeout(t);
+    }, [isRateLimited, isVerifying]),
+  );
+
+  // Restart autofill session on fresh signup token / reference ID
+  useEffect(() => {
+    setOtpSessionKey((prev) => prev + 1);
+    setOtp("");
+    lastUsedClipboardRef.current = "";
+    const t = setTimeout(() => {
+      if (!isRateLimited && !isVerifying) {
+        inputRef.current?.focus();
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [signupToken, referenceId]);
+
+  // Check clipboard for 5-digit OTP
+  const checkClipboardForOtp = useCallback(async () => {
+    try {
+      if (isRateLimited || isVerifying || isExpired) return;
+      const hasString = await Clipboard.hasStringAsync();
+      if (!hasString) return;
+      const content = await Clipboard.getStringAsync();
+      if (!content) return;
+      const trimmed = content.trim();
+
+      const match = trimmed.match(/\b\d{5}\b/);
+      if (match && match[0]) {
+        const foundOtp = match[0];
+        if (foundOtp !== lastUsedClipboardRef.current && foundOtp !== otp) {
+          lastUsedClipboardRef.current = foundOtp;
+          setOtp(foundOtp);
+        }
+      }
+    } catch {
+      // Ignore clipboard read errors
     }
-  }, [isVerifying, isRateLimited, otp]);
+  }, [isRateLimited, isVerifying, isExpired, otp]);
+
+  // When app returns to foreground from SMS / Mail app, refocus input and check clipboard
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+      if (prev && prev.match(/inactive|background/) && nextState === "active") {
+        setTimeout(() => {
+          if (!isRateLimited && !isVerifying) {
+            inputRef.current?.focus();
+          }
+        }, 150);
+        checkClipboardForOtp();
+      }
+    });
+    return () => sub.remove();
+  }, [checkClipboardForOtp, isRateLimited, isVerifying]);
 
   // ---------- Rate limit helpers ----------
   const showLockoutAlert = () => {
+    Keyboard.dismiss();
     Alert.alert(
       "Too Many Attempts",
       "Too many verification attempts. Please try again after 15 minutes.",
@@ -271,7 +330,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     for (const key of lockoutKeys) {
       await AsyncStorage.setItem(key, String(lockoutUntil));
     }
-    setOtp(EMPTY_OTP());
+    setOtp("");
     setTimeLeft(LOCKOUT_SECONDS);
     setIsRateLimited(true);
     setIsExpired(false);
@@ -336,13 +395,18 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   }, [phoneCode, phoneNumber, email, method]);
 
   // Wrong code: the server tracks wrong entries, so show its message.
+  // The keyboard stays closed while the alert is visible and the input is
+  // re-focused only after OK is tapped.
   const handleWrongCode = async (msg: string) => {
     resetOtp();
+    Keyboard.dismiss();
     const displayMsg =
       !msg || /incorrect|invalid|remaining/i.test(msg)
         ? "Incorrect verification code. Please try again."
         : msg;
-    Alert.alert("Invalid Code", displayMsg);
+    Alert.alert("Invalid Code", displayMsg, [
+      { text: "OK", onPress: focusInputAfterAlert },
+    ]);
   };
 
   const handleBackPress = useCallback(() => {
@@ -395,48 +459,14 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  const handleChangeText = (text: string, index: number) => {
-    const cleanText = text.replace(/[^0-9]/g, "");
-
-    // Backspace / cleared box
-    if (!cleanText) {
-      const newOtp = [...otp];
-      newOtp[index] = "";
-      setOtp(newOtp);
-      return;
-    }
-
-    // Autofill / paste: the full code arrives in a single box
-    if (cleanText.length >= OTP_LENGTH) {
-      setOtp(cleanText.slice(0, OTP_LENGTH).split(""));
-      refs[OTP_LENGTH - 1].current?.focus();
-      return;
-    }
-
-    // Normal manual typing: keep only the last typed digit
-    const newOtp = [...otp];
-    newOtp[index] = cleanText.slice(-1);
-    setOtp(newOtp);
-
-    // Auto-focus next box
-    if (index < OTP_LENGTH - 1) {
-      refs[index + 1].current?.focus();
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace") {
-      if (!otp[index] && index > 0) {
-        const newOtp = [...otp];
-        newOtp[index - 1] = "";
-        setOtp(newOtp);
-        refs[index - 1].current?.focus();
-      }
-    }
+  const handleOtpChange = (text: string) => {
+    const cleanText = text.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH);
+    setOtp(cleanText);
   };
 
   const handleSessionExpired = () => {
-    setOtp(EMPTY_OTP());
+    setOtp("");
+    Keyboard.dismiss();
     Alert.alert(
       "Session Expired",
       "Your registration session has expired. Please sign up again to continue.",
@@ -472,7 +502,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const handleVerify = async (codeOverride?: string) => {
     if (verifyLockRef.current) return; // duplicate-request guard
 
-    const code = codeOverride ?? otp.join("");
+    const code = codeOverride ?? otp;
     if (code.length < OTP_LENGTH) return; // wait for the full code
 
     // Persistent lockout
@@ -480,7 +510,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       try {
         const storedLockout = await AsyncStorage.getItem(key);
         if (storedLockout && parseInt(storedLockout, 10) > Date.now()) {
-          setOtp(EMPTY_OTP());
+          setOtp("");
           showLockoutAlert();
           return;
         }
@@ -489,9 +519,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
     if (isExpired) {
       resetOtp();
+      Keyboard.dismiss();
       Alert.alert(
         "Code Expired",
         "Your verification code has expired. Please request a new code.",
+        [{ text: "OK", onPress: focusInputAfterAlert }],
       );
       return;
     }
@@ -670,7 +702,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       } else {
         // Network / 5xx errors: clear so the user can re-enter and retry
         resetOtp();
-        Alert.alert("Verification Error", msg);
+        Keyboard.dismiss();
+        Alert.alert("Verification Error", msg, [
+          { text: "OK", onPress: focusInputAfterAlert },
+        ]);
       }
     } finally {
       verifyLockRef.current = false;
@@ -678,10 +713,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
-  // Auto-verify as soon as every digit is filled
+  // Auto-verify as soon as all digits are filled
   useEffect(() => {
-    if (otp.length === OTP_LENGTH && otp.every((d) => d !== "")) {
-      handleVerify(otp.join(""));
+    if (otp.length === OTP_LENGTH) {
+      handleVerify(otp);
     }
   }, [otp]);
 
@@ -725,7 +760,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }
 
-      setOtp(EMPTY_OTP());
+      setOtp("");
+      setOtpSessionKey((prev) => prev + 1);
       setIsResending(true);
       try {
         let response: any;
@@ -774,7 +810,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               } remaining)`,
             );
           }
-          refs[0].current?.focus();
+          inputRef.current?.focus();
         } else {
           const is429 = response.data?.isRateLimited;
           const msg = response.data?.message || "Failed to resend the code.";
@@ -863,59 +899,79 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             </Text>
           </View>
 
-          {/* 5 OTP Digit Input Boxes */}
-          <View className="flex-row justify-between my-8 px-2">
-            {otp.map((digit, index) => {
-              const isFocused = focusedIndex === index;
-              return (
-                <View
-                  key={index}
-                  className="w-[50px] h-[50px] border rounded-xl justify-center items-center bg-white"
-                  style={{
-                    borderColor: isFocused ? "#FF9114" : "#000000",
-                    borderWidth: isFocused ? 2 : 1,
-                    opacity: isVerifying ? 0.6 : 1,
-                  }}
-                >
-                  <TextInput
-                    ref={refs[index]}
-                    value={digit}
-                    onChangeText={(text) => handleChangeText(text, index)}
-                    onKeyPress={(e) => handleKeyPress(e, index)}
-                    onFocus={() => setFocusedIndex(index)}
-                    onBlur={() => setFocusedIndex(null)}
-                    keyboardType="number-pad"
-                    editable={!isRateLimited && !isVerifying}
-                    textContentType="oneTimeCode"
-                    autoComplete="sms-otp"
-                    importantForAutofill="yes"
-                    autoFocus={index === 0}
+          {/* 5 OTP Digit Input Boxes Container */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => inputRef.current?.focus()}
+            className="relative my-8 px-2"
+          >
+            {/* Master TextInput for 100% reliable SMS autofill & keyboard input */}
+            <TextInput
+              key={`otp_session_${otpSessionKey}`}
+              ref={inputRef}
+              value={otp}
+              onChangeText={handleOtpChange}
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
+              importantForAutofill="yes"
+              editable={!isRateLimited && !isVerifying}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              autoFocus
+              caretHidden
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: "100%",
+                height: "100%",
+                opacity: 1,
+                color: "transparent",
+                backgroundColor: "transparent",
+                zIndex: 10,
+              }}
+            />
+
+            {/* Visual 5-box display */}
+            <View pointerEvents="none" className="flex-row justify-between w-full">
+              {Array.from({ length: OTP_LENGTH }).map((_, index) => {
+                const digit = otp[index] || "";
+                const isFocused =
+                  isInputFocused &&
+                  (otp.length === index ||
+                    (otp.length === OTP_LENGTH && index === OTP_LENGTH - 1));
+
+                return (
+                  <View
+                    key={index}
+                    className="w-[50px] h-[50px] border rounded-xl justify-center items-center bg-white"
                     style={{
-                      textAlign: "center",
-                      textAlignVertical: "center",
-                      fontSize: 20,
-                      fontWeight: "bold",
-                      color: "#000000",
-                      paddingTop: 0,
-                      paddingBottom: 0,
-                      paddingVertical: 0,
-                      paddingHorizontal: 0,
-                      margin: 0,
-                      width: "100%",
-                      height: "100%",
-                      ...(Platform.OS === "android"
-                        ? { includeFontPadding: false }
-                        : {}),
+                      borderColor: isFocused ? "#FF9114" : "#000000",
+                      borderWidth: isFocused ? 2 : 1,
+                      opacity: isVerifying ? 0.6 : 1,
                     }}
-                    // Allow the whole code in one box (autofill / paste).
-                    // handleChangeText keeps only the last digit for manual typing.
-                    maxLength={OTP_LENGTH}
-                    selectTextOnFocus
-                  />
-                </View>
-              );
-            })}
-          </View>
+                  >
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: "#000000",
+                        ...(Platform.OS === "android"
+                          ? { includeFontPadding: false }
+                          : {}),
+                      }}
+                    >
+                      {digit}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
 
           {/* Rate Limit / Code Expired Banner */}
           {isRateLimited && timeLeft > 0 ? (

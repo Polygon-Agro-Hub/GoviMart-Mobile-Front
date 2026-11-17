@@ -51,7 +51,7 @@ const FIELD_LABELS = {
   mobileNumber1: "Mobile Number 1",
   mobileNumber2: "Mobile Number 2",
   buildingType: "Building Type",
-  houseNo: "Building / House No",
+  houseNo: "Building / Plot No",
   streetName: "Street Name",
   city: "Your City",
   buildingNo: "Apartment / Building No",
@@ -1309,7 +1309,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
               icon="house"
               circleSize={30}
               iconSize={14}
-              label="Building / House No *"
+              label="Building / Plot No *"
               value={buildingNo}
               onChangeText={handleBuildingNoChange}
               onBlur={() =>

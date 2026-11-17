@@ -169,6 +169,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
   }
 
   const isClosed = complaint.status === "Closed";
+  const hasPhotos = (complaint.images?.length ?? 0) > 0;
 
   return (
     <View className="flex-1 bg-white">
@@ -204,7 +205,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
             </Text>
 
             <Text className="text-[13px] text-[#5A5859]">
-              Sent : {formatDateTime(complaint.createdAt)}
+              Sent : At {formatDateTime(complaint.createdAt)}
             </Text>
           </View>
 
@@ -222,7 +223,11 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
 
           {/* Description */}
 
-          <View className="px-1.5 py-[7px] border-b border-[#EEF0F2]">
+          <View
+            className={`px-1.5 py-[7px] ${
+              hasPhotos ? "border-b border-[#EEF0F2]" : ""
+            }`}
+          >
             <Text className="text-[13px] text-[#676771] mb-[4px]">
               Description
             </Text>
@@ -232,35 +237,37 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
             </Text>
           </View>
 
-          {/* Photos */}
+          {/* Photos (hidden when there are none) */}
 
-          <View className="px-1.5 py-[7px] pb-0">
-            <Text className="text-[13px] text-[#676771] mb-[5px]">
-              Photos ({complaint.images?.length})
-            </Text>
+          {hasPhotos && (
+            <View className="px-1.5 py-[7px] pb-0">
+              <Text className="text-[13px] text-[#676771] mb-[5px]">
+                Photos ({complaint.images?.length})
+              </Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingTop: 8,
-              }}
-            >
-              {complaint.images?.map((photo, index) => (
-                <TouchableOpacity
-                  key={`${photo.id}-${index}`}
-                  activeOpacity={0.9}
-                  className="w-20 h-20 rounded-[10px] overflow-hidden mr-3"
-                >
-                  <Image
-                    source={{ uri: photo.image }}
-                    className="w-full h-full"
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingTop: 8,
+                }}
+              >
+                {complaint.images?.map((photo, index) => (
+                  <TouchableOpacity
+                    key={`${photo.id}-${index}`}
+                    activeOpacity={0.9}
+                    className="w-20 h-20 rounded-[10px] overflow-hidden mr-3"
+                  >
+                    <Image
+                      source={{ uri: photo.image }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {/* ================================================= */}
@@ -270,11 +277,22 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
         <View className="border border-[#DCE2E8] rounded-2xl px-2.5 py-3.5 bg-white relative">
           {/* Connecting line */}
 
-          <View className="absolute left-6 top-[42px] bottom-[43px] w-px bg-[#DDE1E5]" />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: 27,
+              top: 46,
+              bottom: 46,
+              width: 1,
+              backgroundColor: "#E1E7EE",
+              zIndex: 0,
+            }}
+          />
 
           {/* COMPLAINT SUBMITTED */}
 
-          <View className="flex-row min-h-[64px] mb-5">
+          <View className="flex-row items-center min-h-[64px] mb-5">
             <View className="w-[35px] h-[35px] rounded-full justify-center items-center z-10 bg-black">
               <FontAwesome6
                 name="paper-plane"
@@ -301,7 +319,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
 
           {/* UNDER REVIEW */}
 
-          <View className="flex-row min-h-[64px] mb-5">
+          <View className="flex-row items-center min-h-[64px] mb-5">
             <View className="w-[35px] h-[35px] rounded-full justify-center items-center z-10 bg-black">
               <Ionicons name="hourglass" size={19} color="#FFFFFF" />
             </View>
@@ -319,7 +337,7 @@ const ViewComplaint: React.FC<ViewComplaintProps> = ({ navigation, route }) => {
 
           {/* PENDING RESOLUTION */}
 
-          <View className="flex-row min-h-[64px] mb-0">
+          <View className="flex-row items-center min-h-[64px] mb-0">
             <View
               className={`w-[35px] h-[35px] rounded-full justify-center items-center z-10 ${
                 isClosed ? "bg-black" : "bg-[#F0F1F4]"

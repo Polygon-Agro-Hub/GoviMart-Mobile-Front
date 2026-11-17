@@ -11,19 +11,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import authService from "@/services/auth/auth.service";
 import BRDocumentUploader from "@/component/common/BRDocumentUploader";
 import CustomHeader from "@/component/common/CustomHeader";
 
-type Props = StackScreenProps<
-  RootStackParamList,
-  "VerificationUnsuccessful"
->;
+type Props = StackScreenProps<RootStackParamList, "VerificationUnsuccessful">;
 
 const formatReviewDate = (dateStr?: string | null) => {
   if (!dateStr) return "N/A";
@@ -45,15 +39,30 @@ const formatReviewDate = (dateStr?: string | null) => {
     };
 
     const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December",
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
     ];
     const month = monthNames[d.getMonth()];
 
     const isCurrentYear = d.getFullYear() === new Date().getFullYear();
-    const yearStr = isCurrentYear ? "" : ` ${d.getFullYear()}`;
 
-    return `${time}, ${ordinal(day)} ${month}${yearStr}`;
+    if (isCurrentYear) {
+      // Same year: keep a single line
+      return `${time}, ${ordinal(day)} ${month}`;
+    }
+
+    // Different year: time on the first line, date + year on the second
+    return `${time},\n${ordinal(day)} ${month} ${d.getFullYear()}`;
   } catch {
     return dateStr;
   }
@@ -90,14 +99,17 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
       setFileError("Please upload a new Business Registration (BR) document.");
       Alert.alert(
         "Document Required",
-        "Please select a new Business Registration (BR) document before submitting."
+        "Please select a new Business Registration (BR) document before submitting.",
       );
       return;
     }
     setFileError("");
 
     if (!userId) {
-      Alert.alert("Error", "User session information missing. Please sign in again.");
+      Alert.alert(
+        "Error",
+        "User session information missing. Please sign in again.",
+      );
       navigation.navigate("Login");
       return;
     }
@@ -127,15 +139,20 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
                 navigation.navigate("Login");
               },
             },
-          ]
+          ],
         );
       } else {
-        Alert.alert("Submission Failed", res.data?.message || "Failed to submit document.");
+        Alert.alert(
+          "Submission Failed",
+          res.data?.message || "Failed to submit document.",
+        );
       }
     } catch (err: any) {
       console.error("Resubmit BR error:", err);
       const errorMsg =
-        err.response?.data?.message || err.message || "Failed to resubmit document.";
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to resubmit document.";
       Alert.alert("Error", errorMsg);
     } finally {
       setSubmitting(false);
@@ -143,14 +160,15 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
   };
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <SafeAreaView
+      edges={["bottom"]}
+      style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+    >
       {/* Custom Common Header with Back Button (No Title) */}
       <CustomHeader
         title=""
         showBackButton={true}
         navigation={navigation}
-        style={{ paddingTop: 0, paddingBottom: 0 }}
-        containerStyle={{ marginTop: -6 }}
         onBackPress={() => {
           if (navigation.canGoBack()) {
             navigation.goBack();
@@ -168,7 +186,6 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
           paddingBottom: 32,
         }}
       >
-
         {/* Status Icon */}
         <View style={{ alignItems: "center", marginTop: 0 }}>
           <View
@@ -234,7 +251,8 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
             paddingHorizontal: 8,
           }}
         >
-          Your wholesale account application could not be approved due to issues found with the submitted documentation.
+          Your wholesale account application could not be approved due to issues
+          found with the submitted documentation.
         </Text>
 
         {/* Review Status Card */}
@@ -308,6 +326,8 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
                 color: "#0F172A",
                 fontSize: 13,
                 fontWeight: "600",
+                textAlign: "right",
+                lineHeight: 18,
               }}
             >
               {formattedDate}

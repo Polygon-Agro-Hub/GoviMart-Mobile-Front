@@ -81,6 +81,10 @@ interface AddTimeSnapshot {
   price: number;
 }
 
+// Card heights: 2-line (long) names get the taller card, everything else the shorter one
+const CARD_HEIGHT_LONG_NAME = 240;
+const CARD_HEIGHT_DEFAULT = 220;
+
 const normalizeUnit = (raw?: string | null): "g" | "kg" => {
   const norm = (raw || "g").toString().trim().toLowerCase();
   if (
@@ -253,6 +257,9 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Tracks which cards have a name that wraps to 2 lines (key: `${type}-${id}`)
+  const [longNameMap, setLongNameMap] = useState<Record<string, boolean>>({});
+
   // ---- Sticky search bar support ----
   const scrollRef = useRef<ScrollView>(null);
   const searchBarY = useRef(0);
@@ -310,7 +317,21 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     }
 
     try {
-      const scheduleRes = await orderService.getScheduleOrders();
+      // Wholesale orders get 2-day gap (today 12 -> 14)
+      // Retail orders get 3-day gap (today 12 -> 15)
+      const currentBuyerType = userProfileRef.current?.buyerType || buyerType;
+      const isWholesale =
+        String(currentBuyerType || "").trim().toLowerCase() === "wholesale";
+      const gapDays = isWholesale ? 2 : 3;
+
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + gapDays);
+      const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+      const sheduleDateStr = `${targetDate.getFullYear()}-${pad(
+        targetDate.getMonth() + 1,
+      )}-${pad(targetDate.getDate())}`;
+
+      const scheduleRes = await orderService.getScheduleOrders(sheduleDateStr);
 
       const ord = scheduleRes.data?.order;
 
@@ -334,7 +355,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
       console.warn("[HomeScreen] getScheduleOrders error:", err);
       setReadyOrder(null);
     }
-  }, []);
+  }, [buyerType]);
 
   // Children order inside the ScrollView:
   // HomeHeader (0), ReadyBanner (optional), Banner/Skeleton, SearchBar
@@ -1461,6 +1482,11 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                   const isExpanded = product.id === expandedItemId;
                   const snapshot = addTimeSnapshots[product.id];
 
+                  // Unique key per item (a product and a package could share the same id)
+                  const itemKey = `${product.type}-${product.id}`;
+                  // Only cards whose name wraps to 2 lines get the taller height
+                  const isLongName = !!longNameMap[itemKey];
+
                   const rawStartValue = isProduct
                     ? parseFloat(String(product.startValue ?? "1")) || 1
                     : 1;
@@ -1598,8 +1624,12 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                     >
                       <View
                         key={product.id!}
-                        className="flex-1 bg-[#F4F3F3] pt-4 pb-8 px-3 items-center mx-2 relative mb-6 min-h-[220px]"
+                        className="flex-1 bg-[#F4F3F3] pt-4 pb-8 px-3 items-center mx-2 relative mb-6"
                         style={{
+                          // 240 only when the name takes 2 lines, otherwise 220
+                          minHeight: isLongName
+                            ? CARD_HEIGHT_LONG_NAME
+                            : CARD_HEIGHT_DEFAULT,
                           borderTopLeftRadius: 100,
                           borderTopRightRadius: 100,
                           borderBottomLeftRadius: 18,
@@ -1648,6 +1678,14 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           <Text
                             numberOfLines={2}
                             ellipsizeMode="tail"
+                            onTextLayout={(e) => {
+                              const isMulti = e.nativeEvent.lines.length > 1;
+                              setLongNameMap((prev) =>
+                                prev[itemKey] === isMulti
+                                  ? prev
+                                  : { ...prev, [itemKey]: isMulti },
+                              );
+                            }}
                             style={{
                               color: "#000000",
                               fontWeight: "bold",
