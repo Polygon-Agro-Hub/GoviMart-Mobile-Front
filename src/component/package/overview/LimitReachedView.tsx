@@ -31,8 +31,8 @@ export const LimitReachedView: React.FC<LimitReachedViewProps> = ({
       <RefreshControl
         refreshing={isRefreshing}
         onRefresh={onRefresh}
-        colors={["#92D01B"]}
-        tintColor="#92D01B"
+        colors={["#000000"]}
+        tintColor="#000000"
       />
     }
   >
