@@ -174,11 +174,11 @@ export function detectPaymentType(
   }
 
   if (payType === "Card" || payType.toLowerCase() === "card") {
-    return hasCredit ? "Online Transfer + Credit Balance" : "Online Transfer";
+    return hasCredit ? "Online Transfer + Polygon Wallet" : "Online Transfer";
   }
 
   const base = isPickup ? "Cash on Pickup" : "Cash on Delivery";
-  return hasCredit ? `${base} + Credit Balance` : base;
+  return hasCredit ? `${base} + Polygon Wallet` : base;
 }
 
 export interface PaymentStatusRow {

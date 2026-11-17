@@ -20,6 +20,7 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
+import { AlertModal } from "@/component/common/AlertModal";
 
 /*
   NOTE: add these to the "OrderConfirmedOrderCancelScreen" params in
@@ -293,6 +294,22 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  // AlertModal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const handleAlertClose = () => {
+    setAlertVisible(false);
+    if (alertType === "success") {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home" }],
+      });
+    }
+  };
+
   // Keyboard / scroll refs
   const scrollRef = useRef<ScrollView>(null);
   const rootRef = useRef<View>(null);
@@ -452,28 +469,19 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           processOrderId: processOrderId || undefined,
         });
       }
-      Alert.alert(
-        "Order Cancelled",
-        "Your order has been cancelled successfully.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "Home" }],
-              });
-            },
-          },
-        ],
-      );
+      setAlertTitle("Order Cancelled");
+      setAlertMessage("Your order has been cancelled successfully.");
+      setAlertType("success");
+      setAlertVisible(true);
     } catch (err: any) {
       console.error("Failed to cancel order:", err);
-      Alert.alert(
-        "Cancellation Failed",
+      setAlertTitle("Cancellation Failed");
+      setAlertMessage(
         err?.response?.data?.message ||
           "Unable to cancel your order at this moment. Please try again or contact support.",
       );
+      setAlertType("error");
+      setAlertVisible(true);
     } finally {
       setLoading(false);
     }
@@ -786,6 +794,19 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+        autoClose={false}
+        showOkButton={true}
+        okButtonText="OK"
+        onOkPress={handleAlertClose}
+      />
     </View>
   );
 };

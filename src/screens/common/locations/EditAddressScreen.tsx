@@ -122,6 +122,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const [buildingNo, setBuildingNo] = useState(
     addressParam.buildingNo || addressParam.houseNo || ""
   );
+  const [houseNo, setHouseNo] = useState(addressParam.houseNo || "");
   const [streetName, setStreetName] = useState(addressParam.streetName || "");
   const [city, setCity] = useState(addressParam.city || "");
   const [apartmentName, setApartmentName] = useState(
@@ -162,6 +163,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
   const [mobileNumber2Error, setMobileNumber2Error] = useState("");
   const [buildingTypeError, setBuildingTypeError] = useState("");
   const [buildingNoError, setBuildingNoError] = useState("");
+  const [houseNoError, setHouseNoError] = useState("");
   const [buildingNameError, setBuildingNameError] = useState("");
   const [unitNoError, setUnitNoError] = useState("");
   const [floorNoError, setFloorNoError] = useState("");
@@ -419,6 +421,14 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
     }
   };
 
+  const handleHouseNoChange = (text: string) => {
+    const nextVal = capitalizeWords(stripLeadingSpace(text));
+    setHouseNo(nextVal);
+    if (nextVal.trim()) {
+      setHouseNoError("");
+    }
+  };
+
   const handleApartmentNameChange = (text: string) => {
     const nextVal = capitalizeWords(stripLeadingSpace(text));
     setApartmentName(nextVal);
@@ -452,6 +462,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
     setBuildingType(value);
     setBuildingTypeError("");
     setBuildingNoError("");
+    setHouseNoError("");
     setBuildingNameError("");
     setUnitNoError("");
     setFloorNoError("");
@@ -803,6 +814,12 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         alertTitle = "Required";
         alertMessage = "Please enter the floor number.";
       }
+      if (!houseNo.trim()) {
+        setHouseNoError(requiredMessage(FIELD_LABELS.houseNo));
+        hasError = true;
+        alertTitle = "Required";
+        alertMessage = "Please enter the building or house number.";
+      }
       if (!streetName.trim()) {
         setStreetNameError(requiredMessage(FIELD_LABELS.streetName));
         hasError = true;
@@ -852,7 +869,7 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         !streetName.trim() ||
         !city.trim() ||
         (buildingType === "Apartment" &&
-          (!apartmentName.trim() || !unitNo.trim() || !floorNo.trim()));
+          (!apartmentName.trim() || !unitNo.trim() || !floorNo.trim() || !houseNo.trim()));
 
       Alert.alert(
         hasSpecificRequiredFieldError ? "Required" : alertTitle,
@@ -883,16 +900,16 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
         longitude: longitude!,
         latitude: latitude!,
         buildingNo,
-        houseNo: buildingNo,
         streetName,
         city,
       };
 
       const payload =
         finalBuildingType === "House"
-          ? { ...basePayload, buildingType: "House" }
+          ? { ...basePayload, buildingType: "House", houseNo: buildingNo }
           : {
               ...basePayload,
+              houseNo,
               buildingName: apartmentName,
               unitNo,
               floorNo,
@@ -1281,8 +1298,26 @@ const EditAddress: React.FC<EditAddressProps> = ({ navigation, route }) => {
               placeholder="e.g. 3rd Floor"
               error={floorNoError}
             />
+            {/* Building / Plot No for Apartment */}
             <InputField
               icon="house"
+              circleSize={30}
+              iconSize={14}
+              label="Building / Plot No *"
+              value={houseNo}
+              onChangeText={handleHouseNoChange}
+              onBlur={() =>
+                handleRequiredFieldBlur(
+                  houseNo,
+                  setHouseNoError,
+                  FIELD_LABELS.houseNo
+                )
+              }
+              placeholder="e.g 14/B"
+              error={houseNoError}
+            />
+            <InputField
+              icon="road"
               circleSize={30}
               iconSize={14}
               label="Street Name *"
