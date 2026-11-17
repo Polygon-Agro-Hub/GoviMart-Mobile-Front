@@ -61,6 +61,14 @@ const MONTHS_LONG = [
   "December",
 ];
 
+const CONFIRM_DEADLINE_HOUR = 18; 
+const DEADLINE_MESSAGE = "Sorry, you cannot confirm this order. Order confirmation is closed after 6:00 PM.";
+
+const isPastConfirmDeadline = (): boolean => {
+  const sl = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return sl.getUTCHours() >= CONFIRM_DEADLINE_HOUR;
+};
+
 // "2026-08-04 05:30:00" -> "August 04, 2026" (reads digits literally, no TZ shift)
 const formatLongDate = (raw: any): string => {
   if (!raw) return "N/A";
@@ -89,12 +97,12 @@ const formatAmount = (amount: number | string) => {
     typeof amount === "number"
       ? amount
       : parseFloat(
-        String(amount || "")
-          .replace(/Rs\.?/gi, "")
-          .replace(/LKR/gi, "")
-          .replace(/,/g, "")
-          .trim(),
-      ) || 0;
+          String(amount || "")
+            .replace(/Rs\.?/gi, "")
+            .replace(/LKR/gi, "")
+            .replace(/,/g, "")
+            .trim(),
+        ) || 0;
   return n.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -103,8 +111,19 @@ const formatAmount = (amount: number | string) => {
 
 const num = (v: any) => parseFloat(String(v ?? 0)) || 0;
 
-// Fixed service fee for orderApp = "Dash" AND isPackage = 0 (must match DASH_SERVICE_FEE on the server)
-const DASH_SERVICE_FEE = 180;
+// Same parser as ConfirmOrderDetailsScreen (handles "Rs. 1,200.00", null, etc.)
+const parsePriceValue = (value: unknown): number | null => {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") return value;
+  const parsed = parseFloat(
+    String(value)
+      .replace(/Rs\.?/gi, "")
+      .replace(/LKR/gi, "")
+      .replace(/,/g, "")
+      .trim(),
+  );
+  return isNaN(parsed) ? null : parsed;
+};
 
 // Same rules as the backend (isCardPayment in package-review.dao.js)
 const detectPayment = (order: any) => {
@@ -241,6 +260,25 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const [rawPackagesData, setRawPackagesData] = useState<any[]>([]);
   const [rawItemsData, setRawItemsData] = useState<any[]>([]);
 
+  // ── 6 PM confirm deadline ────────────────────────────────────────────────
+  // Starts from the current time and flips to true once 6:00 PM passes while
+  // the user is still on this screen (checked every 15 seconds).
+  const [deadlinePassed, setDeadlinePassed] = useState<boolean>(
+    isPastConfirmDeadline(),
+  );
+
+  useEffect(() => {
+    if (deadlinePassed) return; // already past 6 PM, nothing to watch
+    const id = setInterval(() => {
+      if (isPastConfirmDeadline()) {
+        setDeadlinePassed(true);
+        clearInterval(id);
+        Alert.alert("Time Expired", DEADLINE_MESSAGE);
+      }
+    }, 15000);
+    return () => clearInterval(id);
+  }, [deadlinePassed]);
+
   // ── Success modal state ──────────────────────────────────────────────────
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [successInvoiceNo, setSuccessInvoiceNo] = useState("");
@@ -300,7 +338,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       try {
         const card = await cardStorageService.getSavedCard(userProfile?.id);
         if (isMounted) setSavedCard(card);
-      } catch { }
+      } catch {}
     };
     loadCard();
     return () => {
@@ -350,44 +388,47 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           const items = (itemsRes.data.data || []) as any[];
           setRawItemsData(items);
 
-          // ONLY CURRENT MARKETPLACE VALUES ARE USED.
-          // If today normalPrice == discountedPrice, discount is 0.
+          // Same rules as ConfirmOrderDetailsScreen.
+          // Only current marketplace values are used for the discount:
+          // if today normalPrice == discountedPrice, discount is 0.
           let currentGrossTotal = 0;
           let currentDiscountTotal = 0;
-          let live = false;
 
           items.forEach((it) => {
             const qty = parseFloat(it.qty) || 1;
-            const unit = String(it.unit || "kg").toLowerCase();
-            const qtyInKg = unit === "g" ? qty / 1000 : qty;
+            const qtyInKg =
+              String(it.unit || "kg").toLowerCase() === "g" ? qty / 1000 : qty;
 
-            const mktNormal = parseFloat(it.marketNormalPrice) || 0;
-            const mktDisc = parseFloat(it.marketDiscountedPrice) || 0;
+            const storedPrice = parsePriceValue(it.price) ?? 0;
+            const mktNormal = parsePriceValue(it.marketNormalPrice);
+            const mktDisc = parsePriceValue(it.marketDiscountedPrice);
 
-            if (mktNormal > 0 || mktDisc > 0) {
-              live = true;
-              const currentNormalPerKg = mktNormal > 0 ? mktNormal : mktDisc;
-              const currentNetPerKg =
-                mktDisc > 0 ? mktDisc : currentNormalPerKg;
+            // today's normal (undiscounted) price for this line
+            const todayNormal =
+              mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
+            // today's effective price: discounted if available, else normal
+            const todayNet =
+              mktDisc != null && mktDisc > 0
+                ? mktDisc * qtyInKg
+                : mktNormal != null && mktNormal > 0
+                  ? mktNormal * qtyInKg
+                  : null;
 
-              const lineGross = currentNormalPerKg * qtyInKg;
-              const lineNet = currentNetPerKg * qtyInKg;
+            const net = todayNet ?? storedPrice;
+            const hasPromo =
+              todayNormal != null &&
+              todayNet != null &&
+              todayNormal - todayNet > 0.01;
+            const gross = hasPromo ? todayNormal! : net;
 
-              const lineDiscount =
-                currentNormalPerKg > currentNetPerKg
-                  ? Math.max(0, lineGross - lineNet)
-                  : 0;
-
-              currentGrossTotal += lineGross;
-              currentDiscountTotal += lineDiscount;
-            } else {
-              currentGrossTotal += num(it.price);
-            }
+            currentGrossTotal += gross;
+            currentDiscountTotal += Math.max(0, gross - net);
           });
 
           setItemsTotal(currentGrossTotal);
           setItemsDiscount(currentDiscountTotal);
-          setHasLiveItemPrices(live);
+          // Details screen treats prices as live whenever items exist
+          setHasLiveItemPrices(items.length > 0);
         }
       } catch (err) {
         console.error("Error fetching order confirmation:", err);
@@ -433,9 +474,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const isFreeDeliveryCoupon = Boolean(
     isCouponApplied &&
-    order?.couponType &&
-    (String(order.couponType).toLowerCase().includes("free") ||
-      String(order.couponType).toLowerCase().includes("delivery")),
+      order?.couponType &&
+      (String(order.couponType).toLowerCase().includes("free") ||
+        String(order.couponType).toLowerCase().includes("delivery")),
   );
 
   const productDiscount = hasLiveItemPrices
@@ -464,12 +505,13 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const fullTotalVal = num(order?.fullTotal ?? order?.total);
   const deliveryChargeForCalc = deliveryFee;
+  // Stored (order-time) additional items total
   const additionalItemsTotal =
     rawItemsData.length > 0
       ? rawItemsData.reduce(
-        (acc: number, it: any) => acc + (parseFloat(it.price) || 0),
-        0,
-      )
+          (acc: number, it: any) => acc + (parsePriceValue(it.price) ?? 0),
+          0,
+        )
       : itemsTotal;
 
   const serviceFee = isDashServiceFee
@@ -484,11 +526,11 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const calculatedTotal = Math.max(
     0,
     packagesTotal +
-    itemsTotal -
-    productDiscount -
-    couponDiscount +
-    deliveryFeeCharged +
-    serviceFee,
+      itemsTotal -
+      productDiscount -
+      couponDiscount +
+      deliveryFeeCharged +
+      serviceFee,
   );
   const orderFullTotal = hasLiveData
     ? calculatedTotal
@@ -584,12 +626,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         isPaid: 1,
       });
 
-      console.log(apiPayload);
-
       // 2nd call (only for an already-paid order whose price increased):
       // the order is now confirmed, so the backend's "already confirmed +
       // isPaid = 1" branch sets amount = newTotal and
-      // moneyPaid = newTotal - creditPaid (the Rs. 100 paid via gateway).
+      // moneyPaid = newTotal - creditPaid (the extra paid via gateway).
       if (syncMoneyPaid) {
         // Best-effort: the payment and the 1st confirm already succeeded, so a
         // failure of this moneyPaid sync must NOT show the error alert.
@@ -642,6 +682,16 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const handleConfirm = async () => {
     if (submitting) return; // prevent double-tap
+
+    // ── 6 PM deadline check (runs at the moment the user taps Confirm) ──
+    // Placed before any card charge or gateway call so nobody is charged for
+    // an order they can no longer confirm.
+    if (isPastConfirmDeadline()) {
+      setDeadlinePassed(true);
+      Alert.alert("Time Expired", DEADLINE_MESSAGE, [{ text: "OK" }]);
+      return;
+    }
+
     if (Number(order?.isConfirmed) === 1) {
       Alert.alert(
         "Already Confirmed!",
@@ -700,8 +750,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               Alert.alert(
                 "Payment Error",
                 chargeErr?.response?.data?.message ||
-                chargeErr?.message ||
-                "Payment failed. Please try again.",
+                  chargeErr?.message ||
+                  "Payment failed. Please try again.",
               );
               return;
             }
@@ -724,8 +774,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         Alert.alert(
           "Payment Error",
           err?.response?.data?.message ||
-          err?.message ||
-          "Failed to start payment. Please try again.",
+            err?.message ||
+            "Failed to start payment. Please try again.",
         );
       }
       return;
@@ -789,22 +839,32 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     const alacarts = rawItemsData.map((it: any) => {
       const qty = parseFloat(it.qty) || 1;
       const unit = it.unit || "kg";
-      const mktNormal = parseFloat(it.marketNormalPrice) || 0;
-      const mktDiscounted = parseFloat(it.marketDiscountedPrice) || 0;
-      const perKg =
-        mktDiscounted > 0 ? mktDiscounted : mktNormal > 0 ? mktNormal : 0;
       const qtyInKg = String(unit).toLowerCase() === "g" ? qty / 1000 : qty;
-      const itemPrice = perKg > 0 ? perKg * qtyInKg : num(it.price);
+      const storedPrice = parsePriceValue(it.price) ?? 0;
+      const mktNormal = parsePriceValue(it.marketNormalPrice);
+      const mktDiscounted = parsePriceValue(it.marketDiscountedPrice);
+
+      // Same rules as the totals calculation
+      const todayNormal =
+        mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
+      const todayNet =
+        mktDiscounted != null && mktDiscounted > 0
+          ? mktDiscounted * qtyInKg
+          : mktNormal != null && mktNormal > 0
+            ? mktNormal * qtyInKg
+            : null;
+
+      const net = todayNet ?? storedPrice;
       const hasCurrentPromo =
-        mktNormal > 0 && mktDiscounted > 0 && mktNormal - mktDiscounted > 0.01;
-      const origPrice = hasCurrentPromo ? mktNormal * qtyInKg : undefined;
+        todayNormal != null && todayNet != null && todayNormal - todayNet > 0.01;
+      const origPrice = hasCurrentPromo ? todayNormal! : undefined;
 
       return {
         id: String(it.id || it.productId || "item"),
         name: it.displayName || it.name || "Item",
         image: it.image,
         weight: `${qty} ${unit}`,
-        price: itemPrice,
+        price: net,
         originalPrice: origPrice,
       };
     });
@@ -1407,6 +1467,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           )}
         </TouchableOpacity>
 
+        {/* Not disabled after 6 PM on purpose: tapping it shows the
+            "Sorry, you cannot confirm this order after 6:00 PM" alert. */}
         <TouchableOpacity
           activeOpacity={0.8}
           disabled={busy}
@@ -1417,7 +1479,6 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             backgroundColor: "#000",
             justifyContent: "center",
             alignItems: "center",
-            opacity: busy && submitting !== "confirm" ? 0.5 : 1,
           }}
         >
           {submitting === "confirm" ? (

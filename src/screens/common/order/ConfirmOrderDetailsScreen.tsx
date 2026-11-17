@@ -179,18 +179,37 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               0,
           ) || 0;
 
-    // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0 adds a fixed
-    // Rs. 180 ON TOP of the delivery fee. Always charged (no pickup /
-    // free-delivery-coupon waiver) and part of the total.
-    const isPackageValue = order?.isPackage;
-    const isDashServiceFee =
-      String(order?.orderApp || "")
-        .trim()
-        .toLowerCase() === "dash" &&
-      isPackageValue != null &&
-      String(isPackageValue).trim() !== "" &&
-      Number(isPackageValue) === 0;
-    const serviceFee = isDashServiceFee ? DASH_SERVICE_FEE : 0;
+    // DASH SERVICE FEE (same rule as the OrderConfirmation screen):
+// applies when orderApp = "Dash" AND isPackage = 0.
+// Amount = stored fullTotal - stored delivery charge - stored additional items total.
+// It can be 180 or 0 depending on the order, so it is never hardcoded.
+const isPackageValue = order?.isPackage;
+const isZeroPackage =
+  isPackageValue != null && String(isPackageValue).trim() !== ""
+    ? Number(isPackageValue) === 0
+    : packagesTotal === 0;
+const isDashServiceFee =
+  String(order?.orderApp || order?.appName || "")
+    .trim()
+    .toLowerCase() === "dash" && isZeroPackage;
+
+const storedFullTotal =
+  parseFloat(order?.fullTotal ?? order?.fulltotal ?? order?.total ?? 0) || 0;
+
+// Raw delivery charge (not zeroed for pickup / free coupon), like OrderConfirmation
+const rawDeliveryCharge =
+  parseFloat(
+    order?.curDlvrCharge != null && order?.curDlvrCharge !== ""
+      ? order.curDlvrCharge
+      : order?.delivaryCharge ?? order?.deliveryCharge ?? 0,
+  ) || 0;
+
+// Stored additional items total (order-time prices, not today's prices)
+const storedItemsTotal = cartItems.reduce((a, i) => a + (i.price || 0), 0);
+
+const serviceFee = isDashServiceFee
+  ? Math.max(0, storedFullTotal - rawDeliveryCharge - storedItemsTotal)
+  : 0;
 
     const hasData = packages.length > 0 || cartItems.length > 0;
     const total = hasData
@@ -214,6 +233,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       couponDiscount,
       deliveryFee,
       serviceFee,
+      isDashServiceFee, 
       total,
       hasData,
     };
@@ -1646,7 +1666,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                 )}
 
                 {/* DASH: Service Fee (orderApp = Dash AND isPackage = 0) */}
-                {t.serviceFee > 0 && (
+                {t.isDashServiceFee && (
                   <>
                     <SummaryRow
                       label="Service Fee"
