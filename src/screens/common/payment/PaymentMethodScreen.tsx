@@ -2246,9 +2246,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           setAppliedCoupon(couponResult);
         }}
         deliveryMethod={orderContext?.deliveryMethod || "home"}
-        cartTotal={
-          (orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)
-        }
+        cartTotal={Math.max(
+          0,
+          (orderContext?.packageTotal || 0) +
+            (orderContext?.productTotal || 0) -
+            (orderContext?.discount || 0),
+        )}
         cartId={orderContext?.cartId}
       />
 
