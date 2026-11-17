@@ -284,6 +284,7 @@ export interface ProductType {
   cropNameSinhala?: string;
   cropNameTamil?: string;
   discountedPrice?: number;
+  pkgBasePrice?: number | string;
   discount?: number;
   comPrice?: number | string;
   tags?: string;
