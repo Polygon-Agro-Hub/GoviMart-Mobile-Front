@@ -149,10 +149,17 @@ const VerificationUnsuccessfulScreen: React.FC<Props> = ({
       }
     } catch (err: any) {
       console.error("Resubmit BR error:", err);
-      const errorMsg =
+      const status = err.response?.status;
+      let errorMsg =
         err.response?.data?.message ||
         err.message ||
         "Failed to resubmit document.";
+
+      if (status === 413 || String(err.message || "").includes("413")) {
+        errorMsg =
+          "The file size is too large to upload. Please upload an image or a document smaller than 4.5MB.";
+      }
+
       Alert.alert("Error", errorMsg);
     } finally {
       setSubmitting(false);

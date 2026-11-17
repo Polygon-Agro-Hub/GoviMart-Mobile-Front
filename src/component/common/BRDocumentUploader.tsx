@@ -6,6 +6,7 @@ import {
   Image,
   Modal,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import {
   Ionicons,
@@ -13,6 +14,8 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system/legacy";
 
 export interface BRDocumentUploaderProps {
   selectedFile: DocumentPicker.DocumentPickerAsset | null;
@@ -49,12 +52,65 @@ export const BRDocumentUploader: React.FC<BRDocumentUploaderProps> = ({
   containerStyle,
 }) => {
   const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   const isPdf =
     selectedFile?.mimeType === "application/pdf" ||
     selectedFile?.name?.toLowerCase().endsWith(".pdf");
 
   const extLabel = getExtensionLabel(selectedFile?.name, selectedFile?.mimeType);
+
+  const compressImageIfNeeded = async (
+    file: DocumentPicker.DocumentPickerAsset,
+  ): Promise<DocumentPicker.DocumentPickerAsset> => {
+    const isImage =
+      file.mimeType?.startsWith("image/") ||
+      /\.(jpe?g|png|heic|heif|webp)$/i.test(file.name || "");
+
+    if (!isImage) {
+      return file;
+    }
+
+    try {
+      setCompressing(true);
+      // Resize to max 1600px width (standard clear document size) and compress as JPEG 0.7
+      const manipResult = await ImageManipulator.manipulateAsync(
+        file.uri,
+        [{ resize: { width: 1600 } }],
+        {
+          compress: 0.7,
+          format: ImageManipulator.SaveFormat.JPEG,
+        },
+      );
+
+      let newSize = file.size;
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(manipResult.uri);
+        if (fileInfo.exists && typeof fileInfo.size === "number") {
+          newSize = fileInfo.size;
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      const originalName = file.name || "BR_Document.jpg";
+      const baseName = originalName.replace(/\.[^/.]+$/, "");
+      const newName = `${baseName}.jpg`;
+
+      return {
+        ...file,
+        uri: manipResult.uri,
+        name: newName,
+        mimeType: "image/jpeg",
+        size: newSize,
+      };
+    } catch (err) {
+      console.warn("Failed to compress image, using original:", err);
+      return file;
+    } finally {
+      setCompressing(false);
+    }
+  };
 
   const handlePickDocument = async () => {
     try {
@@ -70,16 +126,20 @@ export const BRDocumentUploader: React.FC<BRDocumentUploaderProps> = ({
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        const maxBytes = 10 * 1024 * 1024; // 10MB
-        if (file.size && file.size > maxBytes) {
+        const rawFile = result.assets[0];
+
+        // Automatically compress images to reduce file size and avoid payload limits
+        const processedFile = await compressImageIfNeeded(rawFile);
+
+        const maxBytes = 4.5 * 1024 * 1024; // 4.5MB
+        if (processedFile.size && processedFile.size > maxBytes) {
           Alert.alert(
             "File Too Large",
-            "Selected file exceeds the 10MB limit. Please upload a file under 10MB."
+            "Selected file exceeds the 4.5MB limit. Please upload a file under 4.5MB.",
           );
           return;
         }
-        onFileSelect(file);
+        onFileSelect(processedFile);
       }
     } catch (err: any) {
       console.error("Document pick error:", err);
@@ -130,7 +190,26 @@ export const BRDocumentUploader: React.FC<BRDocumentUploaderProps> = ({
       </View>
 
       {/* Main Body: Upload Box OR Preview Card */}
-      {!selectedFile ? (
+      {compressing ? (
+        <View
+          style={{
+            borderWidth: 1.5,
+            borderStyle: "dashed",
+            borderColor: "#FF9114",
+            backgroundColor: "#FFFBF7",
+            borderRadius: 18,
+            paddingVertical: 30,
+            paddingHorizontal: 16,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ActivityIndicator size="small" color="#FF9114" style={{ marginBottom: 10 }} />
+          <Text style={{ fontSize: 13, color: "#334155", fontWeight: "600" }}>
+            Optimizing image size...
+          </Text>
+        </View>
+      ) : !selectedFile ? (
         // State 1: Dropzone / Upload Box
         <TouchableOpacity
           activeOpacity={0.8}
@@ -200,7 +279,7 @@ export const BRDocumentUploader: React.FC<BRDocumentUploaderProps> = ({
                 fontWeight: "500",
               }}
             >
-              PDF, JPG, PNG, HEIC • Max 10MB
+              PDF, JPG, PNG, HEIC • Max 4.5MB
             </Text>
           </View>
         </TouchableOpacity>

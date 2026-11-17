@@ -476,7 +476,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
 
         showAlert(
           "Payment Successful",
-          `Your negative credit balance of Rs. ${formatAmount(subTotal)} has been cleared successfully! You can now continue placing orders without restrictions.`,
+          `Your negative Polygon Wallet balance of Rs. ${formatAmount(subTotal)} has been cleared successfully! You can now continue placing orders without restrictions.`,
           "success"
         );
       } catch (err: any) {
@@ -612,10 +612,12 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     fontSize: 13.5,
                     color: "#64748B",
                     fontWeight: "500",
+                    flexShrink: 1,
+                    marginRight: 8,
                   }}
                 >
                   {isClearBalanceFlow
-                    ? "Total Negative Credit Balance"
+                    ? "Total Negative Polygon Wallet"
                     : isExistingOrderPayFlow
                     ? "Payable Balance"
                     : "Order Total"}
