@@ -1846,8 +1846,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                       }}
                     >
                       {restoredCredit < 0
-                        ? "Check your profile to view your credit balance. Please clear any negative balance before making your next purchase."
-                        : "Check your profile to view your credit balance. Use it on your next purchase."}
+                        ? "Check your profile to view your Polygon Wallet. Please clear any negative balance before making your next purchase."
+                        : "Check your profile to view your Polygon Wallet. Use it on your next purchase."}
                     </Text>
                   </View>
                 </View>

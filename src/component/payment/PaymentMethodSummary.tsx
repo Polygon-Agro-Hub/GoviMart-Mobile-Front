@@ -102,7 +102,7 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                                 color: "#111111",
                             }}
                         >
-                            Pay with Credit Balance
+                            Pay with Polygon Wallet
                         </Text>
                     </View>
 

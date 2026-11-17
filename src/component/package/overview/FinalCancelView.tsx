@@ -97,7 +97,7 @@ export const FinalCancelView: React.FC<FinalCancelViewProps> = ({
           <Text className="font-bold text-black">
             Rs. {formatPrice(refundableAmount)}
           </Text>{" "}
-          will be added to your credit balance. You can use it for your next
+          will be added to your Polygon Wallet. You can use it for your next
           purchase.
         </Text>
       </View>
