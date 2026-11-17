@@ -266,3 +266,4 @@ jobs:
           path: build/Polygon.ipa
           retention-days: 7
           if-no-files-found: warn
+          #Test Command
