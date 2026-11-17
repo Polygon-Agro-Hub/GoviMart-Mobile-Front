@@ -621,6 +621,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               value={otp}
               onChangeText={handleOtpChange}
               keyboardType="number-pad"
+              maxLength={5}
               textContentType="oneTimeCode"
               autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
               importantForAutofill="yes"
@@ -637,8 +638,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                 bottom: 0,
                 width: "100%",
                 height: "100%",
-                opacity: 1,
-                color: "transparent",
+                opacity: 0,
+                fontSize: 1,
                 backgroundColor: "transparent",
                 zIndex: 10,
               }}
