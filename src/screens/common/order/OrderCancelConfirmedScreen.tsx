@@ -479,7 +479,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
                 <Text className="text-[13px] text-[#E11D48] mt-0.5">
                   {refundCreditAmount > 0
-                    ? "This order has been paid. Refund will be converted to your credit balance."
+                    ? "This order has been paid. Refund will be converted to your Polygon Wallet."
                     : "This order will be cancelled immediately."}
                 </Text>
               </View>

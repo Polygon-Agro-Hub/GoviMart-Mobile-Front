@@ -2173,7 +2173,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                   {getPaymentDueText()}
                 </Text>
                 {" "}after receiving your order confirmation. If paying by card or
-                using credit to cover the full order total, complete any
+                using Polygon Wallet to cover the full order total, complete any
                 outstanding payments by the deadline.
               </Text>
             </View>

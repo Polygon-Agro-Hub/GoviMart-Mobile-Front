@@ -1575,6 +1575,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         paddingHorizontal={8}
                         marginLeft={6}
                         arrowSize={16}
+                        showArrow={!isWholesale}
                       />
                     </View>
 
