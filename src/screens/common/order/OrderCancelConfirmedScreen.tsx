@@ -21,6 +21,7 @@ import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
 import { AlertModal } from "@/component/common/AlertModal";
+import LoadingPage from "@/component/common/LoadingPage";
 
 /*
   NOTE: add these to RootStackParamList -> "OrderCancelConfirmation" params:
@@ -195,11 +196,22 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [],
   );
 
+  const [pageLoading, setPageLoading] = useState<boolean>(true);
+
   // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
   useEffect(() => {
-    if (!hasAlaCarte || !orderId) return;
-
     let isMounted = true;
+
+    if (!hasAlaCarte || !orderId) {
+      const t = setTimeout(() => {
+        if (isMounted) setPageLoading(false);
+      }, 150);
+      return () => {
+        isMounted = false;
+        clearTimeout(t);
+      };
+    }
+
     const fetchCancelAlaCarte = async () => {
       try {
         const res = await orderService.getCancelOrderAdditionalItems(
@@ -225,6 +237,10 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
         }
       } catch (err) {
         console.error("Failed to fetch cancel order additional items:", err);
+      } finally {
+        if (isMounted) {
+          setPageLoading(false);
+        }
       }
     };
 
@@ -429,6 +445,30 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       setLoading(false);
     }
   };
+
+  if (pageLoading) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+
+        {/* Header */}
+        <View className="flex-row items-center px-5 pt-3 pb-2">
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
+          >
+            <Ionicons name="chevron-back" size={22} color="#000" />
+          </TouchableOpacity>
+
+          <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
+            Order Cancel Confirmation
+          </Text>
+        </View>
+
+        <LoadingPage message="Loading order details..." fullScreen={true} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white">

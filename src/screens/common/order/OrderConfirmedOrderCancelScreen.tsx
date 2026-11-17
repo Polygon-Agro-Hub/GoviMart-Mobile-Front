@@ -21,6 +21,7 @@ import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
 import { AlertModal } from "@/component/common/AlertModal";
+import LoadingPage from "@/component/common/LoadingPage";
 
 /*
   NOTE: add these to the "OrderConfirmedOrderCancelScreen" params in
@@ -234,15 +235,23 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   const [alaCarteLoading, setAlaCarteLoading] = useState<boolean>(
     hasAlaCarte && Boolean(orderId),
   );
+  const [pageLoading, setPageLoading] = useState<boolean>(true);
 
   // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
   useEffect(() => {
+    let isMounted = true;
+
     if (!hasAlaCarte || !orderId) {
       setAlaCarteLoading(false);
-      return;
+      const t = setTimeout(() => {
+        if (isMounted) setPageLoading(false);
+      }, 150);
+      return () => {
+        isMounted = false;
+        clearTimeout(t);
+      };
     }
 
-    let isMounted = true;
     const fetchCancelAlaCarte = async () => {
       try {
         const res = await orderService.getCancelOrderAdditionalItems(
@@ -277,7 +286,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           setAlaCarteItems(passedAlaCarte);
         }
       } finally {
-        if (isMounted) setAlaCarteLoading(false);
+        if (isMounted) {
+          setAlaCarteLoading(false);
+          setPageLoading(false);
+        }
       }
     };
 
@@ -487,7 +499,32 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     }
   };
 
-  const canCancel = isConfirmed && !loading && !alaCarteLoading;
+  const canCancel =
+    isConfirmed && !loading && !alaCarteLoading && !pageLoading;
+
+  if (pageLoading) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+
+        {/* Header */}
+        <View className="flex-row items-center px-5 pt-3 pb-2">
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
+          >
+            <Ionicons name="chevron-back" size={22} color="#000" />
+          </TouchableOpacity>
+
+          <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
+            Order Cancel Confirmation
+          </Text>
+        </View>
+
+        <LoadingPage message="Loading order details..." fullScreen={true} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white">
