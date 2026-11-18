@@ -1527,6 +1527,19 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                       displayType === "D&AP" ||
                       !displayType);
 
+                  const discountPercent =
+                    isProduct &&
+                    (product as any).discount != null &&
+                    Number((product as any).discount) > 0
+                      ? (product as any).discount
+                      : hasDiscount && normalPerUnit > 0
+                        ? Math.round(
+                            ((normalPerUnit - discountedPerUnit!) /
+                              normalPerUnit) *
+                              100,
+                          )
+                        : null;
+
                   const showStruckNormalPrice =
                     hasDiscount &&
                     (displayType === "AP&SP&D" ||
@@ -1636,7 +1649,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                           borderBottomRightRadius: 18,
                         }}
                       >
-                        {isProduct && showDiscountBadge && product.discount && (
+                        {isProduct && showDiscountBadge && discountPercent != null && (
                           <View
                             style={{
                               position: "absolute",
@@ -1660,7 +1673,7 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                                 color: "#FFF",
                               }}
                             >
-                              {product.discount}%
+                              {discountPercent}%
                             </Text>
                           </View>
                         )}
