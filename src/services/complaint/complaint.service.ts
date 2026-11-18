@@ -18,6 +18,8 @@ class ComplaintService {
                     ...headers,
                     "Content-Type": "multipart/form-data",
                 },
+                // Allow up to 2 min for multi-image uploads (6 × HEIC → JPEG)
+                timeout: 120000,
                 transformRequest: (data, requestHeaders) => {
                     if (requestHeaders) {
                         delete requestHeaders["Content-Type"];

@@ -1094,7 +1094,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             position: "absolute",
             top: 43,
             right: 15,
-            width: 130,
+            width: 150,
             backgroundColor: "#FFFFFF",
             borderRadius: 12,
             paddingVertical: 1,
@@ -1108,6 +1108,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             elevation: 8,
             borderWidth: 1,
             borderColor: "#EEEEEE",
+            justifyContent:"center",
+            alignItems:"center"
           }}
         >
           <TouchableOpacity
@@ -1125,7 +1127,6 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           >
             <Text
               style={{
-                marginLeft: 10,
                 fontSize: 13,
                 fontWeight: "500",
                 color: "#000000",

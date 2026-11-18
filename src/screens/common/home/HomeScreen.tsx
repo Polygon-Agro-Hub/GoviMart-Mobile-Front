@@ -1675,34 +1675,48 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
                             borderBottomRightRadius: 18,
                           }}
                         >
-                          {isProduct && showDiscountBadge && discountPercent != null && (
-                            <View
-                              style={{
-                                position: "absolute",
-                                display: "flex",
-                                top: 15,
-                                left: 4,
-                                width: 35,
-                                height: 35,
-                                backgroundColor: "#F34261",
-                                borderRadius: 100,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                zIndex: 10,
-                              }}
-                            >
-                              <Text
+                          {isProduct && showDiscountBadge && discountPercent != null && (() => {
+                            const label = `${discountPercent}%`;
+                            const SIZE = 38; // always a circle
+
+                            // Smaller font for longer text so it always fits inside the circle
+                            let fontSize = 11;          // "5%", "12%"
+                            if (label.length === 4) fontSize = 10;   // "4.5%"
+                            if (label.length >= 5) fontSize = 9;     // "4.55%"
+
+                            return (
+                              <View
                                 style={{
-                                  fontSize: 11,
-                                  fontWeight: "700",
-                                  textAlign: "center",
-                                  color: "#FFF",
+                                  position: "absolute",
+                                  top: 15,
+                                  left: 4,
+                                  width: SIZE,
+                                  height: SIZE,
+                                  borderRadius: SIZE / 2,
+                                  backgroundColor: "#F34261",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  zIndex: 10,
                                 }}
                               >
-                                {discountPercent}%
-                              </Text>
-                            </View>
-                          )}
+                                <Text
+                                  numberOfLines={1}
+                                  adjustsFontSizeToFit
+                                  minimumFontScale={0.6}
+                                  allowFontScaling={false}
+                                  style={{
+                                    fontSize,
+                                    fontWeight: "700",
+                                    color: "#FFF",
+                                    textAlign: "center",
+                                    includeFontPadding: false,
+                                  }}
+                                >
+                                  {label}
+                                </Text>
+                              </View>
+                            );
+                          })()}
 
                           <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
                             <Image
