@@ -42,6 +42,7 @@ export const InputField = React.memo(({
     marginLeft = 10,
     autoCapitalize,
     secureTextEntry,
+    editable = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     isIconThemeDark?: boolean;
@@ -63,6 +64,7 @@ export const InputField = React.memo(({
     prefix?: string;
     autoCapitalize?: "none" | "sentences" | "words" | "characters";
     secureTextEntry?: boolean;
+    editable?: boolean;
 }) => {
     const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
     const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
@@ -174,8 +176,9 @@ export const InputField = React.memo(({
                         >
                             {!isFocused && !secureTextEntry ? (
                                 <TouchableOpacity
-                                    activeOpacity={1}
-                                    onPress={() => setIsFocused(true)}
+                                    activeOpacity={editable ? 1 : 1}
+                                    disabled={!editable}
+                                    onPress={() => { if (editable) setIsFocused(true); }}
                                     style={{
                                         width: "100%",
                                         height: 24,
@@ -218,6 +221,7 @@ export const InputField = React.memo(({
                                     maxLength={maxLength}
                                     autoCapitalize={autoCapitalize}
                                     secureTextEntry={secureTextEntry}
+                                    editable={editable}
                                     style={{
                                         width: "100%",
                                         height: 24,
@@ -269,6 +273,8 @@ export const DropdownField = ({
     paddingHorizontal = 11,
     marginLeft = 10,
     arrowSize = 19,
+    disabled = false,
+    showArrow = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -285,6 +291,8 @@ export const DropdownField = ({
     paddingHorizontal?: number;
     marginLeft?: number;
     arrowSize?: number;
+    disabled?: boolean;
+    showArrow?: boolean;
 }) => {
     return (
         <View
@@ -294,8 +302,9 @@ export const DropdownField = ({
             }}
         >
             <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setOpen(!open)}
+                activeOpacity={disabled ? 1 : 0.8}
+                disabled={disabled}
+                onPress={() => { if (!disabled) setOpen(!open); }}
                 style={{
                     height: 67,
                     borderWidth: highlighted ? 2 : 1,
@@ -364,15 +373,17 @@ export const DropdownField = ({
 
                 {/* Arrow */}
 
-                <Ionicons
-                    name={
-                        open
-                            ? "chevron-up"
-                            : "chevron-down"
-                    }
-                    size={arrowSize}
-                    color="#111"
-                />
+                {showArrow && (
+                    <Ionicons
+                        name={
+                            open
+                                ? "chevron-up"
+                                : "chevron-down"
+                        }
+                        size={arrowSize}
+                        color="#111"
+                    />
+                )}
             </TouchableOpacity>
 
             {/* Dropdown Options */}

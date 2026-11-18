@@ -15,6 +15,8 @@ interface CustomHeaderProps {
   backgroundColor?: string;
   titleLines?: number; 
   showUnstableBanner?: boolean;
+  style?: any;
+  containerStyle?: any;
 }
 
 const CustomHeader: React.FC<CustomHeaderProps> = ({
@@ -29,16 +31,18 @@ const CustomHeader: React.FC<CustomHeaderProps> = ({
   backgroundColor,
   titleLines = 1,
   showUnstableBanner = true,
+  style,
+  containerStyle,
 }) => {
   const isMultiLine = titleLines > 1;
 
   return (
-    <View style={backgroundColor ? { backgroundColor } : undefined}>
+    <View style={[backgroundColor ? { backgroundColor } : undefined, containerStyle]}>
       <View
         className={`flex-row items-center justify-between px-4 py-4 ${
           dark ? "bg-black" : "bg-white"
         }`}
-        style={backgroundColor ? { backgroundColor } : undefined}
+        style={[backgroundColor ? { backgroundColor } : undefined, style]}
       >
       {/* Left section for Back Button */}
       <View

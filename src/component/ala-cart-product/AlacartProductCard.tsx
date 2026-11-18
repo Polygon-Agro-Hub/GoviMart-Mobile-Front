@@ -85,6 +85,16 @@ export const AlacartProductCard: React.FC<{
     hasDiscount &&
     (displayType === "AP&SP&D" || displayType === "D&AP" || !displayType);
 
+  const discountPercent =
+    product.discount != null && Number(product.discount) > 0
+      ? product.discount
+      : hasDiscount && totalNormalPrice > 0
+        ? Math.round(
+            ((totalNormalPrice - totalDiscountedPrice) / totalNormalPrice) *
+              100,
+          )
+        : null;
+
   const showStruckNormalPrice =
     hasDiscount &&
     (displayType === "AP&SP&D" || displayType === "AP&SP" || !displayType);
@@ -124,7 +134,7 @@ export const AlacartProductCard: React.FC<{
         }}
       >
         {/* Discount % badge, top-left — same placement style as Home */}
-        {!disabled && showDiscountBadge && product.discount ? (
+        {!disabled && showDiscountBadge && discountPercent != null ? (
           <View
             style={{
               position: "absolute",
@@ -147,7 +157,7 @@ export const AlacartProductCard: React.FC<{
                 color: "#FFF",
               }}
             >
-              {product.discount}%
+              {discountPercent}%
             </Text>
           </View>
         ) : null}

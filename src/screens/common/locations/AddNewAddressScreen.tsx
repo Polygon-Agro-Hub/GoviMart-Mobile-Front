@@ -19,16 +19,15 @@ import customerService from "@/services/customer/customer.service";
 import authService from "@/services/auth/auth.service";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import axios from "axios";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 type AddAddressNavigationProp = StackNavigationProp<
   RootStackParamList,
   "AddNewAddress"
 >;
 
-type AddAddressRouteProp = RouteProp<
-  RootStackParamList,
-  "AddNewAddress"
->;
+type AddAddressRouteProp = RouteProp<RootStackParamList, "AddNewAddress">;
 
 interface AddAddressProps {
   navigation: AddAddressNavigationProp;
@@ -52,7 +51,7 @@ const FIELD_LABELS = {
   mobileNumber1: "Mobile Number 1",
   mobileNumber2: "Mobile Number 2",
   buildingType: "Building Type",
-  houseNo: "Building / House No",
+  houseNo: "Building / Plot No",
   streetName: "Street Name",
   city: "Your City",
   buildingNo: "Apartment / Building No",
@@ -66,6 +65,25 @@ const requiredMessage = (label: string) => `${label} is required`;
 const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const fromCheckout = route.params?.fromCheckout;
 
+  const reduxBuyerType = useSelector(
+    (state: RootState) => state.auth.userProfile?.buyerType,
+  );
+  const [storedBuyerType, setStoredBuyerType] = useState<string>("");
+
+  useEffect(() => {
+    AsyncStorage.getItem("userProfile").then((stored) => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.buyerType) setStoredBuyerType(parsed.buyerType);
+        } catch (e) {}
+      }
+    });
+  }, []);
+
+  const isWholesale =
+    (storedBuyerType || reduxBuyerType || "").toString().trim().toLowerCase() === "wholesale";
+
   const [saveAddressAs, setSaveAddressAs] = useState("");
   const [title, setTitle] = useState("");
   const [titleModalOpen, setTitleModalOpen] = useState(false);
@@ -75,6 +93,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const [phoneCode1, setPhoneCode1] = useState("+94");
   const [phoneCode2, setPhoneCode2] = useState("+94");
   const [buildingType, setBuildingType] = useState("");
+
+  useEffect(() => {
+    if (isWholesale && buildingType !== "House") {
+      setBuildingType("House");
+    }
+  }, [isWholesale]);
   const [buildingNo, setBuildingNo] = useState("");
   const [houseNo, setHouseNo] = useState("");
   const [streetName, setStreetName] = useState("");
@@ -93,7 +117,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   // Delivery-eligibility driven city lock:
   // Until the customer has at least one order with a Delivered status,
   // their city is fixed to marketplaceusers.nearestCity and cannot be changed.
-  const [hasDeliveredOrder, setHasDeliveredOrder] = useState<boolean | null>(null);
+  const [hasDeliveredOrder, setHasDeliveredOrder] = useState<boolean | null>(
+    null,
+  );
   const [cityLocked, setCityLocked] = useState(false);
   const [loadingEligibility, setLoadingEligibility] = useState(true);
 
@@ -176,11 +202,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   // Clear any leftover selected coordinates on initial mount and unmount
   useEffect(() => {
     AsyncStorage.multiRemove(["selectedLatitude", "selectedLongitude"]).catch(
-      (err) => console.error("Error clearing stale location on mount:", err)
+      (err) => console.error("Error clearing stale location on mount:", err),
     );
     return () => {
       AsyncStorage.multiRemove(["selectedLatitude", "selectedLongitude"]).catch(
-        (err) => console.error("Error clearing stale location on unmount:", err)
+        (err) =>
+          console.error("Error clearing stale location on unmount:", err),
       );
     };
   }, []);
@@ -232,7 +259,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   const handleRequiredFieldBlur = (
     value: string,
     setError: (msg: string) => void,
-    fieldLabel: string
+    fieldLabel: string,
   ) => {
     if (!value.trim()) {
       setError(requiredMessage(fieldLabel));
@@ -240,7 +267,10 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   };
 
   const handleSaveAddressAsChange = (text: string) => {
-    const stripped = stripLeadingSpace(text).slice(0, SAVE_ADDRESS_AS_MAX_LENGTH);
+    const stripped = stripLeadingSpace(text).slice(
+      0,
+      SAVE_ADDRESS_AS_MAX_LENGTH,
+    );
     const capitalized = capitalizeWords(stripped);
     setSaveAddressAs(capitalized);
     if (capitalized.trim()) {
@@ -266,14 +296,18 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     if (!cleaned.trim()) {
       setMobileNumber1Error("");
     } else if (!validatePhone(cleaned)) {
-      setMobileNumber1Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+      setMobileNumber1Error(
+        "Please enter a valid mobile number (format: 07XXXXXXXX)",
+      );
     } else {
       setMobileNumber1Error("");
     }
 
     if (mobileNumber2.trim()) {
       if (cleaned.trim() && cleaned.trim() === mobileNumber2.trim()) {
-        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+        setMobileNumber2Error(
+          "Mobile Number 2 cannot be the same as Mobile Number 1",
+        );
       } else if (validatePhone(mobileNumber2.trim())) {
         setMobileNumber2Error("");
       }
@@ -284,13 +318,17 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     if (!mobileNumber1.trim()) {
       setMobileNumber1Error(requiredMessage(FIELD_LABELS.mobileNumber1));
     } else if (!validatePhone(mobileNumber1)) {
-      setMobileNumber1Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+      setMobileNumber1Error(
+        "Please enter a valid mobile number (format: 07XXXXXXXX)",
+      );
     } else {
       setMobileNumber1Error("");
     }
 
     if (mobileNumber2.trim() && mobileNumber1.trim() === mobileNumber2.trim()) {
-      setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+      setMobileNumber2Error(
+        "Mobile Number 2 cannot be the same as Mobile Number 1",
+      );
     }
   };
 
@@ -301,10 +339,17 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
 
     if (!cleaned.trim()) {
       setMobileNumber2Error("");
-    } else if (mobileNumber1.trim() && cleaned.trim() === mobileNumber1.trim()) {
-      setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+    } else if (
+      mobileNumber1.trim() &&
+      cleaned.trim() === mobileNumber1.trim()
+    ) {
+      setMobileNumber2Error(
+        "Mobile Number 2 cannot be the same as Mobile Number 1",
+      );
     } else if (!validatePhone(cleaned)) {
-      setMobileNumber2Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+      setMobileNumber2Error(
+        "Please enter a valid mobile number (format: 07XXXXXXXX)",
+      );
     } else {
       setMobileNumber2Error("");
     }
@@ -312,10 +357,17 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
 
   const handleMobile2Blur = () => {
     if (mobileNumber2.trim()) {
-      if (mobileNumber1.trim() && mobileNumber2.trim() === mobileNumber1.trim()) {
-        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+      if (
+        mobileNumber1.trim() &&
+        mobileNumber2.trim() === mobileNumber1.trim()
+      ) {
+        setMobileNumber2Error(
+          "Mobile Number 2 cannot be the same as Mobile Number 1",
+        );
       } else if (!validatePhone(mobileNumber2)) {
-        setMobileNumber2Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+        setMobileNumber2Error(
+          "Please enter a valid mobile number (format: 07XXXXXXXX)",
+        );
       } else {
         setMobileNumber2Error("");
       }
@@ -389,7 +441,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
   };
 
   const matchedCity = allCities.find(
-    (item) => item.city.trim().toLowerCase() === city.trim().toLowerCase()
+    (item) => item.city.trim().toLowerCase() === city.trim().toLowerCase(),
   );
   const isCityKnown = city.trim().length > 0 && !!matchedCity;
   const isCityDeliverable = isCityKnown && !!matchedCity?.isAvailable;
@@ -474,12 +526,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
             alignItems: "center",
           }}
         >
-          <FontAwesome6
-            name="mountain-city"
-            solid
-            size={14}
-            color="#FFFFFF"
-          />
+          <FontAwesome6 name="mountain-city" solid size={14} color="#FFFFFF" />
         </View>
 
         <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
@@ -505,7 +552,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
           </Text>
         </View>
         {!cityLocked && (
-          <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+          <Ionicons
+            name="chevron-down"
+            size={19}
+            color="#111111"
+            style={{ marginRight: 6 }}
+          />
         )}
       </TouchableOpacity>
       {cityError ? (
@@ -521,10 +573,10 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         </Text>
       ) : null}
 
-      
-
-      {!cityLocked && city.trim().length > 0 && isCityKnown && (
-        isCityDeliverable ? (
+      {!cityLocked &&
+        city.trim().length > 0 &&
+        isCityKnown &&
+        (isCityDeliverable ? (
           <View
             style={{
               flexDirection: "row",
@@ -583,11 +635,11 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                 flexShrink: 1,
               }}
             >
-              Delivery not available in {city} yet, but we're working on it and coming to your area soon!
+              Delivery not available in {city} yet, but we're working on it and
+              coming to your area soon!
             </Text>
           </View>
-        )
-      )}
+        ))}
     </View>
   );
 
@@ -640,7 +692,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       alertTitle = "Required";
       alertMessage = "Mobile Number 1 is required.";
     } else if (!validatePhone(p1)) {
-      setMobileNumber1Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+      setMobileNumber1Error(
+        "Please enter a valid mobile number (format: 07XXXXXXXX)",
+      );
       hasError = true;
       alertTitle = "Invalid Phone Number";
       alertMessage = "Please enter a valid mobile number (format: 07XXXXXXXX).";
@@ -649,26 +703,31 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     const p2 = mobileNumber2.trim();
     if (p2) {
       if (p1 && p1 === p2) {
-        setMobileNumber2Error("Mobile Number 2 cannot be the same as Mobile Number 1");
+        setMobileNumber2Error(
+          "Mobile Number 2 cannot be the same as Mobile Number 1",
+        );
         hasError = true;
         alertTitle = "Duplicate Phone Number";
         alertMessage = "Mobile Number 2 cannot be the same as Mobile Number 1.";
       } else if (!validatePhone(p2)) {
-        setMobileNumber2Error("Please enter a valid mobile number (format: 07XXXXXXXX)");
+        setMobileNumber2Error(
+          "Please enter a valid mobile number (format: 07XXXXXXXX)",
+        );
         hasError = true;
         alertTitle = "Invalid Phone Number";
-        alertMessage = "Please enter a valid second mobile number (format: 07XXXXXXXX).";
+        alertMessage =
+          "Please enter a valid second mobile number (format: 07XXXXXXXX).";
       }
     }
 
-    if (!buildingType.trim()) {
+    if (!isWholesale && !buildingType.trim()) {
       setBuildingTypeError(requiredMessage(FIELD_LABELS.buildingType));
       hasError = true;
       alertTitle = "Required";
       alertMessage = "Please select a building type.";
     }
 
-    if (buildingType === "House") {
+    if (isWholesale || buildingType === "House") {
       if (!buildingNo.trim()) {
         setBuildingNoError(requiredMessage(FIELD_LABELS.houseNo));
         hasError = true;
@@ -749,7 +808,9 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
     }
 
     if (latitude === null || longitude === null) {
-      setGeoLocationError("Geo location is required. Please pin your location before submitting.");
+      setGeoLocationError(
+        "Geo location is required. Please pin your location before submitting.",
+      );
       hasError = true;
       if (!alertTitle || alertTitle === "Required") {
         alertTitle = "Geo Location Required";
@@ -763,18 +824,21 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         !title.trim() ||
         !billingName.trim() ||
         !p1 ||
-        !buildingType.trim() ||
+        (!isWholesale && !buildingType.trim()) ||
         !buildingNo.trim() ||
         !streetName.trim() ||
         !city.trim() ||
         (buildingType === "Apartment" &&
-          (!apartmentName.trim() || !unitNo.trim() || !floorNo.trim() || !houseNo.trim()));
+          (!apartmentName.trim() ||
+            !unitNo.trim() ||
+            !floorNo.trim() ||
+            !houseNo.trim()));
 
       Alert.alert(
         hasSpecificRequiredFieldError ? "Required" : alertTitle,
         hasSpecificRequiredFieldError
           ? "Please fill in all required fields."
-          : alertMessage
+          : alertMessage,
       );
       return;
     }
@@ -784,14 +848,16 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       const cleanPhone1 = p1.startsWith("0") ? p1.slice(1) : p1;
       const cleanPhone2 = p2 ? (p2.startsWith("0") ? p2.slice(1) : p2) : "";
 
+      const finalBuildingType = isWholesale ? "House" : (buildingType || "House");
+
       const basePayload = {
-        buildingType,
+        buildingType: finalBuildingType,
         saveAs: saveAddressAs,
         title,
         fullName: billingName,
         phonecode1: phoneCode1,
         phone1: cleanPhone1,
-        phonecode2: phoneCode2,
+        phonecode2: cleanPhone2 ? phoneCode2 : "",
         phone2: cleanPhone2,
         longitude: longitude!,
         latitude: latitude!,
@@ -801,8 +867,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       };
 
       const payload =
-        buildingType === "House"
-          ? { ...basePayload, houseNo: buildingNo }
+        finalBuildingType === "House"
+          ? { ...basePayload, buildingType: "House", houseNo: buildingNo }
           : {
               ...basePayload,
               houseNo,
@@ -830,11 +896,11 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       if (axios.isAxiosError(error) && error.response) {
         if (error.response.status === 409) {
           setSaveAddressAsError(
-            "This name is already used. Please choose a different name."
+            "This name is already used. Please choose a different name.",
           );
           Alert.alert(
             "Duplicate Name",
-            "An address with this name already exists. Please use a different name."
+            "An address with this name already exists. Please use a different name.",
           );
           return;
         }
@@ -876,43 +942,192 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       >
         <View style={{ flex: 1 }}>
           {/* SAVE ADDRESS AS */}
-        <InputField
-          icon="bookmark"
-          circleSize={30}
-          iconSize={14}
-          label="Save Address As *"
-          value={saveAddressAs}
-          onChangeText={handleSaveAddressAsChange}
-          onBlur={() =>
-            handleRequiredFieldBlur(
-              saveAddressAs,
-              setSaveAddressAsError,
-              FIELD_LABELS.saveAddressAs
-            )
-          }
-          placeholder="(e.g.: Home , Work..)"
-          maxLength={SAVE_ADDRESS_AS_MAX_LENGTH}
-          error={saveAddressAsError}
-        />
+          <InputField
+            icon="bookmark"
+            circleSize={30}
+            iconSize={14}
+            label="Save Address As *"
+            value={saveAddressAs}
+            onChangeText={handleSaveAddressAsChange}
+            onBlur={() =>
+              handleRequiredFieldBlur(
+                saveAddressAs,
+                setSaveAddressAsError,
+                FIELD_LABELS.saveAddressAs,
+              )
+            }
+            placeholder="(e.g.: Home , Work..)"
+            maxLength={SAVE_ADDRESS_AS_MAX_LENGTH}
+            error={saveAddressAsError}
+          />
 
-        {/* TITLE + BILLING NAME */}
-        <View style={{ flexDirection: "row", gap: 5, width: "100%", overflow: "hidden" }}>
-          {/* TITLE */}
-          <View style={{ flex: 0.65, minWidth: 0 }}>
-            <View style={{ marginBottom: titleError ? 4 : 12 }}>
+          {/* TITLE + BILLING NAME */}
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 5,
+              width: "100%",
+              overflow: "hidden",
+            }}
+          >
+            {/* TITLE */}
+            <View style={{ flex: 0.65, minWidth: 0 }}>
+              <View style={{ marginBottom: titleError ? 4 : 12 }}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    if (!title.trim()) {
+                      setTitleError(requiredMessage(FIELD_LABELS.title));
+                    }
+                    setTitleModalOpen(true);
+                  }}
+                  style={{
+                    height: 67,
+                    borderWidth: titleError ? 1.5 : 1,
+                    borderColor: titleError ? "#FF3B30" : "#D9DEE5",
+                    borderRadius: 40,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 11,
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
+                      backgroundColor: "#000000",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <FontAwesome6 name="user" solid size={14} color="#FFFFFF" />
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      marginLeft: 10,
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: "#555555",
+                        lineHeight: 19,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Title *
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 18,
+                        color: title ? "#111111" : "#9CA3AF",
+                        fontWeight: title ? "500" : "400",
+                      }}
+                    >
+                      {title || "Title"}
+                    </Text>
+                  </View>
+
+                  <Ionicons
+                    name="chevron-down"
+                    size={19}
+                    color="#111111"
+                    style={{ marginRight: 6 }}
+                  />
+                </TouchableOpacity>
+                {titleError ? (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#FF3B30",
+                      marginTop: 4,
+                      marginLeft: 16,
+                    }}
+                  >
+                    {titleError}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
+            {/* BILLING NAME */}
+            <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+              <InputField
+                icon="user"
+                circleSize={30}
+                iconSize={14}
+                label="Billing Name *"
+                value={billingName}
+                onChangeText={handleBillingNameChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    billingName,
+                    setBillingNameError,
+                    FIELD_LABELS.billingName,
+                  )
+                }
+                placeholder="Type Here"
+                autoCapitalize="words"
+                error={billingNameError}
+              />
+            </View>
+          </View>
+
+          {/* MOBILE 1 */}
+          <InputField
+            icon="phone"
+            circleSize={30}
+            iconSize={14}
+            label="Mobile Number - 1 *"
+            value={mobileNumber1}
+            onChangeText={handleMobile1Change}
+            onBlur={handleMobile1Blur}
+            placeholder="07XXXXXXXX"
+            keyboardType="phone-pad"
+            maxLength={10}
+            error={mobileNumber1Error}
+          />
+
+          {/* MOBILE 2 */}
+          <InputField
+            icon="phone"
+            circleSize={30}
+            iconSize={14}
+            label="Mobile Number - 2 (Optional)"
+            value={mobileNumber2}
+            onChangeText={handleMobile2Change}
+            onBlur={handleMobile2Blur}
+            placeholder="07XXXXXXXX"
+            keyboardType="phone-pad"
+            maxLength={10}
+            error={mobileNumber2Error}
+          />
+
+          {/* BUILDING TYPE (Hidden for Wholesale Users) */}
+          {!isWholesale && (
+            <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
                   Keyboard.dismiss();
-                  if (!title.trim()) {
-                    setTitleError(requiredMessage(FIELD_LABELS.title));
+                  if (!buildingType.trim()) {
+                    setBuildingTypeError(
+                      requiredMessage(FIELD_LABELS.buildingType),
+                    );
                   }
-                  setTitleModalOpen(true);
+                  setBuildingTypeModalOpen(true);
                 }}
                 style={{
                   height: 67,
-                  borderWidth: titleError ? 1.5 : 1,
-                  borderColor: titleError ? "#FF3B30" : "#D9DEE5",
+                  borderWidth: buildingTypeError ? 1.5 : 1,
+                  borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
                   borderRadius: 40,
                   flexDirection: "row",
                   alignItems: "center",
@@ -930,15 +1145,12 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                     alignItems: "center",
                   }}
                 >
-                  <FontAwesome6
-                    name="user"
-                    solid
-                    size={14}
-                    color="#FFFFFF"
-                  />
+                  <FontAwesome6 name="house" solid size={14} color="#FFFFFF" />
                 </View>
 
-                <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
+                <View
+                  style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}
+                >
                   <Text
                     style={{
                       fontSize: 14,
@@ -947,23 +1159,28 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                       marginBottom: 4,
                     }}
                   >
-                    Title *
+                    Building Type *
                   </Text>
                   <Text
                     style={{
                       fontSize: 14,
                       lineHeight: 18,
-                      color: title ? "#111111" : "#9CA3AF",
-                      fontWeight: title ? "500" : "400",
+                      color: buildingType ? "#111111" : "#9CA3AF",
+                      fontWeight: buildingType ? "500" : "400",
                     }}
                   >
-                    {title || "Title"}
+                    {buildingType || "Select From Here"}
                   </Text>
                 </View>
 
-                <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
+                <Ionicons
+                  name="chevron-down"
+                  size={19}
+                  color="#111111"
+                  style={{ marginRight: 6 }}
+                />
               </TouchableOpacity>
-              {titleError ? (
+              {buildingTypeError ? (
                 <Text
                   style={{
                     fontSize: 12,
@@ -972,105 +1189,205 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                     marginLeft: 16,
                   }}
                 >
-                  {titleError}
+                  {buildingTypeError}
                 </Text>
               ) : null}
             </View>
-          </View>
+          )}
 
-          {/* BILLING NAME */}
-          <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-            <InputField
-              icon="user"
-              circleSize={30}
-              iconSize={14}
-              label="Billing Name *"
-              value={billingName}
-              onChangeText={handleBillingNameChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  billingName,
-                  setBillingNameError,
-                  FIELD_LABELS.billingName
-                )
-              }
-              placeholder="Type Here"
-              autoCapitalize="words"
-              error={billingNameError}
-            />
-          </View>
-        </View>
+          {/* ================= APARTMENT SPECIFIC FIELDS ================= */}
+          {!isWholesale && buildingType === "Apartment" && (
+            <>
+              <InputField
+                icon="building"
+                circleSize={30}
+                iconSize={14}
+                label="Apartment / Building No *"
+                value={buildingNo}
+                onChangeText={handleBuildingNoChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    buildingNo,
+                    setBuildingNoError,
+                    FIELD_LABELS.buildingNo,
+                  )
+                }
+                placeholder="Type Here"
+                error={buildingNoError}
+              />
+              <InputField
+                icon="tag"
+                circleSize={30}
+                iconSize={14}
+                label="Apartment / Building Name *"
+                value={apartmentName}
+                onChangeText={handleApartmentNameChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    apartmentName,
+                    setBuildingNameError,
+                    FIELD_LABELS.buildingName,
+                  )
+                }
+                placeholder="e.g. Lotus Residencies"
+                error={buildingNameError}
+              />
+              <InputField
+                icon="hotel"
+                circleSize={30}
+                iconSize={14}
+                label="Flat / Unit Number *"
+                value={unitNo}
+                onChangeText={handleUnitNoChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    unitNo,
+                    setUnitNoError,
+                    FIELD_LABELS.unitNo,
+                  )
+                }
+                placeholder="Type Here"
+                error={unitNoError}
+              />
+              <InputField
+                icon="stairs"
+                circleSize={30}
+                iconSize={14}
+                label="Floor Number *"
+                value={floorNo}
+                onChangeText={handleFloorNoChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    floorNo,
+                    setFloorNoError,
+                    FIELD_LABELS.floorNo,
+                  )
+                }
+                placeholder="e.g. 3rd Floor"
+                error={floorNoError}
+              />
+              {/* NEW: Building / Plot No for Apartment */}
+              <InputField
+                icon="house"
+                circleSize={30}
+                iconSize={14}
+                label="Building / Plot No *"
+                value={houseNo}
+                onChangeText={handleHouseNoChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    houseNo,
+                    setHouseNoError,
+                    FIELD_LABELS.houseNo,
+                  )
+                }
+                placeholder="e.g 14/B"
+                error={houseNoError}
+              />
+              <InputField
+                icon="road"
+                circleSize={30}
+                iconSize={14}
+                label="Street Name *"
+                value={streetName}
+                onChangeText={handleStreetNameChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    streetName,
+                    setStreetNameError,
+                    FIELD_LABELS.streetName,
+                  )
+                }
+                placeholder="Type Here"
+                error={streetNameError}
+              />
+              {renderCityField()}
+            </>
+          )}
 
-        {/* MOBILE 1 */}
-        <InputField
-          icon="phone"
-          circleSize={30}
-          iconSize={14}
-          label="Mobile Number - 1 *"
-          value={mobileNumber1}
-          onChangeText={handleMobile1Change}
-          onBlur={handleMobile1Blur}
-          placeholder="07XXXXXXXX"
-          keyboardType="phone-pad"
-          maxLength={10}
-          error={mobileNumber1Error}
-        />
+          {/* ================= MAIN 3 ADDRESS LINES (Default for Wholesale or House) ================= */}
+          {(isWholesale || buildingType === "House") && (
+            <>
+              <InputField
+                icon="house"
+                circleSize={30}
+                iconSize={14}
+                label="Building / Plot No *"
+                value={buildingNo}
+                onChangeText={handleBuildingNoChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    buildingNo,
+                    setBuildingNoError,
+                    FIELD_LABELS.houseNo,
+                  )
+                }
+                placeholder="e.g 14/B"
+                error={buildingNoError}
+              />
+              <InputField
+                icon="road"
+                circleSize={30}
+                iconSize={14}
+                label="Street Name *"
+                value={streetName}
+                onChangeText={handleStreetNameChange}
+                onBlur={() =>
+                  handleRequiredFieldBlur(
+                    streetName,
+                    setStreetNameError,
+                    FIELD_LABELS.streetName,
+                  )
+                }
+                placeholder="Type Here"
+                error={streetNameError}
+              />
+              {renderCityField()}
+            </>
+          )}
 
-        {/* MOBILE 2 */}
-        <InputField
-          icon="phone"
-          circleSize={30}
-          iconSize={14}
-          label="Mobile Number - 2 (Optional)"
-          value={mobileNumber2}
-          onChangeText={handleMobile2Change}
-          onBlur={handleMobile2Blur}
-          placeholder="07XXXXXXXX"
-          keyboardType="phone-pad"
-          maxLength={10}
-          error={mobileNumber2Error}
-        />
-
-        {/* BUILDING TYPE */}
-        <View style={{ marginBottom: buildingTypeError ? 4 : 12 }}>
+          {/* GEO LOCATION */}
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => {
-              Keyboard.dismiss();
-              if (!buildingType.trim()) {
-                setBuildingTypeError(requiredMessage(FIELD_LABELS.buildingType));
+            activeOpacity={0.85}
+            onPress={async () => {
+              try {
+                await AsyncStorage.multiRemove([
+                  "selectedLatitude",
+                  "selectedLongitude",
+                ]);
+              } catch (e) {
+                console.error("Error clearing coords before navigating:", e);
               }
-              setBuildingTypeModalOpen(true);
+              isLocationRequestedRef.current = true;
+              navigation.navigate("SetLocation");
             }}
             style={{
               height: 67,
-              borderWidth: buildingTypeError ? 1.5 : 1,
-              borderColor: buildingTypeError ? "#FF3B30" : "#D9DEE5",
               borderRadius: 40,
+              backgroundColor: "#FFF5E9",
               flexDirection: "row",
               alignItems: "center",
               paddingHorizontal: 11,
-              backgroundColor: "#FFFFFF",
+              marginBottom: geoLocationError ? 4 : 12,
+              borderWidth: 1,
+              borderColor: geoLocationError ? "#FF3B30" : "#FFE0B2",
             }}
           >
+            {/* Location Icon */}
             <View
               style={{
                 width: 30,
                 height: 30,
                 borderRadius: 15,
-                backgroundColor: "#000000",
+                backgroundColor: "#FF9518",
                 justifyContent: "center",
                 alignItems: "center",
               }}
             >
-              <FontAwesome6
-                name="house"
-                solid
-                size={14}
-                color="#FFFFFF"
-              />
+              <Ionicons name="location" size={15} color="#FFFFFF" />
             </View>
 
+            {/* Text */}
             <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
               <Text
                 style={{
@@ -1080,303 +1397,76 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
                   marginBottom: 4,
                 }}
               >
-                Building Type *
+                Geo Location *
               </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  lineHeight: 18,
-                  color: buildingType ? "#111111" : "#9CA3AF",
-                  fontWeight: buildingType ? "500" : "400",
-                }}
-              >
-                {buildingType || "Select From Here"}
-              </Text>
-            </View>
 
-            <Ionicons name="chevron-down" size={19} color="#111111" style={{ marginRight: 6 }} />
-          </TouchableOpacity>
-          {buildingTypeError ? (
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#FF3B30",
-                marginTop: 4,
-                marginLeft: 16,
-              }}
-            >
-              {buildingTypeError}
-            </Text>
-          ) : null}
-        </View>
-
-        {/* ================= APARTMENT SPECIFIC FIELDS ================= */}
-        {buildingType === "Apartment" && (
-          <>
-            <InputField
-              icon="building"
-              circleSize={30}
-              iconSize={14}
-              label="Apartment / Building No *"
-              value={buildingNo}
-              onChangeText={handleBuildingNoChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  buildingNo,
-                  setBuildingNoError,
-                  FIELD_LABELS.buildingNo
-                )
-              }
-              placeholder="Type Here"
-              error={buildingNoError}
-            />
-            <InputField
-              icon="tag"
-              circleSize={30}
-              iconSize={14}
-              label="Apartment / Building Name *"
-              value={apartmentName}
-              onChangeText={handleApartmentNameChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  apartmentName,
-                  setBuildingNameError,
-                  FIELD_LABELS.buildingName
-                )
-              }
-              placeholder="e.g. Lotus Residencies"
-              error={buildingNameError}
-            />
-            <InputField
-              icon="hotel"
-              circleSize={30}
-              iconSize={14}
-              label="Flat / Unit Number *"
-              value={unitNo}
-              onChangeText={handleUnitNoChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  unitNo,
-                  setUnitNoError,
-                  FIELD_LABELS.unitNo
-                )
-              }
-              placeholder="Type Here"
-              error={unitNoError}
-            />
-            <InputField
-              icon="stairs"
-              circleSize={30}
-              iconSize={14}
-              label="Floor Number *"
-              value={floorNo}
-              onChangeText={handleFloorNoChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  floorNo,
-                  setFloorNoError,
-                  FIELD_LABELS.floorNo
-                )
-              }
-              placeholder="e.g. 3rd Floor"
-              error={floorNoError}
-            />
-            {/* NEW: Building / House No for Apartment */}
-            <InputField
-              icon="house"
-              circleSize={30}
-              iconSize={14}
-              label="Building / House No *"
-              value={houseNo}
-              onChangeText={handleHouseNoChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  houseNo,
-                  setHouseNoError,
-                  FIELD_LABELS.houseNo
-                )
-              }
-              placeholder="e.g 14/B"
-              error={houseNoError}
-            />
-            <InputField
-              icon="road"
-              circleSize={30}
-              iconSize={14}
-              label="Street Name *"
-              value={streetName}
-              onChangeText={handleStreetNameChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  streetName,
-                  setStreetNameError,
-                  FIELD_LABELS.streetName
-                )
-              }
-              placeholder="Type Here"
-              error={streetNameError}
-            />
-            {renderCityField()}
-          </>
-        )}
-
-        {/* ================= HOUSE SPECIFIC FIELDS ================= */}
-        {buildingType === "House" && (
-          <>
-            <InputField
-              icon="house"
-              circleSize={30}
-              iconSize={14}
-              label="Building / House No *"
-              value={buildingNo}
-              onChangeText={handleBuildingNoChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  buildingNo,
-                  setBuildingNoError,
-                  FIELD_LABELS.houseNo
-                )
-              }
-              placeholder="e.g 14/B"
-              error={buildingNoError}
-            />
-            <InputField
-              icon="road"
-              circleSize={30}
-              iconSize={14}
-              label="Street Name *"
-              value={streetName}
-              onChangeText={handleStreetNameChange}
-              onBlur={() =>
-                handleRequiredFieldBlur(
-                  streetName,
-                  setStreetNameError,
-                  FIELD_LABELS.streetName
-                )
-              }
-              placeholder="Type Here"
-              error={streetNameError}
-            />
-            {renderCityField()}
-          </>
-        )}
-
-        {/* GEO LOCATION */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={async () => {
-            try {
-              await AsyncStorage.multiRemove([
-                "selectedLatitude",
-                "selectedLongitude",
-              ]);
-            } catch (e) {
-              console.error("Error clearing coords before navigating:", e);
-            }
-            isLocationRequestedRef.current = true;
-            navigation.navigate("SetLocation");
-          }}
-          style={{
-            height: 67,
-            borderRadius: 40,
-            backgroundColor: "#FFF5E9",
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 11,
-            marginBottom: geoLocationError ? 4 : 12,
-            borderWidth: 1,
-            borderColor: geoLocationError ? "#FF3B30" : "#FFE0B2",
-          }}
-        >
-          {/* Location Icon */}
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: "#FF9518",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Ionicons name="location" size={15} color="#FFFFFF" />
-          </View>
-
-          {/* Text */}
-          <View style={{ flex: 1, marginLeft: 10, justifyContent: "center" }}>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#555555",
-                lineHeight: 19,
-                marginBottom: 4,
-              }}
-            >
-              Geo Location *
-            </Text>
-
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {latitude !== null && longitude !== null && (
-                <View
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {latitude !== null && longitude !== null && (
+                  <View
+                    style={{
+                      width: 13,
+                      height: 13,
+                      borderRadius: 100,
+                      backgroundColor: "#FF9518",
+                      marginRight: 6,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <FontAwesome6 solid name="check" size={9} color="#FFFFFF" />
+                  </View>
+                )}
+                <Text
                   style={{
-                    width: 13,
-                    height: 13,
-                    borderRadius: 100,
-                    backgroundColor: "#FF9518",
-                    marginRight: 6,
-                    alignItems: "center",
-                    justifyContent: "center",
+                    fontSize: 14,
+                    lineHeight: 18,
+                    color: "#FF9518",
+                    fontWeight: "600",
                   }}
                 >
-                  <FontAwesome6 solid name="check" size={9} color="#FFFFFF" />
-                </View>
-              )}
-              <Text
+                  {latitude !== null && longitude !== null
+                    ? "Attached"
+                    : "Click Here"}
+                </Text>
+              </View>
+            </View>
+
+            {/* Trailing icon: pencil when attached, chevron otherwise */}
+            {latitude !== null && longitude !== null ? (
+              <View
                 style={{
-                  fontSize: 14,
-                  lineHeight: 18,
-                  color: "#FF9518",
-                  fontWeight: "600",
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  borderColor: "#FF9518",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 6,
                 }}
               >
-                {latitude !== null && longitude !== null
-                  ? "Attached"
-                  : "Click Here"}
-              </Text>
-            </View>
-          </View>
-
-          {/* Trailing icon: pencil when attached, chevron otherwise */}
-          {latitude !== null && longitude !== null ? (
-            <View
+                <FontAwesome6 solid name="pen" size={14} color="#FF9518" />
+              </View>
+            ) : (
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color="#FF9518"
+                style={{ marginRight: 6 }}
+              />
+            )}
+          </TouchableOpacity>
+          {geoLocationError ? (
+            <Text
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                borderColor: "#FF9518",
-                justifyContent: "center",
-                alignItems: "center",
-                marginRight: 6,
+                color: "#FF3B30",
+                fontSize: 12,
+                marginLeft: 16,
+                marginBottom: 12,
               }}
             >
-              <FontAwesome6 solid name="pen" size={14} color="#FF9518" />
-            </View>
-          ) : (
-            <Ionicons name="chevron-forward" size={18} color="#FF9518" style={{ marginRight: 6 }} />
-          )}
-        </TouchableOpacity>
-        {geoLocationError ? (
-          <Text
-            style={{
-              color: "#FF3B30",
-              fontSize: 12,
-              marginLeft: 16,
-              marginBottom: 12,
-            }}
-          >
-            {geoLocationError}
-          </Text>
-        ) : null}
+              {geoLocationError}
+            </Text>
+          ) : null}
         </View>
 
         {/* SAVE BUTTON */}
@@ -1408,8 +1498,8 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
               {saving
                 ? "Saving..."
                 : fromCheckout
-                ? "Save & Continue"
-                : "Save Address"}
+                  ? "Save & Continue"
+                  : "Save Address"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1433,6 +1523,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
       />
 
       {/* BUILDING TYPE SEARCH MODAL (SEARCH HIDDEN) */}
+      {!isWholesale && (
       <GlobalSearchModal
         visible={buildingTypeModalOpen}
         onClose={() => setBuildingTypeModalOpen(false)}
@@ -1448,6 +1539,7 @@ const AddNewAddress: React.FC<AddAddressProps> = ({ navigation, route }) => {
         noResultsText="No building types found"
         multiSelect={false}
       />
+      )}
 
       {/* CITY SEARCH MODAL (SEARCH ACTIVE) - not opened while city is locked */}
       <GlobalSearchModal

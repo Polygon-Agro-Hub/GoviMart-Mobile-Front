@@ -170,15 +170,15 @@ export function detectPaymentType(
   const fullyCoveredByCredit = hasCredit && creditPaid >= grandTotal - 0.01;
 
   if (fullyCoveredByCredit) {
-    return "Credit Balance";
+    return "Polygon Wallet";
   }
 
   if (payType === "Card" || payType.toLowerCase() === "card") {
-    return hasCredit ? "Online Transfer + Credit Balance" : "Online Transfer";
+    return hasCredit ? "Online Transfer + Polygon Wallet" : "Online Transfer";
   }
 
   const base = isPickup ? "Cash on Pickup" : "Cash on Delivery";
-  return hasCredit ? `${base} + Credit Balance` : base;
+  return hasCredit ? `${base} + Polygon Wallet` : base;
 }
 
 export interface PaymentStatusRow {
@@ -227,7 +227,7 @@ export function getPaymentStatusInfo(
   };
 
   if (hasCreditPaid) {
-    push("Credit Balance Used", creditPaidNum, "paid");
+    push("Polygon Wallet Used", creditPaidNum, "paid");
 
     if (remainingAfterCredit > 0.01) {
       if (isPaid) {
@@ -263,7 +263,7 @@ export const buildInvoiceHtml = (
   const creditPaidAmount = parseAmount(invoice.creditPaid);
   const grandTotalAmount = parseAmount(invoice.grandTotal);
   const isPickup = (invoice.deliveryMethod || "").toLowerCase().includes("pickup");
-  const deliveryMethodLabel = isPickup ? "Instore Pickup" : "Home Delivery";
+  const deliveryMethodLabel = isPickup ? "Instore Pickup" : "Delivery";
 
   const paymentTypeLabel =
     detectPaymentType(
@@ -645,13 +645,13 @@ export const buildInvoiceHtml = (
           <p><span class="lbl-grey">Name :</span> ${billing.apartmentName || billing.buildingName || "N/A"},</p>
           <p><span class="lbl-grey">Flat :</span> ${billing.flatNo || "N/A"},</p>
           <p><span class="lbl-grey">Floor :</span> ${billing.floorNo || "N/A"},</p>
-          <p><span class="lbl-grey">House No :</span> ${billing.houseNo || "N/A"},</p>
+          <p><span class="lbl-grey">Plot No :</span> ${billing.houseNo || "N/A"},</p>
           <p><span class="lbl-grey">Street Name :</span> ${billing.street || "N/A"}</p>
           <p><span class="lbl-grey">City :</span> ${billing.city || "N/A"}</p>
         `
             : `
           <p class="bold-label">House Address :</p>
-          <p><span class="lbl-grey">House No :</span> ${billing.houseNo || "N/A"},</p>
+          <p><span class="lbl-grey">Plot No :</span> ${billing.houseNo || "N/A"},</p>
           <p><span class="lbl-grey">Street Name :</span> ${billing.street || "N/A"},</p>
           <p><span class="lbl-grey">City :</span> ${billing.city || "N/A"}</p>
         `

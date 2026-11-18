@@ -291,8 +291,7 @@ const PrivacyPolicyScreen: React.FC<PrivacyPolicyProps> = ({ navigation }) => {
                   Manage Your Account
                 </Text>
                 <Text className="text-xs text-[#5A5859] leading-relaxed">
-                  To manage your profile, update passwords, track your Credit
-                  Balance, and manage saved addresses.
+                  To manage your profile, update passwords, track your Polygon Wallet, and manage saved addresses.
                 </Text>
               </View>
 

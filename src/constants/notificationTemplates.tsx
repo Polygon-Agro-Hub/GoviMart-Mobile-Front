@@ -95,7 +95,7 @@ export const NOTIFICATION_TEMPLATES: Record<
         ? p.reason
         : (p as any).otherReason || (p as any).returnNote || p.reason;
     return reasonText
-      ? `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.\nReason : “${reasonText}”\n\nIf you have already made a payment for this order, the total amount will be added to your credit balance. You can use this credit toward your next order.`
+      ? `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.\nReason : “${reasonText}”\n\nIf you have already made a payment for this order, the total amount will be added to your Polygon Wallet. You can use this credit toward your next order.`
       : `Your order #${p.invoiceNo || "[Invoice No.]"}, has been cancelled.`;
   },
 };

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -136,6 +136,45 @@ const isValidEmail = (emailStr: string): boolean => {
   return emailRegex.test(trimmed);
 };
 
+const isPassportDocType = (type?: string): boolean =>
+  String(type || "").trim().toUpperCase() === "PASS" ||
+  String(type || "").trim().toUpperCase() === "PASSPORT";
+
+const isValidNic = (value: string): boolean =>
+  /^[0-9]{9}[vVxX]$/.test(value) || /^[0-9]{12}$/.test(value);
+
+const validateDocNumber = (value: string, currentDocType?: string): string => {
+  const clean = value.trim();
+  const isPass = isPassportDocType(currentDocType);
+
+  if (!clean) {
+    return isPass ? "Passport ID is required" : "NIC number is required";
+  }
+  if (/\s/.test(clean)) {
+    return isPass
+      ? "Passport ID cannot contain spaces"
+      : "NIC number cannot contain spaces";
+  }
+  if (!/^[a-zA-Z0-9]+$/.test(clean)) {
+    return "Must contain only letters and numbers";
+  }
+
+  // When docType is "PASS" (Passport), the length validation should not be applied
+  if (isPass) {
+    return "";
+  }
+
+  // When docType is "NIC", apply NIC format and length checks
+  if (clean.length > 12) {
+    return "NIC cannot exceed 12 characters";
+  }
+  if (!isValidNic(clean)) {
+    return "Please enter a valid NIC (9 digits + V/X, or 12 digits)";
+  }
+
+  return "";
+};
+
 type MyAccountNavigationProp = StackNavigationProp<
   RootStackParamList,
   "MyAccount"
@@ -150,14 +189,54 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const scrollRef = useRef<any>(null);
   const scrollToTop = () =>
     scrollRef.current?.scrollTo?.({ y: 0, animated: true });
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      if (scrollRef.current?.scrollToEnd) {
+        scrollRef.current.scrollToEnd({ animated: true });
+      } else if (scrollRef.current?.scrollTo) {
+        scrollRef.current.scrollTo({ y: 99999, animated: true });
+      }
+    }, 250);
+  };
   const reduxBuyerType = useSelector(
     (state: RootState) => state.auth.userProfile?.buyerType,
+  );
+  const reduxNic = useSelector(
+    (state: RootState) => (state.auth.userProfile as any)?.nic,
+  );
+  const reduxDocType = useSelector(
+    (state: RootState) => (state.auth.userProfile as any)?.docType,
   );
   const [buyerType, setBuyerType] = useState("");
 
   const [title, setTitle] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nic, setNic] = useState(reduxNic || "");
+  const [docType, setDocType] = useState(reduxDocType || "");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePickerModalVisible, setImagePickerModalVisible] = useState(false);
@@ -179,6 +258,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
   const [titleError, setTitleError] = useState("");
   const [mobileNumberError, setMobileNumberError] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [nicError, setNicError] = useState("");
   const [companyMobileError, setCompanyMobileError] = useState("");
   const [companyNameError, setCompanyNameError] = useState("");
   const [profileImageError, setProfileImageError] = useState<string | null>(
@@ -248,6 +328,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
     companyMobileCode: string;
     companyMobile: string;
     image: string;
+    nic?: string;
+    docType?: string;
   } | null>(null);
 
   const isWholesale =
@@ -281,6 +363,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (data.phoneCode) setMobileCode(data.phoneCode);
             if (data.phoneNumber) setMobileNumber(data.phoneNumber);
             if (data.email) setEmail(data.email);
+            if (data.nic) setNic(data.nic);
+            if (data.docType) setDocType(data.docType);
             if (data.companyName) {
               setCompanyName(capitalizeFirst(data.companyName));
             }
@@ -306,6 +390,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               ).trim(),
               companyMobile: (data.companyPhone || "").trim(),
               image: fetchedImage,
+              nic: (data.nic || "").trim(),
+              docType: (data.docType || "").trim(),
             });
           }
           console.log("acc details fetching success: ", response.data.data);
@@ -454,6 +540,22 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       hasError = true;
     }
 
+    const cleanedNic = nic.trim().toUpperCase();
+    if (!cleanedNic) {
+      setNicError(
+        isPassportDocType(docType)
+          ? "Passport ID is required"
+          : "NIC number is required",
+      );
+      hasError = true;
+    } else {
+      const docErr = validateDocNumber(cleanedNic, docType);
+      if (docErr) {
+        setNicError(docErr);
+        hasError = true;
+      }
+    }
+
     // Company name & number (wholesale only, required) – country specific
     if (isWholesale) {
       if (!companyName.trim()) {
@@ -494,6 +596,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           ) &&
         email.trim().toLowerCase() ===
           originalAccountData.email.toLowerCase() &&
+        cleanedNic === (originalAccountData.nic || "").trim().toUpperCase() &&
         (!isWholesale ||
           (companyName.trim() === originalAccountData.companyName &&
             (companyMobileCode || mobileCode).trim() ===
@@ -525,6 +628,10 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
       const formattedLastName = capitalizeName(lastName.trim());
       const formattedCompanyName = capitalizeFirst(companyName);
 
+      let determinedDocType = docType
+        ? (isPassportDocType(docType) ? "PASS" : "NIC")
+        : (isValidNic(cleanedNic) ? "NIC" : "PASS");
+
       const payload: any = {
         title: (title || "Mr").trim(),
         firstName: formattedFirstName,
@@ -532,6 +639,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         phoneCode: mobileCode.trim(),
         phoneNumber: cleanedMobile,
         email: email.trim(),
+        nic: cleanedNic,
+        docType: determinedDocType,
         image: finalImage,
       };
 
@@ -682,6 +791,9 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             if (msg.toLowerCase().includes("email")) {
               setEmailError(msg);
             }
+            if (msg.toLowerCase().includes("nic") || msg.toLowerCase().includes("passport")) {
+              setNicError(msg);
+            }
             delayedAlert("Error", msg);
           }
         }
@@ -691,6 +803,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         if (response.data) {
           setMobileNumber(cleanedMobile);
           setCompanyMobile(cleanedCompanyMobile);
+          setNic(cleanedNic);
+          setDocType(determinedDocType);
           const updatedImageStr = profileImage ? profileImage.trim() : "";
           setOriginalAccountData({
             title: title.trim(),
@@ -703,6 +817,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             companyMobileCode: (companyMobileCode || mobileCode).trim(),
             companyMobile: cleanedCompanyMobile,
             image: updatedImageStr,
+            nic: nic.trim(),
+            docType: docType.trim(),
           });
 
           dispatch(updateUserProfileImage({ image: updatedImageStr }));
@@ -716,6 +832,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               phoneCode: mobileCode.trim(),
               image: updatedImageStr,
               companyName: isWholesale ? companyName.trim() : undefined,
+              nic: nic.trim() || undefined,
+              docType: docType.trim() || undefined,
             }),
           );
 
@@ -735,6 +853,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 companyName: isWholesale
                   ? companyName.trim()
                   : parsed.companyName,
+                nic: nic.trim() || parsed.nic,
+                docType: docType.trim() || parsed.docType,
               };
               await AsyncStorage.setItem("userProfile", JSON.stringify(merged));
             }
@@ -765,6 +885,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         setEmailError(errorMessage);
       } else if (lower.includes("phone") || lower.includes("mobile")) {
         setMobileNumberError(errorMessage);
+      } else if (lower.includes("nic") || lower.includes("passport")) {
+        setNicError(errorMessage);
       }
       delayedAlert("Error", errorMessage);
     } finally {
@@ -970,8 +1092,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         <View
           style={{
             position: "absolute",
-            top: 38,
-            right: 5,
+            top: 43,
+            right: 15,
             width: 130,
             backgroundColor: "#FFFFFF",
             borderRadius: 12,
@@ -1039,16 +1161,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
         </View>
       ) : (
         <KeyboardAwareScrollView
+          style={{ flex: 1 }}
           innerRef={(ref) => (scrollRef.current = ref)}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
           enableOnAndroid={true}
           enableAutomaticScroll={true}
-          keyboardOpeningTime={0}
+          extraScrollHeight={Platform.select({ ios: 40, android: 120 })}
+          extraHeight={Platform.select({ ios: 40, android: 120 })}
           enableResetScrollToCoords={false}
           contentContainerStyle={{
             paddingHorizontal: 14,
-            paddingBottom: 20,
+            paddingBottom:
+              keyboardHeight > 0
+                ? Platform.OS === "ios"
+                  ? 40
+                  : 140
+                : Platform.OS === "ios"
+                  ? 16
+                  : 20,
             flexGrow: 1,
             justifyContent: "space-between",
           }}
@@ -1166,7 +1297,7 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
             </View>
 
             {/* FORM */}
-            <View style={{ width: "100%" }}>
+            <View style={{ width: "100%" }} pointerEvents={isWholesale ? "none" : "auto"}>
               {/* TITLE + FIRST NAME */}
               <View
                 style={{
@@ -1181,21 +1312,25 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     label="Title"
                     value={title}
                     open={false}
-                    setOpen={() => setTitleModalOpen(true)}
+                    setOpen={() => { if (!isWholesale) setTitleModalOpen(true); }}
+                    disabled={isWholesale}
                     options={[]}
                     onSelect={() => {}}
                     icon="user"
                     error={titleError}
+                    showArrow={!isWholesale}
                   />
                 </View>
 
                 {/* First Name */}
                 <View style={{ flex: 1 }}>
                   <InputField
+                    isIconThemeDark={false}
                     icon="user"
                     label="First Name"
                     placeholder="First Name"
                     value={firstName}
+                    editable={!isWholesale}
                     autoCapitalize="words"
                     onChangeText={(text) => {
                       const sanitized = sanitizeFirstNameLive(text);
@@ -1223,10 +1358,12 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               {/* LAST NAME */}
               <View style={{ marginBottom: 14 }}>
                 <InputField
+                  isIconThemeDark={false}
                   icon="user"
                   label="Last Name"
                   placeholder="Last Name"
                   value={lastName}
+                  editable={!isWholesale}
                   autoCapitalize="words"
                   onChangeText={(text) => {
                     const sanitized = sanitizeLastNameLive(text);
@@ -1262,7 +1399,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     label="Code"
                     value={mobileCode}
                     open={false}
-                    setOpen={() => setIsPhoneCodeModalOpen(true)}
+                    setOpen={() => { if (!isWholesale) setIsPhoneCodeModalOpen(true); }}
+                    disabled={isWholesale}
                     options={[]}
                     onSelect={() => {}}
                     icon="flag"
@@ -1272,15 +1410,18 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                     marginLeft={6}
                     arrowSize={16}
                     error={codeError}
+                    showArrow={!isWholesale}
                   />
                 </View>
 
                 {/* Mobile Number */}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <InputField
+                    isIconThemeDark={false}
                     icon="phone"
                     label="Mobile Number"
                     placeholder="Mobile Number"
+                    editable={!isWholesale}
                     circleSize={30}
                     iconSize={14}
                     paddingHorizontal={8}
@@ -1309,11 +1450,13 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
               </View>
 
               {/* EMAIL */}
-              <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
+              <View style={{ marginBottom: 14 }}>
                 <InputField
+                  isIconThemeDark={false}
                   icon="house"
                   label="Email"
                   placeholder="Email Address"
+                  editable={!isWholesale}
                   value={email}
                   autoCapitalize="none"
                   onChangeText={(text) => {
@@ -1335,15 +1478,59 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                 />
               </View>
 
+              {/* NIC / PASSPORT ID */}
+              <View style={{ marginBottom: isWholesale ? 14 : 0 }}>
+                <InputField
+                  isIconThemeDark={false}
+                  icon="passport"
+                  label={
+                    isPassportDocType(docType)
+                      ? "Passport ID"
+                      : (docType === "NIC" ? "NIC Number" : "NIC Number / Passport ID")
+                  }
+                  placeholder={
+                    isPassportDocType(docType)
+                      ? "Passport ID"
+                      : (docType === "NIC" ? "NIC Number" : "NIC Number / Passport ID")
+                  }
+                  editable={!isWholesale}
+                  value={nic}
+                  autoCapitalize="characters"
+                  maxLength={isPassportDocType(docType) ? undefined : 12}
+                  error={nicError}
+                  onFocus={scrollToBottom}
+                  onChangeText={(text) => {
+                    const clean = text.replace(/\s/g, "").toUpperCase();
+                    setNic(clean);
+                    if (nicError && clean.length > 0) {
+                      setNicError(validateDocNumber(clean, docType));
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!nic.trim()) {
+                      setNicError(
+                        isPassportDocType(docType)
+                          ? "Passport ID is required"
+                          : "NIC number is required",
+                      );
+                    } else {
+                      setNicError(validateDocNumber(nic, docType));
+                    }
+                  }}
+                />
+              </View>
+
               {/* WHOLESALE ONLY FIELDS */}
               {isWholesale && (
                 <>
                   {/* Company name */}
                   <View style={{ marginBottom: 14 }}>
                     <InputField
+                      isIconThemeDark={false}
                       icon="building"
                       label="Company Name"
                       placeholder="Company Name"
+                      editable={!isWholesale}
                       value={companyName}
                       autoCapitalize="words"
                       onChangeText={(text) => {
@@ -1378,7 +1565,8 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         label="Code"
                         value={companyMobileCode || "+94"}
                         open={false}
-                        setOpen={() => setIsCompanyPhoneCodeModalOpen(true)}
+                        setOpen={() => { if (!isWholesale) setIsCompanyPhoneCodeModalOpen(true); }}
+                        disabled={isWholesale}
                         options={[]}
                         onSelect={() => {}}
                         icon="flag"
@@ -1387,20 +1575,24 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
                         paddingHorizontal={8}
                         marginLeft={6}
                         arrowSize={16}
+                        showArrow={!isWholesale}
                       />
                     </View>
 
                     {/* Company Mobile Number */}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <InputField
+                        isIconThemeDark={false}
                         icon="phone"
                         label="Company Mobile"
                         placeholder="Company Mobile"
+                        editable={!isWholesale}
                         circleSize={30}
                         iconSize={14}
                         paddingHorizontal={8}
                         marginLeft={6}
                         value={companyMobile}
+                        onFocus={scrollToBottom}
                         onChangeText={(text) => {
                           const clean = cleanPhoneInput(
                             text,
@@ -1447,37 +1639,39 @@ const MyAccount: React.FC<MyAccountProps> = ({ navigation }) => {
           </View>
 
           {/* BOTTOM UPDATE BUTTON */}
-          <View
-            style={{
-              marginTop: 24,
-              marginBottom: Platform.OS === "ios" ? 16 : 8,
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={handleUpdate}
-              disabled={updating}
+          {!isWholesale && (
+            <View
               style={{
-                width: "100%",
-                height: 52,
-                borderRadius: 27,
-                backgroundColor: updating ? "#8B9DA7" : "#000",
-                justifyContent: "center",
-                alignItems: "center",
+                marginTop: 24,
+                marginBottom: Platform.OS === "ios" ? 16 : 8,
               }}
             >
-              <Text
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleUpdate}
+                disabled={updating}
                 style={{
-                  color: "#FFFFFF",
-                  fontSize: 14,
-                  fontWeight: "700",
-                  letterSpacing: 0.2,
+                  width: "100%",
+                  height: 52,
+                  borderRadius: 27,
+                  backgroundColor: updating ? "#8B9DA7" : "#000",
+                  justifyContent: "center",
+                  alignItems: "center",
                 }}
               >
-                {updating ? "Updating..." : "Update Account Info"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 14,
+                    fontWeight: "700",
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {updating ? "Updating..." : "Update Account Info"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </KeyboardAwareScrollView>
       )}
 

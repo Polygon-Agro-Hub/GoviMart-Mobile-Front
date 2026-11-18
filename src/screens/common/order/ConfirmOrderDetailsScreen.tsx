@@ -121,7 +121,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState<"confirm" | "cancel" | null>(
     null,
   );
-
+  const packagesCount = packages.reduce((sum, p) => sum + (p.quantity || 1), 0);
   // ─── SHARED TOTALS (same formula as OrderConfirmation screen) ──────────────
   // Everything is calculated from today's marketplace prices.
   // The stored order.fullTotal / order.discount are only fallbacks.
@@ -179,18 +179,37 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
               0,
           ) || 0;
 
-    // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0 adds a fixed
-    // Rs. 180 ON TOP of the delivery fee. Always charged (no pickup /
-    // free-delivery-coupon waiver) and part of the total.
-    const isPackageValue = order?.isPackage;
-    const isDashServiceFee =
-      String(order?.orderApp || "")
-        .trim()
-        .toLowerCase() === "dash" &&
-      isPackageValue != null &&
-      String(isPackageValue).trim() !== "" &&
-      Number(isPackageValue) === 0;
-    const serviceFee = isDashServiceFee ? DASH_SERVICE_FEE : 0;
+    // DASH SERVICE FEE (same rule as the OrderConfirmation screen):
+// applies when orderApp = "Dash" AND isPackage = 0.
+// Amount = stored fullTotal - stored delivery charge - stored additional items total.
+// It can be 180 or 0 depending on the order, so it is never hardcoded.
+const isPackageValue = order?.isPackage;
+const isZeroPackage =
+  isPackageValue != null && String(isPackageValue).trim() !== ""
+    ? Number(isPackageValue) === 0
+    : packagesTotal === 0;
+const isDashServiceFee =
+  String(order?.orderApp || order?.appName || "")
+    .trim()
+    .toLowerCase() === "dash" && isZeroPackage;
+
+const storedFullTotal =
+  parseFloat(order?.fullTotal ?? order?.fulltotal ?? order?.total ?? 0) || 0;
+
+// Raw delivery charge (not zeroed for pickup / free coupon), like OrderConfirmation
+const rawDeliveryCharge =
+  parseFloat(
+    order?.curDlvrCharge != null && order?.curDlvrCharge !== ""
+      ? order.curDlvrCharge
+      : order?.delivaryCharge ?? order?.deliveryCharge ?? 0,
+  ) || 0;
+
+// Stored additional items total (order-time prices, not today's prices)
+const storedItemsTotal = cartItems.reduce((a, i) => a + (i.price || 0), 0);
+
+const serviceFee = isDashServiceFee
+  ? Math.max(0, storedFullTotal - rawDeliveryCharge - storedItemsTotal)
+  : 0;
 
     const hasData = packages.length > 0 || cartItems.length > 0;
     const total = hasData
@@ -214,12 +233,11 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
       couponDiscount,
       deliveryFee,
       serviceFee,
+      isDashServiceFee, 
       total,
       hasData,
     };
   };
-
-
 
   // ─── SCHEDULE DATE + TIME (all orders) ─────────────────────────────────────
   const scheduleDateRaw = order?.sheduleDate || order?.scheduleDate;
@@ -1230,7 +1248,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                   marginBottom: 6,
                 }}
               >
-                Packages ({packages.length})
+                Packages ({packagesCount})
               </Text>
 
               <TouchableOpacity
@@ -1455,8 +1473,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           const orderFullTotal = t.total;
           const isPickup = t.isPickup;
 
-          const creditPaid = parseFloat(order?.creditPaid || 0);
-          const moneyPaid = parseFloat(order?.moneyPaid || 0);
+          const creditPaid = parseFloat(order?.creditPaid || 0) || 0;
+          const moneyPaid = parseFloat(order?.moneyPaid || 0) || 0;
           const paymentMethodLower = (order?.paymentMethod || "").toLowerCase();
           const isCashOrder = paymentMethodLower === "cash";
           const isCardOrder =
@@ -1469,12 +1487,6 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
           // Remaining cash amount: total - creditPaid
           const cashRemainingAmount = Math.max(0, orderFullTotal - creditPaid);
 
-          // Remaining card amount: moneyPaid if > 0, else total - creditPaid
-          const cardRemainingAmount =
-            moneyPaid > 0
-              ? moneyPaid
-              : Math.max(0, orderFullTotal - creditPaid);
-
           // Return calculations
           const status = order?.processStatus || order?.status || "Pending";
           const isOrderCancelled =
@@ -1484,6 +1496,35 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
             (order?.status || "").toLowerCase() === "cancelled";
           const isOrderReturned =
             status === "Return" || status === "Return Received";
+
+          // ─── CARD PAYMENT BREAKDOWN ───────────────────────────────────────
+          // "Paid with Card" = money REALLY received by card.
+          // "Pay with Card"  = card amount still to be paid, e.g. a product
+          //                    price increased on an order that was already
+          //                    fully paid by credit. isPaid can be 1 only
+          //                    because credit covered the old total, so it
+          //                    must never make the extra amount "paid".
+          const cardPaidAmount = isOrderReturned
+            ? isCardOrder
+              ? Math.max(0, orderFullTotal - creditPaid)
+              : 0
+            : isPaid
+              ? moneyPaid > 0
+                ? moneyPaid
+                : isCardOrder && creditPaid === 0
+                  ? orderFullTotal // legacy: card order marked paid, no split stored
+                  : 0
+              : 0;
+
+          const cardDueAmount = isOrderReturned
+            ? 0
+            : Math.max(0, orderFullTotal - creditPaid - cardPaidAmount);
+
+          // Card rows apply to card orders and to credit-paid orders whose
+          // extra amount has to be paid by card (never cash orders).
+          const showCardRows =
+            !isCashOrder && (isCardOrder || isCreditOrder || creditPaid > 0);
+
           const totalPaidByCustomer = isCardOrder ? orderFullTotal : creditPaid;
           const handlingFee = parseFloat(order?.returnHandlingFee || 350);
           const deliveryFeeDeduction = parseFloat(
@@ -1625,7 +1666,7 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                 )}
 
                 {/* DASH: Service Fee (orderApp = Dash AND isPackage = 0) */}
-                {t.serviceFee > 0 && (
+                {t.isDashServiceFee && (
                   <>
                     <SummaryRow
                       label="Service Fee"
@@ -1670,23 +1711,35 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                     Payment Summery
                   </Text>
 
-                  {/* Paid By Credit */}
+                  {/* Paid By Polygon Wallet */}
                   {(creditPaid > 0 || isCreditOrder) && (
                     <SummaryRow
-                      label="Paid By Credit"
+                      label="Paid By Polygon Wallet"
                       value={`Rs. ${formatAmount(creditPaid > 0 ? creditPaid : orderFullTotal)}`}
                       icon="wallet"
                       iconColor="#8D5B4C"
                     />
                   )}
 
-                  {/* Paid with Card */}
-                  {isCardOrder && cardRemainingAmount > 0 && (
+                  {/* Paid with Card: only money really received by card */}
+                  {showCardRows && cardPaidAmount > 0 && (
                     <SummaryRow
-                      label={isPaid ? "Paid with Card" : "Pay with Card"}
-                      value={`Rs. ${formatAmount(cardRemainingAmount)}`}
+                      label="Paid with Card"
+                      value={`Rs. ${formatAmount(cardPaidAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"
+                    />
+                  )}
+
+                  {/* Pay with Card: extra / unpaid amount, stays "Pay" until
+                      the card payment is completed */}
+                  {showCardRows && cardDueAmount > 0 && (
+                    <SummaryRow
+                      label="Pay with Card"
+                      value={`Rs. ${formatAmount(cardDueAmount)}`}
+                      icon="credit-card"
+                      iconColor="#0088FF"
+                      valueColor="#FF9114"
                     />
                   )}
 
@@ -1813,8 +1866,8 @@ const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
                       }}
                     >
                       {restoredCredit < 0
-                        ? "Check your profile to view your credit balance. Please clear any negative balance before making your next purchase."
-                        : "Check your profile to view your credit balance. Use it on your next purchase."}
+                        ? "Check your profile to view your Polygon Wallet. Please clear any negative balance before making your next purchase."
+                        : "Check your profile to view your Polygon Wallet. Use it on your next purchase."}
                     </Text>
                   </View>
                 </View>

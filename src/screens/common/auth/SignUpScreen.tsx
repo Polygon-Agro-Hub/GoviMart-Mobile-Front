@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   Keyboard,
   Pressable,
   TextStyle,
+  ActivityIndicator,
+  BackHandler,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -25,9 +27,12 @@ import {
   Ionicons,
   MaterialIcons,
   Entypo,
+  MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import CustomHeader from "@/component/common/CustomHeader";
+import * as DocumentPicker from "expo-document-picker";
+import BRDocumentUploader from "@/component/common/BRDocumentUploader";
 import { AlertModal } from "@/component/common/AlertModal";
 import authService from "@/services/auth/auth.service";
 import { getSignUpStorageKeys } from "./SignUpOTPScreen";
@@ -215,8 +220,10 @@ const extractFieldErrors = (data: any, msg: string): Record<string, string> => {
     out.email = "Email already exists.";
   }
 
-  if (!out.nic && combined.includes("nic")) {
-    out.nic = "NIC number already exists";
+  if (!out.nic && (combined.includes("nic") || combined.includes("passport"))) {
+    out.nic = combined.includes("passport")
+      ? "Passport ID already exists"
+      : "NIC number already exists";
   }
 
   return out;
@@ -255,6 +262,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [phoneCode, setPhoneCode] = useState(""); // empty default
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [documentType, setDocumentType] = useState<"nic" | "passport">("nic");
   const [nic, setNic] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyPhoneCode, setCompanyPhoneCode] = useState(""); // empty default
@@ -262,6 +270,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [brFile, setBrFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
 
   // Visibility and Modal States
   const [showPassword, setShowPassword] = useState(false);
@@ -295,6 +304,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     isPhoneCodeModalOpen ||
     isCompanyPhoneCodeModalOpen ||
     alertVisible;
+
+  // Block the Android hardware back button while signing up
+  useEffect(() => {
+    if (!isLoading) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => sub.remove();
+  }, [isLoading]);
 
   // Validate fields helper
   const validate = () => {
@@ -337,12 +353,23 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
       newErrors.email = "Invalid email address";
     }
 
-    if (!nic.trim()) {
-      newErrors.nic = "NIC number is required";
-    } else if (/\s/.test(nic)) {
-      newErrors.nic = "NIC number cannot contain spaces";
-    } else if (!isValidNic(nic.trim())) {
-      newErrors.nic = NIC_ERROR;
+    if (documentType === "nic") {
+      if (!nic.trim()) {
+        newErrors.nic = "NIC number is required";
+      } else if (/\s/.test(nic)) {
+        newErrors.nic = "NIC number cannot contain spaces";
+      } else if (!isValidNic(nic.trim())) {
+        newErrors.nic = NIC_ERROR;
+      }
+    } else {
+      // Passport ID: ONLY required validation and max 12 characters
+      if (!nic.trim()) {
+        newErrors.nic = "Passport ID is required";
+      } else if (/\s/.test(nic)) {
+        newErrors.nic = "Passport ID cannot contain spaces";
+      } else if (nic.trim().length > 12) {
+        newErrors.nic = "Passport ID cannot exceed 12 characters";
+      }
     }
 
     if (tab === "business") {
@@ -373,7 +400,11 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
     const confirmError = validateConfirmPassword(confirmPassword, password);
     if (confirmError) newErrors.confirmPassword = confirmError;
 
-    if (tab === "home" && !agreeToTerms) {
+    if (tab === "business" && !brFile) {
+      newErrors.brFile = "Business Registration (BR) document is required";
+    }
+
+    if (!agreeToTerms) {
       newErrors.agreeToTerms = "You must agree to the Terms & Conditions";
     }
 
@@ -414,12 +445,17 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
   };
 
   const handleSignUp = async () => {
+    if (isLoading) return; // guard against double taps
+
     Keyboard.dismiss();
 
     if (!validate()) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+
+    // Show the loading overlay immediately; `finally` hides it on every exit path
+    setIsLoading(true);
 
     try {
       const cleanedPhone = phoneNumber.trim().replace(/^0+/, "");
@@ -491,6 +527,56 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         }
       }
 
+      let brImgUrl: string | null = null;
+      if (tab === "business") {
+        if (!brFile) {
+          setErrors((prev) => ({
+            ...prev,
+            brFile: "Business Registration (BR) document is required",
+          }));
+          return;
+        }
+
+        try {
+          const brFormData = new FormData();
+          brFormData.append("brDocument", {
+            uri:
+              Platform.OS === "android"
+                ? brFile.uri
+                : brFile.uri.replace("file://", ""),
+            name: brFile.name || "BR_Certificate_Scan.jpg",
+            type: brFile.mimeType || "application/octet-stream",
+          } as any);
+
+          const uploadRes = await authService.uploadWholesaleBR(brFormData);
+          if (uploadRes.data?.status && uploadRes.data?.fileUrl) {
+            brImgUrl = uploadRes.data.fileUrl;
+          } else {
+            Alert.alert(
+              "Upload Failed",
+              uploadRes.data?.message ||
+                "Failed to upload Business Registration document.",
+            );
+            return;
+          }
+        } catch (uploadErr: any) {
+          console.error("BR upload error:", uploadErr);
+          const status = uploadErr.response?.status;
+          let errorMsg =
+            uploadErr.response?.data?.message ||
+            uploadErr.message ||
+            "Failed to upload Business Registration document.";
+
+          if (status === 413 || String(uploadErr.message || "").includes("413")) {
+            errorMsg =
+              "The file size is too large to upload. Please upload an image or a document smaller than 4.5MB.";
+          }
+
+          Alert.alert("Upload Error", errorMsg);
+          return;
+        }
+      }
+
       const payload = {
         title,
         firstName: capitalizeName(firstName.trim()),
@@ -499,11 +585,13 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         phoneNumber: cleanedPhone,
         buyerType: tab === "home" ? "Retail" : "Wholesale",
         email: email.trim().toLowerCase(),
+        docType: documentType === "passport" ? "PASS" : "NIC",
         nic: nic.trim().toUpperCase(),
         password,
         confirmPassword,
         agreeToMarketing: true,
-        agreeToTerms: tab === "home" ? agreeToTerms : true,
+        agreeToTerms: agreeToTerms,
+        brImg: brImgUrl,
         companyName: tab === "business" ? companyName.trim() : null,
         companyPhoneCode: tab === "business" ? companyPhoneCode : null,
         companyPhoneNumber: tab === "business" ? cleanedCompanyPhone : null,
@@ -512,7 +600,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         allowRestore: allowRestore ? true : undefined,
       };
 
-      setIsLoading(true);
       const response = await authService.signUp(payload);
 
       if (response.data && response.data.isDeletedAccount) {
@@ -589,18 +676,30 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             const isWholesale =
               (userData.buyerType || "").toLowerCase() === "wholesale";
 
-            const targetScreen: keyof RootStackParamList = isWholesale
-              ? "Home"
-              : "ExcludeListAdd";
-            const targetParams = !isWholesale
-              ? {
-                  customerId: userData.id,
-                  name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
-                  title: userData.title,
-                  number: userData.phoneNumber,
-                  cusId: userData.cusId,
-                }
-              : undefined;
+            if (isWholesale) {
+              Alert.alert(
+                "Registration Submitted",
+                "Your wholesale account has been created and your Business Registration (BR) is submitted for review.",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      navigation.navigate("Login");
+                    },
+                  },
+                ],
+              );
+              return;
+            }
+
+            const targetScreen: keyof RootStackParamList = "ExcludeListAdd";
+            const targetParams = {
+              customerId: userData.id,
+              name: `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+              title: userData.title,
+              number: userData.phoneNumber,
+              cusId: userData.cusId,
+            };
 
             Alert.alert(
               "Registration Successful",
@@ -629,11 +728,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                       );
                     }
 
-                    if (targetParams) {
-                      navigation.navigate(targetScreen as any, targetParams);
-                    } else {
-                      navigation.navigate(targetScreen as any);
-                    }
+                    navigation.navigate(targetScreen as any, targetParams);
                   },
                 },
               ],
@@ -760,6 +855,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             setTab("home");
             setErrors({});
           }}
+          disabled={isLoading}
           activeOpacity={0.8}
           className="flex-1 pb-3 items-center justify-center"
           style={{
@@ -788,6 +884,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             setTab("business");
             setErrors({});
           }}
+          disabled={isLoading}
           activeOpacity={0.8}
           className="flex-1 pb-3 items-center justify-center"
           style={{
@@ -821,7 +918,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         extraScrollHeight={0}
         extraHeight={0}
         keyboardOpeningTime={0}
-        scrollEnabled={!isAnyModalOpen}
+        scrollEnabled={!isAnyModalOpen && !isLoading}
         contentContainerStyle={{ paddingBottom: 20 }}
       >
         <View className="gap-y-4 flex-1">
@@ -834,6 +931,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   Keyboard.dismiss();
                   setIsTitleModalOpen(true);
                 }}
+                disabled={isLoading}
                 activeOpacity={0.8}
                 style={{ height: 50 }}
                 className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between ${
@@ -876,6 +974,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                   placeholder="First Name"
                   placeholderTextColor="#000000"
                   value={firstName}
+                  editable={!isLoading}
                   onChangeText={(text) => {
                     setFirstName((prev) => sanitizeNameLive(text, prev));
                     if (errors.firstName)
@@ -916,6 +1015,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 placeholder="Last Name"
                 placeholderTextColor="#000000"
                 value={lastName}
+                editable={!isLoading}
                 onChangeText={(text) => {
                   setLastName((prev) => sanitizeLastNameLive(text, prev));
                   if (errors.lastName)
@@ -948,6 +1048,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     Keyboard.dismiss();
                     setIsPhoneCodeModalOpen(true);
                   }}
+                  disabled={isLoading}
                   activeOpacity={0.8}
                   style={{ height: 50 }}
                   className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
@@ -987,6 +1088,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     placeholderTextColor="#000000"
                     keyboardType="number-pad"
                     value={phoneNumber}
+                    editable={!isLoading}
                     onChangeText={(text) => {
                       const clean = cleanPhoneInput(text, phoneCode);
                       setPhoneNumber(clean);
@@ -1046,6 +1148,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
+                editable={!isLoading}
                 onChangeText={(text) => {
                   const clean = text.replace(/\s/g, "");
                   setEmail(clean);
@@ -1066,8 +1169,113 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* NIC Number Input */}
+          {/* Document Type Selector & Input */}
           <View>
+            <Text className="text-[13px] font-semibold text-[#1E293B] mb-2 px-1">
+              Document Type <Text className="text-[#1E293B]-500">*</Text>
+            </Text>
+
+            {/* Toggle bar between NIC and Passport */}
+            <View
+              style={{
+                backgroundColor: "#F1F3F7",
+                borderRadius: 30,
+                padding: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              {/* NIC Option */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={isLoading}
+                onPress={() => {
+                  if (documentType !== "nic") {
+                    setDocumentType("nic");
+                    setNic("");
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({ ...prev, nic: "" }));
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 24,
+                  backgroundColor:
+                    documentType === "nic" ? "#000000" : "transparent",
+                  gap: 8,
+                }}
+              >
+                <FontAwesome
+                  name="id-card"
+                  size={14}
+                  color={documentType === "nic" ? "#FFFFFF" : "#4B5563"}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: documentType === "nic" ? "700" : "500",
+                    color: documentType === "nic" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  NIC Number
+                </Text>
+              </TouchableOpacity>
+
+              {/* Passport Option */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={isLoading}
+                onPress={() => {
+                  if (documentType !== "passport") {
+                    setDocumentType("passport");
+                    setNic("");
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({ ...prev, nic: "" }));
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 24,
+                  backgroundColor:
+                    documentType === "passport" ? "#000000" : "transparent",
+                  gap: 8,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="passport"
+                  size={16}
+                  color={documentType === "passport" ? "#FFFFFF" : "#4B5563"}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: documentType === "passport" ? "700" : "500",
+                    color: documentType === "passport" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  Passport ID
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Input field */}
             <View
               style={{
                 height: 50,
@@ -1085,23 +1293,51 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     : "border-black bg-white"
               }`}
             >
-              <FontAwesome name="id-card" size={16} color="black" />
+              {documentType === "nic" ? (
+                <FontAwesome name="id-card" size={16} color="black" />
+              ) : (
+                <MaterialCommunityIcons
+                  name="passport"
+                  size={18}
+                  color="black"
+                />
+              )}
               <TextInput
-                placeholder="NIC Number"
+                placeholder={
+                  documentType === "nic" ? "NIC Number" : "Passport ID"
+                }
                 placeholderTextColor="#000000"
                 autoCapitalize="characters"
                 value={nic}
+                editable={!isLoading}
                 onChangeText={(text) => {
-                  const sanitized = sanitizeNIC(text);
-                  setNic(sanitized);
-                  if (isNicLinked) {
-                    setIsNicLinked(false);
-                    setAllowRestore(false);
+                  if (documentType === "nic") {
+                    const sanitized = sanitizeNIC(text);
+                    setNic(sanitized);
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({
+                      ...prev,
+                      nic: !sanitized || isValidNic(sanitized) ? "" : NIC_ERROR,
+                    }));
+                  } else {
+                    const sanitized = text.replace(/\s/g, "").toUpperCase();
+                    setNic(sanitized);
+                    if (isNicLinked) {
+                      setIsNicLinked(false);
+                      setAllowRestore(false);
+                    }
+                    setErrors((prev) => ({
+                      ...prev,
+                      nic: !sanitized.trim()
+                        ? "Passport ID is required"
+                        : sanitized.length > 12
+                          ? "Passport ID cannot exceed 12 characters"
+                          : "",
+                    }));
                   }
-                  setErrors((prev) => ({
-                    ...prev,
-                    nic: !sanitized || isValidNic(sanitized) ? "" : NIC_ERROR,
-                  }));
                 }}
                 maxLength={12}
                 style={inputTextStyle}
@@ -1110,6 +1346,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               {isNicLinked && (
                 <TouchableOpacity
                   activeOpacity={0.8}
+                  disabled={isLoading}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   onPress={() => {
                     Keyboard.dismiss();
@@ -1143,7 +1380,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 </TouchableOpacity>
               )}
             </View>
-           
+
             {errors.nic && !isNicLinked && (
               <View className="flex-row items-center mt-1.5 px-4">
                 <MaterialIcons
@@ -1180,6 +1417,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                     placeholder="Company Name"
                     placeholderTextColor="#000000"
                     value={companyName}
+                    editable={!isLoading}
                     onChangeText={(text) => {
                       const clean = text
                         .replace(/^\s+/, "")
@@ -1213,6 +1451,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         Keyboard.dismiss();
                         setIsCompanyPhoneCodeModalOpen(true);
                       }}
+                      disabled={isLoading}
                       activeOpacity={0.8}
                       style={{ height: 50 }}
                       className={`h-[50px] border px-4 rounded-full flex-row items-center justify-between bg-white ${
@@ -1256,6 +1495,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                         placeholderTextColor="#000000"
                         keyboardType="number-pad"
                         value={companyNumber}
+                        editable={!isLoading}
                         onChangeText={(text) => {
                           const clean = cleanPhoneInput(text, companyPhoneCode);
                           setCompanyNumber(clean);
@@ -1330,6 +1570,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 placeholderTextColor="#000000"
                 secureTextEntry={!showPassword}
                 value={password}
+                editable={!isLoading}
                 onChangeText={(text) => {
                   setPassword(sanitizePasswordInput(text));
                   if (errors.password)
@@ -1341,7 +1582,10 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 style={inputTextStyle}
                 className="flex-1 text-[14px] text-black"
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                disabled={isLoading}
+              >
                 <FontAwesome5
                   name={showPassword ? "eye-slash" : "eye"}
                   size={16}
@@ -1389,6 +1633,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 placeholderTextColor="#000000"
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
+                editable={!isLoading}
                 onChangeText={(text) => {
                   setConfirmPassword(sanitizePasswordInput(text));
                   if (errors.confirmPassword)
@@ -1402,6 +1647,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               />
               <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                disabled={isLoading}
               >
                 <FontAwesome5
                   name={showConfirmPassword ? "eye-slash" : "eye"}
@@ -1420,50 +1666,69 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* Checkbox (Home tab only) */}
-          {tab === "home" && (
-            <View>
-              <TouchableOpacity
-                onPress={() => setAgreeToTerms(!agreeToTerms)}
-                activeOpacity={0.8}
-                className="flex-row items-start gap-x-3 mt-2 px-1"
-              >
-                <View
-                  className={`w-5 h-5 rounded border items-center justify-center ${
-                    agreeToTerms
-                      ? "bg-black border-black"
-                      : "border-black bg-white"
-                  }`}
-                >
-                  {agreeToTerms && (
-                    <Ionicons name="checkmark" size={14} color="white" />
-                  )}
-                </View>
-                <Text className="text-xs text-black leading-relaxed flex-1">
-                  I agree to the{" "}
-                  <Text className="font-bold underline">
-                    Terms & Conditions
-                  </Text>{" "}
-                  and{" "}
-                  <Text
-                    className="font-bold underline"
-                    onPress={() => navigation.navigate("PrivacyPolicy")}
-                  >
-                    Privacy Policy
-                  </Text>
-                  .
-                </Text>
-              </TouchableOpacity>
-              {errors.agreeToTerms && (
-                <View className="flex-row items-center gap-x-1 mt-2 ml-3">
-                  <MaterialIcons name="error" size={12} color="#E02424" />
-                  <Text className="text-red-500 text-xs">
-                    {errors.agreeToTerms}
-                  </Text>
-                </View>
-              )}
-            </View>
+          {/* Wholesale Business Registration (BR) Upload Section */}
+          {tab === "business" && (
+            <BRDocumentUploader
+              selectedFile={brFile}
+              onFileSelect={(file) => {
+                setBrFile(file);
+                if (file) setErrors((prev) => ({ ...prev, brFile: "" }));
+              }}
+              error={errors.brFile}
+              containerStyle={{ marginTop: 16 }}
+            />
           )}
+
+          {/* Terms & Conditions Checkbox */}
+          <View>
+            <TouchableOpacity
+              onPress={() => {
+                const next = !agreeToTerms;
+                setAgreeToTerms(next);
+                if (next) setErrors((prev) => ({ ...prev, agreeToTerms: "" }));
+              }}
+              disabled={isLoading}
+              activeOpacity={0.8}
+              className="flex-row items-start gap-x-3 mt-4 px-1"
+            >
+              <View
+                className={`w-5 h-5 rounded border items-center justify-center ${
+                  agreeToTerms
+                    ? "bg-black border-black"
+                    : "border-black bg-white"
+                }`}
+              >
+                {agreeToTerms && (
+                  <Ionicons name="checkmark" size={14} color="white" />
+                )}
+              </View>
+              <Text className="text-xs text-black leading-relaxed flex-1">
+                I agree to the{" "}
+                <Text
+                  className="font-bold underline"
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Terms & Conditions
+                </Text>{" "}
+                and{" "}
+                <Text
+                  className="font-bold underline"
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </TouchableOpacity>
+            {errors.agreeToTerms && (
+              <View className="flex-row items-center gap-x-1 mt-2 ml-3">
+                <MaterialIcons name="error" size={12} color="#E02424" />
+                <Text className="text-red-500 text-xs">
+                  {errors.agreeToTerms}
+                </Text>
+              </View>
+            )}
+          </View>
 
           {/* Action Button Section */}
           <View className="pb-0 pt-2">
@@ -1475,6 +1740,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               className="bg-black rounded-full items-center justify-center mt-4 shadow-sm"
               style={{
                 height: 50,
+                opacity: isLoading ? 0.7 : 1,
                 shadowColor: "#000",
                 shadowOffset: {
                   width: 0,
@@ -1485,9 +1751,16 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 elevation: 5,
               }}
             >
-              <Text className="text-white text-base font-bold">
-                {isLoading ? "Signing up..." : "Sign up"}
-              </Text>
+              {isLoading ? (
+                <View className="flex-row items-center gap-x-2">
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text className="text-white text-base font-bold">
+                    Signing up...
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-white text-base font-bold">Sign up</Text>
+              )}
             </TouchableOpacity>
 
             {/* Sign In Redirect Link */}
@@ -1497,6 +1770,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
               </Text>
               <TouchableOpacity
                 activeOpacity={0.7}
+                disabled={isLoading}
                 onPress={() => navigation.navigate("Login")}
               >
                 <Text className="text-[12px] font-bold text-[#0085FF] underline">
@@ -1611,7 +1885,6 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
         <View
           style={{
             flex: 1,
-        
             justifyContent: "flex-end",
           }}
         >
@@ -1958,6 +2231,56 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Full-screen loading overlay: blocks all touches while signing up */}
+      {isLoading && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+            elevation: 999,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          // Swallow every touch so nothing underneath can be pressed
+          onStartShouldSetResponder={() => true}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 24,
+              paddingHorizontal: 32,
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              elevation: 10,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#000000",
+              }}
+            >
+              Creating your account...
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 12, color: "#494A65" }}>
+              Please wait
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };

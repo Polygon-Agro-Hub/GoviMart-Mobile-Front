@@ -201,10 +201,6 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
       currentDeliveryFee,
   );
 
-  // More than one address -> summary scrolls with the content (at the end of the list).
-  // One address or none -> summary is fixed at the bottom.
-  const scrollSummary = addresses.length > 1;
-
   const handleProceed = () => {
     if (!selectedAddressId) {
       Alert.alert(
@@ -285,14 +281,16 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={true}
+        bounces={true}
+        overScrollMode="always"
         contentContainerStyle={{
           flexGrow: 1,
-          paddingHorizontal: 16,
-          paddingTop: 12,
-      //  paddingBottom: scrollSummary ? 24 : 250
+          justifyContent: "space-between",
         }}
       >
-        {/* Add New Address Card */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          {/* Add New Address Card */}
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() =>
@@ -587,33 +585,17 @@ const CheckoutScreen: React.FC<Props> = ({ navigation, route }) => {
             );
           })
         )}
+        </View>
 
-        {/* ─── ORDER SUMMARY INSIDE SCROLLVIEW (more than 1 address) ──────── */}
-        {scrollSummary && (
-          <OrderSummary
-            {...summaryProps}
-            containerStyle={{
-              marginTop: 8,
-              marginHorizontal: -16,
-              marginBottom: 0,
-            }}
-          />
-        )}
-      </ScrollView>
-
-      {/* ─── FIXED BOTTOM SUMMARY (0 or 1 address) ──────────────────────── */}
-      {!scrollSummary && (
+        {/* ─── ORDER SUMMARY ──────────────────────────────────────────────── */}
         <OrderSummary
           {...summaryProps}
           containerStyle={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
+            marginTop: 16,
             marginBottom: 0,
           }}
         />
-      )}
+      </ScrollView>
     </View>
   );
 };

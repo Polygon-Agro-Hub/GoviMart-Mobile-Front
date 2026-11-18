@@ -68,7 +68,7 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                 containerStyle,
             ]}
         >
-            {/* Pay with Credit Balance Row */}
+            {/* Pay with Polygon Wallet Row */}
             {isCreditActive && (
                 <View
                     style={{
@@ -102,7 +102,7 @@ const PaymentMethodSummary: React.FC<PaymentMethodSummaryProps> = ({
                                 color: "#111111",
                             }}
                         >
-                            Pay with Credit Balance
+                            Pay with Polygon Wallet
                         </Text>
                     </View>
 

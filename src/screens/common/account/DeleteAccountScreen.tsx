@@ -313,7 +313,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                   "• All order history and transaction details.",
                   "• Saved addresses and payment methods.",
                   "• Account preferences and settings.",
-                  "• Any remaining positive credit balance.",
+                  "• Any remaining positive Polygon Wallet.",
                 ].map((item) => (
                   <Text
                     key={item}
@@ -357,7 +357,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                     flex: 1,
                   }}
                 >
-                  You have a negative credit balance on your account. Please
+                  You have a negative Polygon Wallet on your account. Please
                   clear the outstanding balance before deleting your account.
                 </Text>
               </View>
@@ -542,7 +542,7 @@ const DeleteAccount: React.FC<DeleteAccountProps> = ({ navigation }) => {
                       letterSpacing: 0.2,
                     }}
                   >
-                    Clear Negative Credit Balance
+                    Clear Negative Polygon Wallet
                   </Text>
                 </TouchableOpacity>
               ) : (

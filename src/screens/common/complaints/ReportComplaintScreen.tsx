@@ -53,12 +53,26 @@ const MAX_IMAGES = 6;
 // Space (px) to keep between the Description box and the top of the keyboard.
 const DESC_EXTRA_SPACE = 24;
 
-const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
+// Category auto-selected when the screen is opened from Order Details
+const ORDER_COMPLAINT_CATEGORY = "complain about my order";
+
+const ReportComplaint: React.FC<ReportComplaintProps> = ({
+  navigation,
+  route,
+}) => {
+  // Params passed from Order Details (both optional)
+  const params = (route?.params || {}) as {
+    orderId?: number;
+    invoiceNo?: string;
+  };
+  const orderId = params.orderId;
+  const invoiceNo = params.invoiceNo;
+  const isOrderComplaint = !!invoiceNo;
+
   const { width: windowWidth } = useWindowDimensions();
   const CONTAINER_PADDING = 16;
   const IMAGE_GAP = 10;
   const NUM_COLUMNS = 3;
-  // Dynamically calculate size so 3 images perfectly fill the container edge to edge
   const imageSize =
     (windowWidth - CONTAINER_PADDING * 2 - IMAGE_GAP * (NUM_COLUMNS - 1)) /
     NUM_COLUMNS;
@@ -89,6 +103,17 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const scrollYRef = useRef(0);
   const keyboardTopRef = useRef(0);
   const keyboardOpenRef = useRef(false);
+
+  // Where to go when the user leaves this screen
+  const goBackToPrevious = useCallback(() => {
+    if (orderId) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("ComplaintHistory");
+    }
+  }, [navigation, orderId]);
+
+  const categoryLocked = isOrderComplaint && !!selectedCategoryId;
 
   // Scroll only as much as needed so the Description box sits just above
   // the keyboard.
@@ -123,7 +148,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         });
       }, 100);
 
-      // wait for bottom padding to render, then scroll
       setTimeout(ensureVisible, 300);
     });
 
@@ -170,6 +194,19 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     fetchCategories();
   }, []);
 
+  // Auto-select "Complain about my order" when opened from Order Details
+  useEffect(() => {
+    if (!isOrderComplaint || categories.length === 0) return;
+    const found = categories.find(
+      (c) =>
+        c.categoryEnglish?.trim().toLowerCase() === ORDER_COMPLAINT_CATEGORY,
+    );
+    if (found) {
+      setSelectedCategoryId(found.id);
+      setSelectedCategoryName(found.categoryEnglish);
+    }
+  }, [categories, isOrderComplaint]);
+
   const categoryModalData = categories.map((cat) => ({
     label: cat.categoryEnglish,
     value: String(cat.id),
@@ -188,7 +225,41 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     }
   };
 
+  const getAssetSize = async (asset: ImagePicker.ImagePickerAsset) => {
+    if (typeof asset.fileSize === "number" && asset.fileSize > 0) {
+      return asset.fileSize; // fast path, no file I/O
+    }
+    try {
+      const info: any = await FileSystem.getInfoAsync(asset.uri);
+      return info?.exists && typeof info.size === "number" ? info.size : 0;
+    } catch {
+      return 0;
+    }
+  };
+
+  const handleAddPhotoPress = () => {
+    if (images.length >= MAX_IMAGES) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+    pickImage();
+  };
+
   const pickImage = async () => {
+    const remainingSlots = MAX_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+
     if (Platform.OS === "ios") {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -205,94 +276,85 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       }
     }
 
+    // Launch without quality compression so native picker returns instantly without delay
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_IMAGES - images.length,
-      aspect: [4, 3],
-      quality: 0.7,
+      selectionLimit: remainingSlots + 1,
     });
 
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      return;
-    }
+    if (result.canceled || !result.assets?.length) return;
 
-    if (images.length + result.assets.length > MAX_IMAGES) {
+    // 1) Instant limit check right when picker closes
+    if (result.assets.length > remainingSlots) {
       showAlert(
-        "Limit Reached",
-        `You can attach up to ${MAX_IMAGES} images.`,
+        "Limit Exceeded",
+        `You can only attach up to ${MAX_IMAGES} photos in total.`,
         "error",
       );
       return;
     }
 
-    let hasOversized = false;
-    const validPhotos: { uri: string; name: string; type: string }[] = [];
-
-    for (let i = 0; i < result.assets.length; i++) {
-      const asset = result.assets[i];
-      let size = asset.fileSize || 0;
-      if (!size) {
-        try {
-          const info = await FileSystem.getInfoAsync(asset.uri);
-          if (info.exists && typeof (info as any).size === "number") {
-            size = (info as any).size;
-          }
-        } catch (e) {
-          console.log("Failed to get asset size:", e);
-        }
-      }
-
-      if (size > MAX_IMAGE_SIZE) {
-        hasOversized = true;
-      } else {
-        const uri = asset.uri;
-        let fileName = asset.fileName;
-        if (!fileName) {
-          const uriParts = uri.split("/");
-          fileName =
-            uriParts[uriParts.length - 1] || `image_${Date.now()}_${i}.jpg`;
-        }
-
-        const ext = (fileName.split(".").pop() || "").toLowerCase();
-        let mimeType = asset.mimeType;
-
-        if (!mimeType) {
-          if (ext === "heic" || ext === "heif") {
-            mimeType = `image/${ext}`;
-          } else if (ext === "png") {
-            mimeType = "image/png";
-          } else if (ext === "webp") {
-            mimeType = "image/webp";
-          } else {
-            mimeType = "image/jpeg";
-          }
-        } else if (
-          (mimeType === "image/heic" || mimeType === "image/heif") &&
-          !fileName.toLowerCase().endsWith(".heic") &&
-          !fileName.toLowerCase().endsWith(".heif")
-        ) {
-          fileName = `${fileName}.${mimeType.replace("image/", "")}`;
-        }
-
-        validPhotos.push({
-          uri: asset.uri,
-          name: fileName,
-          type: mimeType,
-        });
-      }
+    // 2) Fast size check: check available metadata first
+    const hasImmediateOversize = result.assets.some(
+      (a) => typeof a.fileSize === "number" && a.fileSize > MAX_IMAGE_SIZE,
+    );
+    if (hasImmediateOversize) {
+      setImageError("Image size must not exceed 5MB");
+      showAlert(
+        "Limit Exceeded",
+        "Image size must not exceed 5MB. Please choose a smaller image.",
+        "error",
+      );
+      return;
     }
 
+    // Read remaining sizes in parallel
+    const sizes = await Promise.all(result.assets.map(getAssetSize));
+
+    // 3) Oversize check: show the popup right away
+    const hasOversized = sizes.some((s) => s > MAX_IMAGE_SIZE);
     if (hasOversized) {
       setImageError("Image size must not exceed 5MB");
       showAlert(
-        "Image Too Large",
+        "Limit Exceeded",
         "Image size must not exceed 5MB. Please choose a smaller image.",
         "error",
       );
     } else {
       setImageError(null);
     }
+
+    // 4) Build the valid photos (pure sync work, no awaits)
+    const validPhotos: { uri: string; name: string; type: string }[] = [];
+
+    result.assets.forEach((asset, i) => {
+      if (sizes[i] > MAX_IMAGE_SIZE) return;
+
+      let fileName = asset.fileName;
+      if (!fileName) {
+        const parts = asset.uri.split("/");
+        fileName = parts[parts.length - 1] || `image_${Date.now()}_${i}.jpg`;
+      }
+
+      const ext = (fileName.split(".").pop() || "").toLowerCase();
+      let mimeType = asset.mimeType;
+
+      if (!mimeType) {
+        if (ext === "heic" || ext === "heif") mimeType = `image/${ext}`;
+        else if (ext === "png") mimeType = "image/png";
+        else if (ext === "webp") mimeType = "image/webp";
+        else mimeType = "image/jpeg";
+      } else if (
+        (mimeType === "image/heic" || mimeType === "image/heif") &&
+        !fileName.toLowerCase().endsWith(".heic") &&
+        !fileName.toLowerCase().endsWith(".heif")
+      ) {
+        fileName = `${fileName}.${mimeType.replace("image/", "")}`;
+      }
+
+      validPhotos.push({ uri: asset.uri, name: fileName, type: mimeType });
+    });
 
     if (validPhotos.length > 0) {
       setImages((prev) => [...prev, ...validPhotos]);
@@ -318,6 +380,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       return;
     }
 
+    // Validate only the customer's own text (the invoice prefix is added below)
     if (!complain.trim() || complain.trim().length < 3) {
       Alert.alert(
         "Required",
@@ -329,9 +392,17 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     try {
       setSubmitting(true);
 
+      // Prefix line + line break (new line) + customer text:
+      //   Complaint regarding Invoice No : [INV_NO]
+      //   <customer text>
+      const description = invoiceNo
+        ? `Complaint regarding Invoice No : ${invoiceNo}\n${complain.trim()}`
+        : complain.trim();
+
       const formData: any = new FormData();
+      console.log("campicategoryid", String(selectedCategoryId), description);
       formData.append("complaicategoryId", String(selectedCategoryId));
-      formData.append("complain", complain.trim());
+      formData.append("complain", description);
 
       images.forEach((img) => {
         formData.append("images", {
@@ -350,7 +421,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           [
             {
               text: "OK",
-              onPress: () => navigation.navigate("ComplaintHistory"),
+              onPress: goBackToPrevious,
             },
           ],
         );
@@ -381,7 +452,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const onHardwareBack = () => {
-        navigation.navigate("ComplaintHistory");
+        goBackToPrevious();
         return true;
       };
 
@@ -391,7 +462,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       );
 
       return () => subscription.remove();
-    }, [navigation]),
+    }, [goBackToPrevious]),
   );
 
   if (loadingCategories) {
@@ -402,7 +473,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
-          onBackPress={() => navigation.navigate("ComplaintHistory")}
+          onBackPress={goBackToPrevious}
         />
         <View
           style={{
@@ -428,7 +499,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
-        onBackPress={() => navigation.navigate("ComplaintHistory")}
+        onBackPress={goBackToPrevious}
       />
 
       <ScrollView
@@ -443,7 +514,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 12,
-
           paddingBottom: (Platform.OS === "ios" ? 30 : 20) + keyboardHeight,
         }}
       >
@@ -461,7 +531,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
               height: 55,
               borderRadius: 26,
               backgroundColor: "#F3F3F7",
-
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -469,6 +538,24 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             <FontAwesome6 solid name="headset" size={29} color="#000" />
           </View>
         </View>
+
+        {/* INVOICE PILL (only when opened from Order Details) */}
+        {invoiceNo ? (
+          <View style={{ alignItems: "center", marginTop: 14 }}>
+            <View
+              style={{
+                backgroundColor: "#F3F3F7",
+                borderRadius: 99,
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+              }}
+            >
+              <Text style={{ fontSize: 11, color: "#444", fontWeight: "500" }}>
+                Complain regarding Invoice No: {invoiceNo}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* DESCRIPTION TEXT */}
 
@@ -478,7 +565,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             color: "#666",
             fontSize: 13.5,
             lineHeight: 19,
-
             marginTop: 16,
             marginHorizontal: 8,
             marginBottom: 26,
@@ -488,64 +574,66 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           of your complaint below.
         </Text>
 
-        {/* CATEGORY */}
-
-        <View
-          style={{
-            marginBottom: 20,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setCategoryModalVisible(true)}
+        {/* CATEGORY (hidden when opened from Order Details and auto-selected) */}
+        {!categoryLocked && (
+          <View
             style={{
-              minHeight: 60,
-
-              borderWidth: 1,
-              borderColor: "#D9DEE4",
-
-              borderRadius: 26,
-
-              paddingHorizontal: 21,
-              paddingVertical: 10,
-
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+              marginBottom: 20,
             }}
           >
-            <View
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={categoryLocked}
+              onPress={() => setCategoryModalVisible(true)}
               style={{
-                flex: 1,
-                marginRight: 12,
-                justifyContent: "center",
+                minHeight: 60,
+                borderWidth: 1,
+                borderColor: "#D9DEE4",
+                borderRadius: 26,
+                paddingHorizontal: 21,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              <Text
+              <View
                 style={{
-                  fontSize: 13,
-                  color: "#000000",
-                  marginBottom: 3,
+                  flex: 1,
+                  marginRight: 12,
+                  justifyContent: "center",
                 }}
               >
-                Complaint Category
-              </Text>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#000000",
+                    marginBottom: 3,
+                  }}
+                >
+                  Complaint Category
+                </Text>
 
-              <Text
-                style={{
-                  fontSize: 14,
-                  lineHeight: 20,
-                  color: selectedCategoryName ? "#000000" : "#747990",
-                  fontWeight: selectedCategoryName ? "bold" : "normal",
-                }}
-              >
-                {selectedCategoryName || "Select From Here"}
-              </Text>
-            </View>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: selectedCategoryName ? "#000000" : "#747990",
+                    fontWeight: selectedCategoryName ? "bold" : "normal",
+                  }}
+                >
+                  {selectedCategoryName || "Select From Here"}
+                </Text>
+              </View>
 
-            <Ionicons name="chevron-down" size={19} color="#000" />
-          </TouchableOpacity>
-        </View>
+              {categoryLocked ? (
+                <Ionicons name="lock-closed" size={16} color="#747990" />
+              ) : (
+                <Ionicons name="chevron-down" size={19} color="#000" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* CATEGORY SEARCH MODAL */}
 
@@ -579,15 +667,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           <View
             style={{
               height: 204,
-
               borderWidth: 1,
               borderColor: "#D9DEE4",
-
               borderRadius: 17,
-
               paddingHorizontal: 21,
               paddingTop: 13,
-
               marginBottom: 19,
             }}
           >
@@ -644,10 +728,10 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             paddingBottom: 10,
           }}
         >
-          {images.length < 6 && (
+          {images.length < MAX_IMAGES ? (
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={pickImage}
+              onPress={handleAddPhotoPress}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -671,6 +755,36 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
                 }}
               >
                 Add Photo
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleAddPhotoPress}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: "#E5E7EB",
+                backgroundColor: "#F3F4F6",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: 0.7,
+              }}
+            >
+              <FontAwesome6 name="camera" solid size={27} color="#9CA3AF" />
+
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#9CA3AF",
+                  marginTop: 5,
+                }}
+              >
+                Max (6)
               </Text>
             </TouchableOpacity>
           )}

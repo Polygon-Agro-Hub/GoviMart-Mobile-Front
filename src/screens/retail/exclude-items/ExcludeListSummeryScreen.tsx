@@ -23,6 +23,7 @@ import { environment } from "@/environment/environment";
 import { store, RootState } from "@/store";
 import { useSelector } from "react-redux";
 import { tokenStorage } from "@/utils/tokenStorage";
+import NeedHelpModal from "@/component/help/Needhelpmodal";
 
 const getEffectiveToken = async (): Promise<string | null> => {
   return (
@@ -72,6 +73,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   const [selectedPreferIds, setSelectedPreferIds] = useState<number[]>([]);
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{
     id: number;
     type: "prefer" | "exclude" | "bulk-prefer" | "bulk-exclude";
@@ -439,6 +441,24 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         ) : null}
       </View>
 
+      {/* Need Help link */}
+      <View className="mx-auto w-full max-w-[500px] px-6 mt-3 items-end">
+        <TouchableOpacity
+          onPress={() => setShowHelp(true)}
+          activeOpacity={0.7}
+          className="flex-row items-center"
+          style={{ gap: 6 }}
+        >
+          <Ionicons name="help-circle" size={18} color="#0A84FF" />
+          <Text
+            className="text-sm font-medium"
+            style={{ color: "#0A84FF", textDecorationLine: "underline" }}
+          >
+            Need Help ?
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -697,6 +717,9 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* How Customization Works modal */}
+      <NeedHelpModal visible={showHelp} onClose={() => setShowHelp(false)} />
 
       {/* Reusable Delete Confirmation Modal */}
       <ConfirmationModal

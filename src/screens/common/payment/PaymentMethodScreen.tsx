@@ -30,13 +30,19 @@ import CouponModal from "@/component/coupon/CouponModal";
 import AppliedCouponCard from "@/component/coupon/AppliedCouponCard";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 import BackConfirmationModal from "@/component/common/BackConfirmationModal";
-import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
 import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentsLkAdapter } from "@/services/payment/payments-lk.adapter";
 import { getMinDeliveryDate } from "@/component/common/CustomCalendarModal";
-import { OrderProcessingModal, ProcessingStep, UnconfirmedStateProps } from "@/component/common/OrderProcessingModal";
+import {
+  OrderProcessingModal,
+  ProcessingStep,
+  UnconfirmedStateProps,
+} from "@/component/common/OrderProcessingModal";
 import { orderRecoveryService } from "@/services/order/orderRecovery.service";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
@@ -58,12 +64,14 @@ let paymentSessionEndTime: number | null = null;
 // ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
 // Normal orders: pay-by date = delivery - 3 (18 -> 15)
 const NORMAL_GAP_DAYS = 3;
+// Wholesale orders: pay-by date = delivery - 2 (20 -> 18)
+const WHOLESALE_GAP_DAYS = 2;
 // Package orders with isFinalizeImdt = 0: delivery - 2 (18 -> 16)
 const PACKAGE_GAP_DAYS = 2;
 
 const CHECKOUT_PROCESSING_STEPS: ProcessingStep[] = [
   { id: "validate", label: "Validating order items & pricing" },
-  { id: "payment", label: "Processing payment" },
+  { id: "payment", label: "Awaiting Payment..." },
   { id: "create", label: "Creating order" },
   { id: "invoice", label: "Finalizing order details" },
 ];
@@ -109,18 +117,30 @@ const parseDateOnly = (val: any): Date | null => {
 
   // Handle English date formats like "October 14, 2026" or "Oct 14, 2026"
   const englishMonths: Record<string, number> = {
-    january: 0, jan: 0,
-    february: 1, feb: 1,
-    march: 2, mar: 2,
-    april: 3, apr: 3,
+    january: 0,
+    jan: 0,
+    february: 1,
+    feb: 1,
+    march: 2,
+    mar: 2,
+    april: 3,
+    apr: 3,
     may: 4,
-    june: 5, jun: 5,
-    july: 6, jul: 6,
-    august: 7, aug: 7,
-    september: 8, sep: 8, sept: 8,
-    october: 9, oct: 9,
-    november: 10, nov: 10,
-    december: 11, dec: 11,
+    june: 5,
+    jun: 5,
+    july: 6,
+    jul: 6,
+    august: 7,
+    aug: 7,
+    september: 8,
+    sep: 8,
+    sept: 8,
+    october: 9,
+    oct: 9,
+    november: 10,
+    nov: 10,
+    december: 11,
+    dec: 11,
   };
 
   const match = s.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})/);
@@ -141,7 +161,9 @@ const parseDateOnly = (val: any): Date | null => {
 
 const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const dispatch = useDispatch();
-  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
+  const userProfile = useSelector(
+    (state: RootState) => state.auth?.userProfile,
+  );
   const orderContext = route.params?.orderContext;
   const isNavigatingAwayRef = useRef(false);
   const isOrderFinalizedRef = useRef(false);
@@ -156,7 +178,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [processingStage, setProcessingStage] = useState(0);
   const [isReconciling, setIsReconciling] = useState(false);
-  const [unconfirmedState, setUnconfirmedState] = useState<UnconfirmedStateProps | null>(null);
+  const [unconfirmedState, setUnconfirmedState] =
+    useState<UnconfirmedStateProps | null>(null);
 
   // Helper to safely clear all timers and session state
   const clearSessionTimers = useCallback(() => {
@@ -205,10 +228,13 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
   // ─── SAVED CARD & GATEWAY STATE ─────────────────────────────────────────
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
-  const [selectedCardOption, setSelectedCardOption] = useState<"saved_card" | "new_card">("saved_card");
+  const [selectedCardOption, setSelectedCardOption] = useState<
+    "saved_card" | "new_card"
+  >("saved_card");
   const [saveCardForFuture, setSaveCardForFuture] = useState(true);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-  const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
+  const [checkoutSession, setCheckoutSession] =
+    useState<UnifiedCheckoutSession | null>(null);
   const [pendingOrderData, setPendingOrderData] = useState<any>(null);
   const [pendingOrderPayload, setPendingOrderPayload] = useState<any>(null);
   const pendingOrderPayloadRef = useRef<any>(null);
@@ -224,7 +250,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           pending.flowType === "checkout" &&
           Date.now() - pending.timestamp < 10 * 60 * 1000
         ) {
-          const check = await orderRecoveryService.reconcileCheckoutOrder(pending.amount);
+          const check = await orderRecoveryService.reconcileCheckoutOrder(
+            pending.amount,
+          );
           if (check.reconciled && check.orderData) {
             await orderRecoveryService.clearPendingOrder();
             clearSessionTimers();
@@ -268,7 +296,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       return () => {
         isMounted = false;
       };
-    }, [userProfile?.id])
+    }, [userProfile?.id]),
   );
 
   // ─── 5-MINUTE SESSION TIMER ──────────────────────────────────────────────
@@ -310,8 +338,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const scheduledDate = getScheduledDeliveryDate();
     if (!scheduledDate) return false;
 
-    // 3. System Earliest Possible Schedule Date (e.g. today is 12 -> 15)
-    const sysEarliestDate = getMinDeliveryDate();
+    // 3. System Earliest Possible Schedule Date
+    const buyerType = userProfile?.buyerType || orderContext?.buyerType;
+    const sysEarliestDate = getMinDeliveryDate(buyerType);
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() === sysEarliestDate.getTime();
@@ -325,7 +354,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
     const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
 
-    const offset = isPackageFlow ? PACKAGE_GAP_DAYS : NORMAL_GAP_DAYS;
+    const buyerType = userProfile?.buyerType || orderContext?.buyerType;
+    const isWholesale = String(buyerType || "").toLowerCase() === "wholesale";
+
+    const offset = isPackageFlow
+      ? PACKAGE_GAP_DAYS
+      : isWholesale
+        ? WHOLESALE_GAP_DAYS
+        : NORMAL_GAP_DAYS;
     const due = new Date(scheduledDate);
     due.setDate(due.getDate() - offset);
 
@@ -574,13 +610,18 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     setUnconfirmedState(null);
     try {
       if (checkoutSession?.sessionId) {
-        const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+        const adapter = PaymentGatewayFactory.getGateway(
+          "payments_lk",
+        ) as PaymentsLkAdapter;
         await adapter.syncCheckout(checkoutSession.sessionId).catch(() => null);
       }
 
-      const payloadToUse = pendingOrderPayloadRef.current || pendingOrderPayload;
+      const payloadToUse =
+        pendingOrderPayloadRef.current || pendingOrderPayload;
       if (!payloadToUse) {
-        throw new Error("Order details missing. Please contact customer support.");
+        throw new Error(
+          "Order details missing. Please contact customer support.",
+        );
       }
 
       // Persist in-flight paid order intent in case connection drops during createOrder
@@ -617,7 +658,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       isOrderFinalizedRef.current = false;
       isNavigatingAwayRef.current = false;
       isCreatingOrderRef.current = false;
-      console.error("[PaymentMethod] Order finalization error after payment:", err);
+      console.error(
+        "[PaymentMethod] Order finalization error after payment:",
+        err,
+      );
       const isTimeout =
         err?.code === "ECONNABORTED" ||
         err?.message?.includes("timeout") ||
@@ -660,10 +704,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           isPaid: true,
           onCheckStatus: async () => {
             setIsReconciling(true);
-            const statusCheck = await orderRecoveryService.reconcileCheckoutOrder({
-              expectedTotal: paymentAmount,
-              checkoutStartedAt: checkoutStartedAtRef.current,
-            });
+            const statusCheck =
+              await orderRecoveryService.reconcileCheckoutOrder({
+                expectedTotal: paymentAmount,
+                checkoutStartedAt: checkoutStartedAtRef.current,
+              });
             setIsReconciling(false);
             if (statusCheck.reconciled && statusCheck.orderData) {
               await orderRecoveryService.clearPendingOrder();
@@ -682,7 +727,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             } else {
               Alert.alert(
                 "Processing in Background",
-                "The server is still processing your order. Please check again in a few moments."
+                "The server is still processing your order. Please check again in a few moments.",
               );
             }
           },
@@ -702,8 +747,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert(
         "Order Processing Issue",
         err?.response?.data?.message ||
-        err?.message ||
-        "Payment was received, but there was an issue finalizing your order. Please contact customer support."
+          err?.message ||
+          "Payment was received, but there was an issue finalizing your order. Please contact customer support.",
       );
     } finally {
       isCreatingOrderRef.current = false;
@@ -725,7 +770,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
     Alert.alert(
       "Payment Cancelled",
-      "The card payment was not completed. You can try again whenever you are ready."
+      "The card payment was not completed. You can try again whenever you are ready.",
     );
   };
 
@@ -762,7 +807,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         if (
           isSessionExpiredRef.current ||
           isNavigatingAwayRef.current ||
-          (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+          (paymentSessionEndTime !== null &&
+            paymentSessionEndTime <= Date.now())
         ) {
           setIsConfirming(false);
           handleSessionExpiry();
@@ -817,7 +863,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           if (
             isSessionExpiredRef.current ||
             isNavigatingAwayRef.current ||
-            (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+            (paymentSessionEndTime !== null &&
+              paymentSessionEndTime <= Date.now())
           ) {
             setIsConfirming(false);
             handleSessionExpiry();
@@ -846,7 +893,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             },
           };
 
-          const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+          const adapter = PaymentGatewayFactory.getGateway(
+            "payments_lk",
+          ) as PaymentsLkAdapter;
 
           // Option 1: 1-Click Pay with Saved Card
           if (selectedCardOption === "saved_card" && savedCard) {
@@ -875,8 +924,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 await orderRecoveryService.updatePendingOrder({ isPaid: true });
                 setProcessingStage(2); // Creating order on server
                 const response = await orderService.createOrder(payload);
-                if (!response.data || !response.data.status || !response.data.data) {
-                  throw new Error(response.data?.message || "Failed to finalize order");
+                if (
+                  !response.data ||
+                  !response.data.status ||
+                  !response.data.data
+                ) {
+                  throw new Error(
+                    response.data?.message || "Failed to finalize order",
+                  );
                 }
                 const orderData = response.data.data;
 
@@ -898,7 +953,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 return;
               }
             } catch (chargeErr: any) {
-              console.warn("[PaymentMethodScreen] 1-Click charge failed:", chargeErr);
+              console.warn(
+                "[PaymentMethodScreen] 1-Click charge failed:",
+                chargeErr,
+              );
               const isInvalid =
                 chargeErr?.response?.data?.cardInvalid ||
                 chargeErr?.message?.includes("invalid") ||
@@ -919,7 +977,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                         if (
                           isSessionExpiredRef.current ||
                           isNavigatingAwayRef.current ||
-                          (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+                          (paymentSessionEndTime !== null &&
+                            paymentSessionEndTime <= Date.now())
                         ) {
                           handleSessionExpiry();
                           return;
@@ -927,20 +986,26 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                         try {
                           pendingOrderPayloadRef.current = payload;
                           setPendingOrderPayload(payload);
-                          const fallbackSession = await adapter.initiatePayment({
-                            amount: paymentAmount,
-                            paymentType: "order",
-                            itemsDescription: "Polygon Order Payment",
-                            saveCard: true,
-                          });
+                          const fallbackSession = await adapter.initiatePayment(
+                            {
+                              amount: paymentAmount,
+                              paymentType: "order",
+                              itemsDescription: "Polygon Order Payment",
+                              saveCard: true,
+                            },
+                          );
                           setCheckoutSession(fallbackSession);
                           setCheckoutModalVisible(true);
                         } catch (launchErr: any) {
-                          Alert.alert("Error", launchErr?.message || "Failed to launch payment sheet.");
+                          Alert.alert(
+                            "Error",
+                            launchErr?.message ||
+                              "Failed to launch payment sheet.",
+                          );
                         }
                       },
                     },
-                  ]
+                  ],
                 );
                 return;
               }
@@ -953,7 +1018,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
 
               if (isTimeout) {
                 setIsReconciling(true);
-                const check = await orderRecoveryService.reconcileCheckoutOrder(totalAmount);
+                const check =
+                  await orderRecoveryService.reconcileCheckoutOrder(
+                    totalAmount,
+                  );
                 setIsReconciling(false);
                 if (check.reconciled && check.orderData) {
                   await orderRecoveryService.clearPendingOrder();
@@ -978,7 +1046,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                   isPaid: true,
                   onCheckStatus: async () => {
                     setIsReconciling(true);
-                    const statusCheck = await orderRecoveryService.reconcileCheckoutOrder(totalAmount);
+                    const statusCheck =
+                      await orderRecoveryService.reconcileCheckoutOrder(
+                        totalAmount,
+                      );
                     setIsReconciling(false);
                     if (statusCheck.reconciled && statusCheck.orderData) {
                       await orderRecoveryService.clearPendingOrder();
@@ -997,7 +1068,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                     } else {
                       Alert.alert(
                         "Processing in Background",
-                        "The server is still processing your order. Please check again in a few moments."
+                        "The server is still processing your order. Please check again in a few moments.",
                       );
                     }
                   },
@@ -1024,7 +1095,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           if (
             isSessionExpiredRef.current ||
             isNavigatingAwayRef.current ||
-            (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+            (paymentSessionEndTime !== null &&
+              paymentSessionEndTime <= Date.now())
           ) {
             setIsConfirming(false);
             handleSessionExpiry();
@@ -1052,8 +1124,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           Alert.alert(
             "Payment Failed",
             err?.response?.data?.message ||
-            err?.message ||
-            "Could not process card payment. Please try again or pay with cash."
+              err?.message ||
+              "Could not process card payment. Please try again or pay with cash.",
           );
         } finally {
           setIsConfirming(false);
@@ -1065,7 +1137,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         if (
           isSessionExpiredRef.current ||
           isNavigatingAwayRef.current ||
-          (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+          (paymentSessionEndTime !== null &&
+            paymentSessionEndTime <= Date.now())
         ) {
           setIsConfirming(false);
           handleSessionExpiry();
@@ -1138,20 +1211,23 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             });
             return;
           } else {
-            throw new Error(response.data?.message || "Failed to finalize order");
+            throw new Error(
+              response.data?.message || "Failed to finalize order",
+            );
           }
         } catch (err: any) {
           setIsConfirming(false);
           setSubmitting(false);
           console.error("[PaymentMethod] Future card order error:", err);
-          const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
+          const isTimeout =
+            err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
           Alert.alert(
             isTimeout ? "Order Processing Delay" : "Order Failed",
             isTimeout
               ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
               : err?.response?.data?.message ||
-              err?.message ||
-              "Could not place your order. Please try again."
+                  err?.message ||
+                  "Could not place your order. Please try again.",
           );
         } finally {
           setIsConfirming(false);
@@ -1314,10 +1390,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           isPaid: Boolean(isFullCredit),
           onCheckStatus: async () => {
             setIsReconciling(true);
-            const statusCheck = await orderRecoveryService.reconcileCheckoutOrder({
-              expectedTotal: totalAmount,
-              checkoutStartedAt: checkoutStartedAtRef.current,
-            });
+            const statusCheck =
+              await orderRecoveryService.reconcileCheckoutOrder({
+                expectedTotal: totalAmount,
+                checkoutStartedAt: checkoutStartedAtRef.current,
+              });
             setIsReconciling(false);
             if (statusCheck.reconciled && statusCheck.orderData) {
               await orderRecoveryService.clearPendingOrder();
@@ -1336,7 +1413,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             } else {
               Alert.alert(
                 "Order Not Found",
-                "Your order has not been placed on the server yet. You can retry safely."
+                "Your order has not been placed on the server yet. You can retry safely.",
               );
             }
           },
@@ -1729,7 +1806,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                       color: "#111111",
                     }}
                   >
-                    Use Credit Balance
+                    Use My Polygon Wallet
                   </Text>
 
                   <Text
@@ -1762,7 +1839,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                       marginTop: 4,
                     }}
                   >
-                    Pay with your credit balance and pay the rest with cash or
+                    Pay with your Polygon Wallet and pay the rest with cash or
                     card.
                   </Text>
                 </View>
@@ -2067,8 +2144,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             </View>
           )}
 
-          {/* PLEASE NOTE BANNER WHEN SCHEDULED AFTER EPSD */}
-          {(isPackagePayToConfirm || (!isFullCredit && !isEarliestDeliveryDate())) && (
+          {!isFullCredit && !isEarliestDeliveryDate() && (
             <View
               style={{
                 marginHorizontal: 15,
@@ -2091,18 +2167,14 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               >
                 Please Note :
               </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: "#475569",
-                  lineHeight: 19,
-                }}
-              >
-                Please make sure to complete your payment by{" "}
+              <Text style={{ fontSize: 13, color: "#475569", lineHeight: 19 }}>
+                Please review and finalize your order by{" "}
                 <Text style={{ fontWeight: "700", color: "#1E293B" }}>
                   {getPaymentDueText()}
                 </Text>
-                , once you receive your order confirmation.
+                {" "}after receiving your order confirmation. If paying by card or
+                using Polygon Wallet to cover the full order total, complete any
+                outstanding payments by the deadline.
               </Text>
             </View>
           )}
@@ -2174,9 +2246,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           setAppliedCoupon(couponResult);
         }}
         deliveryMethod={orderContext?.deliveryMethod || "home"}
-        cartTotal={
-          (orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)
-        }
+        cartTotal={Math.max(
+          0,
+          (orderContext?.packageTotal || 0) +
+            (orderContext?.productTotal || 0) -
+            (orderContext?.discount || 0),
+        )}
         cartId={orderContext?.cartId}
       />
 
@@ -2219,6 +2294,68 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         onCancel={handleCheckoutCancel}
         onClose={() => setCheckoutModalVisible(false)}
       />
+
+      {/* ─── FULL SCREEN LOADING CONFIRMATION ──────────────────────────── */}
+      <Modal
+        visible={(submitting || isConfirming) && !checkoutModalVisible && !unconfirmedState}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              paddingVertical: 32,
+              paddingHorizontal: 36,
+              alignItems: "center",
+              minWidth: 230,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              elevation: 10,
+            }}
+          >
+            <ActivityIndicator size="large" color="#000000" />
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 15,
+                fontWeight: "600",
+                color: "#000000",
+                textAlign: "center",
+              }}
+            >
+              {paymentMethod === "card" &&
+              paymentAmount > 0 &&
+              (isEarliestDeliveryDate() || isPackagePayToConfirm)
+                ? "Awaiting Payment..."
+                : "Confirming your order..."}
+            </Text>
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                fontWeight: "400",
+                color: "#6B7280",
+                textAlign: "center",
+              }}
+            >
+              Please do not close the app.
+            </Text>
+          </View>
+        </View>
+      </Modal>
 
       {/* ─── ENHANCED ORDER PROCESSING MODAL (PHASE 2 & PHASE 3) ───────────── */}
       <OrderProcessingModal

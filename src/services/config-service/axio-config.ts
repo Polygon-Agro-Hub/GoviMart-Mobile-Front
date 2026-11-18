@@ -7,6 +7,9 @@ import { tokenStorage } from "@/utils/tokenStorage";
 import { ENDPOINTS } from "./endpoints";
 import { networkSimulator, ENABLE_NETWORK_SIMULATOR } from "@/services/network/networkSimulator.service";
 import { connectionStatusService } from "@/services/network/connectionStatus.service";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import socketService from "@/services/socket/socket.service";
+import { timeValidationService } from "@/services/time/timeValidation.service";
 
 const apiClient = axios.create({
   baseURL: environment.API_BASE_URL,
@@ -69,11 +72,23 @@ apiClient.interceptors.response.use(
     } else {
       connectionStatusService.reportFastSuccess();
     }
+
+    // Check server date header for device clock validation
+    const serverDateHeader = response.headers?.["date"] || response.headers?.["Date"];
+    if (typeof serverDateHeader === "string") {
+      timeValidationService.reportServerDateHeader(serverDateHeader);
+    }
+
     return response;
   },
   async (error: AxiosError) => {
     if (networkSimulator.isEnabled()) {
       networkSimulator.handleResponseComplete();
+    }
+
+    const errServerDate = error.response?.headers?.["date"] || error.response?.headers?.["Date"];
+    if (typeof errServerDate === "string") {
+      timeValidationService.reportServerDateHeader(errServerDate);
     }
     if (
       error.code === "ECONNABORTED" ||
@@ -154,8 +169,15 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     } catch (refreshErr) {
       processQueue(refreshErr, null);
-      // Refresh token expired or invalid: clear tokens and log user out
-      await tokenStorage.clearTokens();
+      // Refresh token expired or invalid: clear tokens, storage, socket and log user out
+      await tokenStorage.clearTokens().catch(() => {});
+      await AsyncStorage.multiRemove([
+        "userProfile",
+        "userLoginTime",
+      ]).catch(() => {});
+      try {
+        socketService.disconnect();
+      } catch (e) {}
       store.dispatch(clearCart());
       store.dispatch(logoutSuccess());
       return Promise.reject(refreshErr);

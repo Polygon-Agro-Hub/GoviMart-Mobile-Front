@@ -13,6 +13,7 @@ interface HomeHeaderProps {
 
 const HomeHeader: React.FC<HomeHeaderProps> = ({ onPressProfile, showUnstableBanner = true }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
+  const token = useSelector((state: RootState) => state.auth.token);
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
@@ -20,13 +21,14 @@ const HomeHeader: React.FC<HomeHeaderProps> = ({ onPressProfile, showUnstableBan
   }, [user?.image]);
 
   const hasValidUserImage =
-    !imageError && user?.image && user.image.trim() !== "";
+    Boolean(token && !imageError && user?.image && user.image.trim() !== "");
 
-  // Format display name with title, e.g. "Mr. Pasan"
-  let displayName = "Guest User";
-  if (user) {
+  // Format display name: "Welcome, Guest!" if not logged in, or user name if logged in
+  let displayName = "Welcome, Guest!";
+  if (token && user) {
     const titlePrefix = user.title ? `${user.title}. ` : "";
-    displayName = `${titlePrefix}${user.firstName || ""} ${user.lastName || ""}`.trim() || "Guest User";
+    const fullName = `${titlePrefix}${user.firstName || ""} ${user.lastName || ""}`.trim();
+    displayName = fullName || "Welcome, Guest!";
   }
 
   return (
@@ -35,7 +37,7 @@ const HomeHeader: React.FC<HomeHeaderProps> = ({ onPressProfile, showUnstableBan
         <View className="flex-row items-center flex-1 mr-2">
           <TouchableOpacity onPress={onPressProfile} activeOpacity={0.8}>
             <Image
-              source={hasValidUserImage ? { uri: user.image } : defaultUserIcon}
+              source={hasValidUserImage && user?.image ? { uri: user.image } : defaultUserIcon}
               onError={() => setImageError(true)}
               className="w-14 h-14 rounded-full border-2 border-gray-200 bg-[#EAEFF5]"
             />
