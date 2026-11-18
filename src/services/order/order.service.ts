@@ -154,6 +154,11 @@ class OrderService {
             price?: number; // fallback only
         }>;
         deletedAdditionalItemIds?: number[];
+        packageReviewValues?: Array<{
+            orderPackageId: number;
+            packageId?: string | number;
+            reviewValue: number;
+        }>;
         packages?: Array<{
             orderPackageId: number;
             packageId?: string | number;
@@ -198,12 +203,12 @@ class OrderService {
     }
 
     async cancelOrderBeforeConfirm(payload: {
-    orderId?: number | string;
-    processOrderId?: number | string;
-}) {
-    const headers = await getAuthHeader();
-    return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER_BEFORE_CONFIRM, payload, { headers });
-}
+        orderId?: number | string;
+        processOrderId?: number | string;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER_BEFORE_CONFIRM, payload, { headers });
+    }
 }
 
 export default new OrderService();
