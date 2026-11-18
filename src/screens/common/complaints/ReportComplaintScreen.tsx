@@ -23,6 +23,7 @@ import LoadingPage from "@/component/common/LoadingPage";
 import complaintService from "@/services/complaint/complaint.service";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
 
@@ -249,6 +250,80 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     pickImage();
   };
 
+  /**
+   * Convert a single HEIC/HEIF asset to JPEG using expo-image-manipulator.
+   * Returns a { uri, name, type } object ready for FormData.
+   * Falls back to the original asset on any conversion error.
+   */
+  const convertHeicToJpeg = async (
+    asset: ImagePicker.ImagePickerAsset,
+    index: number,
+  ): Promise<{ uri: string; name: string; type: string }> => {
+    try {
+      const manipResult = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [], // no transforms – just re-encode
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      const baseName =
+        asset.fileName?.replace(/\.(heic|heif)$/i, "") ||
+        `image_${Date.now()}_${index}`;
+      return {
+        uri: manipResult.uri,
+        name: `${baseName}.jpg`,
+        type: "image/jpeg",
+      };
+    } catch (err) {
+      console.warn("HEIC conversion failed for asset", index, err);
+      // Fall back to original (server may still reject, but we tried)
+      const fallbackName =
+        asset.fileName || `image_${Date.now()}_${index}.jpg`;
+      return {
+        uri: asset.uri,
+        name: fallbackName,
+        type: "image/jpeg",
+      };
+    }
+  };
+
+  /**
+   * Compress a standard (non-HEIC) JPEG/PNG/WEBP asset to reduce upload size.
+   * Uses 0.7 quality to keep files small without visible quality loss.
+   */
+  const compressImage = async (
+    asset: ImagePicker.ImagePickerAsset,
+    index: number,
+    mimeType: string,
+  ): Promise<{ uri: string; name: string; type: string }> => {
+    try {
+      const format =
+        mimeType === "image/png"
+          ? ImageManipulator.SaveFormat.PNG
+          : ImageManipulator.SaveFormat.JPEG;
+      const manipResult = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [],
+        { compress: 0.7, format },
+      );
+      const ext = format === ImageManipulator.SaveFormat.PNG ? "png" : "jpg";
+      const baseName =
+        asset.fileName?.replace(/\.[^.]+$/, "") ||
+        `image_${Date.now()}_${index}`;
+      return {
+        uri: manipResult.uri,
+        name: `${baseName}.${ext}`,
+        type: mimeType === "image/png" ? "image/png" : "image/jpeg",
+      };
+    } catch (err) {
+      console.warn("Image compression failed for asset", index, err);
+      // Fall back gracefully to original
+      const fileName =
+        asset.fileName ||
+        `image_${Date.now()}_${index}.${mimeType === "image/png" ? "png" : "jpg"}`;
+      return { uri: asset.uri, name: fileName, type: mimeType };
+    }
+  };
+
   const pickImage = async () => {
     const remainingSlots = MAX_IMAGES - images.length;
     if (remainingSlots <= 0) {
@@ -312,7 +387,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     // Read remaining sizes in parallel
     const sizes = await Promise.all(result.assets.map(getAssetSize));
 
-    // 3) Oversize check: show the popup right away
+    // 3) Oversize check
     const hasOversized = sizes.some((s) => s > MAX_IMAGE_SIZE);
     if (hasOversized) {
       setImageError("Image size must not exceed 5MB");
@@ -325,36 +400,30 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       setImageError(null);
     }
 
-    // 4) Build the valid photos (pure sync work, no awaits)
-    const validPhotos: { uri: string; name: string; type: string }[] = [];
+    // 4) Build valid photo list; convert HEIC/HEIF → JPEG on iOS in parallel,
+    //    and compress all images to reduce upload payload size.
+    const photoPromises = result.assets
+      .filter((_, i) => sizes[i] <= MAX_IMAGE_SIZE)
+      .map(async (asset, i): Promise<{ uri: string; name: string; type: string }> => {
+        const mimeType = asset.mimeType || "";
+        const ext = (asset.fileName?.split(".").pop() || "").toLowerCase();
+        const isHeic =
+          mimeType === "image/heic" ||
+          mimeType === "image/heif" ||
+          ext === "heic" ||
+          ext === "heif";
 
-    result.assets.forEach((asset, i) => {
-      if (sizes[i] > MAX_IMAGE_SIZE) return;
+        if (Platform.OS === "ios" && isHeic) {
+          // Convert HEIC → JPEG so the server can accept it
+          return convertHeicToJpeg(asset, i);
+        }
 
-      let fileName = asset.fileName;
-      if (!fileName) {
-        const parts = asset.uri.split("/");
-        fileName = parts[parts.length - 1] || `image_${Date.now()}_${i}.jpg`;
-      }
+        // Non-HEIC: compress to reduce payload before upload
+        const resolvedMime = mimeType || (ext === "png" ? "image/png" : "image/jpeg");
+        return compressImage(asset, i, resolvedMime);
+      });
 
-      const ext = (fileName.split(".").pop() || "").toLowerCase();
-      let mimeType = asset.mimeType;
-
-      if (!mimeType) {
-        if (ext === "heic" || ext === "heif") mimeType = `image/${ext}`;
-        else if (ext === "png") mimeType = "image/png";
-        else if (ext === "webp") mimeType = "image/webp";
-        else mimeType = "image/jpeg";
-      } else if (
-        (mimeType === "image/heic" || mimeType === "image/heif") &&
-        !fileName.toLowerCase().endsWith(".heic") &&
-        !fileName.toLowerCase().endsWith(".heif")
-      ) {
-        fileName = `${fileName}.${mimeType.replace("image/", "")}`;
-      }
-
-      validPhotos.push({ uri: asset.uri, name: fileName, type: mimeType });
-    });
+    const validPhotos = await Promise.all(photoPromises);
 
     if (validPhotos.length > 0) {
       setImages((prev) => [...prev, ...validPhotos]);

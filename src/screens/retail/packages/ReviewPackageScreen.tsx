@@ -443,25 +443,37 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
   };
   // Builds the full confirmPackageReview payload from current Redux + component state.
   // Called from both the card-additional-payment branch and the existing direct-confirm path.
-  const buildConfirmPayload = (overrideIsPaid?: boolean | number) =>
-    buildConfirmPayloadUtil({
-      orderId: actualOrderId || effectiveOrderId,
-      processOrderId,
-      packageProducts,
-      orderPackageDbIds,
-      productTemplatesState,
-      alacartSelection,
-      originalAlacartMap,
-      deletedAdditionalItemIds,
-      isItemUnavailable,
-      additionalDue,
-      newScheduleDate: (route.params as any)?.newScheduleDate,
-      paymentMethod,
-      isPaid,
-      overrideIsPaid,
-      finalOrderTotalWithDelivery,
-      totalDiff,
-    });
+const buildConfirmPayload = (overrideIsPaid?: boolean | number) => {
+  const base = buildConfirmPayloadUtil({
+    orderId: actualOrderId || effectiveOrderId,
+    processOrderId,
+    packageProducts,
+    orderPackageDbIds,
+    productTemplatesState,
+    alacartSelection,
+    originalAlacartMap,
+    deletedAdditionalItemIds,
+    isItemUnavailable,
+    additionalDue,
+    newScheduleDate: (route.params as any)?.newScheduleDate,
+    paymentMethod,
+    isPaid,
+    overrideIsPaid,
+    finalOrderTotalWithDelivery,
+    totalDiff,
+  });
+
+  // Price change per package: 0, +300, -200 ...
+  const packageReviewValues = packageSummaries
+    .map((s) => ({
+      orderPackageId: orderPackageDbIds[s.pkg.id],
+      packageId: s.pkg.id,
+      reviewValue: Number((s.diff || 0).toFixed(2)),
+    }))
+    .filter((x) => x.orderPackageId != null);
+
+  return { ...base, packageReviewValues };
+};
 
   const cleanupAfterSuccess = () => {
     data.loadedOrderIdRef.current = null;
