@@ -120,14 +120,20 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   // Ensure master input focuses automatically when screen mounts or returns to focus
   useFocusEffect(
     useCallback(() => {
+      checkClipboardForOtp();
       const t = setTimeout(() => {
         if (!isRateLimited && !isVerifying) {
           inputRef.current?.focus();
         }
       }, 250);
       return () => clearTimeout(t);
-    }, [isRateLimited, isVerifying])
+    }, [checkClipboardForOtp, isRateLimited, isVerifying])
   );
+
+  // Check clipboard immediately on mount as well
+  useEffect(() => {
+    checkClipboardForOtp();
+  }, [checkClipboardForOtp]);
 
   // When app returns to foreground from SMS / Mail app, refocus input and check clipboard
   useEffect(() => {
@@ -621,6 +627,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               value={otp}
               onChangeText={handleOtpChange}
               keyboardType="number-pad"
+              maxLength={5}
               textContentType="oneTimeCode"
               autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
               importantForAutofill="yes"
@@ -637,7 +644,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                 bottom: 0,
                 width: "100%",
                 height: "100%",
-                opacity: 1,
+                opacity: Platform.OS === "android" ? 0.01 : 0,
                 color: "transparent",
                 backgroundColor: "transparent",
                 zIndex: 10,

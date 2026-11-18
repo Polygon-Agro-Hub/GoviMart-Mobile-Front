@@ -2173,7 +2173,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                   {getPaymentDueText()}
                 </Text>
                 {" "}after receiving your order confirmation. If paying by card or
-                using credit to cover the full order total, complete any
+                using Polygon Wallet to cover the full order total, complete any
                 outstanding payments by the deadline.
               </Text>
             </View>
@@ -2246,9 +2246,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           setAppliedCoupon(couponResult);
         }}
         deliveryMethod={orderContext?.deliveryMethod || "home"}
-        cartTotal={
-          (orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)
-        }
+        cartTotal={Math.max(
+          0,
+          (orderContext?.packageTotal || 0) +
+            (orderContext?.productTotal || 0) -
+            (orderContext?.discount || 0),
+        )}
         cartId={orderContext?.cartId}
       />
 

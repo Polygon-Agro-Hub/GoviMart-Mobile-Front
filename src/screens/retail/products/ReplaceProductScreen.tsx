@@ -29,22 +29,6 @@ type AlacartSelectedProduct = {
   quantity: number;
 };
 
-/**
- * `normalPrice` / `discountedPrice` in marketplaceitems are PER-1KG rates.
- * `startValue` is the default display quantity, in whatever unit `unitType` says.
- * `changeby` is the stepper increment, in the same unit as `startValue`.
- *
- * This function:
- *  1. Converts startValue/changeby into kg (so the whole app works in kg,
- *     matching what SetQauntity already assumes).
- *  2. Recomputes normalPrice/discountedPrice from "per-kg rate" into
- *     "price for the current display quantity" — i.e. rate * qtyInKg —
- *     so the card shows the correct total, not the raw per-kg rate.
- */
-// Local extension so weightDisplay/perKgPrice can travel alongside a
-// ProductType without ProductType itself needing to declare them.
-// Local extension so weightDisplay/perKgPrice/totalPrice can travel
-// alongside a ProductType without ProductType itself needing to declare them.
 type NormalizedProduct = ProductType & {
   weightDisplay: string;
   perKgPrice: number;
@@ -67,9 +51,9 @@ const normalizeToKg = (product: ProductType): NormalizedProduct => {
     rawChangeBy > 10
       ? Number((rawChangeBy / 1000).toFixed(3))
       : Number(rawChangeBy.toFixed(3));
-
+console.log("RAW", product.id, "pkgBasePrice =", (product as any).pkgBasePrice, Object.keys(product));
   // Per-kg rate, straight from the DB — never mutated.
-  const perKgPrice = parseFloat(String(product.discountedPrice || "0")) || 0;
+  const perKgPrice = parseFloat(String((product as any).pkgBasePrice || "0")) || 0;
 
   // Total price for the current quantity — computed ONCE, here.
   const totalPrice = Number((perKgPrice * qtyKg).toFixed(2));

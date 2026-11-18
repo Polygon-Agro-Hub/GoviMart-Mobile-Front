@@ -20,6 +20,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import CustomHeader from "@/component/common/CustomHeader";
+import { AlertModal } from "@/component/common/AlertModal";
 import * as Clipboard from "expo-clipboard";
 import axios from "axios";
 import { environment } from "@/environment/environment";
@@ -175,6 +176,27 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   const [attemptsCount, setAttemptsCount] = useState<number>(1);
   const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - attemptsCount);
 
+  // Alert Modal
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"error" | "success">("error");
+  const [alertCallback, setAlertCallback] = useState<(() => void) | null>(null);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: "error" | "success" = "error",
+    onOk?: () => void,
+  ) => {
+    Keyboard.dismiss();
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertCallback(() => onOk || null);
+    setAlertVisible(true);
+  };
+
   // Master Input Ref
   const inputRef = useRef<TextInput>(null);
 
@@ -251,31 +273,6 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }, 150);
   };
 
-  // Ensure master input focuses automatically when screen mounts or returns to focus
-  useFocusEffect(
-    useCallback(() => {
-      const t = setTimeout(() => {
-        if (!isRateLimited && !isVerifying) {
-          inputRef.current?.focus();
-        }
-      }, 250);
-      return () => clearTimeout(t);
-    }, [isRateLimited, isVerifying]),
-  );
-
-  // Restart autofill session on fresh signup token / reference ID
-  useEffect(() => {
-    setOtpSessionKey((prev) => prev + 1);
-    setOtp("");
-    lastUsedClipboardRef.current = "";
-    const t = setTimeout(() => {
-      if (!isRateLimited && !isVerifying) {
-        inputRef.current?.focus();
-      }
-    }, 200);
-    return () => clearTimeout(t);
-  }, [signupToken, referenceId]);
-
   // Check clipboard for 5-digit OTP
   const checkClipboardForOtp = useCallback(async () => {
     try {
@@ -299,6 +296,37 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   }, [isRateLimited, isVerifying, isExpired, otp]);
 
+  // Ensure master input focuses automatically when screen mounts or returns to focus
+  useFocusEffect(
+    useCallback(() => {
+      checkClipboardForOtp();
+      const t = setTimeout(() => {
+        if (!isRateLimited && !isVerifying) {
+          inputRef.current?.focus();
+        }
+      }, 250);
+      return () => clearTimeout(t);
+    }, [checkClipboardForOtp, isRateLimited, isVerifying]),
+  );
+
+  // Check clipboard immediately on mount as well
+  useEffect(() => {
+    checkClipboardForOtp();
+  }, [checkClipboardForOtp]);
+
+  // Restart autofill session on fresh signup token / reference ID
+  useEffect(() => {
+    setOtpSessionKey((prev) => prev + 1);
+    setOtp("");
+    lastUsedClipboardRef.current = "";
+    const t = setTimeout(() => {
+      if (!isRateLimited && !isVerifying) {
+        inputRef.current?.focus();
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [signupToken, referenceId]);
+
   // When app returns to foreground from SMS / Mail app, refocus input and check clipboard
   useEffect(() => {
     const sub = AppState.addEventListener("change", (nextState) => {
@@ -318,10 +346,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   // ---------- Rate limit helpers ----------
   const showLockoutAlert = () => {
-    Keyboard.dismiss();
-    Alert.alert(
+    showAlert(
       "Too Many Attempts",
       "Too many verification attempts. Please try again after 15 minutes.",
+      "error",
+      focusInputAfterAlert,
     );
   };
 
@@ -399,14 +428,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // re-focused only after OK is tapped.
   const handleWrongCode = async (msg: string) => {
     resetOtp();
-    Keyboard.dismiss();
     const displayMsg =
       !msg || /incorrect|invalid|remaining/i.test(msg)
         ? "Incorrect verification code. Please try again."
         : msg;
-    Alert.alert("Invalid Code", displayMsg, [
-      { text: "OK", onPress: focusInputAfterAlert },
-    ]);
+    showAlert("Invalid Code", displayMsg, "error", focusInputAfterAlert);
   };
 
   const handleBackPress = useCallback(() => {
@@ -465,23 +491,18 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   };
 
   const handleSessionExpired = () => {
-    setOtp("");
-    Keyboard.dismiss();
-    Alert.alert(
+    resetOtp();
+    showAlert(
       "Session Expired",
       "Your registration session has expired. Please sign up again to continue.",
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            if (flow === "changePhone") {
-              navigation.navigate("MyAccount");
-            } else {
-              navigation.navigate("SignUp");
-            }
-          },
-        },
-      ],
+      "error",
+      () => {
+        if (flow === "changePhone") {
+          navigation.navigate("MyAccount");
+        } else {
+          navigation.navigate("SignUp");
+        }
+      },
     );
   };
 
@@ -498,12 +519,22 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
-  // Called automatically once all digits are entered (no Verify button)
+  // Called automatically once all digits are entered or manually on Verify button press
   const handleVerify = async (codeOverride?: string) => {
     if (verifyLockRef.current) return; // duplicate-request guard
 
-    const code = codeOverride ?? otp;
-    if (code.length < OTP_LENGTH) return; // wait for the full code
+    const code = (codeOverride ?? otp).trim();
+    if (code.length < OTP_LENGTH) {
+      if (!codeOverride) {
+        showAlert(
+          "Invalid Code",
+          "Please enter the full 5-digit verification code.",
+          "error",
+          focusInputAfterAlert,
+        );
+      }
+      return;
+    }
 
     // Persistent lockout
     for (const key of lockoutKeys) {
@@ -519,11 +550,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
     if (isExpired) {
       resetOtp();
-      Keyboard.dismiss();
-      Alert.alert(
+      showAlert(
         "Code Expired",
         "Your verification code has expired. Please request a new code.",
-        [{ text: "OK", onPress: focusInputAfterAlert }],
+        "error",
+        focusInputAfterAlert,
       );
       return;
     }
@@ -547,16 +578,12 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           for (const key of attemptsKeys) {
             await clearAttempts(key);
           }
-          Alert.alert(
+          showAlert(
             "Phone Number Updated",
             response.data.message ||
               "Your mobile number has been successfully updated.",
-            [
-              {
-                text: "OK",
-                onPress: () => navigation.navigate("MyAccount"),
-              },
-            ],
+            "success",
+            () => navigation.navigate("MyAccount"),
           );
         } else {
           await handleFailedVerifyResponse(response.data);
@@ -619,17 +646,13 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               (userData.buyerType || "").toLowerCase() === "wholesale";
 
             if (isWholesale) {
-              Alert.alert(
+              showAlert(
                 "Registration Submitted",
                 "Your wholesale account has been created and your Business Registration (BR) is submitted for review.",
-                [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      navigation.navigate("Login");
-                    },
-                  },
-                ],
+                "success",
+                () => {
+                  navigation.navigate("Login");
+                },
               );
               return;
             }
@@ -643,43 +666,40 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               cusId: userData.cusId,
             };
 
-            Alert.alert(
+            showAlert(
               "Registration Successful",
               "Your Polygon account created successfully.",
-              [
-                {
-                  text: "OK",
-                  onPress: async () => {
-                    try {
-                      const hasAsked = await AsyncStorage.getItem(
-                        "hasAskedNotificationPermission",
-                      );
+              "success",
+              async () => {
+                try {
+                  const hasAsked = await AsyncStorage.getItem(
+                    "hasAskedNotificationPermission",
+                  );
 
-                      if (hasAsked !== "true") {
-                        navigation.navigate("NotificationAccess", {
-                          returnScreen: targetScreen,
-                          returnParams: targetParams,
-                          blockBackNavigation: true,
-                        });
-                        return;
-                      }
-                    } catch (err) {
-                      console.warn(
-                        "Error reading notification permission flag:",
-                        err,
-                      );
-                    }
+                  if (hasAsked !== "true") {
+                    navigation.navigate("NotificationAccess", {
+                      returnScreen: targetScreen,
+                      returnParams: targetParams,
+                      blockBackNavigation: true,
+                    });
+                    return;
+                  }
+                } catch (err) {
+                  console.warn(
+                    "Error reading notification permission flag:",
+                    err,
+                  );
+                }
 
-                    navigation.navigate(targetScreen as any, targetParams);
-                  },
-                },
-              ],
+                navigation.navigate(targetScreen as any, targetParams);
+              },
             );
           } else {
-            Alert.alert(
+            showAlert(
               "Registration Successful",
               "Your Polygon account created successfully.",
-              [{ text: "OK", onPress: () => navigation.navigate("Login") }],
+              "success",
+              () => navigation.navigate("Login"),
             );
           }
         } else {
@@ -702,10 +722,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       } else {
         // Network / 5xx errors: clear so the user can re-enter and retry
         resetOtp();
-        Keyboard.dismiss();
-        Alert.alert("Verification Error", msg, [
-          { text: "OK", onPress: focusInputAfterAlert },
-        ]);
+        showAlert("Verification Error", msg, "error", focusInputAfterAlert);
       }
     } finally {
       verifyLockRef.current = false;
@@ -715,10 +732,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   // Auto-verify as soon as all digits are filled
   useEffect(() => {
-    if (otp.length === OTP_LENGTH) {
+    if (otp.length === OTP_LENGTH && !isVerifying && !isRateLimited && !isExpired) {
       handleVerify(otp);
     }
-  }, [otp]);
+  }, [otp, isVerifying, isRateLimited, isExpired]);
 
   const handleResend = async () => {
     // Block double taps (ref updates synchronously, state does not)
@@ -790,15 +807,17 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
           if (updatedLength >= MAX_OTP_ATTEMPTS) {
             await applyRateLimitLockout();
-            Alert.alert(
+            showAlert(
               "Code Resent",
               "A new 5-digit verification code has been sent. You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.",
+              "success",
+              focusInputAfterAlert,
             );
           } else {
             setTimeLeft(OTP_TIMER_SECONDS);
             setIsExpired(false);
             const remaining = Math.max(0, MAX_OTP_ATTEMPTS - updatedLength);
-            Alert.alert(
+            showAlert(
               "Code Resent",
               `${
                 response.data.message ||
@@ -808,6 +827,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               }\n\n(${remaining} resend ${
                 remaining === 1 ? "attempt" : "attempts"
               } remaining)`,
+              "success",
+              focusInputAfterAlert,
             );
           }
           inputRef.current?.focus();
@@ -819,7 +840,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           } else if (/session.*expired|expired.*invalid/i.test(msg)) {
             handleSessionExpired();
           } else {
-            Alert.alert("Resend Failed", msg);
+            showAlert("Resend Failed", msg, "error", focusInputAfterAlert);
           }
         }
       } catch (err: any) {
@@ -836,7 +857,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         } else if (/session.*expired|expired.*invalid/i.test(msg)) {
           handleSessionExpired();
         } else {
-          Alert.alert("Resend Error", msg);
+          showAlert("Resend Error", msg, "error", focusInputAfterAlert);
         }
       } finally {
         setIsResending(false);
@@ -912,6 +933,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               value={otp}
               onChangeText={handleOtpChange}
               keyboardType="number-pad"
+              maxLength={OTP_LENGTH}
               textContentType="oneTimeCode"
               autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
               importantForAutofill="yes"
@@ -928,7 +950,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                 bottom: 0,
                 width: "100%",
                 height: "100%",
-                opacity: 1,
+                opacity: Platform.OS === "android" ? 0.01 : 0,
                 color: "transparent",
                 backgroundColor: "transparent",
                 zIndex: 10,
@@ -951,7 +973,6 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                     style={{
                       borderColor: isFocused ? "#FF9114" : "#000000",
                       borderWidth: isFocused ? 2 : 1,
-                      opacity: isVerifying ? 0.6 : 1,
                     }}
                   >
                     <Text
@@ -1061,25 +1082,39 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Bottom area (inside the ScrollView so it scrolls above the keyboard) */}
+        {/* Action Buttons (inside the ScrollView so it scrolls above the keyboard) */}
         <View className="bg-white">
-          {/* Verifying indicator. Replaces the old Verify button. The wrapper
-              is kept so the keyboard-scroll logic keeps working. */}
           <View
             ref={verifyWrapRef}
             collapsable={false}
             className="px-6 pt-2 pb-3"
           >
-            <View className="h-[50px] w-full items-center justify-center">
-              {isVerifying && (
-                <View className="flex-row items-center gap-x-2">
-                  <ActivityIndicator size="small" color="#FF9114" />
-                  <Text className="text-sm font-semibold text-[#5A5859]">
+            <TouchableOpacity
+              onPress={() => handleVerify()}
+              disabled={isVerifying || isResending}
+              activeOpacity={0.8}
+              className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 6,
+                elevation: 5,
+              }}
+            >
+              {isVerifying ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text className="text-white text-base font-bold ml-2">
                     Verifying...
                   </Text>
                 </View>
+              ) : (
+                <Text className="text-white text-base font-bold">
+                  Verify
+                </Text>
               )}
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Bottom image: hidden while the keyboard is open */}
@@ -1093,6 +1128,37 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
           )}
         </View>
       </ScrollView>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => {
+          setAlertVisible(false);
+          if (alertCallback) {
+            const cb = alertCallback;
+            setAlertCallback(null);
+            cb();
+          } else {
+            inputRef.current?.focus();
+          }
+        }}
+        autoClose={false}
+        showOkButton={true}
+        okButtonText="OK"
+        onOkPress={() => {
+          setAlertVisible(false);
+          if (alertCallback) {
+            const cb = alertCallback;
+            setAlertCallback(null);
+            cb();
+          } else {
+            inputRef.current?.focus();
+          }
+        }}
+      />
     </View>
   );
 };

@@ -853,18 +853,23 @@ const ReviewPackage: React.FC<Props> = ({ navigation, route }) => {
     }
 
     navigation.navigate("OrderCancelConfirmation", {
-      orderId: effectiveOrderId,
-      processOrderId: processOrderId || undefined,
-      packages: pkgs,
-      alaCarteItems: alacarts,
-      totalPaid: initialPaidAmount,
-      totalPaidCard,
-      totalPaidCredit,
-      totalCashDue,
-      processOrderTotal,
-      paymentMethod,
-      refundCreditAmount,
-    });
+  orderId: effectiveOrderId,
+  processOrderId: processOrderId || undefined,
+  packages: pkgs,
+  alaCarteItems: alacarts,
+  totalPaid: initialPaidAmount,
+  totalPaidCard,
+  totalPaidCredit,
+  totalCashDue,
+  processOrderTotal,
+  paymentMethod,
+  refundCreditAmount,
+  // new: shown as rows on the cancel screen
+  couponDiscount,
+  deliveryFee: isPickup ? 0 : deliveryCharge,
+  isFreeDeliveryCoupon,
+  isPickup,
+});
   };
 
   const packageSummaries = useMemo(() => {
