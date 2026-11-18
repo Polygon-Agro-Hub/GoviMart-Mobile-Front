@@ -310,6 +310,29 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
     null,
   );
 
+  const hasStruckPrice = (item: any) => {
+    if (item.type !== "product") return false;
+    const normal = parseFloat(String(item.normalPrice)) || 0;
+    const disc =
+      item.discountedPrice != null ? parseFloat(String(item.discountedPrice)) : null;
+    const hasDiscount = disc != null && disc > 0 && disc < normal;
+    const dt = String(item.displayType ?? "").trim().toUpperCase();
+    return hasDiscount && (dt === "AP&SP&D" || dt === "AP&SP" || dt === "");
+  };
+
+  const StruckPrice = ({ text }: { text: string }) => (
+    <Text
+      style={{
+        color: "#5A5859",
+        fontSize: 11,
+        textDecorationLine: "line-through",
+        textAlign: "center",
+      }}
+    >
+      {text}
+    </Text>
+  );
+
   const fetchReadyToConfirmOrder = useCallback(async () => {
     if (!userTokenRef.current || !isWithinConfirmWindow()) {
       setReadyOrder(null);
@@ -1460,610 +1483,631 @@ const Home: React.FC<HomeProps> = ({ navigation }) => {
           )
         ) : (
           <View className="mt-8 px-4">
-            {itemRows.map((row, rowIndex) => (
-              <View
-                key={rowIndex}
-                className="flex-row justify-between mb-4 items-stretch"
-              >
-                {row.map((product) => {
-                  const isProduct = product.type === "product";
-                  const isPackage = product.type === "package";
-                  const cartItem = isProduct
-                    ? cartProducts.find(
-                      (p: ProductCartItem) => p.id === product.id,
-                    )
-                    : null;
-                  const cartPackage = isPackage
-                    ? cartPackages.find(
-                      (p: PackageCartItem) => p.id === product.id,
-                    )
-                    : null;
+            {itemRows.map((row, rowIndex) => {
+              const rowHasStruck = row.some(hasStruckPrice);
+              return (
+                <View
+                  key={rowIndex}
+                  className="flex-row justify-between mb-4 items-stretch"
+                >
 
-                  const isExpanded = product.id === expandedItemId;
-                  const snapshot = addTimeSnapshots[product.id];
-
-                  // Unique key per item (a product and a package could share the same id)
-                  const itemKey = `${product.type}-${product.id}`;
-                  // Only cards whose name wraps to 2 lines get the taller height
-                  const isLongName = !!longNameMap[itemKey];
-
-                  const rawStartValue = isProduct
-                    ? parseFloat(String(product.startValue ?? "1")) || 1
-                    : 1;
-                  const normUnit = isProduct
-                    ? normalizeUnit(product.unitType)
-                    : "g";
-
-                  const displayWeightText = isProduct
-                    ? normUnit === "g"
-                      ? `${Math.round(rawStartValue * 1000)} g`
-                      : `${rawStartValue} kg`
-                    : "";
-
-                  const normalPerUnit = isProduct
-                    ? parseFloat(String(product.normalPrice)) || 0
-                    : 0;
-                  const discountedPerUnit =
-                    isProduct && product.discountedPrice != null
-                      ? parseFloat(String(product.discountedPrice))
+                  {row.map((product) => {
+                    const isProduct = product.type === "product";
+                    const isPackage = product.type === "package";
+                    const cartItem = isProduct
+                      ? cartProducts.find(
+                        (p: ProductCartItem) => p.id === product.id,
+                      )
+                      : null;
+                    const cartPackage = isPackage
+                      ? cartPackages.find(
+                        (p: PackageCartItem) => p.id === product.id,
+                      )
                       : null;
 
-                  const hasDiscount =
-                    isProduct &&
-                    discountedPerUnit != null &&
-                    discountedPerUnit > 0 &&
-                    discountedPerUnit < normalPerUnit;
+                    const isExpanded = product.id === expandedItemId;
+                    const snapshot = addTimeSnapshots[product.id];
 
-                  // ---- Price display type (backend: marketplaceitems.displayType) ----
-                  // Falls back to showing everything if displayType is unset/unknown,
-                  // matching the previous behavior for existing items.
-                  const displayType = isProduct
-                    ? ((product as any).displayType as DisplayType | undefined)
-                    : undefined;
+                    // Unique key per item (a product and a package could share the same id)
+                    const itemKey = `${product.type}-${product.id}`;
+                    // Only cards whose name wraps to 2 lines get the taller height
+                    const isLongName = !!longNameMap[itemKey];
 
-                  const showDiscountBadge =
-                    hasDiscount &&
-                    (displayType === "AP&SP&D" ||
-                      displayType === "D&AP" ||
-                      !displayType);
+                    const rawStartValue = isProduct
+                      ? parseFloat(String(product.startValue ?? "1")) || 1
+                      : 1;
+                    const normUnit = isProduct
+                      ? normalizeUnit(product.unitType)
+                      : "g";
 
-                  const showStruckNormalPrice =
-                    hasDiscount &&
-                    (displayType === "AP&SP&D" ||
-                      displayType === "AP&SP" ||
-                      !displayType);
+                    const displayWeightText = isProduct
+                      ? normUnit === "g"
+                        ? `${Math.round(rawStartValue * 1000)} g`
+                        : `${rawStartValue} kg`
+                      : "";
 
-                  const startNormalPrice = isProduct
-                    ? normalPerUnit * rawStartValue
-                    : 0;
-                  const startDiscountedPrice =
-                    isProduct && discountedPerUnit != null
-                      ? discountedPerUnit * rawStartValue
-                      : startNormalPrice;
+                    const normalPerUnit = isProduct
+                      ? parseFloat(String(product.normalPrice)) || 0
+                      : 0;
+                    const discountedPerUnit =
+                      isProduct && product.discountedPrice != null
+                        ? parseFloat(String(product.discountedPrice))
+                        : null;
 
-                  const basePrice = isProduct
-                    ? hasDiscount && displayType !== "D&AP"
-                      ? startDiscountedPrice
-                      : startNormalPrice
-                    : parseFloat(String(product.subTotal)) || 0;
+                    const hasDiscount =
+                      isProduct &&
+                      discountedPerUnit != null &&
+                      discountedPerUnit > 0 &&
+                      discountedPerUnit < normalPerUnit;
 
-                  const weightMultiplier = cartItem
-                    ? cartItem.unit === "kg"
-                      ? cartItem.weight
-                      : cartItem.weight / 1000
-                    : 1;
-                  // NOTE: Written as if/else instead of nested ternaries to avoid
-                  // Babel JSX parser misinterpreting `<` as a JSX tag opener.
-                  let effectiveCartUnitPrice: number;
-                  if (cartItem) {
-                    const _cd = cartItem.discountedPrice;
-                    const _cn = cartItem.normalPrice;
-                    const _cp = cartItem.price;
-                    const _notDAP = displayType !== "D&AP";
-                    if (
-                      _cd != null &&
-                      _cd > 0 &&
-                      _cn != null &&
-                      _cd < _cn &&
-                      _notDAP
-                    ) {
-                      effectiveCartUnitPrice = _cd;
-                    } else if (
-                      _cd != null &&
-                      _cd > 0 &&
-                      _cp != null &&
-                      _cd < _cp &&
-                      _notDAP
-                    ) {
-                      effectiveCartUnitPrice = _cd;
+                    // ---- Price display type (backend: marketplaceitems.displayType) ----
+                    // Falls back to showing everything if displayType is unset/unknown,
+                    // matching the previous behavior for existing items.
+                    const displayType = isProduct
+                      ? ((product as any).displayType as DisplayType | undefined)
+                      : undefined;
+
+                    const showDiscountBadge =
+                      hasDiscount &&
+                      (displayType === "AP&SP&D" ||
+                        displayType === "D&AP" ||
+                        !displayType);
+
+                    const discountPercent =
+                      isProduct &&
+                        (product as any).discount != null &&
+                        Number((product as any).discount) > 0
+                        ? (product as any).discount
+                        : hasDiscount && normalPerUnit > 0
+                          ? Math.round(
+                            ((normalPerUnit - discountedPerUnit!) /
+                              normalPerUnit) *
+                            100,
+                          )
+                          : null;
+
+                    const showStruckNormalPrice =
+                      hasDiscount &&
+                      (displayType === "AP&SP&D" ||
+                        displayType === "AP&SP" ||
+                        !displayType);
+
+                    const startNormalPrice = isProduct
+                      ? normalPerUnit * rawStartValue
+                      : 0;
+                    const startDiscountedPrice =
+                      isProduct && discountedPerUnit != null
+                        ? discountedPerUnit * rawStartValue
+                        : startNormalPrice;
+
+                    const basePrice = isProduct
+                      ? hasDiscount && displayType !== "D&AP"
+                        ? startDiscountedPrice
+                        : startNormalPrice
+                      : parseFloat(String(product.subTotal)) || 0;
+
+                    const weightMultiplier = cartItem
+                      ? cartItem.unit === "kg"
+                        ? cartItem.weight
+                        : cartItem.weight / 1000
+                      : 1;
+                    // NOTE: Written as if/else instead of nested ternaries to avoid
+                    // Babel JSX parser misinterpreting `<` as a JSX tag opener.
+                    let effectiveCartUnitPrice: number;
+                    if (cartItem) {
+                      const _cd = cartItem.discountedPrice;
+                      const _cn = cartItem.normalPrice;
+                      const _cp = cartItem.price;
+                      const _notDAP = displayType !== "D&AP";
+                      if (
+                        _cd != null &&
+                        _cd > 0 &&
+                        _cn != null &&
+                        _cd < _cn &&
+                        _notDAP
+                      ) {
+                        effectiveCartUnitPrice = _cd;
+                      } else if (
+                        _cd != null &&
+                        _cd > 0 &&
+                        _cp != null &&
+                        _cd < _cp &&
+                        _notDAP
+                      ) {
+                        effectiveCartUnitPrice = _cd;
+                      } else {
+                        effectiveCartUnitPrice = _cn != null ? _cn : (_cp ?? 0);
+                      }
                     } else {
-                      effectiveCartUnitPrice = _cn != null ? _cn : (_cp ?? 0);
+                      effectiveCartUnitPrice =
+                        hasDiscount && displayType !== "D&AP"
+                          ? discountedPerUnit!
+                          : normalPerUnit;
                     }
-                  } else {
-                    effectiveCartUnitPrice =
-                      hasDiscount && displayType !== "D&AP"
-                        ? discountedPerUnit!
-                        : normalPerUnit;
-                  }
-                  const calculatedProductPrice = cartItem
-                    ? effectiveCartUnitPrice * weightMultiplier
-                    : basePrice;
-                  const calculatedPackagePrice = cartPackage
-                    ? basePrice * cartPackage.quantity
-                    : basePrice;
-                  const isMinimum = cartItem
-                    ? cartItem.weight <= cartItem.minimumWeight
-                    : false;
-                  const isItemAtMax =
-                    cartItem && cartItem.maxWeight != null
-                      ? cartItem.weight >= cartItem.maxWeight
+                    const calculatedProductPrice = cartItem
+                      ? effectiveCartUnitPrice * weightMultiplier
+                      : basePrice;
+                    const calculatedPackagePrice = cartPackage
+                      ? basePrice * cartPackage.quantity
+                      : basePrice;
+                    const isMinimum = cartItem
+                      ? cartItem.weight <= cartItem.minimumWeight
                       : false;
+                    const isItemAtMax =
+                      cartItem && cartItem.maxWeight != null
+                        ? cartItem.weight >= cartItem.maxWeight
+                        : false;
 
-                  return (
-                    <TouchableOpacity
-                      key={product.id}
-                      activeOpacity={0.9}
-                      className="flex-1"
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        if (product.type === "package") {
-                          navigation.navigate("ViewPackage", {
-                            packageId: product.id,
-                            packageName: product.displayName,
-                            image: product.image,
-                            price: parseFloat(product.subTotal),
-                            packageType: product.packageType,
-                            endDate: product.endDate,
-                          });
-                        } else {
-                          navigation.navigate("ViewProduct", {
-                            product: product,
-                          });
-                        }
-                      }}
-                    >
-                      <View
-                        key={product.id!}
-                        className="flex-1 bg-[#F4F3F3] pt-4 pb-8 px-3 items-center mx-2 relative mb-6"
-                        style={{
-                          // 240 only when the name takes 2 lines, otherwise 220
-                          minHeight: isLongName
-                            ? CARD_HEIGHT_LONG_NAME
-                            : CARD_HEIGHT_DEFAULT,
-                          borderTopLeftRadius: 100,
-                          borderTopRightRadius: 100,
-                          borderBottomLeftRadius: 18,
-                          borderBottomRightRadius: 18,
+                    return (
+                      <TouchableOpacity
+                        key={product.id}
+                        activeOpacity={0.9}
+                        className="flex-1"
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          if (product.type === "package") {
+                            navigation.navigate("ViewPackage", {
+                              packageId: product.id,
+                              packageName: product.displayName,
+                              image: product.image,
+                              price: parseFloat(product.subTotal),
+                              packageType: product.packageType,
+                              endDate: product.endDate,
+                            });
+                          } else {
+                            navigation.navigate("ViewProduct", {
+                              product: product,
+                            });
+                          }
                         }}
                       >
-                        {isProduct && showDiscountBadge && product.discount && (
-                          <View
-                            style={{
-                              position: "absolute",
-                              display: "flex",
-                              top: 15,
-                              left: 4,
-                              width: 35,
-                              height: 35,
-                              backgroundColor: "#F34261",
-                              borderRadius: 100,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              zIndex: 10,
-                            }}
-                          >
-                            <Text
+                        <View
+                          key={product.id!}
+                          className="flex-1 bg-[#F4F3F3] pt-4 pb-8 px-3 items-center mx-2 relative mb-6"
+                          style={{
+                            // 240 only when the name takes 2 lines, otherwise 220
+                            minHeight: isLongName
+                              ? CARD_HEIGHT_LONG_NAME
+                              : CARD_HEIGHT_DEFAULT,
+                            borderTopLeftRadius: 100,
+                            borderTopRightRadius: 100,
+                            borderBottomLeftRadius: 18,
+                            borderBottomRightRadius: 18,
+                          }}
+                        >
+                          {isProduct && showDiscountBadge && discountPercent != null && (
+                            <View
                               style={{
-                                fontSize: 11,
-                                fontWeight: "700",
-                                textAlign: "center",
-                                color: "#FFF",
+                                position: "absolute",
+                                display: "flex",
+                                top: 15,
+                                left: 4,
+                                width: 35,
+                                height: 35,
+                                backgroundColor: "#F34261",
+                                borderRadius: 100,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                zIndex: 10,
                               }}
                             >
-                              {product.discount}%
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "700",
+                                  textAlign: "center",
+                                  color: "#FFF",
+                                }}
+                              >
+                                {discountPercent}%
+                              </Text>
+                            </View>
+                          )}
+
+                          <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
+                            <Image
+                              source={{ uri: product?.image! }}
+                              className="w-20 h-20"
+                              resizeMode="contain"
+                            />
+                          </View>
+
+                          {/* Product Details */}
+                          <View style={{ width: "100%", marginTop: 4 }}>
+                            <Text
+                              numberOfLines={2}
+                              ellipsizeMode="tail"
+                              onTextLayout={(e) => {
+                                const isMulti = e.nativeEvent.lines.length > 1;
+                                setLongNameMap((prev) =>
+                                  prev[itemKey] === isMulti
+                                    ? prev
+                                    : { ...prev, [itemKey]: isMulti },
+                                );
+                              }}
+                              style={{
+                                color: "#000000",
+                                fontWeight: "bold",
+                                fontSize: 13,
+                                textAlign: "center",
+                              }}
+                            >
+                              {product?.displayName}
                             </Text>
                           </View>
-                        )}
 
-                        <View className="w-28 h-28 rounded-full bg-white items-center justify-center shadow-sm border border-gray-100">
-                          <Image
-                            source={{ uri: product?.image! }}
-                            className="w-20 h-20"
-                            resizeMode="contain"
-                          />
-                        </View>
-
-                        {/* Product Details */}
-                        <View style={{ width: "100%", marginTop: 4 }}>
-                          <Text
-                            numberOfLines={2}
-                            ellipsizeMode="tail"
-                            onTextLayout={(e) => {
-                              const isMulti = e.nativeEvent.lines.length > 1;
-                              setLongNameMap((prev) =>
-                                prev[itemKey] === isMulti
-                                  ? prev
-                                  : { ...prev, [itemKey]: isMulti },
-                              );
-                            }}
-                            style={{
-                              color: "#000000",
-                              fontWeight: "bold",
-                              fontSize: 13,
-                              textAlign: "center",
-                            }}
-                          >
-                            {product?.displayName}
-                          </Text>
-                        </View>
-
-                        {/* PRODUCT CARD: Not in cart */}
-                        {isProduct && !cartItem && (
-                          <>
-                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
-                              {displayWeightText}
-                            </Text>
-
-                            {showStruckNormalPrice && (
-                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
-                                Rs. {formatPrice(startNormalPrice)}
+                          {/* PRODUCT CARD: Not in cart */}
+                          {isProduct && !cartItem && (
+                            <>
+                              <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
+                                {displayWeightText}
                               </Text>
-                            )}
 
-                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
-                              Rs. {formatPrice(basePrice)}
-                            </Text>
-
-                            {/* Black Circular Add Button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              disabled={addingItemId === product.id}
-                              onPress={() => {
-                                handleAddProduct(product as ProductType);
-                              }}
-                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
-                              style={{
-                                shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 4,
-                                elevation: 5,
-                              }}
-                            >
-                              {addingItemId === product.id ? (
-                                <ActivityIndicator
-                                  size="small"
-                                  color="#FFFFFF"
-                                />
-                              ) : (
-                                <Ionicons
-                                  name="add"
-                                  size={22}
-                                  color="#FFFFFF"
-                                />
+                              {rowHasStruck && (
+                                <View style={{ height: 16, justifyContent: "center", marginTop: 2 }}>
+                                  {showStruckNormalPrice && (
+                                    <StruckPrice text={`Rs. ${formatPrice(startNormalPrice)}`} />
+                                  )}
+                                </View>
                               )}
-                            </TouchableOpacity>
-                          </>
-                        )}
 
-                        {/* PRODUCT CARD: In cart, EXPANDED (currently active) */}
-                        {isProduct && cartItem && isExpanded && (
-                          <>
-                            {/* Unit Switcher: kg vs g */}
-                            <View className="flex-row items-center justify-center mt-2 mb-1">
-                              {/* kg button */}
+                              <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
+                                Rs. {formatPrice(basePrice)}
+                              </Text>
+
+                              {/* Black Circular Add Button */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleUnit(product.id, "kg");
+                                disabled={addingItemId === product.id}
+                                onPress={() => {
+                                  handleAddProduct(product as ProductType);
                                 }}
+                                className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
                                 style={{
-                                  backgroundColor:
-                                    cartItem.unit === "kg"
-                                      ? "#FF9114"
-                                      : "#FFC179",
-                                  width: 38,
-                                  height: 22,
-                                  borderRadius: 11,
-                                  alignItems: "center",
-                                  justifyContent: "center",
+                                  shadowColor: "#000",
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.3,
+                                  shadowRadius: 4,
+                                  elevation: 5,
                                 }}
                               >
-                                <Text
+                                {addingItemId === product.id ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="add"
+                                    size={22}
+                                    color="#FFFFFF"
+                                  />
+                                )}
+                              </TouchableOpacity>
+                            </>
+                          )}
+
+                          {/* PRODUCT CARD: In cart, EXPANDED (currently active) */}
+                          {isProduct && cartItem && isExpanded && (
+                            <>
+                              {/* Unit Switcher: kg vs g */}
+                              <View className="flex-row items-center justify-center mt-2 mb-1">
+                                {/* kg button */}
+                                <TouchableOpacity
+                                  activeOpacity={0.8}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleUnit(product.id, "kg");
+                                  }}
                                   style={{
-                                    color: "#FFFFFF",
-                                    fontSize: 12,
-                                    fontWeight: "bold",
-                                    textAlign: "center",
-                                    textAlignVertical: "center",
-                                    includeFontPadding: false,
+                                    backgroundColor:
+                                      cartItem.unit === "kg"
+                                        ? "#FF9114"
+                                        : "#FFC179",
+                                    width: 38,
+                                    height: 22,
+                                    borderRadius: 11,
+                                    alignItems: "center",
+                                    justifyContent: "center",
                                   }}
                                 >
-                                  kg
-                                </Text>
-                              </TouchableOpacity>
+                                  <Text
+                                    style={{
+                                      color: "#FFFFFF",
+                                      fontSize: 12,
+                                      fontWeight: "bold",
+                                      textAlign: "center",
+                                      textAlignVertical: "center",
+                                      includeFontPadding: false,
+                                    }}
+                                  >
+                                    kg
+                                  </Text>
+                                </TouchableOpacity>
 
-                              {/* Arrow icon */}
-                              <View
-                                style={{
-                                  height: 22,
-                                  justifyContent: "center",
-                                  alignItems: "center",
-                                  marginHorizontal: 6,
-                                }}
-                              >
-                                <FontAwesome6
-                                  name="arrows-left-right"
-                                  size={13}
-                                  color="#000000"
-                                />
+                                {/* Arrow icon */}
+                                <View
+                                  style={{
+                                    height: 22,
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    marginHorizontal: 6,
+                                  }}
+                                >
+                                  <FontAwesome6
+                                    name="arrows-left-right"
+                                    size={13}
+                                    color="#000000"
+                                  />
+                                </View>
+
+                                {/* g button */}
+                                <TouchableOpacity
+                                  activeOpacity={0.8}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleUnit(product.id, "g");
+                                  }}
+                                  style={{
+                                    backgroundColor:
+                                      cartItem.unit === "g"
+                                        ? "#FF9114"
+                                        : "#FFC179",
+                                    width: 38,
+                                    height: 22,
+                                    borderRadius: 11,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      color: "#FFFFFF",
+                                      fontSize: 12,
+                                      fontWeight: "bold",
+                                      textAlign: "center",
+                                      textAlignVertical: "center",
+                                      includeFontPadding: false,
+                                    }}
+                                  >
+                                    g
+                                  </Text>
+                                </TouchableOpacity>
                               </View>
 
-                              {/* g button */}
-                              <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleUnit(product.id, "g");
-                                }}
-                                style={{
-                                  backgroundColor:
-                                    cartItem.unit === "g"
-                                      ? "#FF9114"
-                                      : "#FFC179",
-                                  width: 38,
-                                  height: 22,
-                                  borderRadius: 11,
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <Text
-                                  style={{
-                                    color: "#FFFFFF",
-                                    fontSize: 12,
-                                    fontWeight: "bold",
-                                    textAlign: "center",
-                                    textAlignVertical: "center",
-                                    includeFontPadding: false,
+                              {/* Quantity Selector Capsule */}
+                              <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-3 shadow-sm">
+                                {/* Minus / Trash Button */}
+                                <TouchableOpacity
+                                  activeOpacity={0.8}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleDecrement(product.id);
                                   }}
+                                  className="w-6 h-6 rounded-full bg-black items-center justify-center"
                                 >
-                                  g
+                                  {isMinimum ? (
+                                    <FontAwesome6
+                                      name="trash"
+                                      size={13}
+                                      color="#FFFFFF"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="remove"
+                                      size={14}
+                                      color="#FFFFFF"
+                                    />
+                                  )}
+                                </TouchableOpacity>
+
+                                {/* Qty value */}
+                                <Text className="text-black font-bold text-[12px]">
+                                  {cartItem.weight} {cartItem.unit}
                                 </Text>
-                              </TouchableOpacity>
-                            </View>
 
-                            {/* Quantity Selector Capsule */}
-                            <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-3 shadow-sm">
-                              {/* Minus / Trash Button */}
+                                {/* Plus Button */}
+                                <TouchableOpacity
+                                  activeOpacity={0.8}
+                                  disabled={isItemAtMax}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleIncrement(product.id);
+                                  }}
+                                  className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
+                                    }`}
+                                >
+                                  <Ionicons
+                                    name="add"
+                                    size={14}
+                                    color="#FFFFFF"
+                                  />
+                                </TouchableOpacity>
+                              </View>
+
+                              {/* Price */}
+                              <Text className="text-black font-extrabold text-sm mt-2 text-center">
+                                Rs. {formatPrice(calculatedProductPrice)}
+                              </Text>
+                            </>
+                          )}
+
+                          {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
+                          {isProduct && cartItem && !isExpanded && (
+                            <>
+                              <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
+                                {displayWeightText}
+                              </Text>
+
+                              {rowHasStruck && (
+                                <View style={{ height: 16, justifyContent: "center", marginTop: 2 }}>
+                                  {showStruckNormalPrice && (
+                                    <StruckPrice text={`Rs. ${formatPrice(startNormalPrice)}`} />
+                                  )}
+                                </View>
+                              )}
+
+                              <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
+                                Rs. {formatPrice(basePrice)}
+                              </Text>
+
+                              {/* Plus Button — tap to re-expand this card and see live controls */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleDecrement(product.id);
+                                disabled={addingItemId === product.id}
+                                onPress={() => {
+                                  setExpandedItemId(product.id);
                                 }}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                                style={{
+                                  shadowColor: "#000",
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.3,
+                                  shadowRadius: 4,
+                                  elevation: 5,
+                                }}
                               >
-                                {isMinimum ? (
-                                  <FontAwesome6
-                                    name="trash"
-                                    size={13}
+                                <Ionicons name="add" size={22} color="#FFFFFF" />
+                              </TouchableOpacity>
+                            </>
+                          )}
+
+                          {/* PACKAGE CARD: Not in cart */}
+                          {isPackage && !cartPackage && (
+                            <>
+                              <Text className="text-black font-extrabold text-sm mt-2 text-center">
+                                Rs. {formatPrice(basePrice)}
+                              </Text>
+
+                              {/* Add Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                disabled={addingItemId === product.id}
+                                onPress={() => {
+                                  handleAddPackage(product as PackageType);
+                                }}
+                                className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                                style={{
+                                  shadowColor: "#000",
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.3,
+                                  shadowRadius: 4,
+                                  elevation: 5,
+                                }}
+                              >
+                                {addingItemId === product.id ? (
+                                  <ActivityIndicator
+                                    size="small"
                                     color="#FFFFFF"
                                   />
                                 ) : (
                                   <Ionicons
-                                    name="remove"
-                                    size={14}
+                                    name="add"
+                                    size={22}
                                     color="#FFFFFF"
                                   />
                                 )}
                               </TouchableOpacity>
+                            </>
+                          )}
 
-                              {/* Qty value */}
-                              <Text className="text-black font-bold text-[12px]">
-                                {cartItem.weight} {cartItem.unit}
-                              </Text>
+                          {/* PACKAGE CARD: In cart, EXPANDED (currently active) */}
+                          {isPackage && cartPackage && isExpanded && (
+                            <>
+                              {/* Quantity Selector capsule for Package */}
+                              <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-2 shadow-sm">
+                                {/* Minus / Trash Button */}
+                                <TouchableOpacity
+                                  activeOpacity={0.8}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleDecrementPackage(product.id);
+                                  }}
+                                  className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                >
+                                  {cartPackage.quantity <= 1 ? (
+                                    <FontAwesome6
+                                      name="trash"
+                                      size={13}
+                                      color="#FFFFFF"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="remove"
+                                      size={14}
+                                      color="#FFFFFF"
+                                    />
+                                  )}
+                                </TouchableOpacity>
 
-                              {/* Plus Button */}
-                              <TouchableOpacity
-                                activeOpacity={0.8}
-                                disabled={isItemAtMax}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleIncrement(product.id);
-                                }}
-                                className={`w-6 h-6 rounded-full items-center justify-center ${isItemAtMax ? "bg-gray-300" : "bg-black"
-                                  }`}
-                              >
-                                <Ionicons
-                                  name="add"
-                                  size={14}
-                                  color="#FFFFFF"
-                                />
-                              </TouchableOpacity>
-                            </View>
+                                {/* Quantity value */}
+                                <Text className="text-black font-bold text-[12px]">
+                                  {cartPackage.quantity}
+                                </Text>
 
-                            {/* Price */}
-                            <Text className="text-black font-extrabold text-sm mt-2 text-center">
-                              Rs. {formatPrice(calculatedProductPrice)}
-                            </Text>
-                          </>
-                        )}
-
-                        {/* PRODUCT CARD: In cart, COLLAPSED (not the active one) */}
-                        {isProduct && cartItem && !isExpanded && (
-                          <>
-                            <Text className="text-[#5A5859] text-[11px] mt-0.5 text-center">
-                              {displayWeightText}
-                            </Text>
-
-                            {showStruckNormalPrice && (
-                              <Text className="text-[#5A5859] text-[11px] line-through text-center mt-0.5">
-                                Rs. {formatPrice(startNormalPrice)}
-                              </Text>
-                            )}
-
-                            <Text className="text-[#000000] font-extrabold text-sm mt-0.5 text-center">
-                              Rs. {formatPrice(basePrice)}
-                            </Text>
-
-                            {/* Plus Button — tap to re-expand this card and see live controls */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              disabled={addingItemId === product.id}
-                              onPress={() => {
-                                setExpandedItemId(product.id);
-                              }}
-                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
-                              style={{
-                                shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 4,
-                                elevation: 5,
-                              }}
-                            >
-                              <Ionicons name="add" size={22} color="#FFFFFF" />
-                            </TouchableOpacity>
-                          </>
-                        )}
-
-                        {/* PACKAGE CARD: Not in cart */}
-                        {isPackage && !cartPackage && (
-                          <>
-                            <Text className="text-black font-extrabold text-sm mt-2 text-center">
-                              Rs. {formatPrice(basePrice)}
-                            </Text>
-
-                            {/* Add Button */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              disabled={addingItemId === product.id}
-                              onPress={() => {
-                                handleAddPackage(product as PackageType);
-                              }}
-                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
-                              style={{
-                                shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 4,
-                                elevation: 5,
-                              }}
-                            >
-                              {addingItemId === product.id ? (
-                                <ActivityIndicator
-                                  size="small"
-                                  color="#FFFFFF"
-                                />
-                              ) : (
-                                <Ionicons
-                                  name="add"
-                                  size={22}
-                                  color="#FFFFFF"
-                                />
-                              )}
-                            </TouchableOpacity>
-                          </>
-                        )}
-
-                        {/* PACKAGE CARD: In cart, EXPANDED (currently active) */}
-                        {isPackage && cartPackage && isExpanded && (
-                          <>
-                            {/* Quantity Selector capsule for Package */}
-                            <View className="flex-row items-center justify-between bg-[#F4F3F3] border border-[#A3A3A3] rounded-full px-1.5 py-1 w-full max-w-[130px] mt-2 shadow-sm">
-                              {/* Minus / Trash Button */}
-                              <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleDecrementPackage(product.id);
-                                }}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
-                              >
-                                {cartPackage.quantity <= 1 ? (
-                                  <FontAwesome6
-                                    name="trash"
-                                    size={13}
-                                    color="#FFFFFF"
-                                  />
-                                ) : (
+                                {/* Plus Button */}
+                                <TouchableOpacity
+                                  activeOpacity={0.8}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleIncrementPackage(product.id);
+                                  }}
+                                  className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                >
                                   <Ionicons
-                                    name="remove"
+                                    name="add"
                                     size={14}
                                     color="#FFFFFF"
                                   />
-                                )}
-                              </TouchableOpacity>
+                                </TouchableOpacity>
+                              </View>
 
-                              {/* Quantity value */}
-                              <Text className="text-black font-bold text-[12px]">
-                                {cartPackage.quantity}
+                              {/* Price */}
+                              <Text className="text-black font-extrabold text-sm mt-2 text-center">
+                                Rs. {formatPrice(calculatedPackagePrice)}
+                              </Text>
+                            </>
+                          )}
+
+                          {/* PACKAGE CARD: In cart, COLLAPSED (not the active one) */}
+                          {/* Shows the FROZEN add-time snapshot, not live cartPackage data. */}
+                          {isPackage && cartPackage && !isExpanded && (
+                            <>
+                              <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
+                                Rs.{" "}
+                                {formatPrice(
+                                  snapshot?.price ?? calculatedPackagePrice,
+                                )}
                               </Text>
 
-                              {/* Plus Button */}
+                              {/* Re-expand Button — tap to re-expand this card */}
                               <TouchableOpacity
                                 activeOpacity={0.8}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleIncrementPackage(product.id);
+                                disabled={addingItemId === product.id}
+                                onPress={() => {
+                                  setExpandedItemId(product.id);
                                 }}
-                                className="w-6 h-6 rounded-full bg-black items-center justify-center"
+                                className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
+                                style={{
+                                  shadowColor: "#000",
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.3,
+                                  shadowRadius: 4,
+                                  elevation: 5,
+                                }}
                               >
-                                <Ionicons
-                                  name="add"
-                                  size={14}
-                                  color="#FFFFFF"
-                                />
+                                <Ionicons name="add" size={20} color="#FFFFFF" />
                               </TouchableOpacity>
-                            </View>
-
-                            {/* Price */}
-                            <Text className="text-black font-extrabold text-sm mt-2 text-center">
-                              Rs. {formatPrice(calculatedPackagePrice)}
-                            </Text>
-                          </>
-                        )}
-
-                        {/* PACKAGE CARD: In cart, COLLAPSED (not the active one) */}
-                        {/* Shows the FROZEN add-time snapshot, not live cartPackage data. */}
-                        {isPackage && cartPackage && !isExpanded && (
-                          <>
-                            <Text className="text-black font-extrabold text-sm mt-0.5 text-center">
-                              Rs.{" "}
-                              {formatPrice(
-                                snapshot?.price ?? calculatedPackagePrice,
-                              )}
-                            </Text>
-
-                            {/* Re-expand Button — tap to re-expand this card */}
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              disabled={addingItemId === product.id}
-                              onPress={() => {
-                                setExpandedItemId(product.id);
-                              }}
-                              className="w-10 h-10 rounded-full bg-black items-center justify-center absolute -bottom-5"
-                              style={{
-                                shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 4 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 4,
-                                elevation: 5,
-                              }}
-                            >
-                              <Ionicons name="add" size={20} color="#FFFFFF" />
-                            </TouchableOpacity>
-                          </>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-                {row.length === 1 && <View className="flex-1" />}
-              </View>
-            ))}
+                            </>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {row.length === 1 && <View className="flex-1" />}
+                </View>
+              );
+            })}
           </View>
         )}
       </ScrollView>

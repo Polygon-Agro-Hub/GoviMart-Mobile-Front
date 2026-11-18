@@ -226,7 +226,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   };
 
   const getAssetSize = async (asset: ImagePicker.ImagePickerAsset) => {
-    if (asset.fileSize) return asset.fileSize; // fast path, no file I/O
+    if (typeof asset.fileSize === "number" && asset.fileSize > 0) {
+      return asset.fileSize; // fast path, no file I/O
+    }
     try {
       const info: any = await FileSystem.getInfoAsync(asset.uri);
       return info?.exists && typeof info.size === "number" ? info.size : 0;
@@ -235,7 +237,29 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     }
   };
 
+  const handleAddPhotoPress = () => {
+    if (images.length >= MAX_IMAGES) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+    pickImage();
+  };
+
   const pickImage = async () => {
+    const remainingSlots = MAX_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+
     if (Platform.OS === "ios") {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -252,28 +276,40 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       }
     }
 
+    // Launch without quality compression so native picker returns instantly without delay
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      // Let the picker return more than the remaining slots so WE can warn
-      // immediately instead of the native picker silently blocking the user.
-      selectionLimit: MAX_IMAGES,
-      quality: 0.7,
+      selectionLimit: remainingSlots + 1,
     });
 
     if (result.canceled || !result.assets?.length) return;
 
-    // 1) Limit check: instant, before any async work
-    if (images.length + result.assets.length > MAX_IMAGES) {
+    // 1) Instant limit check right when picker closes
+    if (result.assets.length > remainingSlots) {
       showAlert(
-        "Limit Reached",
-        `You can attach up to ${MAX_IMAGES} images.`,
+        "Limit Exceeded",
+        `You can only attach up to ${MAX_IMAGES} photos in total.`,
         "error",
       );
       return;
     }
 
-    // 2) Read all sizes in parallel (not one by one)
+    // 2) Fast size check: check available metadata first
+    const hasImmediateOversize = result.assets.some(
+      (a) => typeof a.fileSize === "number" && a.fileSize > MAX_IMAGE_SIZE,
+    );
+    if (hasImmediateOversize) {
+      setImageError("Image size must not exceed 5MB");
+      showAlert(
+        "Limit Exceeded",
+        "Image size must not exceed 5MB. Please choose a smaller image.",
+        "error",
+      );
+      return;
+    }
+
+    // Read remaining sizes in parallel
     const sizes = await Promise.all(result.assets.map(getAssetSize));
 
     // 3) Oversize check: show the popup right away
@@ -281,7 +317,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     if (hasOversized) {
       setImageError("Image size must not exceed 5MB");
       showAlert(
-        "Image Too Large",
+        "Limit Exceeded",
         "Image size must not exceed 5MB. Please choose a smaller image.",
         "error",
       );
@@ -692,10 +728,10 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
             paddingBottom: 10,
           }}
         >
-          {images.length < 6 && (
+          {images.length < MAX_IMAGES ? (
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={pickImage}
+              onPress={handleAddPhotoPress}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -719,6 +755,36 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                 }}
               >
                 Add Photo
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleAddPhotoPress}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: "#E5E7EB",
+                backgroundColor: "#F3F4F6",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: 0.7,
+              }}
+            >
+              <FontAwesome6 name="camera" solid size={27} color="#9CA3AF" />
+
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#9CA3AF",
+                  marginTop: 5,
+                }}
+              >
+                Max (6)
               </Text>
             </TouchableOpacity>
           )}

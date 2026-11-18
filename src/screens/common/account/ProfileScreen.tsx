@@ -410,7 +410,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                     onPress={() => {
                       navigation.navigate("PaymentScreen", {
                         amount: Math.abs(creditBalance),
-                        title: "Payment Summery",
+                        title: "Payment Summary",
                       });
                     }}
                     style={{

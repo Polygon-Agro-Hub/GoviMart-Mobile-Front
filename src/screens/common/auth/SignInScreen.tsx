@@ -82,6 +82,7 @@ import socketService from "@/services/socket/socket.service";
 import pushNotificationService from "@/services/notification/pushNotification.service";
 import { AlertModal } from "@/component/common/AlertModal";
 import { PHONE_RULES } from "@/utils/phoneValidation";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.4;
@@ -307,6 +308,7 @@ const extractDocName = (url?: string | null) => {
 };
 
 const Login: React.FC<LoginProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -957,6 +959,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
         visible={wholesalePendingModalVisible}
         transparent
         animationType="slide"
+        statusBarTranslucent
         onRequestClose={() => setWholesalePendingModalVisible(false)}
       >
         <View
@@ -972,202 +975,209 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
               borderTopLeftRadius: 36,
               borderTopRightRadius: 36,
               paddingHorizontal: 24,
-              paddingTop: 28,
-              paddingBottom: Platform.OS === "ios" ? 40 : 28,
+              paddingTop: 24,
+              paddingBottom: Math.max(insets.bottom, 20) + 16,
+              maxHeight: "92%",
             }}
           >
-            {/* Top Icon with Hourglass & Overlapping Mini Shield */}
-            <View style={{ alignItems: "center", marginBottom: 16 }}>
-              <View
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 24,
-                  backgroundColor: "#FFF8E6",
-                  borderWidth: 1.5,
-                  borderColor: "#FDE8AF",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                }}
-              >
-                <PendingHourglassIcon width={28} height={42} color="#D97706" />
-
-                {/* Overlapping Mini Shield Verification Badge */}
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ flexGrow: 0 }}
+            >
+              {/* Top Icon with Hourglass & Overlapping Mini Shield */}
+              <View style={{ alignItems: "center", marginBottom: 16 }}>
                 <View
                   style={{
-                    position: "absolute",
-                    bottom: -5,
-                    right: -5,
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: "#281E4B",
-                    borderWidth: 2.5,
-                    borderColor: "#FFFFFF",
+                    width: 80,
+                    height: 80,
+                    borderRadius: 24,
+                    backgroundColor: "#FFF8E6",
+                    borderWidth: 1.5,
+                    borderColor: "#FDE8AF",
                     alignItems: "center",
                     justifyContent: "center",
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.16,
-                    shadowRadius: 3,
-                    elevation: 4,
+                    position: "relative",
                   }}
                 >
-                  <PendingShieldCheckIcon size={16} color="#FFFFFF" />
+                  <PendingHourglassIcon width={28} height={42} color="#D97706" />
+
+                  {/* Overlapping Mini Shield Verification Badge */}
+                  <View
+                    style={{
+                      position: "absolute",
+                      bottom: -5,
+                      right: -5,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#281E4B",
+                      borderWidth: 2.5,
+                      borderColor: "#FFFFFF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.16,
+                      shadowRadius: 3,
+                      elevation: 4,
+                    }}
+                  >
+                    <PendingShieldCheckIcon size={16} color="#FFFFFF" />
+                  </View>
                 </View>
               </View>
-            </View>
 
-            {/* Title */}
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: "800",
-                color: "#0F172A",
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-            >
-              Wholesale Verification Pending
-            </Text>
-
-            {/* Subtitle */}
-            <Text
-              style={{
-                fontSize: 13,
-                color: "#64748B",
-                textAlign: "center",
-                lineHeight: 20,
-                marginBottom: 22,
-                paddingHorizontal: 8,
-              }}
-            >
-              Your wholesale account registration and business documents are
-              currently being verified by our team. This process typically takes
-              24–48 hours to ensure all trade compliance standards are met.
-            </Text>
-
-            {/* Status Card */}
-            <View
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 18,
-                padding: 16,
-                marginBottom: 24,
-              }}
-            >
-              {/* Row 1: Review Status */}
-              <View
+              {/* Title */}
+              <Text
                 style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 14,
+                  fontSize: 22,
+                  fontWeight: "800",
+                  color: "#0F172A",
+                  textAlign: "center",
+                  marginBottom: 10,
                 }}
               >
-                <Text
-                  style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}
-                >
-                  Review Status
-                </Text>
+                Wholesale Verification Pending
+              </Text>
+
+              {/* Subtitle */}
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#64748B",
+                  textAlign: "center",
+                  lineHeight: 20,
+                  marginBottom: 22,
+                  paddingHorizontal: 8,
+                }}
+              >
+                Your wholesale account registration and business documents are
+                currently being verified by our team. This process typically takes
+                24–48 hours to ensure all trade compliance standards are met.
+              </Text>
+
+              {/* Status Card */}
+              <View
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 18,
+                  padding: 16,
+                  marginBottom: 16,
+                }}
+              >
+                {/* Row 1: Review Status */}
                 <View
                   style={{
                     flexDirection: "row",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    backgroundColor: "#FFF5E9",
-                    borderWidth: 1,
-                    borderColor: "#FF9114",
-                    borderRadius: 999,
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
+                    marginBottom: 14,
                   }}
                 >
+                  <Text
+                    style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}
+                  >
+                    Review Status
+                  </Text>
                   <View
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: "#FF9114",
-                      marginRight: 6,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      color: "#FF9114",
-                      fontSize: 12,
-                      fontWeight: "600",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "#FFF5E9",
+                      borderWidth: 1,
+                      borderColor: "#FF9114",
+                      borderRadius: 999,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
                     }}
                   >
-                    Pending Approval
+                    <View
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: "#FF9114",
+                        marginRight: 6,
+                      }}
+                    />
+                    <Text
+                      style={{
+                        color: "#FF9114",
+                        fontSize: 12,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Pending Approval
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Row 2: Submitted Date */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 14,
+                  }}
+                >
+                  <Text
+                    style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}
+                  >
+                    Submitted Date
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#0F172A",
+                      fontSize: 13,
+                      fontWeight: "700",
+                      textAlign: "right",
+                      flexShrink: 1,
+                      marginLeft: 12,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {formatSubmittedDate(wholesalePendingData?.submittedDate)}
+                  </Text>
+                </View>
+
+                {/* Row 3: Submitted Document */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#64748B",
+                      fontSize: 13,
+                      fontWeight: "500",
+                      lineHeight: 18,
+                    }}
+                  >
+                    {"Submitted\nDocument"}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: "#00C8B3",
+                      fontSize: 13,
+                      fontWeight: "600",
+                      maxWidth: "55%",
+                      textDecorationLine: "underline",
+                      textDecorationColor: "#A7F3D0",
+                    }}
+                  >
+                    {extractDocName(wholesalePendingData?.brImg)}
                   </Text>
                 </View>
               </View>
-
-              {/* Row 2: Submitted Date */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 14,
-                }}
-              >
-                <Text
-                  style={{ color: "#64748B", fontSize: 13, fontWeight: "500" }}
-                >
-                  Submitted Date
-                </Text>
-                <Text
-                  style={{
-                    color: "#0F172A",
-                    fontSize: 13,
-                    fontWeight: "700",
-                    textAlign: "right",
-                    flexShrink: 1,
-                    marginLeft: 12,
-                    lineHeight: 18,
-                  }}
-                >
-                  {formatSubmittedDate(wholesalePendingData?.submittedDate)}
-                </Text>
-              </View>
-
-              {/* Row 3: Submitted Document */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#64748B",
-                    fontSize: 13,
-                    fontWeight: "500",
-                    lineHeight: 18,
-                  }}
-                >
-                  {"Submitted\nDocument"}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: "#00C8B3",
-                    fontSize: 13,
-                    fontWeight: "600",
-                    maxWidth: "55%",
-                    textDecorationLine: "underline",
-                    textDecorationColor: "#A7F3D0",
-                  }}
-                >
-                  {extractDocName(wholesalePendingData?.brImg)}
-                </Text>
-              </View>
-            </View>
+            </ScrollView>
 
             {/* Bottom Action Button */}
             <TouchableOpacity
@@ -1184,7 +1194,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
                 shadowOpacity: 0.2,
                 shadowRadius: 8,
                 elevation: 4,
-                marginBottom:10
+                marginTop: 10,
               }}
             >
               <Text

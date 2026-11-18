@@ -20,12 +20,18 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
+import { AlertModal } from "@/component/common/AlertModal";
+import LoadingPage from "@/component/common/LoadingPage";
 
 /*
   NOTE: add these to the "OrderConfirmedOrderCancelScreen" params in
   RootStackParamList:
     serviceFee?: number;
     hasAlaCarte?: boolean;
+    couponDiscount?: number;        // money-off coupon (not free delivery)
+    deliveryFee?: number;           // original delivery fee (0 for pickup)
+    isFreeDeliveryCoupon?: boolean; // true => "Delivery Fee Coupon Applied!"
+    isPickup?: boolean;
 */
 type Props = StackScreenProps<
   RootStackParamList,
@@ -125,19 +131,36 @@ const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({
 );
 
 // Flat summary row with a divider line underneath (matches the design)
+//  - light: regular-weight order breakdown rows (For Packages, Delivery Fee ...)
+//  - bold:  Total row
+//  - default: semi-bold payment rows (Total Pay with Card (Due) ...)
+//  - valueClassName: overrides the value text style (e.g. green coupon message)
 const SummaryRow: React.FC<{
   label: string;
   value: string;
   bold?: boolean;
-}> = ({ label, value, bold }) => (
-  <View className="flex-row justify-between items-center py-3 border-b border-[#D9D9D9]">
-    <Text className={`text-[14px] text-black ${bold ? "font-bold" : ""}`}>
+  light?: boolean;
+  valueClassName?: string;
+}> = ({ label, value, bold, light, valueClassName }) => (
+  <View
+    className={`flex-row justify-between items-center py-3 border-b ${
+      light ? "border-[#ECECEC]" : "border-[#D9D9D9]"
+    }`}
+  >
+    <Text
+      className={`text-[14px] ${light ? "text-[#4B4F6B]" : "text-black"} ${
+        bold ? "font-bold" : light ? "" : "font-semibold"
+      }`}
+    >
       {label}
     </Text>
     <Text
-      className={`text-[14px] text-black ${
-        bold ? "font-bold" : "font-semibold"
-      }`}
+      className={
+        valueClassName ??
+        `text-[14px] ${light ? "text-[#4B4F6B]" : "text-black"} ${
+          bold ? "font-bold" : light ? "" : "font-semibold"
+        }`
+      }
     >
       {value}
     </Text>
@@ -166,6 +189,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
     serviceFee: passedServiceFee, // DASH: 0 / undefined when not a Dash order
+    couponDiscount: passedCouponDiscount,
+    deliveryFee: passedDeliveryFee,
+    isFreeDeliveryCoupon: passedIsFreeDeliveryCoupon,
+    isPickup: passedIsPickup,
   } = (route.params || {}) as any;
 
   // Order has ala carte items check
@@ -177,6 +204,17 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
 
   // DASH service fee (only passed for orderApp = "Dash")
   const serviceFee = Number(passedServiceFee ?? 0);
+
+  // Coupon / delivery details passed from the confirmation screen
+  const couponDiscount = Number(passedCouponDiscount ?? 0);
+  const isPickup = Boolean(passedIsPickup);
+  const isFreeDeliveryCoupon = Boolean(passedIsFreeDeliveryCoupon);
+  const deliveryFee = isPickup ? 0 : Number(passedDeliveryFee ?? 0);
+  // Free-delivery coupon => nothing is charged for delivery
+  const deliveryFeeCharged = isFreeDeliveryCoupon ? 0 : deliveryFee;
+  // Show the Delivery Fee row for delivery orders (not for pickup)
+  const showDeliveryRow =
+    !isPickup && (isFreeDeliveryCoupon || deliveryFee > 0);
 
   // Duplicates are merged here, so it works no matter how the caller sends them
   const packages: PackageItem[] = useMemo(
@@ -197,15 +235,23 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   const [alaCarteLoading, setAlaCarteLoading] = useState<boolean>(
     hasAlaCarte && Boolean(orderId),
   );
+  const [pageLoading, setPageLoading] = useState<boolean>(true);
 
   // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
   useEffect(() => {
+    let isMounted = true;
+
     if (!hasAlaCarte || !orderId) {
       setAlaCarteLoading(false);
-      return;
+      const t = setTimeout(() => {
+        if (isMounted) setPageLoading(false);
+      }, 150);
+      return () => {
+        isMounted = false;
+        clearTimeout(t);
+      };
     }
 
-    let isMounted = true;
     const fetchCancelAlaCarte = async () => {
       try {
         const res = await orderService.getCancelOrderAdditionalItems(
@@ -240,7 +286,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           setAlaCarteItems(passedAlaCarte);
         }
       } finally {
-        if (isMounted) setAlaCarteLoading(false);
+        if (isMounted) {
+          setAlaCarteLoading(false);
+          setPageLoading(false);
+        }
       }
     };
 
@@ -256,6 +305,22 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // AlertModal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const handleAlertClose = () => {
+    setAlertVisible(false);
+    if (alertType === "success") {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home" }],
+      });
+    }
+  };
 
   // Keyboard / scroll refs
   const scrollRef = useRef<ScrollView>(null);
@@ -330,14 +395,23 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
     0,
   );
   const alaCarteTotal = alaCarteItems.reduce((sum, i) => sum + i.price, 0);
-  // DASH: the service fee is part of the order total
-  const calculatedOrderTotal = packagesTotal + alaCarteTotal + serviceFee;
+
+  // Order total = packages + ala carte - coupon + delivery fee (0 when a
+  // free-delivery coupon is applied) + DASH service fee
+  const calculatedOrderTotal = Math.max(
+    0,
+    packagesTotal +
+      alaCarteTotal -
+      couponDiscount +
+      deliveryFeeCharged +
+      serviceFee,
+  );
 
   // The items list (order-time prices) is the single source of truth, so the
   // list and the summary always match. Passed totals are only a fallback when
   // there are no items to sum.
   const processOrderTotal =
-    calculatedOrderTotal > 0
+    packagesTotal + alaCarteTotal > 0
       ? calculatedOrderTotal
       : Number(passedProcessOrderTotal ?? passedTotalPaid ?? 0);
 
@@ -407,34 +481,50 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           processOrderId: processOrderId || undefined,
         });
       }
-      Alert.alert(
-        "Order Cancelled",
-        "Your order has been cancelled successfully.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "Home" }],
-              });
-            },
-          },
-        ],
-      );
+      setAlertTitle("Order Cancelled");
+      setAlertMessage("Your order has been cancelled successfully.");
+      setAlertType("success");
+      setAlertVisible(true);
     } catch (err: any) {
       console.error("Failed to cancel order:", err);
-      Alert.alert(
-        "Cancellation Failed",
+      setAlertTitle("Cancellation Failed");
+      setAlertMessage(
         err?.response?.data?.message ||
           "Unable to cancel your order at this moment. Please try again or contact support.",
       );
+      setAlertType("error");
+      setAlertVisible(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const canCancel = isConfirmed && !loading && !alaCarteLoading;
+  const canCancel =
+    isConfirmed && !loading && !alaCarteLoading && !pageLoading;
+
+  if (pageLoading) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+
+        {/* Header */}
+        <View className="flex-row items-center px-5 pt-3 pb-2">
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
+          >
+            <Ionicons name="chevron-back" size={22} color="#000" />
+          </TouchableOpacity>
+
+          <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
+            Order Cancel Confirmation
+          </Text>
+        </View>
+
+        <LoadingPage message="Loading order details..." fullScreen={true} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white">
@@ -571,6 +661,57 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
                 order-time items are loaded so wrong numbers never flash */}
             {!alaCarteLoading && (
               <View className="mx-5 mt-6">
+                {/* ── Order breakdown ── */}
+                {packagesTotal > 0 && (
+                  <SummaryRow
+                    light
+                    label="For Packages"
+                    value={`Rs. ${formatPrice(packagesTotal)}`}
+                  />
+                )}
+
+                {alaCarteTotal > 0 && (
+                  <SummaryRow
+                    light
+                    label="For Ala Carte"
+                    value={`Rs. ${formatPrice(alaCarteTotal)}`}
+                  />
+                )}
+
+                {couponDiscount > 0 && (
+                  <SummaryRow
+                    light
+                    label="Coupon Discount"
+                    value={`- Rs. ${formatPrice(couponDiscount)}`}
+                  />
+                )}
+
+                {showDeliveryRow &&
+                  (isFreeDeliveryCoupon ? (
+                    <SummaryRow
+                      light
+                      label="Delivery Fee"
+                      value="Delivery Fee Coupon Applied!"
+                      valueClassName="text-[11px] text-[#1F7A3A]"
+                    />
+                  ) : (
+                    <SummaryRow
+                      light
+                      label="Delivery Fee"
+                      value={`+ Rs. ${formatPrice(deliveryFee)}`}
+                    />
+                  ))}
+
+                {/* DASH: Service Fee (only for Dash orders) */}
+                {serviceFee > 0 && (
+                  <SummaryRow
+                    light
+                    label="Service Fee"
+                    value={`+ Rs. ${formatPrice(serviceFee)}`}
+                  />
+                )}
+
+                {/* ── Payment breakdown ── */}
                 {totalPaidCard > 0 && (
                   <SummaryRow
                     label="Total Paid with Card"
@@ -596,14 +737,6 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
                   <SummaryRow
                     label="Total Cash (Due)"
                     value={`Rs. ${formatPrice(totalCashDue)}`}
-                  />
-                )}
-
-                {/* DASH: Service Fee (only for Dash orders) */}
-                {serviceFee > 0 && (
-                  <SummaryRow
-                    label="Service Fee"
-                    value={`+ Rs. ${formatPrice(serviceFee)}`}
                   />
                 )}
 
@@ -698,6 +831,19 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+        autoClose={false}
+        showOkButton={true}
+        okButtonText="OK"
+        onOkPress={handleAlertClose}
+      />
     </View>
   );
 };
