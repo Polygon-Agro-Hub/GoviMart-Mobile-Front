@@ -14,7 +14,6 @@ import {
   ScrollView,
   TextInput,
   Keyboard,
-  Alert,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
@@ -27,6 +26,7 @@ import LoadingPage from "@/component/common/LoadingPage";
   NOTE: add these to RootStackParamList -> "OrderCancelConfirmation" params:
     totalCardDue?: number;
     hasAlaCarte?: boolean;
+    serviceFee?: number;            // DASH service fee (0 / undefined otherwise)
     couponDiscount?: number;        // money-off coupon (not free delivery)
     deliveryFee?: number;           // original delivery fee (0 for pickup)
     isFreeDeliveryCoupon?: boolean; // true => "Delivery Fee Coupon Applied!"
@@ -44,8 +44,8 @@ type PackageItem = {
   icon?: string;
   image?: string;
   qty: number;
-  productPrice?: number;
-  unitPrice?: number; // base product price when productPrice isn't passed
+  productPrice?: number; // price stored on the order (order-time)
+  unitPrice?: number; // fallback only - make sure caller passes order-time value
   packingFee?: number;
   serviceFee?: number;
 };
@@ -73,6 +73,25 @@ const getPackageUnitPrice = (pkg: PackageItem): number =>
   Number(pkg.productPrice ?? pkg.unitPrice ?? 0) +
   Number(pkg.packingFee ?? 0) +
   Number(pkg.serviceFee ?? 0);
+
+// The same package passed more than once is merged into ONE row with the
+// quantities added together (so it can be shown as "x2").
+const groupPackages = (list: PackageItem[]): PackageItem[] => {
+  const map = new Map<string, PackageItem>();
+  list.forEach((p) => {
+    const key = `${String(p.name || "")
+      .trim()
+      .toLowerCase()}|${getPackageUnitPrice(p)}`;
+    const qty = Number(p.qty) || 1;
+    const existing = map.get(key);
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      map.set(key, { ...p, id: key, qty });
+    }
+  });
+  return Array.from(map.values());
+};
 
 // 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
 const formatPrice = (value: number | string | null | undefined): string => {
@@ -164,6 +183,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
+    serviceFee: passedServiceFee, // DASH: 0 / undefined when not a Dash order
     couponDiscount: passedCouponDiscount,
     deliveryFee: passedDeliveryFee,
     isFreeDeliveryCoupon: passedIsFreeDeliveryCoupon,
@@ -177,6 +197,9 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       (passedAlaCarte && passedAlaCarte.length > 0),
   );
 
+  // DASH service fee (only passed for orderApp = "Dash")
+  const serviceFee = Number(passedServiceFee ?? 0);
+
   // Coupon / delivery details passed from the review screen
   const couponDiscount = Number(passedCouponDiscount ?? 0);
   const isPickup = Boolean(passedIsPickup);
@@ -188,14 +211,25 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const showDeliveryRow =
     !isPickup && (isFreeDeliveryCoupon || deliveryFee > 0);
 
-  const packages: PackageItem[] =
-    passedPackages && passedPackages.length > 0 ? passedPackages : [];
-
-  // Starts with whatever was passed (if anything), then replaced by fetched data
-  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>(
-    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [],
+  // Duplicates are merged here, so it works no matter how the caller sends them
+  const packages: PackageItem[] = useMemo(
+    () =>
+      passedPackages && passedPackages.length > 0
+        ? groupPackages(passedPackages as PackageItem[])
+        : [],
+    [passedPackages],
   );
 
+  // Passed ala carte items may carry live marketplace prices, so they are NOT
+  // used while we wait for the order-time prices from the server.
+  // They are only used as a fallback if the fetch fails.
+  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>([]);
+
+  // True until the order-time ala carte items are loaded (or the fetch fails).
+  // The summary stays hidden meanwhile so it never flashes wrong numbers.
+  const [alaCarteLoading, setAlaCarteLoading] = useState<boolean>(
+    hasAlaCarte && Boolean(orderId),
+  );
   const [pageLoading, setPageLoading] = useState<boolean>(true);
 
   // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
@@ -203,6 +237,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     let isMounted = true;
 
     if (!hasAlaCarte || !orderId) {
+      setAlaCarteLoading(false);
       const t = setTimeout(() => {
         if (isMounted) setPageLoading(false);
       }, 150);
@@ -218,7 +253,9 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
           orderId,
           processOrderId,
         );
-        if (isMounted && res.data?.status && Array.isArray(res.data.data)) {
+        if (!isMounted) return;
+
+        if (res.data?.status && Array.isArray(res.data.data)) {
           const items: AlaCarteItem[] = res.data.data.map((it: any) => {
             const linePrice = parseFloat(it.price) || 0;
             const lineNormal = parseFloat(it.normalPrice) || 0;
@@ -234,11 +271,18 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
             };
           });
           setAlaCarteItems(items);
+        } else if (passedAlaCarte && passedAlaCarte.length > 0) {
+          // Fallback: server returned nothing usable
+          setAlaCarteItems(passedAlaCarte);
         }
       } catch (err) {
         console.error("Failed to fetch cancel order additional items:", err);
+        if (isMounted && passedAlaCarte && passedAlaCarte.length > 0) {
+          setAlaCarteItems(passedAlaCarte);
+        }
       } finally {
         if (isMounted) {
+          setAlaCarteLoading(false);
           setPageLoading(false);
         }
       }
@@ -249,6 +293,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAlaCarte, orderId, processOrderId]);
 
   const [confirmText, setConfirmText] = useState("");
@@ -346,28 +391,33 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
   );
   const alaCarteTotal = alaCarteItems.reduce((sum, i) => sum + i.price, 0);
 
-  // Fallback total = packages + ala carte - coupon + delivery fee (0 when a
-  // free-delivery coupon is applied)
+  // Order total = packages + ala carte - coupon + delivery fee (0 when a
+  // free-delivery coupon is applied) + DASH service fee
   const calculatedOrderTotal = Math.max(
     0,
-    packagesTotal + alaCarteTotal - couponDiscount + deliveryFeeCharged,
+    packagesTotal +
+      alaCarteTotal -
+      couponDiscount +
+      deliveryFeeCharged +
+      serviceFee,
   );
 
+  // The items list (order-time prices) is the single source of truth, so the
+  // list and the summary always match. Passed totals are only a fallback when
+  // there are no items to sum.
   const processOrderTotal =
-    passedProcessOrderTotal !== undefined && passedProcessOrderTotal > 0
-      ? passedProcessOrderTotal
-      : passedTotalPaid !== undefined && passedTotalPaid > 0
-        ? passedTotalPaid
-        : calculatedOrderTotal;
+    packagesTotal + alaCarteTotal > 0
+      ? calculatedOrderTotal
+      : Number(passedProcessOrderTotal ?? passedTotalPaid ?? 0);
 
   /* ---------------------------------------------------------
      Payment breakdown
      An order can be split: Credit + Card, or Credit + Cash.
      Each part is shown on its own line.
        - Credit:     as passed (DB creditPaid).
-       - Card PAID:  only when the caller says card was actually paid.
-       - Card DUE:   card order that is not paid yet.
-       - Cash DUE:   cash / COD amount, not paid yet.
+       - Card PAID:  as passed (actual payment).
+       - Card DUE:   derived from the order-time total.
+       - Cash DUE:   derived from the order-time total.
   --------------------------------------------------------- */
 
   const method = (paymentMethod || "").toLowerCase();
@@ -390,23 +440,20 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
     ? 0
     : Math.min(Number(passedTotalPaidCard ?? 0), remainingAfterCredit);
 
-  // Card DUE (card order that is not paid yet)
+  // Card DUE (card order that is not paid yet) - derived, not passed, so it
+  // always agrees with the order-time total
   const totalCardDue = isFullyPaidByCredit
     ? 0
-    : passedTotalCardDue !== undefined
-      ? Math.min(Number(passedTotalCardDue), remainingAfterCredit)
-      : method === "card" && totalPaidCard === 0
-        ? remainingAfterCredit
-        : 0;
+    : method === "card"
+      ? Math.max(0, remainingAfterCredit - totalPaidCard)
+      : 0;
 
-  // Cash DUE
+  // Cash DUE - derived, not passed
   const totalCashDue = isFullyPaidByCredit
     ? 0
-    : passedTotalCashDue !== undefined
-      ? Math.min(Number(passedTotalCashDue), remainingAfterCredit)
-      : method.includes("cash") || method === "cod"
-        ? remainingAfterCredit
-        : 0;
+    : method.includes("cash") || method === "cod"
+      ? remainingAfterCredit
+      : 0;
 
   // Only card PAID + credit are refunded as credit. Due amounts (card due /
   // cash due) were never paid, so they are never refunded.
@@ -419,7 +466,7 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const onCancelOrder = async () => {
-    if (!isConfirmed || loading) return;
+    if (!isConfirmed || loading || alaCarteLoading) return;
     setLoading(true);
     try {
       if (orderId) {
@@ -445,6 +492,9 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
       setLoading(false);
     }
   };
+
+  const canCancel =
+    isConfirmed && !loading && !alaCarteLoading && !pageLoading;
 
   if (pageLoading) {
     return (
@@ -539,12 +589,15 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
                       )}
                       <View className="flex-row items-center pb-3">
                         <ItemAvatar icon={pkg.icon} image={pkg.image} />
-                        <View className="ml-3">
+                        <View className="ml-3 flex-1">
                           <Text className="text-[15px] font-bold text-black">
-                            {pkg.name}{" "}
-                            <Text className="text-[13px] font-normal text-[#8A8A8A]">
-                              (x{pkg.qty})
-                            </Text>
+                            {pkg.name}
+                            {pkg.qty > 1 && (
+                              <Text className="text-[14px] font-semibold text-[#4A4A4A]">
+                                {" "}
+                                (X{pkg.qty})
+                              </Text>
+                            )}
                           </Text>
                           <Text className="text-[13px] text-black mt-0.5">
                             Rs. {formatPrice(unitPrice)}
@@ -598,87 +651,99 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
               </SectionCard>
             )}
 
-            {/* Totals Summary (flat rows with dividers) */}
-            <View className="mx-5 mt-6">
-              {/* ── Order breakdown ── */}
-              {packagesTotal > 0 && (
-                <SummaryRow
-                  light
-                  label="For Packages"
-                  value={`Rs. ${formatPrice(packagesTotal)}`}
-                />
-              )}
-
-              {alaCarteTotal > 0 && (
-                <SummaryRow
-                  light
-                  label="For Ala Carte"
-                  value={`Rs. ${formatPrice(alaCarteTotal)}`}
-                />
-              )}
-
-              {couponDiscount > 0 && (
-                <SummaryRow
-                  light
-                  label="Coupon Discount"
-                  value={`- Rs. ${formatPrice(couponDiscount)}`}
-                />
-              )}
-
-              {showDeliveryRow &&
-                (isFreeDeliveryCoupon ? (
+            {/* Totals Summary (flat rows with dividers) - shown only after
+                order-time items are loaded so wrong numbers never flash */}
+            {!alaCarteLoading && (
+              <View className="mx-5 mt-6">
+                {/* ── Order breakdown ── */}
+                {packagesTotal > 0 && (
                   <SummaryRow
                     light
-                    label="Delivery Fee"
-                    value="Delivery Fee Coupon Applied!"
-                    valueClassName="text-[11px] text-[#1F7A3A]"
+                    label="For Packages"
+                    value={`Rs. ${formatPrice(packagesTotal)}`}
                   />
-                ) : (
+                )}
+
+                {alaCarteTotal > 0 && (
                   <SummaryRow
                     light
-                    label="Delivery Fee"
-                    value={`+ Rs. ${formatPrice(deliveryFee)}`}
+                    label="For Ala Carte"
+                    value={`Rs. ${formatPrice(alaCarteTotal)}`}
                   />
-                ))}
+                )}
 
-              {/* ── Payment breakdown ── */}
-              {totalPaidCard > 0 && (
+                {couponDiscount > 0 && (
+                  <SummaryRow
+                    light
+                    label="Coupon Discount"
+                    value={`- Rs. ${formatPrice(couponDiscount)}`}
+                  />
+                )}
+
+                {showDeliveryRow &&
+                  (isFreeDeliveryCoupon ? (
+                    <SummaryRow
+                      light
+                      label="Delivery Fee"
+                      value="Delivery Fee Coupon Applied!"
+                      valueClassName="text-[11px] text-[#1F7A3A]"
+                    />
+                  ) : (
+                    <SummaryRow
+                      light
+                      label="Delivery Fee"
+                      value={`+ Rs. ${formatPrice(deliveryFee)}`}
+                    />
+                  ))}
+
+                {/* DASH: Service Fee (only for Dash orders) */}
+                {serviceFee > 0 && (
+                  <SummaryRow
+                    light
+                    label="Service Fee"
+                    value={`+ Rs. ${formatPrice(serviceFee)}`}
+                  />
+                )}
+
+                {/* ── Payment breakdown ── */}
+                {totalPaidCard > 0 && (
+                  <SummaryRow
+                    label="Total Paid with Card"
+                    value={`Rs. ${formatPrice(totalPaidCard)}`}
+                  />
+                )}
+
+                {totalCardDue > 0 && (
+                  <SummaryRow
+                    label="Total Pay with Card (Due)"
+                    value={`Rs. ${formatPrice(totalCardDue)}`}
+                  />
+                )}
+
+                {totalPaidCredit > 0 && (
+                  <SummaryRow
+                    label="Total Paid with Credit"
+                    value={`Rs. ${formatPrice(totalPaidCredit)}`}
+                  />
+                )}
+
+                {totalCashDue > 0 && (
+                  <SummaryRow
+                    label="Total Cash (Due)"
+                    value={`Rs. ${formatPrice(totalCashDue)}`}
+                  />
+                )}
+
                 <SummaryRow
-                  label="Total Paid with Card"
-                  value={`Rs. ${formatPrice(totalPaidCard)}`}
+                  label="Total"
+                  value={`Rs. ${formatPrice(processOrderTotal)}`}
+                  bold
                 />
-              )}
-
-              {totalCardDue > 0 && (
-                <SummaryRow
-                  label="Total Pay with Card (Due)"
-                  value={`Rs. ${formatPrice(totalCardDue)}`}
-                />
-              )}
-
-              {totalPaidCredit > 0 && (
-                <SummaryRow
-                  label="Total Paid with Credit"
-                  value={`Rs. ${formatPrice(totalPaidCredit)}`}
-                />
-              )}
-
-              {totalCashDue > 0 && (
-                <SummaryRow
-                  label="Total Cash (Due)"
-                  value={`Rs. ${formatPrice(totalCashDue)}`}
-                />
-              )}
-
-              <SummaryRow
-                label="Total"
-                value={`Rs. ${formatPrice(processOrderTotal)}`}
-                bold
-              />
-            </View>
+              </View>
+            )}
 
             {/* Credit info component */}
-            {refundCreditAmount > 0 && (
+            {!alaCarteLoading && refundCreditAmount > 0 && (
               <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
                 <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
                   <Ionicons name="wallet" size={22} color="#fff" />
@@ -741,10 +806,10 @@ const OrderCancelConfirmation: React.FC<Props> = ({ navigation, route }) => {
         >
           <TouchableOpacity
             onPress={onCancelOrder}
-            disabled={!isConfirmed || loading}
+            disabled={!canCancel}
             activeOpacity={0.85}
             className={`rounded-full py-4 items-center ${
-              isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
+              canCancel ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
             style={{
               shadowColor: "#000000",

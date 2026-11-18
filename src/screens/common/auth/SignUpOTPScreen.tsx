@@ -203,6 +203,11 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // Synchronous locks (refs update immediately, state does not)
   const resendLockRef = useRef(false);
   const verifyLockRef = useRef(false);
+  // FIX: true once the server accepted the code. Blocks any further
+  // verification and any error alert that could replace the success alert.
+  const verifiedRef = useRef(false);
+  // FIX: last code that was auto-submitted (a code is submitted only once).
+  const autoSubmittedRef = useRef<string>("");
   const lastUsedClipboardRef = useRef<string>("");
   const appStateRef = useRef(AppState.currentState);
 
@@ -276,7 +281,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // Check clipboard for 5-digit OTP
   const checkClipboardForOtp = useCallback(async () => {
     try {
-      if (isRateLimited || isVerifying || isExpired) return;
+      if (isRateLimited || isVerifying || isExpired || verifiedRef.current)
+        return;
       const hasString = await Clipboard.hasStringAsync();
       if (!hasString) return;
       const content = await Clipboard.getStringAsync();
@@ -299,9 +305,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   // Ensure master input focuses automatically when screen mounts or returns to focus
   useFocusEffect(
     useCallback(() => {
+      if (verifiedRef.current) return;
       checkClipboardForOtp();
       const t = setTimeout(() => {
-        if (!isRateLimited && !isVerifying) {
+        if (!isRateLimited && !isVerifying && !verifiedRef.current) {
           inputRef.current?.focus();
         }
       }, 250);
@@ -319,6 +326,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     setOtpSessionKey((prev) => prev + 1);
     setOtp("");
     lastUsedClipboardRef.current = "";
+    // FIX: a fresh code must be allowed to auto-submit
+    verifiedRef.current = false;
+    autoSubmittedRef.current = "";
     const t = setTimeout(() => {
       if (!isRateLimited && !isVerifying) {
         inputRef.current?.focus();
@@ -334,7 +344,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       appStateRef.current = nextState;
       if (prev && prev.match(/inactive|background/) && nextState === "active") {
         setTimeout(() => {
-          if (!isRateLimited && !isVerifying) {
+          if (!isRateLimited && !isVerifying && !verifiedRef.current) {
             inputRef.current?.focus();
           }
         }, 150);
@@ -507,6 +517,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
   };
 
   const handleFailedVerifyResponse = async (data: any) => {
+    // FIX: never show an error after the code was already accepted
+    if (verifiedRef.current) return;
+
     const is429 = data?.isRateLimited;
     const msg = data?.message || "Incorrect verification code.";
     if (is429 || /too many|15 minutes/i.test(msg)) {
@@ -521,7 +534,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
 
   // Called automatically once all digits are entered or manually on Verify button press
   const handleVerify = async (codeOverride?: string) => {
-    if (verifyLockRef.current) return; // duplicate-request guard
+    // FIX: also block if the code was already accepted
+    if (verifyLockRef.current || verifiedRef.current) return;
 
     const code = (codeOverride ?? otp).trim();
     if (code.length < OTP_LENGTH) {
@@ -572,6 +586,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         });
 
         if (response.data && response.data.status) {
+          // FIX: mark success BEFORE anything else so no second verify can run
+          verifiedRef.current = true;
           for (const key of lockoutKeys) {
             await AsyncStorage.removeItem(key);
           }
@@ -599,6 +615,8 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         );
 
         if (response.data && response.data.status) {
+          // FIX: mark success BEFORE anything else so no second verify can run
+          verifiedRef.current = true;
           for (const key of lockoutKeys) {
             await AsyncStorage.removeItem(key);
           }
@@ -707,6 +725,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
         }
       }
     } catch (err: any) {
+      // FIX: never show an error after the code was already accepted
+      if (verifiedRef.current) return;
+
       console.error("Verification error:", err);
       const status = err.response?.status;
       const is429 = status === 429 || err.response?.data?.isRateLimited;
@@ -730,9 +751,23 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
     }
   };
 
-  // Auto-verify as soon as all digits are filled
+  // Auto-verify as soon as all digits are filled.
+  // FIX: each distinct code is submitted only once, and never after success.
   useEffect(() => {
-    if (otp.length === OTP_LENGTH && !isVerifying && !isRateLimited && !isExpired) {
+    if (otp.length < OTP_LENGTH) {
+      // allow re-submit after the user edits/clears the code
+      autoSubmittedRef.current = "";
+      return;
+    }
+    if (
+      otp.length === OTP_LENGTH &&
+      !isVerifying &&
+      !isRateLimited &&
+      !isExpired &&
+      !verifiedRef.current &&
+      autoSubmittedRef.current !== otp
+    ) {
+      autoSubmittedRef.current = otp;
       handleVerify(otp);
     }
   }, [otp, isVerifying, isRateLimited, isExpired]);
@@ -778,6 +813,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
       }
 
       setOtp("");
+      // FIX: a new code must be allowed to auto-submit
+      verifiedRef.current = false;
+      autoSubmittedRef.current = "";
+      lastUsedClipboardRef.current = "";
       setOtpSessionKey((prev) => prev + 1);
       setIsResending(true);
       try {
@@ -935,7 +974,9 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
               keyboardType="number-pad"
               maxLength={OTP_LENGTH}
               textContentType="oneTimeCode"
-              autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
+              autoComplete={
+                Platform.OS === "android" ? "sms-otp" : "one-time-code"
+              }
               importantForAutofill="yes"
               editable={!isRateLimited && !isVerifying}
               onFocus={() => setIsInputFocused(true)}
@@ -958,7 +999,10 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             />
 
             {/* Visual 5-box display */}
-            <View pointerEvents="none" className="flex-row justify-between w-full">
+            <View
+              pointerEvents="none"
+              className="flex-row justify-between w-full"
+            >
               {Array.from({ length: OTP_LENGTH }).map((_, index) => {
                 const digit = otp[index] || "";
                 const isFocused =
@@ -1075,8 +1119,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
             {!isRateLimited && remainingAttempts > 0 && (
               <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
                 ({remainingAttempts}{" "}
-                {remainingAttempts === 1 ? "attempt" : "attempts"}{" "}
-                remaining)
+                {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
               </Text>
             )}
           </View>
@@ -1110,9 +1153,7 @@ const SignUpOTP: React.FC<SignUpOTPProps> = ({ route, navigation }) => {
                   </Text>
                 </View>
               ) : (
-                <Text className="text-white text-base font-bold">
-                  Verify
-                </Text>
+                <Text className="text-white text-base font-bold">Verify</Text>
               )}
             </TouchableOpacity>
           </View>

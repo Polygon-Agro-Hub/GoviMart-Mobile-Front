@@ -63,7 +63,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     phoneNumberParam,
     identifier
   );
-  const storageKey = attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
+  const storageKey =
+    attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
 
   // State Management
   const [otp, setOtp] = useState<string>("");
@@ -88,16 +89,21 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   // Master Input Ref
   const inputRef = useRef<TextInput>(null);
 
-  // Synchronous lock to block double-tap on Resend (state updates too late) and duplicate verification
+  // Synchronous locks (state updates too late for double-tap / duplicate verification)
   const resendLockRef = useRef(false);
   const verifyLockRef = useRef(false);
+  // FIX: true once the server accepted the code (blocks any further verification)
+  const verifiedRef = useRef(false);
+  // FIX: last code that was auto-submitted (prevents re-submitting the same code)
+  const autoSubmittedRef = useRef<string>("");
   const lastUsedClipboardRef = useRef<string>("");
   const appStateRef = useRef(AppState.currentState);
 
   // Check clipboard for 5-digit OTP
   const checkClipboardForOtp = useCallback(async () => {
     try {
-      if (isRateLimited || isVerifying || isExpired) return;
+      if (isRateLimited || isVerifying || isExpired || verifiedRef.current)
+        return;
       const hasString = await Clipboard.hasStringAsync();
       if (!hasString) return;
       const content = await Clipboard.getStringAsync();
@@ -120,6 +126,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   // Ensure master input focuses automatically when screen mounts or returns to focus
   useFocusEffect(
     useCallback(() => {
+      if (verifiedRef.current) return;
       checkClipboardForOtp();
       const t = setTimeout(() => {
         if (!isRateLimited && !isVerifying) {
@@ -129,6 +136,19 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       return () => clearTimeout(t);
     }, [checkClipboardForOtp, isRateLimited, isVerifying])
   );
+
+  // FIX: if the user comes back to this screen (back button) after a successful
+  // verify, reset the state. The old code is already consumed, so clear it.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      if (verifiedRef.current) {
+        verifiedRef.current = false;
+        autoSubmittedRef.current = "";
+        setOtp("");
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   // Check clipboard immediately on mount as well
   useEffect(() => {
@@ -142,7 +162,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       appStateRef.current = nextState;
       if (prev && prev.match(/inactive|background/) && nextState === "active") {
         setTimeout(() => {
-          if (!isRateLimited && !isVerifying) {
+          if (!isRateLimited && !isVerifying && !verifiedRef.current) {
             inputRef.current?.focus();
           }
         }, 150);
@@ -232,7 +252,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const clearAttempts = async (key: string) => {
     try {
       await AsyncStorage.removeItem(key);
-    } catch { }
+    } catch {}
   };
 
   const showRateLimitAlert = () => {
@@ -348,7 +368,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const handleVerify = async (codeOverride?: string) => {
-    if (verifyLockRef.current) return;
+    // FIX: also block if the code was already accepted
+    if (verifyLockRef.current || verifiedRef.current) return;
 
     const code = (codeOverride ?? otp).trim();
     if (code.length < 5) {
@@ -380,6 +401,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       });
 
       if (response.data && response.data.status) {
+        // FIX: mark success BEFORE anything else so no second verify can run
+        verifiedRef.current = true;
         for (const key of attemptsKeys) {
           await clearAttempts(key);
         }
@@ -390,6 +413,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           verifiedResetToken: response.data.verifiedResetToken,
         });
       } else {
+        // FIX: safety net - never show an error after a successful verify
+        if (verifiedRef.current) return;
+
         const is429 = response.data?.isRateLimited;
         const msg = response.data?.message || "Failed to verify the code.";
         if (is429 || msg.toLowerCase().includes("too many")) {
@@ -408,6 +434,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         }
       }
     } catch (err: any) {
+      // FIX: safety net - never show an error after a successful verify
+      if (verifiedRef.current) return;
+
       console.error("Verification error:", err);
       const is429 = err.response?.status === 429;
       const msg =
@@ -431,9 +460,23 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
-  // Auto-verify as soon as all 5 digits are filled (typed, pasted, or auto-filled)
+  // Auto-verify as soon as all 5 digits are filled (typed, pasted, or auto-filled).
+  // FIX: each distinct code is submitted only once, and never after success.
   useEffect(() => {
-    if (otp.length === 5 && !isVerifying && !isRateLimited && !isExpired) {
+    if (otp.length < 5) {
+      // allow re-submit after the user edits/clears the code
+      autoSubmittedRef.current = "";
+      return;
+    }
+    if (
+      otp.length === 5 &&
+      !isVerifying &&
+      !isRateLimited &&
+      !isExpired &&
+      !verifiedRef.current &&
+      autoSubmittedRef.current !== otp
+    ) {
+      autoSubmittedRef.current = otp;
       handleVerify(otp);
     }
   }, [otp, isVerifying, isRateLimited, isExpired]);
@@ -466,7 +509,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               }
             }
           }
-        } catch (e) { }
+        } catch (e) {}
       }
 
       // 2. Check attempts count BEFORE sending
@@ -480,6 +523,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
       setOtp("");
       lastUsedClipboardRef.current = "";
+      // FIX: a new code must be allowed to auto-submit
+      verifiedRef.current = false;
+      autoSubmittedRef.current = "";
       setOtpSessionKey((prev) => prev + 1);
       setIsResending(true);
       try {
@@ -508,9 +554,10 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             setAlertType("error");
             setAlertTitle("Code Resent");
             setAlertMessage(
-              `${method === "email"
-                ? "A new 5-digit verification code has been sent to your email address."
-                : "A new 5-digit verification code has been sent to your mobile number."
+              `${
+                method === "email"
+                  ? "A new 5-digit verification code has been sent to your email address."
+                  : "A new 5-digit verification code has been sent to your mobile number."
               } You have reached the maximum limit of 5 OTP requests. Next attempt will be available after 15 minutes.`
             );
             setAlertVisible(true);
@@ -521,10 +568,11 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             setAlertType("success");
             setAlertTitle("Code Resent");
             setAlertMessage(
-              `${response.data.message ||
-              (method === "email"
-                ? "Verification code has been resent to your email address."
-                : "Verification code has been resent to your mobile number.")
+              `${
+                response.data.message ||
+                (method === "email"
+                  ? "Verification code has been resent to your email address."
+                  : "Verification code has been resent to your mobile number.")
               }\n\n(${remaining} resend attempts remaining)`
             );
             setAlertVisible(true);
@@ -629,7 +677,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
               keyboardType="number-pad"
               maxLength={5}
               textContentType="oneTimeCode"
-              autoComplete={Platform.OS === "android" ? "sms-otp" : "one-time-code"}
+              autoComplete={
+                Platform.OS === "android" ? "sms-otp" : "one-time-code"
+              }
               importantForAutofill="yes"
               editable={!isRateLimited && !isVerifying}
               onFocus={() => setIsInputFocused(true)}
@@ -652,13 +702,15 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             />
 
             {/* Visual 5-box display */}
-            <View pointerEvents="none" className="flex-row justify-between w-full">
+            <View
+              pointerEvents="none"
+              className="flex-row justify-between w-full"
+            >
               {Array.from({ length: 5 }).map((_, index) => {
                 const digit = otp[index] || "";
                 const isFocused =
                   isInputFocused &&
-                  (otp.length === index ||
-                    (otp.length === 5 && index === 4));
+                  (otp.length === index || (otp.length === 5 && index === 4));
 
                 return (
                   <View
@@ -768,8 +820,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             {!isRateLimited && remainingAttempts > 0 && (
               <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
                 ({remainingAttempts}{" "}
-                {remainingAttempts === 1 ? "attempt" : "attempts"}{" "}
-                remaining)
+                {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
               </Text>
             )}
           </View>
@@ -803,9 +854,7 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                   </Text>
                 </View>
               ) : (
-                <Text className="text-white text-base font-bold">
-                  Verify
-                </Text>
+                <Text className="text-white text-base font-bold">Verify</Text>
               )}
             </TouchableOpacity>
           </View>
