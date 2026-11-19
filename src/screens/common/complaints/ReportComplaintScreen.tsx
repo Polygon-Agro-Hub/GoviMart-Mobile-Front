@@ -270,24 +270,17 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: remainingSlots + 1,
-      quality: 1, // no picker compression, we compress ourselves
+      selectionLimit: remainingSlots,
+      quality: 1, // picker quality: raw from library so compressImageUnder5MB compresses up to 50%
     });
 
     if (result.canceled || !result.assets?.length) return;
 
-    // 1) Photo count limit
-    if (result.assets.length > remainingSlots) {
-      showAlert(
-        "Limit Exceeded",
-        `You can only attach up to ${MAX_IMAGES} photos in total.`,
-        "error",
-      );
-      return;
-    }
+    // Defensively enforce remainingSlots (max 6 photos total)
+    const selectedAssets = result.assets.slice(0, remainingSlots);
 
-    // 2) Convert (HEIC -> JPEG) and compress each image under 5MB.
-    //    One by one, so 6 large HEIC photos don't spike memory.
+    // 2) Convert (HEIC -> JPEG) and compress each image up to 50%
+    //    One by one, so multiple heavy photos don't spike memory.
     processingRef.current = true;
     setProcessingImages(true);
 
@@ -295,8 +288,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     let failedCount = 0;
 
     try {
-      for (let i = 0; i < result.assets.length; i++) {
-        const asset = result.assets[i];
+      for (let i = 0; i < selectedAssets.length; i++) {
+        const asset = selectedAssets[i];
         try {
           const { uri } = await compressImageUnder5MB(asset.uri, asset.width);
 
@@ -315,12 +308,12 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
         }
       }
 
-      // 3) Error only if an image is STILL too big after compression
+      // 3) Error if any image could not be processed
       if (failedCount > 0) {
-        setImageError("Image size must not exceed 5MB");
+        setImageError("Could not process some images.");
         showAlert(
-          "Limit Exceeded",
-          "Some images could not be reduced below 5MB. Please choose a smaller image.",
+          "Image Processing Error",
+          "Could not process some of the selected images. Please try selecting different photos.",
           "error",
         );
       } else {
