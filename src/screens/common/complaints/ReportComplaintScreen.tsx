@@ -22,10 +22,9 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import complaintService from "@/services/complaint/complaint.service";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system/legacy";
-import * as ImageManipulator from "expo-image-manipulator";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
+import { compressImageUnder5MB } from "@/utils/imageCompress";
 
 type ReportComplaintNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -91,6 +90,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   const [imageError, setImageError] = useState<string | null>(null);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [processingImages, setProcessingImages] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [alertVisible, setAlertVisible] = useState(false);
@@ -104,6 +104,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   const scrollYRef = useRef(0);
   const keyboardTopRef = useRef(0);
   const keyboardOpenRef = useRef(false);
+  const processingRef = useRef(false); // blocks double taps instantly
 
   // Where to go when the user leaves this screen
   const goBackToPrevious = useCallback(() => {
@@ -176,8 +177,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     setAlertVisible(true);
   };
 
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
-
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -226,19 +225,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     }
   };
 
-  const getAssetSize = async (asset: ImagePicker.ImagePickerAsset) => {
-    if (typeof asset.fileSize === "number" && asset.fileSize > 0) {
-      return asset.fileSize; // fast path, no file I/O
-    }
-    try {
-      const info: any = await FileSystem.getInfoAsync(asset.uri);
-      return info?.exists && typeof info.size === "number" ? info.size : 0;
-    } catch {
-      return 0;
-    }
-  };
-
   const handleAddPhotoPress = () => {
+    if (processingRef.current) return;
     if (images.length >= MAX_IMAGES) {
       showAlert(
         "Limit Exceeded",
@@ -250,81 +238,9 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     pickImage();
   };
 
-  /**
-   * Convert a single HEIC/HEIF asset to JPEG using expo-image-manipulator.
-   * Returns a { uri, name, type } object ready for FormData.
-   * Falls back to the original asset on any conversion error.
-   */
-  const convertHeicToJpeg = async (
-    asset: ImagePicker.ImagePickerAsset,
-    index: number,
-  ): Promise<{ uri: string; name: string; type: string }> => {
-    try {
-      const manipResult = await ImageManipulator.manipulateAsync(
-        asset.uri,
-        [], // no transforms – just re-encode
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
-      );
-      const baseName =
-        asset.fileName?.replace(/\.(heic|heif)$/i, "") ||
-        `image_${Date.now()}_${index}`;
-      return {
-        uri: manipResult.uri,
-        name: `${baseName}.jpg`,
-        type: "image/jpeg",
-      };
-    } catch (err) {
-      console.warn("HEIC conversion failed for asset", index, err);
-      // Fall back to original (server may still reject, but we tried)
-      const fallbackName =
-        asset.fileName || `image_${Date.now()}_${index}.jpg`;
-      return {
-        uri: asset.uri,
-        name: fallbackName,
-        type: "image/jpeg",
-      };
-    }
-  };
-
-  /**
-   * Compress a standard (non-HEIC) JPEG/PNG/WEBP asset to reduce upload size.
-   * Uses 0.7 quality to keep files small without visible quality loss.
-   */
-  const compressImage = async (
-    asset: ImagePicker.ImagePickerAsset,
-    index: number,
-    mimeType: string,
-  ): Promise<{ uri: string; name: string; type: string }> => {
-    try {
-      const format =
-        mimeType === "image/png"
-          ? ImageManipulator.SaveFormat.PNG
-          : ImageManipulator.SaveFormat.JPEG;
-      const manipResult = await ImageManipulator.manipulateAsync(
-        asset.uri,
-        [],
-        { compress: 0.7, format },
-      );
-      const ext = format === ImageManipulator.SaveFormat.PNG ? "png" : "jpg";
-      const baseName =
-        asset.fileName?.replace(/\.[^.]+$/, "") ||
-        `image_${Date.now()}_${index}`;
-      return {
-        uri: manipResult.uri,
-        name: `${baseName}.${ext}`,
-        type: mimeType === "image/png" ? "image/png" : "image/jpeg",
-      };
-    } catch (err) {
-      console.warn("Image compression failed for asset", index, err);
-      // Fall back gracefully to original
-      const fileName =
-        asset.fileName ||
-        `image_${Date.now()}_${index}.${mimeType === "image/png" ? "png" : "jpg"}`;
-      return { uri: asset.uri, name: fileName, type: mimeType };
-    }
-  };
-
   const pickImage = async () => {
+    if (processingRef.current) return;
+
     const remainingSlots = MAX_IMAGES - images.length;
     if (remainingSlots <= 0) {
       showAlert(
@@ -351,16 +267,16 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       }
     }
 
-    // Launch without quality compression so native picker returns instantly without delay
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots + 1,
+      quality: 1, // no picker compression, we compress ourselves
     });
 
     if (result.canceled || !result.assets?.length) return;
 
-    // 1) Instant limit check right when picker closes
+    // 1) Photo count limit
     if (result.assets.length > remainingSlots) {
       showAlert(
         "Limit Exceeded",
@@ -370,63 +286,53 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       return;
     }
 
-    // 2) Fast size check: check available metadata first
-    const hasImmediateOversize = result.assets.some(
-      (a) => typeof a.fileSize === "number" && a.fileSize > MAX_IMAGE_SIZE,
-    );
-    if (hasImmediateOversize) {
-      setImageError("Image size must not exceed 5MB");
-      showAlert(
-        "Limit Exceeded",
-        "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error",
-      );
-      return;
-    }
+    // 2) Convert (HEIC -> JPEG) and compress each image under 5MB.
+    //    One by one, so 6 large HEIC photos don't spike memory.
+    processingRef.current = true;
+    setProcessingImages(true);
 
-    // Read remaining sizes in parallel
-    const sizes = await Promise.all(result.assets.map(getAssetSize));
+    const validPhotos: { uri: string; name: string; type: string }[] = [];
+    let failedCount = 0;
 
-    // 3) Oversize check
-    const hasOversized = sizes.some((s) => s > MAX_IMAGE_SIZE);
-    if (hasOversized) {
-      setImageError("Image size must not exceed 5MB");
-      showAlert(
-        "Limit Exceeded",
-        "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error",
-      );
-    } else {
-      setImageError(null);
-    }
+    try {
+      for (let i = 0; i < result.assets.length; i++) {
+        const asset = result.assets[i];
+        try {
+          const { uri } = await compressImageUnder5MB(asset.uri, asset.width);
 
-    // 4) Build valid photo list; convert HEIC/HEIF → JPEG on iOS in parallel,
-    //    and compress all images to reduce upload payload size.
-    const photoPromises = result.assets
-      .filter((_, i) => sizes[i] <= MAX_IMAGE_SIZE)
-      .map(async (asset, i): Promise<{ uri: string; name: string; type: string }> => {
-        const mimeType = asset.mimeType || "";
-        const ext = (asset.fileName?.split(".").pop() || "").toLowerCase();
-        const isHeic =
-          mimeType === "image/heic" ||
-          mimeType === "image/heif" ||
-          ext === "heic" ||
-          ext === "heif";
+          const baseName =
+            asset.fileName?.replace(/\.[^.]+$/, "") ||
+            `image_${Date.now()}_${i}`;
 
-        if (Platform.OS === "ios" && isHeic) {
-          // Convert HEIC → JPEG so the server can accept it
-          return convertHeicToJpeg(asset, i);
+          validPhotos.push({
+            uri,
+            name: `${baseName}.jpg`,
+            type: "image/jpeg",
+          });
+        } catch (err) {
+          failedCount++;
+          console.log("image compress failed:", err);
         }
+      }
 
-        // Non-HEIC: compress to reduce payload before upload
-        const resolvedMime = mimeType || (ext === "png" ? "image/png" : "image/jpeg");
-        return compressImage(asset, i, resolvedMime);
-      });
+      // 3) Error only if an image is STILL too big after compression
+      if (failedCount > 0) {
+        setImageError("Image size must not exceed 5MB");
+        showAlert(
+          "Limit Exceeded",
+          "Some images could not be reduced below 5MB. Please choose a smaller image.",
+          "error",
+        );
+      } else {
+        setImageError(null);
+      }
 
-    const validPhotos = await Promise.all(photoPromises);
-
-    if (validPhotos.length > 0) {
-      setImages((prev) => [...prev, ...validPhotos]);
+      if (validPhotos.length > 0) {
+        setImages((prev) => [...prev, ...validPhotos].slice(0, MAX_IMAGES));
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingImages(false);
     }
   };
 
@@ -441,7 +347,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || processingImages) return;
     Keyboard.dismiss();
 
     if (!selectedCategoryId) {
@@ -469,7 +375,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
         : complain.trim();
 
       const formData: any = new FormData();
-      console.log("campicategoryid", String(selectedCategoryId), description);
       formData.append("complaicategoryId", String(selectedCategoryId));
       formData.append("complain", description);
 
@@ -801,6 +706,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleAddPhotoPress}
+              disabled={processingImages}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -813,18 +719,24 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                 alignItems: "center",
               }}
             >
-              <FontAwesome6 name="camera" solid size={27} color="#000" />
+              {processingImages ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <>
+                  <FontAwesome6 name="camera" solid size={27} color="#000" />
 
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: "#747990",
-                  marginTop: 5,
-                }}
-              >
-                Add Photo
-              </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#747990",
+                      marginTop: 5,
+                    }}
+                  >
+                    Add Photo
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -860,7 +772,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
 
           {images.map((img, index) => (
             <View
-              key={index}
+              key={img.uri}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -879,6 +791,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
 
               <TouchableOpacity
                 onPress={() => removeImage(index)}
+                disabled={processingImages || submitting}
                 style={{
                   position: "absolute",
                   top: 5,
@@ -936,6 +849,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={handleSubmit}
+            disabled={submitting || processingImages}
             style={{
               height: 50,
               borderRadius: 27,
