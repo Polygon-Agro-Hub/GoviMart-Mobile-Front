@@ -237,7 +237,8 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   // Calendar grid calculations
   const calendarDays = useMemo(() => {
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
+    // Using noon (12:00) prevents DST midnight transition shifts on some device timezones
+    const firstDayOfWeek = new Date(currentYear, currentMonth, 1, 12).getDay();
 
     const days: Array<{
       day: number;
@@ -302,6 +303,15 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
 
     return days;
   }, [currentYear, currentMonth, minDate, maxDate, internalSelectedDate]);
+
+  // Group days into rows of exactly 7 days to eliminate any flexWrap column-shifting on all devices
+  const weeks = useMemo(() => {
+    const rows: (typeof calendarDays)[] = [];
+    for (let i = 0; i < calendarDays.length; i += 7) {
+      rows.push(calendarDays.slice(i, i + 7));
+    }
+    return rows;
+  }, [calendarDays]);
 
   const handleDayPress = (dayItem: { date: Date; isDisabled: boolean }) => {
     if (dayItem.isDisabled) return;
@@ -468,12 +478,12 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
           </View>
 
           {/* Days of Week Row */}
-          <View style={{ flexDirection: "row", marginBottom: 8 }}>
+          <View style={{ flexDirection: "row", width: "100%", marginBottom: 8 }}>
             {DAYS_OF_WEEK.map((d) => (
               <View
                 key={d}
                 style={{
-                  width: "14.285%",
+                  flex: 1,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -485,61 +495,68 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
             ))}
           </View>
 
-          {/* Calendar Grid */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {calendarDays.map((item, index) => {
-              if (!item.isCurrentMonth) {
-                return (
-                  <View
-                    key={`blank-${index}`}
-                    style={{ width: "14.285%", height: 40, marginVertical: 2 }}
-                  />
-                );
-              }
+          {/* Calendar Grid (Strict 7-day rows, completely immune to flexWrap column shifts) */}
+          <View style={{ width: "100%" }}>
+            {weeks.map((week, weekIndex) => (
+              <View
+                key={`week-${weekIndex}`}
+                style={{ flexDirection: "row", width: "100%" }}
+              >
+                {week.map((item, dayIndex) => {
+                  if (!item.isCurrentMonth) {
+                    return (
+                      <View
+                        key={`blank-${weekIndex}-${dayIndex}`}
+                        style={{ flex: 1, height: 40, marginVertical: 2 }}
+                      />
+                    );
+                  }
 
-              return (
-                <View
-                  key={`day-${item.day}`}
-                  style={{
-                    width: "14.285%",
-                    height: 40,
-                    marginVertical: 2,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <TouchableOpacity
-                    activeOpacity={item.isDisabled ? 1 : 0.7}
-                    disabled={item.isDisabled}
-                    onPress={() => handleDayPress(item)}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      justifyContent: "center",
-                      alignItems: "center",
-                      backgroundColor: item.isSelected ? "#000000" : "transparent",
-                      borderWidth: item.isToday && !item.isSelected ? 1 : 0,
-                      borderColor: "#111827",
-                    }}
-                  >
-                    <Text
+                  return (
+                    <View
+                      key={`day-${item.day}`}
                       style={{
-                        fontSize: 13,
-                        fontWeight: item.isSelected ? "700" : "500",
-                        color: item.isDisabled
-                          ? "#D1D5DB"
-                          : item.isSelected
-                          ? "#FFFFFF"
-                          : "#111827",
+                        flex: 1,
+                        height: 40,
+                        marginVertical: 2,
+                        justifyContent: "center",
+                        alignItems: "center",
                       }}
                     >
-                      {String(item.day)}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+                      <TouchableOpacity
+                        activeOpacity={item.isDisabled ? 1 : 0.7}
+                        disabled={item.isDisabled}
+                        onPress={() => handleDayPress(item)}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          justifyContent: "center",
+                          alignItems: "center",
+                          backgroundColor: item.isSelected ? "#000000" : "transparent",
+                          borderWidth: item.isToday && !item.isSelected ? 1 : 0,
+                          borderColor: "#111827",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: item.isSelected ? "700" : "500",
+                            color: item.isDisabled
+                              ? "#D1D5DB"
+                              : item.isSelected
+                              ? "#FFFFFF"
+                              : "#111827",
+                          }}
+                        >
+                          {String(item.day)}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
           </View>
 
           {/* Confirm Date Button */}
