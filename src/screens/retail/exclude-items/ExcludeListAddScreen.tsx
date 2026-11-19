@@ -509,7 +509,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
           onBackPress={handleBackPress}
         />
 
-        <View className="flex-1 mx-auto w-full max-w-[500px]">
+        <View className="flex-1 mx-auto w-full ">
           <View className="px-5">
             <Text className="text-center text-sm text-gray-500">
               Choose items the customer would prefer to include or exclude from
@@ -622,9 +622,8 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
             onPress={handlesubmitexcludelist}
             disabled={saveDisabled}
             activeOpacity={0.8}
-            className={`rounded-full items-center justify-center h-[50px] w-full max-w-[500px] ${
-              saveDisabled && !loading ? "bg-[#8A9BA8]" : "bg-black"
-            }`}
+            className={`rounded-full items-center justify-center h-[50px] w-full  ${saveDisabled && !loading ? "bg-[#8A9BA8]" : "bg-black"
+              }`}
             style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 3 },
@@ -647,7 +646,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
               onPress={handleSkip}
               disabled={loading}
               activeOpacity={0.8}
-              className="bg-black rounded-full items-center justify-center h-[50px] w-full max-w-[500px] mt-3"
+              className="bg-black rounded-full items-center justify-center h-[50px] w-full  mt-3"
             >
               <Text className="text-white text-base font-bold">
                 Skip for now

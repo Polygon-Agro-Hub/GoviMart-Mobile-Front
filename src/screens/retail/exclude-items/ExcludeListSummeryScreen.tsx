@@ -433,7 +433,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         titleLines={2}
       />
 
-      <View className="mx-auto w-full max-w-[500px]">
+      <View className="mx-auto w-full ">
         {displayCusId ? (
           <Text className="text-center text-black text-base -mt-[3px]">
             Customer ID : {displayCusId}
@@ -442,7 +442,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       </View>
 
       {/* Need Help link */}
-      <View className="mx-auto w-full max-w-[500px] px-6 mt-3 items-end">
+      <View className="mx-auto w-full px-6 mt-3 items-end">
         <TouchableOpacity
           onPress={() => setShowHelp(true)}
           activeOpacity={0.7}
@@ -465,7 +465,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         className="flex-1 mb-24"
         contentContainerStyle={{ flexGrow: 1 }}
       >
-        <View className="mx-auto w-full max-w-[500px] px-6">
+        <View className="mx-auto w-full px-6">
           {/* ---------------- Items prefer to include ---------------- */}
           <View className="mt-6 border border-gray-200 rounded-xl bg-white overflow-hidden">
             <View className="flex-row items-center gap-3 px-4 py-3 bg-[#E6F2E5]">
@@ -680,7 +680,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
       <View className="absolute bottom-0 left-0 right-0 bg-white pt-4 pb-4 px-6 items-center">
         <TouchableOpacity
           onPress={
-            isFromAccount   
+            isFromAccount
               ? () =>
                 navigation.navigate("ExcludeListAdd", {
                   customerId: Number(customerId || user?.id || 1002),
@@ -695,22 +695,22 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
               : handleCompleteOnboarding
           }
           activeOpacity={0.8}
-         style={{
-              height: 50,
-              width:'100%',
-              borderRadius: 27,
-              backgroundColor: "#000000",
-              justifyContent: "center",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOffset: {
-                width: 0,
-                height: 3,
-              },
-              shadowOpacity: 0.18,
-              shadowRadius: 5,
-              elevation: 4,
-            }}
+          style={{
+            height: 50,
+            width: '100%',
+            borderRadius: 27,
+            backgroundColor: "#000000",
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+            elevation: 4,
+          }}
         >
           <Text className="text-white text-base font-bold">
             {isFromAccount ? "Add More" : "Continue"}

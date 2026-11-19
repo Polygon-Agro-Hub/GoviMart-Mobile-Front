@@ -22,9 +22,9 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import complaintService from "@/services/complaint/complaint.service";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system/legacy";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
+import { compressImageUnder5MB } from "@/utils/imageCompress";
 
 type ReportComplaintNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -90,6 +90,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   const [imageError, setImageError] = useState<string | null>(null);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [processingImages, setProcessingImages] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [alertVisible, setAlertVisible] = useState(false);
@@ -103,6 +104,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   const scrollYRef = useRef(0);
   const keyboardTopRef = useRef(0);
   const keyboardOpenRef = useRef(false);
+  const processingRef = useRef(false); // blocks double taps instantly
 
   // Where to go when the user leaves this screen
   const goBackToPrevious = useCallback(() => {
@@ -175,8 +177,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     setAlertVisible(true);
   };
 
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
-
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -225,19 +225,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
     }
   };
 
-  const getAssetSize = async (asset: ImagePicker.ImagePickerAsset) => {
-    if (typeof asset.fileSize === "number" && asset.fileSize > 0) {
-      return asset.fileSize; // fast path, no file I/O
-    }
-    try {
-      const info: any = await FileSystem.getInfoAsync(asset.uri);
-      return info?.exists && typeof info.size === "number" ? info.size : 0;
-    } catch {
-      return 0;
-    }
-  };
-
   const handleAddPhotoPress = () => {
+    if (processingRef.current) return;
     if (images.length >= MAX_IMAGES) {
       showAlert(
         "Limit Exceeded",
@@ -250,6 +239,8 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   };
 
   const pickImage = async () => {
+    if (processingRef.current) return;
+
     const remainingSlots = MAX_IMAGES - images.length;
     if (remainingSlots <= 0) {
       showAlert(
@@ -276,16 +267,16 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       }
     }
 
-    // Launch without quality compression so native picker returns instantly without delay
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots + 1,
+      quality: 1, // no picker compression, we compress ourselves
     });
 
     if (result.canceled || !result.assets?.length) return;
 
-    // 1) Instant limit check right when picker closes
+    // 1) Photo count limit
     if (result.assets.length > remainingSlots) {
       showAlert(
         "Limit Exceeded",
@@ -295,69 +286,53 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
       return;
     }
 
-    // 2) Fast size check: check available metadata first
-    const hasImmediateOversize = result.assets.some(
-      (a) => typeof a.fileSize === "number" && a.fileSize > MAX_IMAGE_SIZE,
-    );
-    if (hasImmediateOversize) {
-      setImageError("Image size must not exceed 5MB");
-      showAlert(
-        "Limit Exceeded",
-        "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error",
-      );
-      return;
-    }
+    // 2) Convert (HEIC -> JPEG) and compress each image under 5MB.
+    //    One by one, so 6 large HEIC photos don't spike memory.
+    processingRef.current = true;
+    setProcessingImages(true);
 
-    // Read remaining sizes in parallel
-    const sizes = await Promise.all(result.assets.map(getAssetSize));
-
-    // 3) Oversize check: show the popup right away
-    const hasOversized = sizes.some((s) => s > MAX_IMAGE_SIZE);
-    if (hasOversized) {
-      setImageError("Image size must not exceed 5MB");
-      showAlert(
-        "Limit Exceeded",
-        "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error",
-      );
-    } else {
-      setImageError(null);
-    }
-
-    // 4) Build the valid photos (pure sync work, no awaits)
     const validPhotos: { uri: string; name: string; type: string }[] = [];
+    let failedCount = 0;
 
-    result.assets.forEach((asset, i) => {
-      if (sizes[i] > MAX_IMAGE_SIZE) return;
+    try {
+      for (let i = 0; i < result.assets.length; i++) {
+        const asset = result.assets[i];
+        try {
+          const { uri } = await compressImageUnder5MB(asset.uri, asset.width);
 
-      let fileName = asset.fileName;
-      if (!fileName) {
-        const parts = asset.uri.split("/");
-        fileName = parts[parts.length - 1] || `image_${Date.now()}_${i}.jpg`;
+          const baseName =
+            asset.fileName?.replace(/\.[^.]+$/, "") ||
+            `image_${Date.now()}_${i}`;
+
+          validPhotos.push({
+            uri,
+            name: `${baseName}.jpg`,
+            type: "image/jpeg",
+          });
+        } catch (err) {
+          failedCount++;
+          console.log("image compress failed:", err);
+        }
       }
 
-      const ext = (fileName.split(".").pop() || "").toLowerCase();
-      let mimeType = asset.mimeType;
-
-      if (!mimeType) {
-        if (ext === "heic" || ext === "heif") mimeType = `image/${ext}`;
-        else if (ext === "png") mimeType = "image/png";
-        else if (ext === "webp") mimeType = "image/webp";
-        else mimeType = "image/jpeg";
-      } else if (
-        (mimeType === "image/heic" || mimeType === "image/heif") &&
-        !fileName.toLowerCase().endsWith(".heic") &&
-        !fileName.toLowerCase().endsWith(".heif")
-      ) {
-        fileName = `${fileName}.${mimeType.replace("image/", "")}`;
+      // 3) Error only if an image is STILL too big after compression
+      if (failedCount > 0) {
+        setImageError("Image size must not exceed 5MB");
+        showAlert(
+          "Limit Exceeded",
+          "Some images could not be reduced below 5MB. Please choose a smaller image.",
+          "error",
+        );
+      } else {
+        setImageError(null);
       }
 
-      validPhotos.push({ uri: asset.uri, name: fileName, type: mimeType });
-    });
-
-    if (validPhotos.length > 0) {
-      setImages((prev) => [...prev, ...validPhotos]);
+      if (validPhotos.length > 0) {
+        setImages((prev) => [...prev, ...validPhotos].slice(0, MAX_IMAGES));
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingImages(false);
     }
   };
 
@@ -372,7 +347,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || processingImages) return;
     Keyboard.dismiss();
 
     if (!selectedCategoryId) {
@@ -400,7 +375,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
         : complain.trim();
 
       const formData: any = new FormData();
-      console.log("campicategoryid", String(selectedCategoryId), description);
       formData.append("complaicategoryId", String(selectedCategoryId));
       formData.append("complain", description);
 
@@ -732,6 +706,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleAddPhotoPress}
+              disabled={processingImages}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -744,18 +719,24 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
                 alignItems: "center",
               }}
             >
-              <FontAwesome6 name="camera" solid size={27} color="#000" />
+              {processingImages ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <>
+                  <FontAwesome6 name="camera" solid size={27} color="#000" />
 
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: "#747990",
-                  marginTop: 5,
-                }}
-              >
-                Add Photo
-              </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#747990",
+                      marginTop: 5,
+                    }}
+                  >
+                    Add Photo
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -791,7 +772,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
 
           {images.map((img, index) => (
             <View
-              key={index}
+              key={img.uri}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -810,6 +791,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
 
               <TouchableOpacity
                 onPress={() => removeImage(index)}
+                disabled={processingImages || submitting}
                 style={{
                   position: "absolute",
                   top: 5,
@@ -867,6 +849,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={handleSubmit}
+            disabled={submitting || processingImages}
             style={{
               height: 50,
               borderRadius: 27,
