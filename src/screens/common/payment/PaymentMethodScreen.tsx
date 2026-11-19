@@ -636,7 +636,13 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       });
 
       setProcessingStage(2); // Creating order on server
-      const response = await orderService.createOrder(payloadToUse);
+      // ── Risk 4-C fix: attach checkoutSessionId so the backend can verify
+      //    payment status directly with the gateway instead of trusting isPaid=1 ──
+      const finalPayload = {
+        ...payloadToUse,
+        checkoutSessionId: checkoutSession?.sessionId ?? null,
+      };
+      const response = await orderService.createOrder(finalPayload);
       if (!response.data || !response.data.status || !response.data.data) {
         throw new Error(response.data?.message || "Failed to finalize order");
       }
@@ -2289,6 +2295,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         checkoutUrl={checkoutSession?.checkoutUrl || ""}
         orderId={checkoutSession?.orderId || ""}
         amount={paymentAmount}
+        sessionId={checkoutSession?.sessionId}
         customerAddress={checkoutSession?.customerAddress}
         onSuccess={handleCheckoutSuccess}
         onCancel={handleCheckoutCancel}

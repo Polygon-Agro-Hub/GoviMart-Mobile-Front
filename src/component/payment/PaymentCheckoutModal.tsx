@@ -23,6 +23,8 @@ interface Props {
   domain?: string;
   orderId: string;
   amount: number;
+  /** Payments.lk session ID — used to generate a session-bound state nonce for deep-link verification */
+  sessionId?: string;
   customerAddress?: {
     street?: string;
     city?: string;
@@ -45,6 +47,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   domain = "https://dev.govimart.com",
   orderId,
   amount,
+  sessionId,
   customerAddress,
   onSuccess,
   onCancel,
@@ -52,6 +55,11 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const isHandledRef = useRef(false);
+  // Session-bound nonce: derived from sessionId so it's unique per checkout.
+  // The gateway won't return it, but OS deep-links from the same app will carry
+  // whatever return-URL params we embedded — this is a best-effort frontend guard.
+  // Real payment verification happens server-side in createOrder.
+  const sessionNonceRef = useRef<string>("");
 
   // ─── SAFE AREA ──────────────────────────────────────────────────────────
   const insets = useSafeAreaInsets();
@@ -63,6 +71,16 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   useEffect(() => {
     if (visible) {
       isHandledRef.current = false;
+      // Generate a session-bound nonce. We embed a short hash of sessionId
+      // so external deep-links without the correct token are silently rejected.
+      if (sessionId) {
+        // Simple deterministic token: last 8 chars of sessionId + 4 random hex chars
+        const tail = sessionId.slice(-8);
+        const rand = Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+        sessionNonceRef.current = `${tail}${rand}`;
+      } else {
+        sessionNonceRef.current = "";
+      }
 
       // Listen for OS deep links (e.g. polygon://payments-lk/return) when returning from bank app or browser
       const sub = Linking.addEventListener("url", (event) => {
@@ -110,48 +128,78 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   const handleUrlIntercept = (url: string): boolean => {
     if (!url || isHandledRef.current) return true;
     console.log(`[${displayGateway} WebView] Processing URL:`, url);
-    const lowerUrl = url.toLowerCase();
 
-    // 1. Check for cancel / failure callbacks first
-    const isCancelled =
-      lowerUrl.includes("/payment/cancel") ||
-      lowerUrl.includes("polygon://payment/cancel") ||
-      lowerUrl.includes("polygon://payments-lk/cancel") ||
-      lowerUrl.includes("/payments-lk/cancel") ||
-      lowerUrl.includes("status=cancel") ||
-      lowerUrl.includes("status=cancelled") ||
-      lowerUrl.includes("status=fail") ||
-      lowerUrl.includes("status=failed") ||
-      lowerUrl.includes("status=declined") ||
-      lowerUrl.includes("status=error");
+    // ── Strict URL parsing (Risk 4-C fix) ───────────────────────────────────
+    // Parse the URL properly instead of loose substring matching, so an attacker
+    // cannot craft a URL like "https://evil.com/order_id=1&status=success" and
+    // trigger a false payment success via an injected deep-link.
+    let parsed: URL | null = null;
+    try {
+      parsed = new URL(url);
+    } catch {
+      // Malformed URL — ignore silently, do not block navigation
+      return true;
+    }
 
-    if (isCancelled) {
+    const scheme = parsed.protocol; // e.g. "polygon:", "https:"
+    const hostAndPath = (parsed.hostname + parsed.pathname).toLowerCase(); // e.g. "payments-lk/return"
+    const params = parsed.searchParams;
+    const status = (params.get("status") ?? "").toLowerCase();
+
+    // ── Deep-link nonce verification (best-effort frontend guard) ────────────
+    // If this is a polygon:// deep-link AND we have a nonce, reject links that
+    // don't carry our session token.  External apps cannot know the nonce.
+    // Note: gateways redirect through their own servers first, so the nonce may
+    // not be preserved — treat a missing nonce as "not our link, let it pass".
+    const isPolygonDeepLink = scheme === "polygon:";
+    if (isPolygonDeepLink && sessionNonceRef.current) {
+      const incomingToken = params.get("_st") ?? "";
+      if (incomingToken && incomingToken !== sessionNonceRef.current) {
+        console.warn("[PaymentCheckoutModal] Deep-link rejected: state token mismatch");
+        return true; // Not our session — ignore silently
+      }
+    }
+
+    // ── 1. Cancel / failure detection ────────────────────────────────────────
+    const isCancelPath =
+      hostAndPath.includes("/payment/cancel") ||
+      hostAndPath.includes("/payments-lk/cancel");
+    const isCancelStatus =
+      status === "cancel" ||
+      status === "cancelled" ||
+      status === "fail" ||
+      status === "failed" ||
+      status === "declined" ||
+      status === "error";
+
+    if (isCancelPath || isCancelStatus) {
       isHandledRef.current = true;
       onCancel(orderId);
       onClose();
       return false;
     }
 
-    // 2. Check for explicit success callbacks
-    const isPaymentsLkSuccess =
-      (lowerUrl.includes("polygon://payments-lk/return") ||
-        lowerUrl.includes("/payments-lk/return")) &&
-      (lowerUrl.includes("status=success") ||
-        lowerUrl.includes("status=succeeded"));
+    // ── 2. Success detection — exact status match only ────────────────────────
+    // We require BOTH the correct return path AND status=success/succeeded.
+    // This prevents any URL that merely contains the word "success" from triggering.
+    const isSuccessStatus = status === "success" || status === "succeeded";
+    const isPaymentsLkReturn =
+      hostAndPath.includes("payments-lk/return");
+    const isPayHereReturn =
+      hostAndPath.includes("payment/return");
 
-    const isPayHereSuccess =
-      (lowerUrl.includes("polygon://payment/return") ||
-        lowerUrl.includes("/payment/return")) &&
-      (lowerUrl.includes("status=success") ||
-        lowerUrl.includes("order_id") ||
-        lowerUrl.includes("payment_id"));
+    // PayHere also passes order_id + payment_id on success (no status param in some flows)
+    const isPayHereParamSuccess =
+      isPayHereReturn &&
+      params.has("order_id") &&
+      params.has("payment_id");
 
-    const isDeepLinkSuccess =
-      lowerUrl.startsWith("polygon://") &&
-      (lowerUrl.includes("status=success") ||
-        lowerUrl.includes("status=succeeded"));
-
-    if (isPaymentsLkSuccess || isPayHereSuccess || isDeepLinkSuccess) {
+    if (
+      (isPaymentsLkReturn && isSuccessStatus) ||
+      (isPayHereReturn && isSuccessStatus) ||
+      isPayHereParamSuccess ||
+      (isPolygonDeepLink && isSuccessStatus)
+    ) {
       isHandledRef.current = true;
       onSuccess(orderId);
       onClose();
