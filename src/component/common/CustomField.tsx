@@ -38,8 +38,11 @@ export const InputField = React.memo(({
     iconColor,
     circleSize = 36,
     iconSize = 17,
+    paddingHorizontal = 11,
+    marginLeft = 10,
     autoCapitalize,
     secureTextEntry,
+    editable = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     isIconThemeDark?: boolean;
@@ -47,6 +50,8 @@ export const InputField = React.memo(({
     iconColor?: string;
     circleSize?: number;
     iconSize?: number;
+    paddingHorizontal?: number;
+    marginLeft?: number;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
@@ -59,9 +64,11 @@ export const InputField = React.memo(({
     prefix?: string;
     autoCapitalize?: "none" | "sentences" | "words" | "characters";
     secureTextEntry?: boolean;
+    editable?: boolean;
 }) => {
     const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
     const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
+    const resolvedPlaceholder = placeholder !== undefined ? placeholder : label;
     const inputRef = useRef<TextInput>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -86,7 +93,7 @@ export const InputField = React.memo(({
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-                    paddingHorizontal: 11,
+                    paddingHorizontal: paddingHorizontal,
                     backgroundColor: "#FFFFFF",
                     overflow: "hidden",
                 }}
@@ -117,7 +124,7 @@ export const InputField = React.memo(({
                     style={{
                         flex: 1,
                         minWidth: 0,
-                        marginLeft: 10,
+                        marginLeft: marginLeft,
                         justifyContent: "center",
                         overflow: "hidden",
                     }}
@@ -169,8 +176,9 @@ export const InputField = React.memo(({
                         >
                             {!isFocused && !secureTextEntry ? (
                                 <TouchableOpacity
-                                    activeOpacity={1}
-                                    onPress={() => setIsFocused(true)}
+                                    activeOpacity={editable ? 1 : 1}
+                                    disabled={!editable}
+                                    onPress={() => { if (editable) setIsFocused(true); }}
                                     style={{
                                         width: "100%",
                                         height: 24,
@@ -181,6 +189,8 @@ export const InputField = React.memo(({
                                     <Text
                                         numberOfLines={1}
                                         ellipsizeMode="tail"
+                                        adjustsFontSizeToFit={true}
+                                        minimumFontScale={0.8}
                                         style={{
                                             fontSize: 14,
                                             color: value ? "#111111" : "#9CA3AF",
@@ -189,7 +199,7 @@ export const InputField = React.memo(({
                                             width: containerWidth > 0 ? containerWidth - 4 : "100%",
                                         }}
                                     >
-                                        {formatDisplayText(value, placeholder, containerWidth)}
+                                        {formatDisplayText(value, resolvedPlaceholder, containerWidth)}
                                     </Text>
                                 </TouchableOpacity>
                             ) : (
@@ -206,11 +216,12 @@ export const InputField = React.memo(({
                                         onFocus?.();
                                     }}
                                     keyboardType={keyboardType}
-                                    placeholder={placeholder}
+                                    placeholder={resolvedPlaceholder}
                                     placeholderTextColor="#9CA3AF"
                                     maxLength={maxLength}
                                     autoCapitalize={autoCapitalize}
                                     secureTextEntry={secureTextEntry}
+                                    editable={editable}
                                     style={{
                                         width: "100%",
                                         height: 24,
@@ -257,6 +268,13 @@ export const DropdownField = ({
     highlighted = false,
     error,
     placeholder = "Select From Here",
+    circleSize = 36,
+    iconSize = 17,
+    paddingHorizontal = 11,
+    marginLeft = 10,
+    arrowSize = 19,
+    disabled = false,
+    showArrow = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -268,6 +286,13 @@ export const DropdownField = ({
     highlighted?: boolean;
     error?: string;
     placeholder?: string;
+    circleSize?: number;
+    iconSize?: number;
+    paddingHorizontal?: number;
+    marginLeft?: number;
+    arrowSize?: number;
+    disabled?: boolean;
+    showArrow?: boolean;
 }) => {
     return (
         <View
@@ -277,8 +302,9 @@ export const DropdownField = ({
             }}
         >
             <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setOpen(!open)}
+                activeOpacity={disabled ? 1 : 0.8}
+                disabled={disabled}
+                onPress={() => { if (!disabled) setOpen(!open); }}
                 style={{
                     height: 67,
                     borderWidth: highlighted ? 2 : 1,
@@ -286,7 +312,7 @@ export const DropdownField = ({
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-                    paddingHorizontal: 11,
+                    paddingHorizontal: paddingHorizontal,
                     backgroundColor: "#FFFFFF",
                 }}
             >
@@ -294,9 +320,9 @@ export const DropdownField = ({
 
                 <View
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
                         backgroundColor: "#F2F2F6",
                         justifyContent: "center",
                         alignItems: "center",
@@ -305,7 +331,7 @@ export const DropdownField = ({
                     <FontAwesome6
                         name={icon}
                         solid
-                        size={17}
+                        size={iconSize}
                         color="#000000"
                     />
                 </View>
@@ -315,7 +341,7 @@ export const DropdownField = ({
                 <View
                     style={{
                         flex: 1,
-                        marginLeft: 10,
+                        marginLeft: marginLeft,
                         justifyContent: "center",
                     }}
                 >
@@ -331,6 +357,9 @@ export const DropdownField = ({
                     </Text>
 
                     <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.85}
                         style={{
                             fontSize: 14,
                             lineHeight: 18,
@@ -344,15 +373,17 @@ export const DropdownField = ({
 
                 {/* Arrow */}
 
-                <Ionicons
-                    name={
-                        open
-                            ? "chevron-up"
-                            : "chevron-down"
-                    }
-                    size={19}
-                    color="#111"
-                />
+                {showArrow && (
+                    <Ionicons
+                        name={
+                            open
+                                ? "chevron-up"
+                                : "chevron-down"
+                        }
+                        size={arrowSize}
+                        color="#111"
+                    />
+                )}
             </TouchableOpacity>
 
             {/* Dropdown Options */}

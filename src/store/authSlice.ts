@@ -13,6 +13,8 @@ interface UserProfile {
   title?: string;
   cusId?: string;
   companyName?: string;
+  nic?: string;
+  docType?: string;
 }
 
 interface RememberedDetails {

@@ -156,7 +156,7 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
         >
           <Ionicons name="call" size={14} color="#FFFFFF" />
           <Text className="text-white text-xs font-bold ml-2">
-            Call (+94) 770171988
+            Call (+94) 11 431 3433
           </Text>
         </TouchableOpacity>
       </ScrollView>

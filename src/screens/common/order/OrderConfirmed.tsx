@@ -22,12 +22,15 @@ import { RootState } from "@/store";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
 import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
-import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import apiClient from "@/services/config-service/axio-config";
 import { ENDPOINTS } from "@/services/config-service/endpoints";
 import { getAuthHeader } from "@/services/config-service/auth-header";
 
 // NOTE: add  OrderConfirmation: { orderId: number }  to RootStackParamList
+// NOTE: add  totalCardDue?: number  to the "OrderConfirmedOrderCancelScreen" params
 type OrderConfirmationNavigationProp = StackNavigationProp<
   RootStackParamList,
   "OrderConfirmation"
@@ -44,9 +47,27 @@ interface Props {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const MONTHS_LONG = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
+
+const CONFIRM_DEADLINE_HOUR = 18; 
+const DEADLINE_MESSAGE = "Sorry, you cannot confirm this order. Order confirmation is closed after 6:00 PM.";
+
+const isPastConfirmDeadline = (): boolean => {
+  const sl = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return sl.getUTCHours() >= CONFIRM_DEADLINE_HOUR;
+};
 
 // "2026-08-04 05:30:00" -> "August 04, 2026" (reads digits literally, no TZ shift)
 const formatLongDate = (raw: any): string => {
@@ -90,12 +111,25 @@ const formatAmount = (amount: number | string) => {
 
 const num = (v: any) => parseFloat(String(v ?? 0)) || 0;
 
-// Fixed service fee for orderApp = "Dash" AND isPackage = 0 (must match DASH_SERVICE_FEE on the server)
-const DASH_SERVICE_FEE = 180;
+// Same parser as ConfirmOrderDetailsScreen (handles "Rs. 1,200.00", null, etc.)
+const parsePriceValue = (value: unknown): number | null => {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") return value;
+  const parsed = parseFloat(
+    String(value)
+      .replace(/Rs\.?/gi, "")
+      .replace(/LKR/gi, "")
+      .replace(/,/g, "")
+      .trim(),
+  );
+  return isNaN(parsed) ? null : parsed;
+};
 
 // Same rules as the backend (isCardPayment in package-review.dao.js)
 const detectPayment = (order: any) => {
-  const m = String(order?.paymentMethod || "").trim().toLowerCase();
+  const m = String(order?.paymentMethod || "")
+    .trim()
+    .toLowerCase();
   const paid =
     Number(order?.isPaid) === 1 ||
     order?.isPaid === true ||
@@ -226,6 +260,25 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const [rawPackagesData, setRawPackagesData] = useState<any[]>([]);
   const [rawItemsData, setRawItemsData] = useState<any[]>([]);
 
+  // ── 6 PM confirm deadline ────────────────────────────────────────────────
+  // Starts from the current time and flips to true once 6:00 PM passes while
+  // the user is still on this screen (checked every 15 seconds).
+  const [deadlinePassed, setDeadlinePassed] = useState<boolean>(
+    isPastConfirmDeadline(),
+  );
+
+  useEffect(() => {
+    if (deadlinePassed) return; // already past 6 PM, nothing to watch
+    const id = setInterval(() => {
+      if (isPastConfirmDeadline()) {
+        setDeadlinePassed(true);
+        clearInterval(id);
+        Alert.alert("Time Expired", DEADLINE_MESSAGE);
+      }
+    }, 15000);
+    return () => clearInterval(id);
+  }, [deadlinePassed]);
+
   // ── Success modal state ──────────────────────────────────────────────────
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [successInvoiceNo, setSuccessInvoiceNo] = useState("");
@@ -257,6 +310,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     processOrderId?: string | number;
     newTotal?: number;
     isPaid?: number;
+    syncMoneyPaid?: boolean; // paid order + price increase: sync moneyPaid after confirm
   } | null>(null);
 
   // Fetch active payment gateway
@@ -334,44 +388,47 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           const items = (itemsRes.data.data || []) as any[];
           setRawItemsData(items);
 
-          // ONLY CURRENT MARKETPLACE VALUES ARE USED.
-          // If today normalPrice == discountedPrice, discount is 0.
+          // Same rules as ConfirmOrderDetailsScreen.
+          // Only current marketplace values are used for the discount:
+          // if today normalPrice == discountedPrice, discount is 0.
           let currentGrossTotal = 0;
           let currentDiscountTotal = 0;
-          let live = false;
 
           items.forEach((it) => {
             const qty = parseFloat(it.qty) || 1;
-            const unit = String(it.unit || "kg").toLowerCase();
-            const qtyInKg = unit === "g" ? qty / 1000 : qty;
+            const qtyInKg =
+              String(it.unit || "kg").toLowerCase() === "g" ? qty / 1000 : qty;
 
-            const mktNormal = parseFloat(it.marketNormalPrice) || 0;
-            const mktDisc = parseFloat(it.marketDiscountedPrice) || 0;
+            const storedPrice = parsePriceValue(it.price) ?? 0;
+            const mktNormal = parsePriceValue(it.marketNormalPrice);
+            const mktDisc = parsePriceValue(it.marketDiscountedPrice);
 
-            if (mktNormal > 0 || mktDisc > 0) {
-              live = true;
-              const currentNormalPerKg = mktNormal > 0 ? mktNormal : mktDisc;
-              const currentNetPerKg =
-                mktDisc > 0 ? mktDisc : currentNormalPerKg;
+            // today's normal (undiscounted) price for this line
+            const todayNormal =
+              mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
+            // today's effective price: discounted if available, else normal
+            const todayNet =
+              mktDisc != null && mktDisc > 0
+                ? mktDisc * qtyInKg
+                : mktNormal != null && mktNormal > 0
+                  ? mktNormal * qtyInKg
+                  : null;
 
-              const lineGross = currentNormalPerKg * qtyInKg;
-              const lineNet = currentNetPerKg * qtyInKg;
+            const net = todayNet ?? storedPrice;
+            const hasPromo =
+              todayNormal != null &&
+              todayNet != null &&
+              todayNormal - todayNet > 0.01;
+            const gross = hasPromo ? todayNormal! : net;
 
-              const lineDiscount =
-                currentNormalPerKg > currentNetPerKg
-                  ? Math.max(0, lineGross - lineNet)
-                  : 0;
-
-              currentGrossTotal += lineGross;
-              currentDiscountTotal += lineDiscount;
-            } else {
-              currentGrossTotal += num(it.price);
-            }
+            currentGrossTotal += gross;
+            currentDiscountTotal += Math.max(0, gross - net);
           });
 
           setItemsTotal(currentGrossTotal);
           setItemsDiscount(currentDiscountTotal);
-          setHasLiveItemPrices(live);
+          // Details screen treats prices as live whenever items exist
+          setHasLiveItemPrices(items.length > 0);
         }
       } catch (err) {
         console.error("Error fetching order confirmation:", err);
@@ -434,17 +491,32 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       : order?.deliveryCharge,
   );
 
-  // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0 adds a fixed
-  // "Service Fee" (Rs. 180) ON TOP of the normal delivery fee. It is always
-  // charged (no pickup / free-delivery-coupon waiver) and is part of the total.
-  // Display condition only (no extra fetch): uses order.orderApp and order.isPackage.
+  // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0
+  // Service Fee = processorders.fullTotal - processorders.deliveryCharge - total(orderadditionalitems.price)
   const isPackageValue = order?.isPackage;
+  const isZeroPackage =
+    isPackageValue != null && String(isPackageValue).trim() !== ""
+      ? Number(isPackageValue) === 0
+      : packagesTotal === 0;
   const isDashServiceFee =
-    String(order?.orderApp || "").trim().toLowerCase() === "dash" &&
-    isPackageValue != null &&
-    String(isPackageValue).trim() !== "" &&
-    Number(isPackageValue) === 0;
-  const serviceFee = isDashServiceFee ? DASH_SERVICE_FEE : 0;
+    String(order?.orderApp || order?.appName || "")
+      .trim()
+      .toLowerCase() === "dash" && isZeroPackage;
+
+  const fullTotalVal = num(order?.fullTotal ?? order?.total);
+  const deliveryChargeForCalc = deliveryFee;
+  // Stored (order-time) additional items total
+  const additionalItemsTotal =
+    rawItemsData.length > 0
+      ? rawItemsData.reduce(
+          (acc: number, it: any) => acc + (parsePriceValue(it.price) ?? 0),
+          0,
+        )
+      : itemsTotal;
+
+  const serviceFee = isDashServiceFee
+    ? Math.max(0, fullTotalVal - deliveryChargeForCalc - additionalItemsTotal)
+    : 0;
   // Delivery fee keeps its normal rules for every order
   const deliveryFeeCharged =
     !isPickup && !isFreeDeliveryCoupon ? deliveryFee : 0;
@@ -472,7 +544,41 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
   const creditApplied = Math.min(creditPaid, orderFullTotal);
   const remaining = Math.max(0, orderFullTotal - creditApplied);
 
+  const isFullyPaidByCredit = creditApplied > 0 && remaining < 0.01;
+
   const isUnpaidCardOrder = isCardOrder && !pay.paid;
+
+  // ── PRICE INCREASE ON AN ALREADY-PAID ORDER ──────────────────────────────
+  // Example: order fully paid with credit (isPaid = 1), then today's price is
+  // Rs. 100 higher. That Rs. 100 must go straight to the payment gateway.
+  // Amount the customer already paid before today's price change (credit + card).
+  // Cash orders are never "pre-paid".
+  const alreadyPaid =
+    pay.paid && !isCashOrder
+      ? num(order?.amount) > 0
+        ? num(order?.amount)
+        : creditPaid + num(order?.moneyPaid)
+      : creditPaid;
+
+  const extraDue =
+    pay.paid && !isCashOrder
+      ? Math.round(Math.max(0, orderFullTotal - alreadyPaid) * 100) / 100
+      : 0;
+  const hasExtraDue = extraDue >= 0.01;
+
+  // Single amount that must be collected through the gateway on confirm
+  const gatewayAmount = isUnpaidCardOrder
+    ? remaining
+    : hasExtraDue
+      ? extraDue
+      : 0;
+  const needsGateway = gatewayAmount >= 0.01;
+
+  // Card row in Payment Summary: don't count the price difference twice
+  const cardRowAmount = hasExtraDue
+    ? Math.max(0, remaining - extraDue)
+    : remaining;
+
   const cardBrand: string =
     savedCard?.scheme || order?.cardBrand || order?.cardType || "Master";
   const cardLast4: string =
@@ -511,15 +617,46 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     }
 
     try {
+      // syncMoneyPaid is a frontend-only flag, never sent to the API
+      const { syncMoneyPaid, ...apiPayload } = payload;
+
+      // 1st call: confirm the order with live prices (unchanged backend flow)
       await orderService.confirmOrderWithLivePrices({
-        ...payload,
+        ...apiPayload,
         isPaid: 1,
       });
+
+      // 2nd call (only for an already-paid order whose price increased):
+      // the order is now confirmed, so the backend's "already confirmed +
+      // isPaid = 1" branch sets amount = newTotal and
+      // moneyPaid = newTotal - creditPaid (the extra paid via gateway).
+      if (syncMoneyPaid) {
+        // Best-effort: the payment and the 1st confirm already succeeded, so a
+        // failure of this moneyPaid sync must NOT show the error alert.
+        try {
+          await orderService.confirmOrderWithLivePrices({
+            orderId: apiPayload.orderId,
+            processOrderId: apiPayload.processOrderId,
+            ...(apiPayload.newTotal != null
+              ? { newTotal: apiPayload.newTotal }
+              : {}),
+            isPaid: 1,
+          });
+        } catch (syncErr: any) {
+          console.warn(
+            "moneyPaid sync call returned an error (ignored):",
+            syncErr?.response?.data || syncErr,
+          );
+        }
+      }
 
       setPendingConfirmPayload(null);
       showSuccess();
     } catch (err: any) {
-      console.error("Post-payment confirm order failed:", err);
+      console.error(
+        "Post-payment confirm order failed:",
+        err?.response?.data || err,
+      );
       Alert.alert(
         "Confirmation Error",
         "Your payment was received but the order could not be confirmed. Please contact support.",
@@ -545,6 +682,16 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
   const handleConfirm = async () => {
     if (submitting) return; // prevent double-tap
+
+    // ── 6 PM deadline check (runs at the moment the user taps Confirm) ──
+    // Placed before any card charge or gateway call so nobody is charged for
+    // an order they can no longer confirm.
+    if (isPastConfirmDeadline()) {
+      setDeadlinePassed(true);
+      Alert.alert("Time Expired", DEADLINE_MESSAGE, [{ text: "OK" }]);
+      return;
+    }
+
     if (Number(order?.isConfirmed) === 1) {
       Alert.alert(
         "Already Confirmed!",
@@ -559,16 +706,21 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     const processOrderId =
       order?.processOrderId || order?.proOrderId || order?.id || orderId;
 
-    // ── If paymentMethod == "card" and isPaid == 0 -> settle total from gateway ──
-    if (isUnpaidCardOrder && remaining > 0) {
+    // ── Unpaid card order OR paid order whose total increased -> gateway ──
+    if (needsGateway) {
       const confirmPayload = {
         orderId: effectiveOrderId,
         processOrderId: processOrderId || undefined,
         ...(liveTotal != null ? { newTotal: liveTotal } : {}),
         isPaid: 1,
+        ...(hasExtraDue ? { syncMoneyPaid: true } : {}),
       };
       setPendingConfirmPayload(confirmPayload);
       setSubmitting("confirm");
+
+      const description = hasExtraDue
+        ? `Polygon Order Price Difference - ${invoiceNo}`
+        : `Polygon Order Payment - ${invoiceNo}`;
 
       try {
         const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
@@ -578,10 +730,10 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           try {
             const chargeRes = await adapter.chargeSavedCard({
               cardId: savedCard.id,
-              amount: remaining,
+              amount: gatewayAmount,
               paymentType: "order",
               orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `GoviMart Order Payment - ${invoiceNo}`,
+              itemsDescription: description,
             });
             if (chargeRes.success) {
               await handlePaymentSuccess(confirmPayload);
@@ -610,9 +762,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         // Hosted Checkout Modal
         const session = await adapter.initiatePayment({
           orderId: String(processOrderId || effectiveOrderId),
-          amount: remaining,
+          amount: gatewayAmount,
           paymentType: "order",
-          itemsDescription: `GoviMart Order Payment - ${invoiceNo}`,
+          itemsDescription: description,
         });
 
         setCheckoutSession(session);
@@ -629,7 +781,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
-    // Direct confirm (Cash, already paid card order, or 100% credit covered)
+    // Direct confirm (Cash, already paid order with no price increase, or 100% credit covered)
     try {
       setSubmitting("confirm");
       if (orderId) {
@@ -687,22 +839,32 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
     const alacarts = rawItemsData.map((it: any) => {
       const qty = parseFloat(it.qty) || 1;
       const unit = it.unit || "kg";
-      const mktNormal = parseFloat(it.marketNormalPrice) || 0;
-      const mktDiscounted = parseFloat(it.marketDiscountedPrice) || 0;
-      const perKg =
-        mktDiscounted > 0 ? mktDiscounted : mktNormal > 0 ? mktNormal : 0;
       const qtyInKg = String(unit).toLowerCase() === "g" ? qty / 1000 : qty;
-      const itemPrice = perKg > 0 ? perKg * qtyInKg : num(it.price);
+      const storedPrice = parsePriceValue(it.price) ?? 0;
+      const mktNormal = parsePriceValue(it.marketNormalPrice);
+      const mktDiscounted = parsePriceValue(it.marketDiscountedPrice);
+
+      // Same rules as the totals calculation
+      const todayNormal =
+        mktNormal != null && mktNormal > 0 ? mktNormal * qtyInKg : null;
+      const todayNet =
+        mktDiscounted != null && mktDiscounted > 0
+          ? mktDiscounted * qtyInKg
+          : mktNormal != null && mktNormal > 0
+            ? mktNormal * qtyInKg
+            : null;
+
+      const net = todayNet ?? storedPrice;
       const hasCurrentPromo =
-        mktNormal > 0 && mktDiscounted > 0 && mktNormal - mktDiscounted > 0.01;
-      const origPrice = hasCurrentPromo ? mktNormal * qtyInKg : undefined;
+        todayNormal != null && todayNet != null && todayNormal - todayNet > 0.01;
+      const origPrice = hasCurrentPromo ? todayNormal! : undefined;
 
       return {
         id: String(it.id || it.productId || "item"),
         name: it.displayName || it.name || "Item",
         image: it.image,
         weight: `${qty} ${unit}`,
-        price: itemPrice,
+        price: net,
         originalPrice: origPrice,
       };
     });
@@ -712,20 +874,40 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
     const initialPaidAmount =
       num(order?.amount) > 0 ? num(order?.amount) : orderFullTotal;
-    const moneyPaid = num(order?.moneyPaid);
     const creditPaidVal = num(order?.creditPaid);
 
-    const totalPaidCard = isCardOrOnline
-      ? moneyPaid > 0
-        ? moneyPaid
-        : initialPaidAmount
-      : 0;
     const totalPaidCredit = creditPaidVal || 0;
     const processOrderTotal = orderFullTotal;
-    const totalCashDue =
-      isCashMethod && !pay.paid
-        ? Math.max(0, processOrderTotal - totalPaidCredit)
+    const remainingAfterCredit = Math.max(
+      0,
+      processOrderTotal - totalPaidCredit,
+    );
+
+    // Card money really paid BEFORE today's price change
+    // (already-paid amount minus the credit part). Never the price increase.
+    const cardPaidBefore =
+      pay.paid && !isCashMethod
+        ? Math.max(0, alreadyPaid - totalPaidCredit)
         : 0;
+
+    // Card PAID: only real card money, never the unpaid price difference
+    const totalPaidCard = Math.max(
+      0,
+      Math.min(
+        cardPaidBefore,
+        remainingAfterCredit - (hasExtraDue ? extraDue : 0),
+      ),
+    );
+
+    // Card DUE:
+    //  - unpaid card order (isPaid = 0), plus
+    //  - price increase on an already-paid order (extraDue)
+    const totalCardDue =
+      (isCardOrOnline && !pay.paid ? remainingAfterCredit : 0) +
+      (hasExtraDue ? extraDue : 0);
+
+    // Cash DUE
+    const totalCashDue = isCashMethod && !pay.paid ? remainingAfterCredit : 0;
 
     // Amount returned to the credit balance on cancel = the creditPaid column value
     // (same rule as the server).
@@ -739,19 +921,35 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
       refundCreditAmount = totalPaidCredit > 0 ? totalPaidCredit : 0;
     }
 
-    navigation.navigate("OrderCancelConfirmation", {
+    const isPkgVal = order?.isPackage;
+    const isAlaCarteOnlyOrder =
+      isPkgVal != null &&
+      String(isPkgVal).trim() !== "" &&
+      Number(isPkgVal) === 0;
+    const hasOrderAlacart =
+      alacarts.length > 0 || rawItemsData.length > 0 || isAlaCarteOnlyOrder;
+
+    navigation.navigate("OrderConfirmedOrderCancelScreen", {
       orderId: effectiveOrderId,
       processOrderId: processOrderId ? String(processOrderId) : undefined,
+      hasAlaCarte: hasOrderAlacart,
+      hasAlacart: hasOrderAlacart,
       packages: pkgs,
       alaCarteItems: alacarts,
       totalPaid: initialPaidAmount,
       totalPaidCard,
+      totalCardDue,
       totalPaidCredit,
       totalCashDue,
       processOrderTotal,
       paymentMethod: order?.paymentMethod || "cash",
       refundCreditAmount,
-      serviceFee, // DASH: 0 when not a Dash order
+      serviceFee,
+      // new: shown as rows on the cancel screen
+      couponDiscount,
+      deliveryFee,
+      isFreeDeliveryCoupon,
+      isPickup,
     });
   };
 
@@ -782,7 +980,9 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           }}
         >
           Here is the updated total for your order{" "}
-          <Text style={{ fontWeight: "700", color: "#111" }}>[{invoiceNo}]</Text>
+          <Text style={{ fontWeight: "700", color: "#111" }}>
+            [{invoiceNo}]
+          </Text>
           {placed.date ? ` placed at ${placed.time} on ${placed.date}.` : "."}
         </Text>
 
@@ -904,7 +1104,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               value={`+ Rs. ${formatAmount(isFreeDeliveryCoupon ? 0 : deliveryFee)}`}
             />
           )}
-          {serviceFee > 0 && (
+          {isDashServiceFee && (
             <SummaryRow
               label="Service Fee"
               value={`+ Rs. ${formatAmount(serviceFee)}`}
@@ -921,9 +1121,67 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         </View>
 
         {/* PAYMENT NOTICE */}
-        {isCardOrder ? (
+        {hasExtraDue ? (
+          // Already-paid order (credit / card) whose total went up today
+          <View
+            style={{
+              backgroundColor: "#EEF3FF",
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ fontSize: 11, color: "#111", lineHeight: 16 }}>
+              Prices changed since you placed this order. The extra{" "}
+              <Text style={{ fontWeight: "700" }}>
+                Rs. {formatAmount(extraDue)}
+              </Text>{" "}
+              will be{" "}
+              {savedCard
+                ? "charged to your saved card"
+                : "paid via the secure payment gateway"}{" "}
+              when you confirm.
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "#FFF",
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                marginTop: 8,
+              }}
+            >
+              {savedCard ? (
+                <>
+                  <CardBrand brand={cardBrand} />
+                  <Text style={{ fontSize: 11, color: "#111" }}>
+                    {/visa/i.test(cardBrand) ? "Visa" : "Master"} ●●●●{" "}
+                    {String(cardLast4).slice(-4)}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons
+                    name="card-outline"
+                    size={16}
+                    color="#0066FF"
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={{ fontSize: 11, fontWeight: "600", color: "#111" }}
+                  >
+                    Pay via Payment Gateway (Card)
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        ) : isCardOrder ? (
           isUnpaidCardOrder ? (
             remaining > 0 ? (
+              // Card order not paid yet: customer must pay now
               <View
                 style={{
                   backgroundColor: "#EEF3FF",
@@ -943,7 +1201,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                     </>
                   ) : (
                     <>
-                      You will be redirected to the secure payment gateway to pay{" "}
+                      You will be redirected to the secure payment gateway to
+                      pay{" "}
                       <Text style={{ fontWeight: "700" }}>
                         Rs. {formatAmount(remaining)}
                       </Text>{" "}
@@ -992,6 +1251,7 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               </View>
             ) : (
+              // Card order not paid, but credit balance covers everything
               <View
                 style={{
                   flexDirection: "row",
@@ -1020,7 +1280,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
                 </Text>
               </View>
             )
-          ) : (
+          ) : isFullyPaidByCredit ? null : (
+            // Card order paid online (hidden when credit paid everything)
             <View
               style={{
                 flexDirection: "row",
@@ -1049,7 +1310,37 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
               </Text>
             </View>
           )
+        ) : pay.paid && !isCashOrder ? (
+          // Paid with credit, no price increase
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#E8F9EC",
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 14,
+            }}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={16}
+              color="#1F7A3A"
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 11,
+                color: "#1F7A3A",
+                lineHeight: 16,
+              }}
+            >
+              Your order is fully covered by your credit balance.
+            </Text>
+          </View>
         ) : (
+          // Cash order
           <View
             style={{
               flexDirection: "row",
@@ -1105,17 +1396,26 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
 
           {creditApplied > 0 && (
             <SummaryRow
-              label="Paid By Credit"
+              label="Paid By Polygon Wallet"
               value={`Rs. ${formatAmount(creditApplied)}`}
               icon="wallet"
               iconColor="#8D5B4C"
             />
           )}
 
-          {isCardOrder && remaining > 0 && (
+          {isCardOrder && cardRowAmount > 0 && (
+            <SummaryRow
+              label={pay.paid ? "Paid with Card" : "Pay with Card"}
+              value={`Rs. ${formatAmount(cardRowAmount)}`}
+              icon="credit-card"
+              iconColor="#0088FF"
+            />
+          )}
+
+          {hasExtraDue && (
             <SummaryRow
               label="Pay with Card"
-              value={`Rs. ${formatAmount(remaining)}`}
+              value={`Rs. ${formatAmount(extraDue)}`}
               icon="credit-card"
               iconColor="#0088FF"
               valueColor="#FF9114"
@@ -1167,6 +1467,8 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
           )}
         </TouchableOpacity>
 
+        {/* Not disabled after 6 PM on purpose: tapping it shows the
+            "Sorry, you cannot confirm this order after 6:00 PM" alert. */}
         <TouchableOpacity
           activeOpacity={0.8}
           disabled={busy}
@@ -1177,15 +1479,14 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
             backgroundColor: "#000",
             justifyContent: "center",
             alignItems: "center",
-            opacity: busy && submitting !== "confirm" ? 0.5 : 1,
           }}
         >
           {submitting === "confirm" ? (
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFF" }}>
-              {isUnpaidCardOrder && remaining > 0
-                ? `Pay Rs. ${formatAmount(remaining)} & Confirm Order`
+              {needsGateway
+                ? `Pay Rs. ${formatAmount(gatewayAmount)} & Confirm Order`
                 : "Confirm & Accept My Order"}
             </Text>
           )}

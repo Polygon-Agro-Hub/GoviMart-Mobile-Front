@@ -20,9 +20,23 @@ import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackScreenProps } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import orderService from "@/services/order/order.service";
+import { AlertModal } from "@/component/common/AlertModal";
+import LoadingPage from "@/component/common/LoadingPage";
 
-// NOTE: add  serviceFee?: number  to this route's params in RootStackParamList.
-type Props = StackScreenProps<RootStackParamList, "OrderConfirmedOrderCancelScreen">;
+/*
+  NOTE: add these to the "OrderConfirmedOrderCancelScreen" params in
+  RootStackParamList:
+    serviceFee?: number;
+    hasAlaCarte?: boolean;
+    couponDiscount?: number;        // money-off coupon (not free delivery)
+    deliveryFee?: number;           // original delivery fee (0 for pickup)
+    isFreeDeliveryCoupon?: boolean; // true => "Delivery Fee Coupon Applied!"
+    isPickup?: boolean;
+*/
+type Props = StackScreenProps<
+  RootStackParamList,
+  "OrderConfirmedOrderCancelScreen"
+>;
 
 /* ---------------------------------------------------------
    Types
@@ -34,8 +48,8 @@ type PackageItem = {
   icon?: string;
   image?: string;
   qty: number;
-  productPrice?: number;
-  unitPrice?: number; // base product price when productPrice isn't passed
+  productPrice?: number; // price stored on the order (order-time)
+  unitPrice?: number; // fallback only - make sure caller passes order-time value
   packingFee?: number;
   serviceFee?: number;
 };
@@ -69,7 +83,9 @@ const getPackageUnitPrice = (pkg: PackageItem): number =>
 const groupPackages = (list: PackageItem[]): PackageItem[] => {
   const map = new Map<string, PackageItem>();
   list.forEach((p) => {
-    const key = `${String(p.name || "").trim().toLowerCase()}|${getPackageUnitPrice(p)}`;
+    const key = `${String(p.name || "")
+      .trim()
+      .toLowerCase()}|${getPackageUnitPrice(p)}`;
     const qty = Number(p.qty) || 1;
     const existing = map.get(key);
     if (existing) {
@@ -79,6 +95,14 @@ const groupPackages = (list: PackageItem[]): PackageItem[] => {
     }
   });
   return Array.from(map.values());
+};
+
+// 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
+const formatPrice = (value: number | string | null | undefined): string => {
+  const num = Number(value ?? 0);
+  if (!isFinite(num)) return "0.00";
+  const [intPart, decPart] = num.toFixed(2).split(".");
+  return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decPart}`;
 };
 
 const ItemAvatar: React.FC<{ icon?: string; image?: string }> = ({
@@ -106,28 +130,91 @@ const SectionCard: React.FC<{ title: string; children: React.ReactNode }> = ({
   </View>
 );
 
+// Flat summary row with a divider line underneath (matches the design)
+//  - light: regular-weight order breakdown rows (For Packages, Delivery Fee ...)
+//  - bold:  Total row
+//  - default: semi-bold payment rows (Total Pay with Card (Due) ...)
+//  - valueClassName: overrides the value text style (e.g. green coupon message)
+const SummaryRow: React.FC<{
+  label: string;
+  value: string;
+  bold?: boolean;
+  light?: boolean;
+  valueClassName?: string;
+}> = ({ label, value, bold, light, valueClassName }) => (
+  <View
+    className={`flex-row justify-between items-center py-3 border-b ${
+      light ? "border-[#ECECEC]" : "border-[#D9D9D9]"
+    }`}
+  >
+    <Text
+      className={`text-[14px] ${light ? "text-[#4B4F6B]" : "text-black"} ${
+        bold ? "font-bold" : light ? "" : "font-semibold"
+      }`}
+    >
+      {label}
+    </Text>
+    <Text
+      className={
+        valueClassName ??
+        `text-[14px] ${light ? "text-[#4B4F6B]" : "text-black"} ${
+          bold ? "font-bold" : light ? "" : "font-semibold"
+        }`
+      }
+    >
+      {value}
+    </Text>
+  </View>
+);
+
 /* ---------------------------------------------------------
    Screen
 --------------------------------------------------------- */
 
-const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route }) => {
+const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({
+  navigation,
+  route,
+}) => {
   const {
     orderId,
     processOrderId,
+    hasAlaCarte: passedHasAlaCarte,
+    hasAlacart: passedHasAlacart,
     packages: passedPackages,
     alaCarteItems: passedAlaCarte,
     totalPaid: passedTotalPaid,
     totalPaidCard: passedTotalPaidCard,
     totalPaidCredit: passedTotalPaidCredit,
-    totalCashDue: passedTotalCashDue,
     processOrderTotal: passedProcessOrderTotal,
     paymentMethod,
     refundCreditAmount: passedRefundCreditAmount,
     serviceFee: passedServiceFee, // DASH: 0 / undefined when not a Dash order
-  } = route.params || {};
+    couponDiscount: passedCouponDiscount,
+    deliveryFee: passedDeliveryFee,
+    isFreeDeliveryCoupon: passedIsFreeDeliveryCoupon,
+    isPickup: passedIsPickup,
+  } = (route.params || {}) as any;
+
+  // Order has ala carte items check
+  const hasAlaCarte = Boolean(
+    passedHasAlaCarte ||
+      passedHasAlacart ||
+      (passedAlaCarte && passedAlaCarte.length > 0),
+  );
 
   // DASH service fee (only passed for orderApp = "Dash")
   const serviceFee = Number(passedServiceFee ?? 0);
+
+  // Coupon / delivery details passed from the confirmation screen
+  const couponDiscount = Number(passedCouponDiscount ?? 0);
+  const isPickup = Boolean(passedIsPickup);
+  const isFreeDeliveryCoupon = Boolean(passedIsFreeDeliveryCoupon);
+  const deliveryFee = isPickup ? 0 : Number(passedDeliveryFee ?? 0);
+  // Free-delivery coupon => nothing is charged for delivery
+  const deliveryFeeCharged = isFreeDeliveryCoupon ? 0 : deliveryFee;
+  // Show the Delivery Fee row for delivery orders (not for pickup)
+  const showDeliveryRow =
+    !isPickup && (isFreeDeliveryCoupon || deliveryFee > 0);
 
   // Duplicates are merged here, so it works no matter how the caller sends them
   const packages: PackageItem[] = useMemo(
@@ -137,13 +224,103 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         : [],
     [passedPackages],
   );
-  const alaCarteItems: AlaCarteItem[] =
-    passedAlaCarte && passedAlaCarte.length > 0 ? passedAlaCarte : [];
+
+  // Passed ala carte items may carry live marketplace prices, so they are NOT
+  // used while we wait for the order-time prices from the server.
+  // They are only used as a fallback if the fetch fails.
+  const [alaCarteItems, setAlaCarteItems] = useState<AlaCarteItem[]>([]);
+
+  // True until the order-time ala carte items are loaded (or the fetch fails).
+  // The summary stays hidden meanwhile so it never flashes wrong numbers.
+  const [alaCarteLoading, setAlaCarteLoading] = useState<boolean>(
+    hasAlaCarte && Boolean(orderId),
+  );
+  const [pageLoading, setPageLoading] = useState<boolean>(true);
+
+  // Fetch directly from orderadditionalitems table ONLY when this order has ala carte items
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!hasAlaCarte || !orderId) {
+      setAlaCarteLoading(false);
+      const t = setTimeout(() => {
+        if (isMounted) setPageLoading(false);
+      }, 150);
+      return () => {
+        isMounted = false;
+        clearTimeout(t);
+      };
+    }
+
+    const fetchCancelAlaCarte = async () => {
+      try {
+        const res = await orderService.getCancelOrderAdditionalItems(
+          orderId,
+          processOrderId,
+        );
+        if (!isMounted) return;
+
+        if (res.data?.status && Array.isArray(res.data.data)) {
+          const items: AlaCarteItem[] = res.data.data.map((it: any) => {
+            const linePrice = parseFloat(it.price) || 0;
+            const lineNormal = parseFloat(it.normalPrice) || 0;
+            return {
+              id: String(it.id || it.productId || "item"),
+              name: it.displayName || it.name || "Item",
+              icon: it.icon,
+              image: it.image,
+              weight: `${it.qty} ${it.unit || "kg"}`,
+              price: linePrice,
+              originalPrice:
+                lineNormal > linePrice + 0.01 ? lineNormal : undefined,
+            };
+          });
+          setAlaCarteItems(items);
+        } else if (passedAlaCarte && passedAlaCarte.length > 0) {
+          // Fallback: server returned nothing usable
+          setAlaCarteItems(passedAlaCarte);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cancel order additional items:", err);
+        if (isMounted && passedAlaCarte && passedAlaCarte.length > 0) {
+          setAlaCarteItems(passedAlaCarte);
+        }
+      } finally {
+        if (isMounted) {
+          setAlaCarteLoading(false);
+          setPageLoading(false);
+        }
+      }
+    };
+
+    fetchCancelAlaCarte();
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAlaCarte, orderId, processOrderId]);
 
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // AlertModal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const handleAlertClose = () => {
+    setAlertVisible(false);
+    if (alertType === "success") {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home" }],
+      });
+    }
+  };
 
   // Keyboard / scroll refs
   const scrollRef = useRef<ScrollView>(null);
@@ -218,23 +395,35 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
     0,
   );
   const alaCarteTotal = alaCarteItems.reduce((sum, i) => sum + i.price, 0);
-  // DASH: the service fee is part of the order total
-  const calculatedOrderTotal = packagesTotal + alaCarteTotal + serviceFee;
 
+  // Order total = packages + ala carte - coupon + delivery fee (0 when a
+  // free-delivery coupon is applied) + DASH service fee
+  const calculatedOrderTotal = Math.max(
+    0,
+    packagesTotal +
+      alaCarteTotal -
+      couponDiscount +
+      deliveryFeeCharged +
+      serviceFee,
+  );
+
+  // The items list (order-time prices) is the single source of truth, so the
+  // list and the summary always match. Passed totals are only a fallback when
+  // there are no items to sum.
   const processOrderTotal =
-    passedProcessOrderTotal !== undefined && passedProcessOrderTotal > 0
-      ? passedProcessOrderTotal
-      : passedTotalPaid !== undefined && passedTotalPaid > 0
-        ? passedTotalPaid
-        : calculatedOrderTotal;
+    packagesTotal + alaCarteTotal > 0
+      ? calculatedOrderTotal
+      : Number(passedProcessOrderTotal ?? passedTotalPaid ?? 0);
 
   /* ---------------------------------------------------------
      Payment breakdown
      An order can be split: Credit + Card, or Credit + Cash.
      Each part is shown on its own line.
-       - Credit: as passed (DB creditPaid).
-       - Card: as passed, else (card order) total - credit.
-       - Cash due: as passed, else (cash/COD order) total - credit.
+       - Credit:     as passed (DB creditPaid) - historical, not price based.
+       - Card PAID:  as passed (actual payment) - historical.
+       - Card DUE:   derived from the order-time total (the card is only
+                     charged when the customer confirms the order).
+       - Cash DUE:   derived from the order-time total.
   --------------------------------------------------------- */
 
   const method = (paymentMethod || "").toLowerCase();
@@ -252,21 +441,24 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
   const isFullyPaidByCredit =
     processOrderTotal > 0 && remainingAfterCredit === 0;
 
+  // Card PAID
   const totalPaidCard = isFullyPaidByCredit
     ? 0
-    : passedTotalPaidCard !== undefined
-      ? Math.min(Number(passedTotalPaidCard), remainingAfterCredit)
-      : method === "card"
-        ? remainingAfterCredit
-        : 0;
+    : Math.min(Number(passedTotalPaidCard ?? 0), remainingAfterCredit);
 
+  // Card DUE (card order that is not paid yet) - derived, not passed
+  const totalCardDue = isFullyPaidByCredit
+    ? 0
+    : method === "card"
+      ? Math.max(0, remainingAfterCredit - totalPaidCard)
+      : 0;
+
+  // Cash DUE - derived, not passed
   const totalCashDue = isFullyPaidByCredit
     ? 0
-    : passedTotalCashDue !== undefined
-      ? Math.min(Number(passedTotalCashDue), remainingAfterCredit)
-      : method.includes("cash") || method === "cod"
-        ? remainingAfterCredit
-        : 0;
+    : method.includes("cash") || method === "cod"
+      ? remainingAfterCredit
+      : 0;
 
   // Only the credit that was already paid goes back to the credit balance.
   // The card amount is NOT refunded as credit (the card is only charged when
@@ -280,7 +472,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
   );
 
   const onCancelOrder = async () => {
-    if (!isConfirmed || loading) return;
+    if (!isConfirmed || loading || alaCarteLoading) return;
     setLoading(true);
     try {
       if (orderId) {
@@ -289,40 +481,50 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
           processOrderId: processOrderId || undefined,
         });
       }
-      Alert.alert(
-        "Order Cancelled",
-        "Your order has been cancelled successfully.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "Home" }],
-              });
-            },
-          },
-        ],
-      );
+      setAlertTitle("Order Cancelled");
+      setAlertMessage("Your order has been cancelled successfully.");
+      setAlertType("success");
+      setAlertVisible(true);
     } catch (err: any) {
       console.error("Failed to cancel order:", err);
-      Alert.alert(
-        "Cancellation Failed",
+      setAlertTitle("Cancellation Failed");
+      setAlertMessage(
         err?.response?.data?.message ||
           "Unable to cancel your order at this moment. Please try again or contact support.",
       );
+      setAlertType("error");
+      setAlertVisible(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // 1250 -> "1,250.00", 1234567.5 -> "1,234,567.50"
-  const formatPrice = (value: number | string | null | undefined): string => {
-    const num = Number(value ?? 0);
-    if (!isFinite(num)) return "0.00";
-    const [intPart, decPart] = num.toFixed(2).split(".");
-    return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decPart}`;
-  };
+  const canCancel =
+    isConfirmed && !loading && !alaCarteLoading && !pageLoading;
+
+  if (pageLoading) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+
+        {/* Header */}
+        <View className="flex-row items-center px-5 pt-3 pb-2">
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            className="w-11 h-11 rounded-full border border-[#EEEEEE] items-center justify-center"
+          >
+            <Ionicons name="chevron-back" size={22} color="#000" />
+          </TouchableOpacity>
+
+          <Text className="flex-1 text-center text-[17px] font-semibold text-black mr-11">
+            Order Cancel Confirmation
+          </Text>
+        </View>
+
+        <LoadingPage message="Loading order details..." fullScreen={true} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white">
@@ -373,7 +575,7 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
                 </Text>
                 <Text className="text-[13px] text-[#E11D48] mt-0.5">
                   {refundCreditAmount > 0
-                    ? "The credit you paid for this order will be returned to your credit balance."
+                    ? "The credit you paid for this order will be returned to your Polygon Wallet."
                     : "This order will be cancelled immediately."}
                 </Text>
               </View>
@@ -455,85 +657,113 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
               </SectionCard>
             )}
 
-            {/* Totals Summary */}
-            <View className="mx-5 mt-6 border border-[#EEEEEE] rounded-2xl p-4 bg-white">
-              <Text className="text-[14px] font-bold text-black mb-3">
-                Payment Summary
-              </Text>
+            {/* Totals Summary (flat rows with dividers) - shown only after
+                order-time items are loaded so wrong numbers never flash */}
+            {!alaCarteLoading && (
+              <View className="mx-5 mt-6">
+                {/* ── Order breakdown ── */}
+                {packagesTotal > 0 && (
+                  <SummaryRow
+                    light
+                    label="For Packages"
+                    value={`Rs. ${formatPrice(packagesTotal)}`}
+                  />
+                )}
 
-              {/* Total Paid with Card (if any) */}
-              {totalPaidCard > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#4A4A4A]">
-                    Total Paid with Card
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-black">
-                    Rs. {formatPrice(totalPaidCard)}
-                  </Text>
-                </View>
-              )}
+                {alaCarteTotal > 0 && (
+                  <SummaryRow
+                    light
+                    label="For Ala Carte"
+                    value={`Rs. ${formatPrice(alaCarteTotal)}`}
+                  />
+                )}
 
-              {/* Total Paid with Credit (if any) */}
-              {totalPaidCredit > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#4A4A4A]">
-                    Total Paid with Credit
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-black">
-                    Rs. {formatPrice(totalPaidCredit)}
-                  </Text>
-                </View>
-              )}
+                {couponDiscount > 0 && (
+                  <SummaryRow
+                    light
+                    label="Coupon Discount"
+                    value={`- Rs. ${formatPrice(couponDiscount)}`}
+                  />
+                )}
 
-              {/* Total Cash Due (if any) */}
-              {totalCashDue > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#000000]">
-                    Total Cash Due
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-[#000000]">
-                    Rs. {formatPrice(totalCashDue)}
-                  </Text>
-                </View>
-              )}
+                {showDeliveryRow &&
+                  (isFreeDeliveryCoupon ? (
+                    <SummaryRow
+                      light
+                      label="Delivery Fee"
+                      value="Delivery Fee Coupon Applied!"
+                      valueClassName="text-[11px] text-[#1F7A3A]"
+                    />
+                  ) : (
+                    <SummaryRow
+                      light
+                      label="Delivery Fee"
+                      value={`+ Rs. ${formatPrice(deliveryFee)}`}
+                    />
+                  ))}
 
-              {/* DASH: Service Fee (only for Dash orders) */}
-              {serviceFee > 0 && (
-                <View className="flex-row justify-between pb-2.5">
-                  <Text className="text-[14px] text-[#4A4A4A]">Service Fee</Text>
-                  <Text className="text-[14px] font-semibold text-black">
-                    + Rs. {formatPrice(serviceFee)}
-                  </Text>
-                </View>
-              )}
+                {/* DASH: Service Fee (only for Dash orders) */}
+                {serviceFee > 0 && (
+                  <SummaryRow
+                    light
+                    label="Service Fee"
+                    value={`+ Rs. ${formatPrice(serviceFee)}`}
+                  />
+                )}
 
-              <View className="h-[1px] bg-[#ECECEC] my-1" />
+                {/* ── Payment breakdown ── */}
+                {totalPaidCard > 0 && (
+                  <SummaryRow
+                    label="Total Paid with Card"
+                    value={`Rs. ${formatPrice(totalPaidCard)}`}
+                  />
+                )}
 
-              {/* Grand Total */}
-              <View className="flex-row justify-between pt-2">
-                <Text className="text-[15px] font-bold text-black">Total</Text>
-                <Text className="text-[16px] font-bold text-black">
-                  Rs. {formatPrice(processOrderTotal)}
-                </Text>
+                {totalCardDue > 0 && (
+                  <SummaryRow
+                    label="Total Pay with Card (Due)"
+                    value={`Rs. ${formatPrice(totalCardDue)}`}
+                  />
+                )}
+
+                {totalPaidCredit > 0 && (
+                  <SummaryRow
+                    label="Total Paid with Credit"
+                    value={`Rs. ${formatPrice(totalPaidCredit)}`}
+                  />
+                )}
+
+                {totalCashDue > 0 && (
+                  <SummaryRow
+                    label="Total Cash (Due)"
+                    value={`Rs. ${formatPrice(totalCashDue)}`}
+                  />
+                )}
+
+                <SummaryRow
+                  label="Total"
+                  value={`Rs. ${formatPrice(processOrderTotal)}`}
+                  bold
+                />
               </View>
-            </View>
+            )}
 
             {/* Credit info component (only the credit that was paid) */}
-            {refundCreditAmount > 0 && (
+            {!alaCarteLoading && refundCreditAmount > 0 && (
               <View className="mx-5 mt-6 bg-[#EAF9EE] border border-[#A6F4C5] rounded-3xl p-5 items-center">
                 <View className="w-12 h-12 rounded-full bg-[#22C55E] items-center justify-center">
                   <Ionicons name="wallet" size={22} color="#fff" />
                 </View>
                 <Text className="text-[15px] font-bold text-[#15803D] mt-3 text-center">
-                  Amount will be credited to your credit balance
+                  Amount will be credited to your Polygon Wallet
                 </Text>
                 <Text className="text-[13px] text-[#3F7A50] text-center mt-2 leading-5">
                   After canceling, the credit amount you paid,{" "}
                   <Text className="font-bold text-[#15803D]">
                     Rs. {formatPrice(refundCreditAmount)}
                   </Text>{" "}
-                  will be added back to your credit balance. You can use it
-                  for your next purchase.
+                  will be added back to your Polygon Wallet. You can use it for
+                  your next purchase.
                 </Text>
               </View>
             )}
@@ -582,10 +812,10 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
         >
           <TouchableOpacity
             onPress={onCancelOrder}
-            disabled={!isConfirmed || loading}
+            disabled={!canCancel}
             activeOpacity={0.85}
             className={`rounded-full py-4 items-center ${
-              isConfirmed ? "bg-[#E11D48]" : "bg-[#7F919C]"
+              canCancel ? "bg-[#E11D48]" : "bg-[#7F919C]"
             }`}
             style={{
               shadowColor: "#000000",
@@ -601,6 +831,19 @@ const OrderConfirmedOrderCancelScreen: React.FC<Props> = ({ navigation, route })
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+        autoClose={false}
+        showOkButton={true}
+        okButtonText="OK"
+        onOkPress={handleAlertClose}
+      />
     </View>
   );
 };

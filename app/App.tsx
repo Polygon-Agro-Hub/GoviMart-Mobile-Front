@@ -14,6 +14,7 @@ import pushNotificationService from "@/services/notification/pushNotification.se
 import socketService from "@/services/socket/socket.service";
 import { updateGlobalUnreadCount } from "@/store/notificationStore";
 import { AppUpdateProvider } from "@/features/app-update";
+import { TimeValidationProvider } from "@/features/time-validation";
 
 LogBox.ignoreLogs([
   "`expo-notifications` functionality is not fully supported in Expo Go",
@@ -22,10 +23,10 @@ LogBox.ignoreLogs([
 
 // Disable console logs in production to improve JS thread performance (Sales Dash pattern)
 if (!__DEV__) {
-  console.log = () => {};
-  console.warn = () => {};
-  console.info = () => {};
-  console.debug = () => {};
+  console.log = () => { };
+  console.warn = () => { };
+  console.info = () => { };
+  console.debug = () => { };
 }
 
 function AppContent() {
@@ -41,7 +42,7 @@ function AppContent() {
     pushNotificationService.init().then(async () => {
       const alreadyGranted = await pushNotificationService.requestPermissions();
       if (alreadyGranted) {
-        pushNotificationService.registerPushToken().catch(() => {});
+        pushNotificationService.registerPushToken().catch(() => { });
       }
     });
 
@@ -103,9 +104,11 @@ export default function App() {
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <SafeAreaProvider>
-          <AppUpdateProvider>
-            <AppContent />
-          </AppUpdateProvider>
+          <TimeValidationProvider>
+            <AppUpdateProvider>
+              <AppContent />
+            </AppUpdateProvider>
+          </TimeValidationProvider>
         </SafeAreaProvider>
       </PersistGate>
     </Provider>

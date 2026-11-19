@@ -32,7 +32,7 @@ const normalizeToKg = (product: ProductType) => {
   const perKgNormalPrice = parseFloat(String(product.normalPrice || "0")) || 0;
   const perKgDiscountedPrice =
     product.discountedPrice != null &&
-    String(product.discountedPrice).trim() !== ""
+      String(product.discountedPrice).trim() !== ""
       ? parseFloat(String(product.discountedPrice))
       : 0;
 
@@ -85,6 +85,16 @@ export const AlacartProductCard: React.FC<{
     hasDiscount &&
     (displayType === "AP&SP&D" || displayType === "D&AP" || !displayType);
 
+  const discountPercent =
+    product.discount != null && Number(product.discount) > 0
+      ? product.discount
+      : hasDiscount && totalNormalPrice > 0
+        ? Math.round(
+          ((totalNormalPrice - totalDiscountedPrice) / totalNormalPrice) *
+          100,
+        )
+        : null;
+
   const showStruckNormalPrice =
     hasDiscount &&
     (displayType === "AP&SP&D" || displayType === "AP&SP" || !displayType);
@@ -124,32 +134,50 @@ export const AlacartProductCard: React.FC<{
         }}
       >
         {/* Discount % badge, top-left — same placement style as Home */}
-        {!disabled && showDiscountBadge && product.discount ? (
-          <View
-            style={{
-              position: "absolute",
-              top: 15,
-              left: 4,
-              width: 35,
-              height: 35,
-              backgroundColor: "#F34261",
-              borderRadius: 100,
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 10,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                textAlign: "center",
-                color: "#FFF",
-              }}
-            >
-              {product.discount}%
-            </Text>
-          </View>
+        {/* Discount % badge, top-left: always a circle, font shrinks for longer text */}
+        {!disabled && showDiscountBadge && discountPercent != null ? (
+          (() => {
+            const label = `${discountPercent}%`;
+            const SIZE = 38; // always a circle
+
+            // Smaller font for longer text so it always fits inside the circle
+            let fontSize = 11;                       // "5%", "12%"
+            if (label.length === 4) fontSize = 10;   // "4.5%"
+            if (label.length >= 5) fontSize = 9;     // "4.55%"
+
+            return (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 15,
+                  left: 4,
+                  width: SIZE,
+                  height: SIZE,
+                  borderRadius: SIZE / 2,
+                  backgroundColor: "#F34261",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 10,
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                  allowFontScaling={false}
+                  style={{
+                    fontSize,
+                    fontWeight: "700",
+                    textAlign: "center",
+                    color: "#FFF",
+                    includeFontPadding: false,
+                  }}
+                >
+                  {label}
+                </Text>
+              </View>
+            );
+          })()
         ) : null}
 
         {/* Circular image wrapper */}
@@ -232,9 +260,9 @@ export const AlacartProductCard: React.FC<{
             disabled
               ? undefined
               : (e) => {
-                  e.stopPropagation();
-                  onToggle();
-                }
+                e.stopPropagation();
+                onToggle();
+              }
           }
           disabled={disabled}
           className="w-10 h-10 rounded-full items-center justify-center absolute -bottom-5"

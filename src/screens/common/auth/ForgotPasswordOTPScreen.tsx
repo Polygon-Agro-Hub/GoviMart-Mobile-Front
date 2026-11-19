@@ -9,9 +9,11 @@ import {
   Platform,
   Image,
   Keyboard,
+  AppState,
+  ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
 import { FontAwesome5, MaterialIcons, AntDesign } from "@expo/vector-icons";
@@ -19,6 +21,7 @@ import CustomHeader from "@/component/common/CustomHeader";
 import authService from "@/services/auth/auth.service";
 import { AlertModal } from "@/component/common/AlertModal";
 import { getForgotPwdStorageKeys } from "./ForgotPasswordInputScreen";
+import * as Clipboard from "expo-clipboard";
 
 type NavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -60,11 +63,13 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     phoneNumberParam,
     identifier
   );
-  const storageKey = attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
+  const storageKey =
+    attemptsKeys[0] || `@forgot_pwd_otp_attempts_${cleanIdentifier}`;
 
   // State Management
-  const [otp, setOtp] = useState(["", "", "", "", ""]);
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [otp, setOtp] = useState<string>("");
+  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
+  const [otpSessionKey, setOtpSessionKey] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState(OTP_TIMER_SECONDS);
   const [isExpired, setIsExpired] = useState(false);
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -81,17 +86,91 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"error" | "success">("error");
 
-  // Input Refs
-  const ref_1 = useRef<TextInput>(null);
-  const ref_2 = useRef<TextInput>(null);
-  const ref_3 = useRef<TextInput>(null);
-  const ref_4 = useRef<TextInput>(null);
-  const ref_5 = useRef<TextInput>(null);
+  // Master Input Ref
+  const inputRef = useRef<TextInput>(null);
 
-  const refs = [ref_1, ref_2, ref_3, ref_4, ref_5];
-
-  // Synchronous lock to block double-tap on Resend (state updates too late)
+  // Synchronous locks (state updates too late for double-tap / duplicate verification)
   const resendLockRef = useRef(false);
+  const verifyLockRef = useRef(false);
+  // FIX: true once the server accepted the code (blocks any further verification)
+  const verifiedRef = useRef(false);
+  // FIX: last code that was auto-submitted (prevents re-submitting the same code)
+  const autoSubmittedRef = useRef<string>("");
+  const lastUsedClipboardRef = useRef<string>("");
+  const appStateRef = useRef(AppState.currentState);
+
+  // Check clipboard for 5-digit OTP
+  const checkClipboardForOtp = useCallback(async () => {
+    try {
+      if (isRateLimited || isVerifying || isExpired || verifiedRef.current)
+        return;
+      const hasString = await Clipboard.hasStringAsync();
+      if (!hasString) return;
+      const content = await Clipboard.getStringAsync();
+      if (!content) return;
+      const trimmed = content.trim();
+
+      const match = trimmed.match(/\b\d{5}\b/);
+      if (match && match[0]) {
+        const foundOtp = match[0];
+        if (foundOtp !== lastUsedClipboardRef.current && foundOtp !== otp) {
+          lastUsedClipboardRef.current = foundOtp;
+          setOtp(foundOtp);
+        }
+      }
+    } catch {
+      // Ignore clipboard read errors
+    }
+  }, [isRateLimited, isVerifying, isExpired, otp]);
+
+  // Ensure master input focuses automatically when screen mounts or returns to focus
+  useFocusEffect(
+    useCallback(() => {
+      if (verifiedRef.current) return;
+      checkClipboardForOtp();
+      const t = setTimeout(() => {
+        if (!isRateLimited && !isVerifying) {
+          inputRef.current?.focus();
+        }
+      }, 250);
+      return () => clearTimeout(t);
+    }, [checkClipboardForOtp, isRateLimited, isVerifying])
+  );
+
+  // FIX: if the user comes back to this screen (back button) after a successful
+  // verify, reset the state. The old code is already consumed, so clear it.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      if (verifiedRef.current) {
+        verifiedRef.current = false;
+        autoSubmittedRef.current = "";
+        setOtp("");
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // Check clipboard immediately on mount as well
+  useEffect(() => {
+    checkClipboardForOtp();
+  }, [checkClipboardForOtp]);
+
+  // When app returns to foreground from SMS / Mail app, refocus input and check clipboard
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+      if (prev && prev.match(/inactive|background/) && nextState === "active") {
+        setTimeout(() => {
+          if (!isRateLimited && !isVerifying && !verifiedRef.current) {
+            inputRef.current?.focus();
+          }
+        }, 150);
+        checkClipboardForOtp();
+      }
+    });
+    return () => sub.remove();
+  }, [checkClipboardForOtp, isRateLimited, isVerifying]);
 
   // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
@@ -271,34 +350,9 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  const handleChangeText = (text: string, index: number) => {
-    const cleanText = text.replace(/[^0-9]/g, "");
-    if (!cleanText) {
-      const newOtp = [...otp];
-      newOtp[index] = "";
-      setOtp(newOtp);
-      return;
-    }
-
-    const newOtp = [...otp];
-    newOtp[index] = cleanText.slice(-1);
-    setOtp(newOtp);
-
-    // Auto-focus next box
-    if (index < 4) {
-      refs[index + 1].current?.focus();
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace") {
-      if (!otp[index] && index > 0) {
-        const newOtp = [...otp];
-        newOtp[index - 1] = "";
-        setOtp(newOtp);
-        refs[index - 1].current?.focus();
-      }
-    }
+  const handleOtpChange = (text: string) => {
+    const cleanText = text.replace(/[^0-9]/g, "").slice(0, 5);
+    setOtp(cleanText);
   };
 
   const applyRateLimitLockout = async () => {
@@ -313,8 +367,11 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
     showRateLimitAlert();
   };
 
-  const handleVerify = async () => {
-    const code = otp.join("");
+  const handleVerify = async (codeOverride?: string) => {
+    // FIX: also block if the code was already accepted
+    if (verifyLockRef.current || verifiedRef.current) return;
+
+    const code = (codeOverride ?? otp).trim();
     if (code.length < 5) {
       setAlertType("error");
       setAlertTitle("Invalid Code");
@@ -333,6 +390,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       return;
     }
 
+    verifyLockRef.current = true;
+    Keyboard.dismiss();
     setIsVerifying(true);
     try {
       const response = await authService.verifyForgotPasswordOtp({
@@ -342,6 +401,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       });
 
       if (response.data && response.data.status) {
+        // FIX: mark success BEFORE anything else so no second verify can run
+        verifiedRef.current = true;
         for (const key of attemptsKeys) {
           await clearAttempts(key);
         }
@@ -352,20 +413,30 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
           verifiedResetToken: response.data.verifiedResetToken,
         });
       } else {
+        // FIX: safety net - never show an error after a successful verify
+        if (verifiedRef.current) return;
+
         const is429 = response.data?.isRateLimited;
         const msg = response.data?.message || "Failed to verify the code.";
         if (is429 || msg.toLowerCase().includes("too many")) {
           await applyRateLimitLockout();
         } else {
+          const displayMsg =
+            !msg || /incorrect|invalid|remaining/i.test(msg)
+              ? "Incorrect verification code. Please try again."
+              : msg;
           setAlertType("error");
-          setAlertTitle("Verification Failed");
-          setAlertMessage(msg);
+          setAlertTitle("Invalid Code");
+          setAlertMessage(displayMsg);
           setAlertVisible(true);
-          setOtp(["", "", "", "", ""]);
-          refs[0].current?.focus();
+          setOtp("");
+          inputRef.current?.focus();
         }
       }
     } catch (err: any) {
+      // FIX: safety net - never show an error after a successful verify
+      if (verifiedRef.current) return;
+
       console.error("Verification error:", err);
       const is429 = err.response?.status === 429;
       const msg =
@@ -373,17 +444,42 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
       if (is429 || msg.toLowerCase().includes("too many")) {
         await applyRateLimitLockout();
       } else {
+        const isWrongCode = !msg || /incorrect|invalid|remaining/i.test(msg);
         setAlertType("error");
-        setAlertTitle("Verification Error");
-        setAlertMessage(msg);
+        setAlertTitle(isWrongCode ? "Invalid Code" : "Verification Error");
+        setAlertMessage(
+          isWrongCode ? "Incorrect verification code. Please try again." : msg
+        );
         setAlertVisible(true);
-        setOtp(["", "", "", "", ""]);
-        refs[0].current?.focus();
+        setOtp("");
+        inputRef.current?.focus();
       }
     } finally {
+      verifyLockRef.current = false;
       setIsVerifying(false);
     }
   };
+
+  // Auto-verify as soon as all 5 digits are filled (typed, pasted, or auto-filled).
+  // FIX: each distinct code is submitted only once, and never after success.
+  useEffect(() => {
+    if (otp.length < 5) {
+      // allow re-submit after the user edits/clears the code
+      autoSubmittedRef.current = "";
+      return;
+    }
+    if (
+      otp.length === 5 &&
+      !isVerifying &&
+      !isRateLimited &&
+      !isExpired &&
+      !verifiedRef.current &&
+      autoSubmittedRef.current !== otp
+    ) {
+      autoSubmittedRef.current = otp;
+      handleVerify(otp);
+    }
+  }, [otp, isVerifying, isRateLimited, isExpired]);
 
   const handleResend = async () => {
     // Block double taps (ref updates synchronously, state does not)
@@ -425,7 +521,12 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         }
       }
 
-      setOtp(["", "", "", "", ""]);
+      setOtp("");
+      lastUsedClipboardRef.current = "";
+      // FIX: a new code must be allowed to auto-submit
+      verifiedRef.current = false;
+      autoSubmittedRef.current = "";
+      setOtpSessionKey((prev) => prev + 1);
       setIsResending(true);
       try {
         const response = await authService.resendForgotPasswordOtp({
@@ -472,11 +573,10 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
                 (method === "email"
                   ? "Verification code has been resent to your email address."
                   : "Verification code has been resent to your mobile number.")
-              }\n\n(5 OTP resend attempts limit · ${remaining} remaining)`
+              }\n\n(${remaining} resend attempts remaining)`
             );
             setAlertVisible(true);
           }
-          refs[0].current?.focus();
         } else {
           const is429 = response.data?.isRateLimited;
           const msg =
@@ -562,51 +662,83 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             </Text>
           </View>
 
-          {/* 5 OTP Digit Input Boxes */}
-          <View className="flex-row justify-between my-8 px-2">
-            {otp.map((digit, index) => {
-              const isFocused = focusedIndex === index;
-              return (
-                <View
-                  key={index}
-                  className="w-[50px] h-[50px] border rounded-xl justify-center items-center bg-white"
-                  style={{
-                    borderColor: isFocused ? "#FF9114" : "#000000",
-                    borderWidth: isFocused ? 2 : 1,
-                  }}
-                >
-                  <TextInput
-                    ref={refs[index]}
-                    value={digit}
-                    onChangeText={(text) => handleChangeText(text, index)}
-                    onKeyPress={(e) => handleKeyPress(e, index)}
-                    onFocus={() => setFocusedIndex(index)}
-                    onBlur={() => setFocusedIndex(null)}
-                    keyboardType="number-pad"
+          {/* 5 OTP Digit Input Boxes Container */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => inputRef.current?.focus()}
+            className="relative my-8 px-2"
+          >
+            {/* Master TextInput for 100% reliable SMS autofill & keyboard input */}
+            <TextInput
+              key={`forgot_otp_${otpSessionKey}`}
+              ref={inputRef}
+              value={otp}
+              onChangeText={handleOtpChange}
+              keyboardType="number-pad"
+              maxLength={5}
+              textContentType="oneTimeCode"
+              autoComplete={
+                Platform.OS === "android" ? "sms-otp" : "one-time-code"
+              }
+              importantForAutofill="yes"
+              editable={!isRateLimited && !isVerifying}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              autoFocus
+              caretHidden
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: "100%",
+                height: "100%",
+                opacity: Platform.OS === "android" ? 0.01 : 0,
+                color: "transparent",
+                backgroundColor: "transparent",
+                zIndex: 10,
+              }}
+            />
+
+            {/* Visual 5-box display */}
+            <View
+              pointerEvents="none"
+              className="flex-row justify-between w-full"
+            >
+              {Array.from({ length: 5 }).map((_, index) => {
+                const digit = otp[index] || "";
+                const isFocused =
+                  isInputFocused &&
+                  (otp.length === index || (otp.length === 5 && index === 4));
+
+                return (
+                  <View
+                    key={index}
+                    className="w-[50px] h-[50px] border rounded-xl justify-center items-center bg-white"
                     style={{
-                      textAlign: "center",
-                      textAlignVertical: "center",
-                      fontSize: 20,
-                      fontWeight: "bold",
-                      color: "#000000",
-                      paddingTop: 0,
-                      paddingBottom: 0,
-                      paddingVertical: 0,
-                      paddingHorizontal: 0,
-                      margin: 0,
-                      width: "100%",
-                      height: "100%",
-                      ...(Platform.OS === "android"
-                        ? { includeFontPadding: false }
-                        : {}),
+                      borderColor: isFocused ? "#FF9114" : "#000000",
+                      borderWidth: isFocused ? 2 : 1,
                     }}
-                    maxLength={1}
-                    selectTextOnFocus
-                  />
-                </View>
-              );
-            })}
-          </View>
+                  >
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: "#000000",
+                        ...(Platform.OS === "android"
+                          ? { includeFontPadding: false }
+                          : {}),
+                      }}
+                    >
+                      {digit}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
 
           {/* Rate Limit / Code Expired Banner */}
           {isRateLimited && timeLeft > 0 ? (
@@ -687,7 +819,8 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
 
             {!isRateLimited && remainingAttempts > 0 && (
               <Text className="text-xs text-[#5A5859] text-center mt-2 font-medium">
-                ({remainingAttempts} {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
+                ({remainingAttempts}{" "}
+                {remainingAttempts === 1 ? "attempt" : "attempts"} remaining)
               </Text>
             )}
           </View>
@@ -701,14 +834,28 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
             className="px-6 pt-2 pb-3"
           >
             <TouchableOpacity
-              onPress={handleVerify}
+              onPress={() => handleVerify()}
               disabled={isVerifying || isResending}
               activeOpacity={0.8}
               className="bg-black rounded-full items-center justify-center h-[50px] w-full"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 6,
+                elevation: 5,
+              }}
             >
-              <Text className="text-white text-base font-bold">
-                {isVerifying ? "Verifying..." : "Verify"}
-              </Text>
+              {isVerifying ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text className="text-white text-base font-bold ml-2">
+                    Verifying...
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-white text-base font-bold">Verify</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -730,9 +877,17 @@ const ForgotPasswordOTPScreen: React.FC<Props> = ({ route, navigation }) => {
         title={alertTitle}
         message={alertMessage}
         type={alertType}
-        onClose={() => setAlertVisible(false)}
+        onClose={() => {
+          setAlertVisible(false);
+          inputRef.current?.focus();
+        }}
         autoClose={false}
         showOkButton={true}
+        okButtonText="OK"
+        onOkPress={() => {
+          setAlertVisible(false);
+          inputRef.current?.focus();
+        }}
       />
     </View>
   );

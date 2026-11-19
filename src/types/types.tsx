@@ -1,3 +1,4 @@
+import type { PackageMeta } from "@/store/packageReviewSlice";
 // ─── Navigation Route Params ─────────────────────────────────────────────────
 
 export interface CheckoutDetails {
@@ -25,6 +26,7 @@ export interface CheckoutDetails {
   // Schedule fields
   scheduleType?: string;
   deliveryDate?: string;
+  buyerType?: string;
   earliestDeliveryDate?: string | null;
   hasPackageUnavailableOnEarliest?: boolean;
   timeSlot?: string;
@@ -49,6 +51,7 @@ export interface OrderContext {
   packages?: any[];
   additionalItems?: any[];
   deliveryCharge?: number;
+  buyerType?: string;
   isFinalizeImdt?: number;
   deliveryMethod?: "home" | "pickup";
   checkoutDetails?: CheckoutDetails;
@@ -94,6 +97,13 @@ export type RootStackParamList = {
   };
   ResetPassword: { verifiedResetToken: string };
   UpdatePassword: { customerId?: number; name?: string; number?: string; redirectTo?: keyof RootStackParamList; } | undefined;
+  VerificationUnsuccessful: {
+    userId: number;
+    approveStatus?: string;
+    brImg?: string;
+    submittedDate?: string;
+    approvedAt?: string;
+  };
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   PrivacyPolicy: undefined;
   Home: undefined;
@@ -129,7 +139,7 @@ export type RootStackParamList = {
   AddNewAddress: { fromCheckout?: boolean } | undefined;
   ReportComplaint: undefined;
   ComplaintHistory: undefined;
-  ViewComplaint: { id: number } | undefined;
+  ViewComplaint: { id: number; orderId?: number };
   MyAccount: undefined;
   DeleteAccount: undefined;
   SavedCards: undefined;
@@ -138,8 +148,18 @@ export type RootStackParamList = {
   Notification: undefined;
   CheckoutScreen: { orderContext: OrderContext };
   ScheduleOrder: { orderContext: OrderContext };
-  PaymentMethod: { total: number; orderContext?: OrderContext };
-  PaymentScreen: { amount?: number; title?: string; orderContext?: OrderContext } | undefined;
+  PaymentMethod: {
+    total?: number;
+    orderContext?: OrderContext;
+  } | undefined;
+  PaymentScreen: {
+    amount?: number;
+    title?: string;
+    orderContext?: OrderContext;
+    orderId?: string | number;
+    processOrderId?: string | number;
+    invoiceNo?: string;
+  } | undefined;
   OrderDeliveryMethod: { orderContext?: OrderContext } | undefined;
   OrderConfirmed: {
     orderId?: string | number;
@@ -156,22 +176,24 @@ export type RootStackParamList = {
   ChoosePickupCentre: { orderContext?: OrderContext } | undefined;
   OrderHistory: undefined;
   OrderDetails: { orderId: string } | undefined;
-  ConfirmOrderDetailsScreen:{ orderId: string } | undefined;
+  ConfirmOrderDetailsScreen: { orderId: string } | undefined;
   ViewLocation: { latitude: number; longitude: number; title: string };
   OrderConfirmation: { orderId: string } | undefined;
- ReviewPackage: {
-  orderId?: number | string;
-  invoiceNo?: string;
-  targetStepIndex?: number;
-  replacedProduct?: any;
-  newScheduleDate?: string;
-  refreshKey?: number; // set ONLY by the Notification tab
-};
- SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
+  ReviewPackage: {
+    orderId?: number | string;
+    invoiceNo?: string;
+    targetStepIndex?: number;
+    replacedProduct?: any;
+    newScheduleDate?: string;
+    refreshKey?: number; // set ONLY by the Notification tab
+  };
+  SetQauntity: { orderId?: string | number; fromProduct?: any; toProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; isPaid?: boolean | number; } | undefined;
 
   OrderConfirmedOrderCancelScreen: {
     orderId?: string | number;
     processOrderId?: string | number;
+    hasAlaCarte?: boolean;
+    hasAlacart?: boolean;
     packages?: Array<{
       id: string;
       name: string;
@@ -195,8 +217,13 @@ export type RootStackParamList = {
     totalCashDue?: number;
     processOrderTotal?: number;
     paymentMethod?: string;
+    couponDiscount?: number;
+    deliveryFee?: number;
+    isFreeDeliveryCoupon?: boolean;
+    isPickup?: boolean;
     refundCreditAmount?: number;
-    serviceFee?: number; 
+    totalCardDue?: number;
+    serviceFee?: number;
   } | undefined;
   OrderCancelConfirmation: {
     orderId?: string | number;
@@ -224,10 +251,15 @@ export type RootStackParamList = {
     totalCashDue?: number;
     processOrderTotal?: number;
     paymentMethod?: string;
+    couponDiscount?: number;
+    deliveryFee?: number;
+    isFreeDeliveryCoupon?: boolean;
+    isPickup?: boolean;
     refundCreditAmount?: number;
     serviceFee?: number;
+    totalCardDue?: number;
   } | undefined;
- ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; } | undefined;
+  ReplaceProduct: { orderId?: string | number; fromProduct?: any; packageId?: string; orderPackageId?: number; replceId?: number; stepIndex?: number; paymentMethod?: string; deliveryMethod?: "home" | "pickup"; isPaid?: boolean | number; } | undefined;
 };
 
 // ─── Product / Package Types (shared across screens) ─────────────────────────
@@ -252,6 +284,7 @@ export interface ProductType {
   cropNameSinhala?: string;
   cropNameTamil?: string;
   discountedPrice?: number;
+  pkgBasePrice?: number | string;
   discount?: number;
   comPrice?: number | string;
   tags?: string;
@@ -308,7 +341,9 @@ export interface SignUpPayload {
   phoneNumber: string;
   buyerType: string;
   email: string;
+  docType?: string;
   nic: string;
+  brImg?: string | null;
   password: string;
   confirmPassword: string;
   agreeToMarketing?: boolean;
@@ -330,6 +365,8 @@ export interface UpdateUserDetailsPayload {
   phoneCode?: string;
   phoneNumber?: string;
   email?: string;
+  nic?: string;
+  docType?: string;
   companyName?: string;
   companyPhoneCode?: string;
   companyPhone?: string;
@@ -361,6 +398,7 @@ export interface AddressPayload {
 export interface PhoneChangeOtpPayload {
   phoneCode: string;
   phoneNumber: string;
+  email?: string;
 }
 
 export interface VerifyPhoneChangePayload {
@@ -371,41 +409,62 @@ export interface VerifyPhoneChangePayload {
 }
 
 //___________Review Package screen types________________
-export type PackageSummary = {
-    id: string;
-    name: string;
-    icon: string; // emoji placeholder — swap for an <Image> when you have assets
-    qty: number;
-    unitPrice: number;
-};
- 
+export type ScreenMode = "overview" | "flow";
+
+export type FlowStep =
+  | { type: "package"; packageId: string }
+  | { type: "alacart" }
+  | { type: "confirm" };
+
+export interface Category {
+  id: string;
+  name: string;
+  circleBg: string;
+  borderColor: string;
+  activeBg: string;
+  active: boolean;
+}
+
+export type OriginalAlacartEntry = { amount: number; unit: string };
+
+export interface PackageSummary {
+  pkg: PackageMeta;
+  stepIndex: number;
+  originalPrice: number; // total (x qty) - still used for totals
+  unitOriginalPrice: number; // price of ONE package
+  unitCurrentPrice: number; // price of ONE package incl. changes
+  diff: number; // change for ONE package
+  additionalChanges: number;
+  currentPrice: number; // total (x qty)
+}
+
 export type ReviewProduct = {
-    id: string;
-    itemId?: number;
-    productId?: number;
-    category: string; // e.g. "Up Country Fruit (1)"
-    name: string;
-    icon: string;
-    image?: string;
-    price: number;
-    quantity: number;
-    unit: "kg" | "g";
-    step: number;
-    productType?: number | string;
-    productTypeId?: number | string;
-    productTypeName?: string;
-    excludedWarning?: string;
-    isReplaced?: boolean;
-    originalProduct?: ReviewProduct;
-    minQuantity?: number;
+  id: string;
+  itemId?: number;
+  productId?: number;
+  category: string; // e.g. "Up Country Fruit (1)"
+  name: string;
+  icon: string;
+  image?: string;
+  price: number;
+  quantity: number;
+  unit: "kg" | "g";
+  step: number;
+  productType?: number | string;
+  productTypeId?: number | string;
+  productTypeName?: string;
+  excludedWarning?: string;
+  isReplaced?: boolean;
+  originalProduct?: ReviewProduct;
+  minQuantity?: number;
 };
- 
+
 export type PackageReview = {
-    id: string;
-    no: number;
-    name: string;
-    products: ReviewProduct[];
-    originalPackagePrice: number;
-    serviceFee: number;
-    packingFee: number;
+  id: string;
+  no: number;
+  name: string;
+  products: ReviewProduct[];
+  originalPackagePrice: number;
+  serviceFee: number;
+  packingFee: number;
 };

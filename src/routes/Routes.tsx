@@ -21,6 +21,7 @@ import ForgotPassword from "@/screens/common/auth/ForgotPasswordScreen";
 import ForgotPasswordInput from "@/screens/common/auth/ForgotPasswordInputScreen";
 import ForgotPasswordOTP from "@/screens/common/auth/ForgotPasswordOTPScreen";
 import ResetPassword from "@/screens/common/auth/ResetPasswordScreen";
+import VerificationUnsuccessful from "@/screens/common/auth/VerificationUnsuccessfulScreen";
 import DeliveryLocation from "@/screens/common/locations/DeliveryLocationScreen";
 import CameraAccess from "@/screens/common/permission/CameraAccess";
 import LocationAccess from "@/screens/common/permission/LocationAccess";
@@ -87,7 +88,7 @@ export interface StackRouteConfig {
  * Fallback route used when a signed-in user tries to reach a screen
  * their role isn't allowed to see and there's nowhere sensible to go back to.
  */
-const UNAUTHORIZED_FALLBACK_ROUTE = "ChooseAuth";
+const UNAUTHORIZED_FALLBACK_ROUTE = "Home";
 
 /**
  * Wraps a screen component with a role check. If the current user's role
@@ -184,6 +185,7 @@ export const PUBLIC_STACK_SCREENS: StackRouteConfig[] = [
   { name: "ForgotPasswordInput", component: ForgotPasswordInput, allowedRoles: "PUBLIC" },
   { name: "ForgotPasswordOTP", component: ForgotPasswordOTP, allowedRoles: "PUBLIC" },
   { name: "ResetPassword", component: ResetPassword, allowedRoles: "PUBLIC" },
+  { name: "VerificationUnsuccessful", component: VerificationUnsuccessful, allowedRoles: "PUBLIC" },
   { name: "DeliveryLocation", component: DeliveryLocation, allowedRoles: "PUBLIC" },
   { name: "CameraAccess", component: CameraAccess as any, allowedRoles: "PUBLIC" },
   { name: "LocationAccess", component: LocationAccess as any, allowedRoles: "PUBLIC" },
@@ -194,13 +196,13 @@ export const PUBLIC_STACK_SCREENS: StackRouteConfig[] = [
 // 2. SHARED CUSTOMER ROUTES (Accessible by both Retail and Wholesale)
 // ============================================================================
 export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
-  { name: "Home", component: Home, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "Home", component: Home, allowedRoles: "PUBLIC" },
   { name: "Profile", component: Profile, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "MyAccount", component: MyAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "DeleteAccount", component: DeleteAccount, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "SavedCards", component: SavedCards, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "SaveCardInfo", component: SaveCardInfo, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
-  { name: "ViewProduct", component: ViewProduct, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "ViewProduct", component: ViewProduct, allowedRoles: "PUBLIC" },
   { name: "MyCart", component: MyCart, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ScheduleOrder", component: ScheduleOrder, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
@@ -231,7 +233,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
 // 3. RETAIL-ONLY ROUTES (Package Review & Customization - Retail Only)
 // ============================================================================
 export const RETAIL_STACK_SCREENS: StackRouteConfig[] = [
-  { name: "ViewPackage", component: ViewPackage, allowedRoles: [ROLES.RETAIL] },
+  { name: "ViewPackage", component: ViewPackage, allowedRoles: "PUBLIC" },
   { name: "ReviewPackage", component: ReviewPackage, allowedRoles: [ROLES.RETAIL] },
   { name: "SetQauntity", component: ChangeProductQuantity, allowedRoles: [ROLES.RETAIL] },
   { name: "ReplaceProduct", component: ReplaceProduct, allowedRoles: [ROLES.RETAIL] },

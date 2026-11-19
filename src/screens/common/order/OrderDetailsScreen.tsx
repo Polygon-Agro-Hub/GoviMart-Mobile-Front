@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
+  Modal,
+  BackHandler,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { RootStackParamList } from "@/types/types";
 import CustomHeader from "@/component/common/CustomHeader";
 import InfoNoticeCard from "@/component/common/InfoNoticeCard";
@@ -17,6 +20,8 @@ import { SummaryRow } from "@/component/order/SummaryRow";
 import { PackageModal } from "@/component/order/PackageModal";
 import LoadingPage from "@/component/common/LoadingPage";
 import orderService from "@/services/order/order.service";
+import complaintService from "@/services/complaint/complaint.service";
+import ComplaintReply from "@/component/complaint/ComplaintReply";
 
 type OrderDetailsNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -56,39 +61,7 @@ interface CartItem {
   oldPrice?: number;
 }
 
-// ─── PICKUP SCHEDULE HELPER ──────────────────────────────────────────────────
-// The DB column `sheduleDate` only stores the date (e.g. 2026-10-21 05:30:00),
-// while pickup orders are shown with a fixed pickup time of 09:30 PM.
-const PICKUP_TIME_LABEL = "09:30 PM";
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-// "2026-10-21 05:30:00" -> { date: "Oct 21, 2026", time: "09:30 PM" }
-// Reads the date digits literally, so a timezone can never shift the day.
-const formatPickupSchedule = (
-  raw: any,
-): { date: string; time: string } | null => {
-  if (!raw) return null;
-  const str = raw instanceof Date ? raw.toISOString() : String(raw);
-  const m = str.match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
-  if (!m) return null;
-  return {
-    date: `${MONTHS[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}, ${m[1]}`,
-    time: PICKUP_TIME_LABEL,
-  };
-};
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
   const orderId = route.params?.orderId;
@@ -100,32 +73,24 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
   const [packageModalVisible, setPackageModalVisible] = useState(false);
 
-  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
-
-  // Pickup orders show the scheduled date + fixed pickup time in the header
-  const isPickupOrder =
-    (
-      order?.delivaryMethod ||
-      order?.deliveryMethod ||
-      order?.deliveryType ||
-      ""
-    ).toUpperCase() === "PICKUP";
-
-  const pickupSchedule = isPickupOrder
-    ? formatPickupSchedule(order?.sheduleDate || order?.scheduleDate)
-    : null;
+  // Complaint linked to this order (null when none)
+  const [complaint, setComplaint] = useState<any>(null);
+  // True until the complaint lookup for this focus has finished. The complaint
+  // button is hidden while true so the wrong status is never shown first.
+  const [complaintLoading, setComplaintLoading] = useState(true);
+  const [replyModalVisible, setReplyModalVisible] = useState(false);
 
   const formatAmount = (amount: number | string) => {
     const num =
       typeof amount === "number"
         ? amount
         : parseFloat(
-          String(amount || "")
-            .replace(/Rs\.?/gi, "")
-            .replace(/LKR/gi, "")
-            .replace(/,/g, "")
-            .trim(),
-        ) || 0;
+            String(amount || "")
+              .replace(/Rs\.?/gi, "")
+              .replace(/LKR/gi, "")
+              .replace(/,/g, "")
+              .trim(),
+          ) || 0;
     return num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -133,9 +98,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
   };
 
   // Parses a price-ish value (number, "Rs. 1,200.00", null) into a plain
-  // number, or null if there's nothing there. Used so we can compare an
-  // item's original vs. discounted amount before deciding to show the
-  // struck-through "old price".
+  // number, or null if there's nothing there.
   const parsePriceValue = (value: unknown): number | null => {
     if (value == null || value === "") return null;
     if (typeof value === "number") return value;
@@ -201,23 +164,117 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     setPackageModalVisible(true);
   };
 
+  // ─── COMPLAINT BUTTON LOGIC ────────────────────────────────────────────────
+
+  const invoiceNo =
+    order?.invoiceNo || order?.invoiceNumber || order?.invNo || undefined;
+
+  // "Report an Issue": only Delivered / Picked up orders, within 24h of deliveredTime
+  const normalizedOrderStatus = String(
+    order?.processStatus || order?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  const isDeliveredOrPickedUp = ["delivered", "picked up", "pickedup"].includes(
+    normalizedOrderStatus,
+  );
+
+  const canReportIssue = (() => {
+    // deliveredTime = processorders.deliveredTime (delivery) or
+    // pickuporders.handOverTime (pickup, mapped by the backend)
+    const deliveredRaw = order?.deliveredTime;
+    if (!isDeliveredOrPickedUp || !deliveredRaw) return false;
+    const deliveredAt = new Date(deliveredRaw).getTime();
+    if (isNaN(deliveredAt)) return false;
+    const diff = Date.now() - deliveredAt;
+    return diff >= 0 && diff <= DAY_MS;
+  })();
+
+  const complaintStatus = String(complaint?.status || "")
+    .trim()
+    .toLowerCase();
+  const hasComplaint = !!complaint;
+  const isComplaintClosed = hasComplaint && complaintStatus === "closed";
+  const isComplaintOpen = hasComplaint && !isComplaintClosed;
+
+  const handleReportIssue = () => {
+    navigation.navigate("ReportComplaint" as any, {
+      orderId,
+      invoiceNo,
+    });
+  };
+
+  const handleBack = useCallback(() => {
+    navigation.navigate("OrderHistory");
+  }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          handleBack();
+          return true;
+        },
+      );
+      return () => subscription.remove();
+    }, [handleBack]),
+  );
+
+  const handleViewComplaint = () => {
+    if (!complaint?.id) return;
+    navigation.navigate("ViewComplaint" as any, {
+      id: complaint.id,
+      orderId,
+    });
+  };
+
+  const isInitialMount = useRef(true);
+
   useEffect(() => {
     const fetchAllOrderDetails = async () => {
       if (!orderId) {
         setLoading(false);
+        setComplaintLoading(false);
         return;
       }
       try {
         setLoading(true);
-        const [orderRes, packagesRes, itemsRes] = await Promise.all([
-          orderService.getOrderById(orderId),
-          orderService.getOrderPackages(orderId),
-          orderService.getOrderAdditionalItems(orderId),
-        ]);
+        setComplaintLoading(true);
+        const [orderRes, packagesRes, itemsRes, complaintsRes] =
+          await Promise.all([
+            orderService.getOrderById(orderId),
+            orderService.getOrderPackages(orderId),
+            orderService.getOrderAdditionalItems(orderId),
+            complaintService.getMyComplaints().catch(() => null),
+          ]);
 
-        if (orderRes.data && orderRes.data.status) {
-          // console.log("Fetched Order:", orderRes.data.order);
-          setOrder(orderRes.data.order);
+        const fetchedOrder =
+          orderRes.data && orderRes.data.status ? orderRes.data.order : null;
+        if (fetchedOrder) {
+          setOrder(fetchedOrder);
+        }
+
+        const invNo =
+          fetchedOrder?.invoiceNo ||
+          fetchedOrder?.invoiceNumber ||
+          fetchedOrder?.invNo ||
+          undefined;
+
+        if (invNo && complaintsRes?.data?.status) {
+          const prefix = `Complaint regarding Invoice No : ${invNo}\n`;
+          const list: any[] = complaintsRes.data.data || [];
+          const found =
+            list.find((c) =>
+              String(c?.complain || "")
+                .replace(/<br\s*\/?>/gi, "\n")
+                .replace(/\r\n/g, "\n")
+                .startsWith(prefix),
+            ) || null;
+          setComplaint(found);
+        } else {
+          setComplaint(null);
         }
 
         if (packagesRes.data && packagesRes.data.status) {
@@ -232,11 +289,11 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                 : typeof p.productPrice === "number"
                   ? p.productPrice
                   : parseFloat(
-                    String(p.productPrice || "")
-                      .replace(/Rs\.?/i, "")
-                      .replace(/,/g, "")
-                      .trim(),
-                  ) || 0;
+                      String(p.productPrice || "")
+                        .replace(/Rs\.?/i, "")
+                        .replace(/,/g, "")
+                        .trim(),
+                    ) || 0;
             const qty = parseFloat(p.packageQty || p.qty || p.quantity) || 1;
 
             if (packageMap.has(key)) {
@@ -278,14 +335,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             (item: any, idx: number) => {
               const priceNum = parsePriceValue(item.price) ?? 0;
 
-              // The "original" (pre-discount) price for this line item.
-              // Backend naming isn't confirmed for this endpoint yet, so
-              // we try the field names used for products elsewhere in
-              // the app (normalPrice/comPrice) plus a couple of likely
-              // order-line variants, in priority order. If none of these
-              // match what the API actually returns, console.log(item)
-              // here once to see the real field name and add it to this
-              // list.
               const originalPriceNum =
                 parsePriceValue(item.normalPrice) ??
                 parsePriceValue(item.originalPrice) ??
@@ -315,11 +364,49 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         console.error("Error fetching order details:", err);
       } finally {
         setLoading(false);
+        setComplaintLoading(false);
       }
     };
 
     fetchAllOrderDetails();
   }, [orderId]);
+
+  // Look up the complaint when this screen gains focus (e.g. returning from Report Complaint)
+  useFocusEffect(
+    useCallback(() => {
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
+      }
+
+      if (!invoiceNo) return;
+
+      let active = true;
+
+      (async () => {
+        try {
+          const res = await complaintService.getMyComplaints();
+          const prefix = `Complaint regarding Invoice No : ${invoiceNo}\n`;
+          const list: any[] = res.data?.status ? res.data.data || [] : [];
+          const found =
+            list.find((c) =>
+              String(c?.complain || "")
+                .replace(/<br\s*\/?>/gi, "\n")
+                .replace(/\r\n/g, "\n")
+                .startsWith(prefix),
+            ) || null;
+          if (active) setComplaint(found);
+        } catch (e) {
+          // keep existing complaint state
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, [invoiceNo]),
+  );
+
   const NORMAL_STAGES = [
     "Ordered",
     "Processing",
@@ -328,6 +415,13 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     "On the way",
     "Delivered",
   ];
+
+  // Cancelled during REVIEW => Ordered > Processing > Cancelled
+  //   (orders.isPackage = 1 AND orders.isFinalizeImdt = 0)
+  // Cancelled during ORDER CONFIRMATION => Ordered > Cancelled
+  // NOTE: the column name is `isFinalizeImdt` (no "d"), matching the DB table.
+  const isCancelledDuringReview = () =>
+    Number(order?.isPackage) === 1 && Number(order?.isFinalizeImdt) === 0;
 
   const getStatusItems = () => {
     const isPickup =
@@ -379,14 +473,13 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           order?.returnNote ||
           order?.returnReason ||
           "Customer did not picked up the order during the day.";
-        const pickupSched =
-          pickupSchedule ||
-          formatPickupSchedule(
-            order?.sheduleDate || order?.scheduleDate || order?.deliveryDate,
-          );
-        const pickupReturnTime = pickupSched
-          ? `${pickupSched.date}, ${pickupSched.time}`
-          : returnTime || updateTime;
+
+        const schedDate = formatDate(order?.sheduleDate || order?.scheduleDate);
+        const schedTime = order?.sheduleTime || order?.scheduleTime;
+        const pickupReturnTime =
+          schedDate !== "N/A"
+            ? `${schedDate}${schedTime ? `, ${schedTime}` : ""}`
+            : returnTime || updateTime;
 
         return [
           {
@@ -417,7 +510,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         ];
       }
 
-      if (status === "Cancelled") {
+      if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
+        const showProcessing = isCancelledDuringReview();
         return [
           {
             title: "Ordered",
@@ -425,12 +519,16 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             icon: "cart-shopping",
             active: true,
           },
-          {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
+          ...(showProcessing
+            ? [
+                {
+                  title: "Processing",
+                  date: processingTime,
+                  icon: "box-open",
+                  active: true,
+                },
+              ]
+            : []),
           {
             title: "Cancelled",
             date: "",
@@ -470,7 +568,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
     // --- DELIVERY FLOW ---
 
-    // If order had any hold history or is on hold, construct a dynamic timeline with all stages including Hold, restarted On the way, and Returned/Delivered
     const holdHistory: Array<{
       holdTime?: string | Date | null;
       restartedTime?: string | Date | null;
@@ -496,39 +593,38 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         active: boolean;
         description?: string;
       }> = [
-          {
-            title: "Ordered",
-            date: orderTime || "Just now",
-            icon: "cart-shopping",
-            active: true,
-          },
-          {
-            title: "Processing",
-            date: processingTime,
-            icon: "box-open",
-            active: true,
-          },
-          {
-            title: "Out For Delivery",
-            date: outTime || updateTime,
-            icon: "dolly",
-            active: true,
-          },
-          {
-            title: "Collected",
-            date: collectedTime || updateTime,
-            icon: "truck",
-            active: true,
-          },
-          {
-            title: "On the way",
-            date: onTheWayTime || updateTime,
-            icon: "truck-fast",
-            active: true,
-          },
-        ];
+        {
+          title: "Ordered",
+          date: orderTime || "Just now",
+          icon: "cart-shopping",
+          active: true,
+        },
+        {
+          title: "Processing",
+          date: processingTime,
+          icon: "box-open",
+          active: true,
+        },
+        {
+          title: "Out For Delivery",
+          date: outTime || updateTime,
+          icon: "dolly",
+          active: true,
+        },
+        {
+          title: "Collected",
+          date: collectedTime || updateTime,
+          icon: "truck",
+          active: true,
+        },
+        {
+          title: "On the way",
+          date: onTheWayTime || updateTime,
+          icon: "truck-fast",
+          active: true,
+        },
+      ];
 
-      // Add each hold event (and restarted "On the way" step)
       holdHistory.forEach((hld) => {
         holdItems.push({
           title: "Hold",
@@ -547,7 +643,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         }
       });
 
-      // If status is currently Hold but holdHistory had no items
       if (isHoldNow && holdHistory.length === 0) {
         holdItems.push({
           title: "Hold",
@@ -558,7 +653,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         });
       }
 
-      // If the order has progressed past Hold to Delivered / Completed
       if (isCompletedOrDelivered) {
         holdItems.push({
           title: "Delivered",
@@ -570,7 +664,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         !isHoldNow &&
         (status === "On the way" || order?.drvStatus === "On the way")
       ) {
-        // If currently On the way and the last item in holdItems is not "On the way"
         const lastItem = holdItems[holdItems.length - 1];
         if (!lastItem || lastItem.title !== "On the way") {
           holdItems.push({
@@ -580,7 +673,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             active: true,
           });
         }
-        // Also show inactive Delivered stage if it's currently on the way
         holdItems.push({
           title: "Delivered",
           date: "",
@@ -651,7 +743,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
       ];
     }
 
-    if (status === "Cancelled") {
+    if (status === "Cancelled" || status?.toLowerCase() === "cancelled") {
+      const showProcessing = isCancelledDuringReview();
       return [
         {
           title: "Ordered",
@@ -659,12 +752,16 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           icon: "cart-shopping",
           active: true,
         },
-        {
-          title: "Processing",
-          date: processingTime,
-          icon: "box-open",
-          active: true,
-        },
+        ...(showProcessing
+          ? [
+              {
+                title: "Processing",
+                date: processingTime,
+                icon: "box-open",
+                active: true,
+              },
+            ]
+          : []),
         {
           title: "Cancelled",
           date: "",
@@ -731,13 +828,14 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
     ];
   };
 
-  if (loading) {
+  if (loading || complaintLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
         <CustomHeader
           showBackButton
           navigation={navigation}
           title="Order Details"
+          onBackPress={handleBack}
         />
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
@@ -761,6 +859,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         showBackButton
         navigation={navigation}
         title="Order Details"
+        onBackPress={handleBack}
       />
 
       {/* CONTENT */}
@@ -784,25 +883,130 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             marginBottom: 15,
           }}
         >
-          <Text
+          {/* ORDER ID + COMPLAINT BUTTON */}
+          <View
             style={{
-              fontSize: 12,
-              color: "#747990",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
             }}
           >
-            Order ID
-          </Text>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={{ fontSize: 12, color: "#747990" }}>Order ID</Text>
 
-          <Text
-            style={{
-              fontSize: 15,
-              color: "#111",
-              fontWeight: "600",
-              marginTop: 3,
-            }}
-          >
-            #{order?.invoiceNo || order?.invoiceNumber || order?.invNo || "N/A"}
-          </Text>
+              <Text
+                style={{
+                  fontSize: 15,
+                  color: "#111",
+                  fontWeight: "600",
+                  marginTop: 3,
+                }}
+              >
+                #{invoiceNo || "N/A"}
+              </Text>
+            </View>
+
+            {/* Complaint buttons are hidden until the complaint lookup is done */}
+
+            {/* 1) No complaint yet + Delivered/Picked up within 24h */}
+            {!complaintLoading && !hasComplaint && canReportIssue && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleReportIssue}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#FDECEF",
+                  borderRadius: 99,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 3,
+                  elevation: 2,
+                }}
+              >
+                <Ionicons name="help-circle" size={14} color="#B3202F" />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#B3202F",
+                    marginLeft: 4,
+                  }}
+                >
+                  Report an Issue
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 2) Complaint opened (not closed) */}
+            {!complaintLoading && isComplaintOpen && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleViewComplaint}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#F3F3F7",
+                  borderRadius: 99,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 3,
+                  elevation: 2,
+                }}
+              >
+                <Ionicons name="hourglass" size={12} color="#000" />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#111",
+                    marginLeft: 4,
+                  }}
+                >
+                  Complaint Under Review
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 3) Complaint closed */}
+            {!complaintLoading && isComplaintClosed && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setReplyModalVisible(true)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#000",
+                  borderRadius: 99,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 3,
+                  elevation: 2,
+                }}
+              >
+                <Ionicons name="information-circle" size={13} color="#FFF" />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: "#FFF",
+                    marginLeft: 4,
+                  }}
+                >
+                  View Complaint Reply
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View
             style={{
@@ -828,8 +1032,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   marginLeft: 3,
                 }}
               >
-                {pickupSchedule?.date ??
-                  formatDate(order?.sheduleDate || order?.scheduleDate)}
+                {formatDate(order?.sheduleDate || order?.scheduleDate)}
               </Text>
             </View>
 
@@ -858,8 +1061,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   marginLeft: 3,
                 }}
               >
-                {pickupSchedule?.time ??
-                  (order?.sheduleTime || order?.scheduleTime || "N/A")}
+                {order?.sheduleTime || order?.scheduleTime || "N/A"}
               </Text>
             </View>
 
@@ -901,6 +1103,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             </View>
           </View>
         </View>
+
         {/* ORDER STATUS */}
         <View
           style={{
@@ -1327,16 +1530,13 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
             (creditPaid > 0 && moneyPaid === 0 && !isCashOrder && !isCardOrder);
           const isPaid = Number(order?.isPaid) === 1;
 
-          // Remaining cash amount: fullTotal - creditPaid (as specified by user, since processorders.amount is 0 until paid)
           const cashRemainingAmount = Math.max(0, orderFullTotal - creditPaid);
 
-          // Remaining card amount: moneyPaid if > 0, else fullTotal - creditPaid
           const cardRemainingAmount =
             moneyPaid > 0
               ? moneyPaid
               : Math.max(0, orderFullTotal - creditPaid);
 
-          // Return calculations
           const status = order?.processStatus || order?.status || "Pending";
           const isOrderCancelled =
             status === "Cancelled" ||
@@ -1349,9 +1549,9 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
           const handlingFee = parseFloat(order?.returnHandlingFee || 350);
           const deliveryFeeDeduction = parseFloat(
             order?.curDlvrCharge ||
-            order?.delivaryCharge ||
-            order?.deliveryCharge ||
-            300,
+              order?.delivaryCharge ||
+              order?.deliveryCharge ||
+              300,
           );
           const restoredCredit =
             totalPaidByCustomer > 0
@@ -1371,6 +1571,31 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
               order?.deliveryType ||
               ""
             ).toUpperCase() === "PICKUP";
+
+          // DASH SERVICE FEE: orderApp = "Dash" AND isPackage = 0
+          // Service Fee = processorders.fullTotal - processorders.deliveryCharge - total(orderadditionalitems.price)
+          const isPackageValue = order?.isPackage;
+          const isZeroPackage =
+            isPackageValue != null && String(isPackageValue).trim() !== ""
+              ? Number(isPackageValue) === 0
+              : packages.length === 0;
+          const isDashServiceFee =
+            String(order?.orderApp || order?.appName || "")
+              .trim()
+              .toLowerCase() === "dash" && isZeroPackage;
+          const deliveryChargeForCalc = parseFloat(
+            order?.delivaryCharge || order?.deliveryCharge || 0,
+          ) || 0;
+          const additionalItemsTotal = cartItems.reduce(
+            (acc, item) => acc + item.price,
+            0,
+          );
+          const serviceFee = isDashServiceFee
+            ? Math.max(
+                0,
+                orderFullTotal - deliveryChargeForCalc - additionalItemsTotal,
+              )
+            : 0;
 
           return (
             <>
@@ -1493,6 +1718,23 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                   </>
                 )}
 
+                {/* DASH: Service Fee (orderApp = Dash AND isPackage = 0) */}
+                {isDashServiceFee && (
+                  <>
+                    <SummaryRow
+                      label="Service Fee"
+                      value={`+ Rs. ${formatAmount(serviceFee)}`}
+                    />
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: "#E1E7EE",
+                        marginVertical: 6,
+                      }}
+                    />
+                  </>
+                )}
+
                 <SummaryRow
                   label="Total"
                   value={`Rs. ${formatAmount(orderFullTotal)}`}
@@ -1522,30 +1764,24 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                     Payment Summery
                   </Text>
 
-                  {/* Paid By Credit */}
                   {(creditPaid > 0 || isCreditOrder) && (
                     <SummaryRow
-                      label="Paid By Credit"
+                      label="Paid By Polygon Wallet"
                       value={`Rs. ${formatAmount(creditPaid > 0 ? creditPaid : orderFullTotal)}`}
                       icon="wallet"
                       iconColor="#8D5B4C"
                     />
                   )}
 
-                  {/* Paid with Card */}
                   {isCardOrder && cardRemainingAmount > 0 && (
                     <SummaryRow
-                      label="Paid with Card"
+                      label={isPaid ? "Paid with Card" : "Pay with Card"}
                       value={`Rs. ${formatAmount(cardRemainingAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"
                     />
                   )}
 
-                  {/* Cash Row:
-                      If returned: always show "Paid with Cash", "Rs. 0.00", in green (#00B83D).
-                      If not returned: show "Paid with Cash" (green) if isPaid, else "Pay with Cash" (orange).
-                  */}
                   {isCashOrder &&
                     (isOrderReturned || cashRemainingAmount > 0) && (
                       <SummaryRow
@@ -1567,7 +1803,6 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                       />
                     )}
 
-                  {/* Fallback if none of the above matched */}
                   {!isCardOrder &&
                     !isCashOrder &&
                     !isCreditOrder &&
@@ -1669,8 +1904,8 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
                       }}
                     >
                       {restoredCredit < 0
-                        ? "Check your profile to view your credit balance. Please clear any negative balance before making your next purchase."
-                        : "Check your profile to view your credit balance. Use it on your next purchase."}
+                        ? "Check your profile to view your Polygon Wallet. Please clear any negative balance before making your next purchase."
+                        : "Check your profile to view your Polygon Wallet. Use it on your next purchase."}
                     </Text>
                   </View>
                 </View>
@@ -1687,6 +1922,14 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
         visible={packageModalVisible}
         onVisible={setPackageModalVisible}
         packages={packages}
+      />
+
+      {/* COMPLAINT REPLY MODAL */}
+      <ComplaintReply
+        visible={replyModalVisible}
+        onClose={() => setReplyModalVisible(false)}
+        reply={complaint?.reply}
+        replyTime={complaint?.replyTime}
       />
     </View>
   );

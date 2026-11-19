@@ -9,6 +9,8 @@ import {
   BackHandler,
   Modal,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -28,12 +30,20 @@ import CouponModal from "@/component/coupon/CouponModal";
 import AppliedCouponCard from "@/component/coupon/AppliedCouponCard";
 import UnavailableItemsModal from "@/component/common/UnavailableItemsModal";
 import BackConfirmationModal from "@/component/common/BackConfirmationModal";
-import cardStorageService, { SavedCard } from "@/services/payment/cardStorageService";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
 import { PaymentGatewayFactory } from "@/services/payment/payment.factory";
 import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentsLkAdapter } from "@/services/payment/payments-lk.adapter";
 import { getMinDeliveryDate } from "@/component/common/CustomCalendarModal";
+import {
+  OrderProcessingModal,
+  ProcessingStep,
+  UnconfirmedStateProps,
+} from "@/component/common/OrderProcessingModal";
+import { orderRecoveryService } from "@/services/order/orderRecovery.service";
 
 type PaymentMethodNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -54,8 +64,17 @@ let paymentSessionEndTime: number | null = null;
 // ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
 // Normal orders: pay-by date = delivery - 3 (18 -> 15)
 const NORMAL_GAP_DAYS = 3;
+// Wholesale orders: pay-by date = delivery - 2 (20 -> 18)
+const WHOLESALE_GAP_DAYS = 2;
 // Package orders with isFinalizeImdt = 0: delivery - 2 (18 -> 16)
 const PACKAGE_GAP_DAYS = 2;
+
+const CHECKOUT_PROCESSING_STEPS: ProcessingStep[] = [
+  { id: "validate", label: "Validating order items & pricing" },
+  { id: "payment", label: "Awaiting Payment..." },
+  { id: "create", label: "Creating order" },
+  { id: "invoice", label: "Finalizing order details" },
+];
 
 const MONTHS_LONG = [
   "January",
@@ -98,18 +117,30 @@ const parseDateOnly = (val: any): Date | null => {
 
   // Handle English date formats like "October 14, 2026" or "Oct 14, 2026"
   const englishMonths: Record<string, number> = {
-    january: 0, jan: 0,
-    february: 1, feb: 1,
-    march: 2, mar: 2,
-    april: 3, apr: 3,
+    january: 0,
+    jan: 0,
+    february: 1,
+    feb: 1,
+    march: 2,
+    mar: 2,
+    april: 3,
+    apr: 3,
     may: 4,
-    june: 5, jun: 5,
-    july: 6, jul: 6,
-    august: 7, aug: 7,
-    september: 8, sep: 8, sept: 8,
-    october: 9, oct: 9,
-    november: 10, nov: 10,
-    december: 11, dec: 11,
+    june: 5,
+    jun: 5,
+    july: 6,
+    jul: 6,
+    august: 7,
+    aug: 7,
+    september: 8,
+    sep: 8,
+    sept: 8,
+    october: 9,
+    oct: 9,
+    november: 10,
+    nov: 10,
+    december: 11,
+    dec: 11,
   };
 
   const match = s.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})/);
@@ -130,14 +161,25 @@ const parseDateOnly = (val: any): Date | null => {
 
 const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   const dispatch = useDispatch();
-  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
+  const userProfile = useSelector(
+    (state: RootState) => state.auth?.userProfile,
+  );
   const orderContext = route.params?.orderContext;
   const isNavigatingAwayRef = useRef(false);
   const isOrderFinalizedRef = useRef(false);
+  const isSessionExpiredRef = useRef(false);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const isCreatingOrderRef = useRef(false);
+  const checkoutStartedAtRef = useRef<number>(Date.now());
   const timerIntervalRef = useRef<any>(null);
   const sessionExpiredTimeoutRef = useRef<any>(null);
   const [backConfirmVisible, setBackConfirmVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [processingStage, setProcessingStage] = useState(0);
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [unconfirmedState, setUnconfirmedState] =
+    useState<UnconfirmedStateProps | null>(null);
 
   // Helper to safely clear all timers and session state
   const clearSessionTimers = useCallback(() => {
@@ -150,17 +192,87 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       sessionExpiredTimeoutRef.current = null;
     }
     paymentSessionEndTime = null;
+    setIsConfirming(false);
   }, []);
+
+  const handleSessionExpiry = useCallback(() => {
+    if (isOrderFinalizedRef.current || isSessionExpiredRef.current) return;
+    isSessionExpiredRef.current = true;
+    setIsSessionExpired(true);
+    isNavigatingAwayRef.current = true;
+    setIsConfirming(false);
+    setSubmitting(false);
+
+    clearSessionTimers();
+    setCheckoutModalVisible(false);
+    setCouponModalVisible(false);
+    setUnavailableModalVisible(false);
+    setBackConfirmVisible(false);
+    pendingOrderPayloadRef.current = null;
+    setPendingOrderPayload(null);
+
+    Alert.alert(
+      "Session Expired",
+      "Your payment session has expired. You are being redirected to your cart.",
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            navigation.navigate("MyCart");
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [navigation, clearSessionTimers]);
 
   // ─── SAVED CARD & GATEWAY STATE ─────────────────────────────────────────
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
-  const [selectedCardOption, setSelectedCardOption] = useState<"saved_card" | "new_card">("saved_card");
+  const [selectedCardOption, setSelectedCardOption] = useState<
+    "saved_card" | "new_card"
+  >("saved_card");
   const [saveCardForFuture, setSaveCardForFuture] = useState(true);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-  const [checkoutSession, setCheckoutSession] = useState<UnifiedCheckoutSession | null>(null);
+  const [checkoutSession, setCheckoutSession] =
+    useState<UnifiedCheckoutSession | null>(null);
   const [pendingOrderData, setPendingOrderData] = useState<any>(null);
   const [pendingOrderPayload, setPendingOrderPayload] = useState<any>(null);
   const pendingOrderPayloadRef = useRef<any>(null);
+
+  // Auto-recovery check on mount: check if there was an in-flight paid order that needs reconciliation
+  useEffect(() => {
+    const checkPendingRecovery = async () => {
+      try {
+        const pending = await orderRecoveryService.getPendingOrder();
+        if (
+          pending &&
+          pending.isPaid &&
+          pending.flowType === "checkout" &&
+          Date.now() - pending.timestamp < 10 * 60 * 1000
+        ) {
+          const check = await orderRecoveryService.reconcileCheckoutOrder(
+            pending.amount,
+          );
+          if (check.reconciled && check.orderData) {
+            await orderRecoveryService.clearPendingOrder();
+            clearSessionTimers();
+            dispatch(clearCart());
+            navigation.navigate("OrderConfirmed", {
+              orderId: check.orderData.orderId,
+              processOrderId: check.orderData.processOrderId,
+              invoiceNumber: check.orderData.invoiceNumber,
+              total: check.orderData.total || pending.amount,
+              couponValue: appliedCoupon?.discount || 0,
+              orderContext,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("[PaymentMethod] Error checking pending recovery:", err);
+      }
+    };
+    checkPendingRecovery();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -184,7 +296,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       return () => {
         isMounted = false;
       };
-    }, [userProfile?.id])
+    }, [userProfile?.id]),
   );
 
   // ─── 5-MINUTE SESSION TIMER ──────────────────────────────────────────────
@@ -226,47 +338,61 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const scheduledDate = getScheduledDeliveryDate();
     if (!scheduledDate) return false;
 
-    // 3. System Earliest Possible Schedule Date (e.g. today is 12 -> 15)
-    const sysEarliestDate = getMinDeliveryDate();
+    // 3. System Earliest Possible Schedule Date
+    const buyerType = userProfile?.buyerType || orderContext?.buyerType;
+    const sysEarliestDate = getMinDeliveryDate(buyerType);
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() === sysEarliestDate.getTime();
   };
 
-const getPaymentDueText = (): string => {
-  const scheduledDate = getScheduledDeliveryDate();
-  if (!scheduledDate) return "your scheduled order date";
+  const getPaymentDueText = (): string => {
+    const scheduledDate = getScheduledDeliveryDate();
+    if (!scheduledDate) return "your scheduled order date";
 
-  const hasPkg =
-    (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
-  const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
+    const hasPkg =
+      (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
+    const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
 
-  const offset = isPackageFlow ? PACKAGE_GAP_DAYS : NORMAL_GAP_DAYS;
-  const due = new Date(scheduledDate);
-  due.setDate(due.getDate() - offset);
+    const buyerType = userProfile?.buyerType || orderContext?.buyerType;
+    const isWholesale = String(buyerType || "").toLowerCase() === "wholesale";
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (due < today) return "today";
+    const offset = isPackageFlow
+      ? PACKAGE_GAP_DAYS
+      : isWholesale
+        ? WHOLESALE_GAP_DAYS
+        : NORMAL_GAP_DAYS;
+    const due = new Date(scheduledDate);
+    due.setDate(due.getDate() - offset);
 
-  return `${MONTHS_LONG[due.getMonth()]} ${getOrdinal(due.getDate())}`;
-};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (due < today) return "today";
+
+    return `${MONTHS_LONG[due.getMonth()]} ${getOrdinal(due.getDate())}`;
+  };
 
   useEffect(() => {
-    // Reset finalized flag when entering screen
+    // Reset finalized and expired flags when entering screen
     isOrderFinalizedRef.current = false;
+    isSessionExpiredRef.current = false;
+    setIsSessionExpired(false);
 
     if (!paymentSessionEndTime || paymentSessionEndTime <= Date.now()) {
       paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
     }
 
-    timerIntervalRef.current = setInterval(() => {
-      // 1. If order is already completed, navigating away, or submitting, never expire session
-      if (isOrderFinalizedRef.current || isNavigatingAwayRef.current || submitting) {
+    const checkTimer = () => {
+      // 1. If order is already completed, navigating away, or expired, do not tick
+      if (
+        isOrderFinalizedRef.current ||
+        isNavigatingAwayRef.current ||
+        isSessionExpiredRef.current
+      ) {
         return;
       }
 
-      // 2. If Payments.lk checkout modal is currently active, pause/extend timer so customer is not interrupted
+      // 2. If Payments.lk checkout modal is currently active, extend timer so customer is not interrupted
       if (checkoutModalVisible) {
         paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
         setRemainingSeconds(300);
@@ -281,27 +407,12 @@ const getPaymentDueText = (): string => {
       setRemainingSeconds(diff);
 
       if (diff <= 0) {
-        clearSessionTimers();
-        isNavigatingAwayRef.current = true;
-
-        setCheckoutModalVisible(false);
-        setCouponModalVisible(false);
-        setUnavailableModalVisible(false);
-        setBackConfirmVisible(false);
-        pendingOrderPayloadRef.current = null;
-        setPendingOrderPayload(null);
-
-        sessionExpiredTimeoutRef.current = setTimeout(() => {
-          if (isOrderFinalizedRef.current) return;
-          Alert.alert(
-            "Session Expired",
-            "Your payment session has expired. You are being redirected to your cart.",
-            [{ text: "OK", onPress: () => navigation.navigate("MyCart") }],
-            { cancelable: false },
-          );
-        }, 300);
+        handleSessionExpiry();
       }
-    }, 1000);
+    };
+
+    checkTimer();
+    timerIntervalRef.current = setInterval(checkTimer, 1000);
 
     return () => {
       if (timerIntervalRef.current) {
@@ -313,7 +424,31 @@ const getPaymentDueText = (): string => {
         sessionExpiredTimeoutRef.current = null;
       }
     };
-  }, [navigation, checkoutModalVisible, submitting, clearSessionTimers]);
+  }, [checkoutModalVisible, handleSessionExpiry]);
+
+  // Handle app resuming from background after sleep/multitasking
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        if (isOrderFinalizedRef.current || isSessionExpiredRef.current) return;
+        if (paymentSessionEndTime && paymentSessionEndTime <= Date.now()) {
+          setRemainingSeconds(0);
+          handleSessionExpiry();
+        } else if (paymentSessionEndTime) {
+          const diff = Math.max(
+            0,
+            Math.floor((paymentSessionEndTime - Date.now()) / 1000),
+          );
+          setRemainingSeconds(diff);
+        }
+      }
+    };
+
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => {
+      sub.remove();
+    };
+  }, [handleSessionExpiry]);
 
   useFocusEffect(
     useCallback(() => {
@@ -404,10 +539,10 @@ const getPaymentDueText = (): string => {
   const isCashDisabled = isImmediateFinalize || isExceedCashLimit;
 
   const hasPackageInCart =
-  (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
+    (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
 
-// isFinalizeImdt = 0 AND has package -> no EPSD check
-const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
+  // isFinalizeImdt = 0 AND has package -> no EPSD check
+  const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
 
   useEffect(() => {
     const fetchBalanceAndLimit = async () => {
@@ -460,6 +595,10 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
   const isFullCredit = useCredit && creditUsed > 0 && paymentAmount <= 0;
 
   const handleCheckoutSuccess = async (orderId: string) => {
+    // Prevent double invocation if WebView fires onSuccess multiple times
+    if (isCreatingOrderRef.current) return;
+    isCreatingOrderRef.current = true;
+
     // 1. Mark order as finalized immediately & kill the session timer to prevent any expiry alert
     isOrderFinalizedRef.current = true;
     isNavigatingAwayRef.current = true;
@@ -467,22 +606,43 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
 
     setCheckoutModalVisible(false);
     setSubmitting(true);
+    setProcessingStage(1); // Payment stage
+    setUnconfirmedState(null);
     try {
       if (checkoutSession?.sessionId) {
-        const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+        const adapter = PaymentGatewayFactory.getGateway(
+          "payments_lk",
+        ) as PaymentsLkAdapter;
         await adapter.syncCheckout(checkoutSession.sessionId).catch(() => null);
       }
 
-      const payloadToUse = pendingOrderPayloadRef.current || pendingOrderPayload;
+      const payloadToUse =
+        pendingOrderPayloadRef.current || pendingOrderPayload;
       if (!payloadToUse) {
-        throw new Error("Order details missing. Please contact customer support.");
+        throw new Error(
+          "Order details missing. Please contact customer support.",
+        );
       }
 
+      // Persist in-flight paid order intent in case connection drops during createOrder
+      await orderRecoveryService.savePendingOrder({
+        correlationId: orderRecoveryService.generateCorrelationId(),
+        flowType: "checkout",
+        amount: paymentAmount,
+        paymentMethod: "card",
+        isPaid: true,
+        timestamp: Date.now(),
+        payload: payloadToUse,
+      });
+
+      setProcessingStage(2); // Creating order on server
       const response = await orderService.createOrder(payloadToUse);
       if (!response.data || !response.data.status || !response.data.data) {
         throw new Error(response.data?.message || "Failed to finalize order");
       }
 
+      setProcessingStage(3); // Finalizing invoice & delivery
+      await orderRecoveryService.clearPendingOrder();
       const orderData = response.data.data;
       clearSessionTimers();
       dispatch(clearCart());
@@ -497,20 +657,105 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
     } catch (err: any) {
       isOrderFinalizedRef.current = false;
       isNavigatingAwayRef.current = false;
-      console.error("[PaymentMethod] Order finalization error after payment:", err);
-      const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
+      isCreatingOrderRef.current = false;
+      console.error(
+        "[PaymentMethod] Order finalization error after payment:",
+        err,
+      );
+      const isTimeout =
+        err?.code === "ECONNABORTED" ||
+        err?.message?.includes("timeout") ||
+        !err?.response ||
+        err?.message?.includes("Network Error");
+
+      const isCartMissingOrCleared =
+        err?.response?.status === 403 ||
+        err?.response?.data?.message?.includes("Cart does not belong") ||
+        err?.response?.data?.message?.includes("Active cart not found");
+
+      if (isTimeout || isCartMissingOrCleared) {
+        setIsReconciling(true);
+        const check = await orderRecoveryService.reconcileCheckoutOrder({
+          expectedTotal: paymentAmount,
+          checkoutStartedAt: checkoutStartedAtRef.current,
+        });
+        setIsReconciling(false);
+
+        if (check.reconciled && check.orderData) {
+          await orderRecoveryService.clearPendingOrder();
+          clearSessionTimers();
+          dispatch(clearCart());
+          setSubmitting(false);
+          navigation.navigate("OrderConfirmed", {
+            orderId: check.orderData.orderId,
+            processOrderId: check.orderData.processOrderId,
+            invoiceNumber: check.orderData.invoiceNumber,
+            total: check.orderData.total || paymentAmount,
+            couponValue: appliedCoupon?.discount || 0,
+            orderContext,
+          });
+          return;
+        }
+
+        setUnconfirmedState({
+          title: "Order Taking Longer Than Expected",
+          message:
+            "Your payment was received, but server confirmation timed out due to slow network. We saved your transaction securely.",
+          isPaid: true,
+          onCheckStatus: async () => {
+            setIsReconciling(true);
+            const statusCheck =
+              await orderRecoveryService.reconcileCheckoutOrder({
+                expectedTotal: paymentAmount,
+                checkoutStartedAt: checkoutStartedAtRef.current,
+              });
+            setIsReconciling(false);
+            if (statusCheck.reconciled && statusCheck.orderData) {
+              await orderRecoveryService.clearPendingOrder();
+              clearSessionTimers();
+              dispatch(clearCart());
+              setUnconfirmedState(null);
+              setSubmitting(false);
+              navigation.navigate("OrderConfirmed", {
+                orderId: statusCheck.orderData.orderId,
+                processOrderId: statusCheck.orderData.processOrderId,
+                invoiceNumber: statusCheck.orderData.invoiceNumber,
+                total: statusCheck.orderData.total || paymentAmount,
+                couponValue: appliedCoupon?.discount || 0,
+                orderContext,
+              });
+            } else {
+              Alert.alert(
+                "Processing in Background",
+                "The server is still processing your order. Please check again in a few moments.",
+              );
+            }
+          },
+          onRetry: async () => {
+            setUnconfirmedState(null);
+            handleCheckoutSuccess(orderId);
+          },
+          onCancel: () => {
+            setUnconfirmedState(null);
+            setSubmitting(false);
+          },
+        });
+        return;
+      }
+
+      setSubmitting(false);
       Alert.alert(
-        isTimeout ? "Order Processing Delay" : "Order Processing Issue",
-        isTimeout
-          ? "Payment was received, but order confirmation is taking longer than expected. Please check your Order History before retrying."
-          : err?.response?.data?.message ||
-            err?.message ||
-            "Payment was received, but there was an issue finalizing your order. Please contact customer support."
+        "Order Processing Issue",
+        err?.response?.data?.message ||
+          err?.message ||
+          "Payment was received, but there was an issue finalizing your order. Please contact customer support.",
       );
     } finally {
-      setSubmitting(false);
-      pendingOrderPayloadRef.current = null;
-      setPendingOrderPayload(null);
+      isCreatingOrderRef.current = false;
+      if (!unconfirmedState) {
+        pendingOrderPayloadRef.current = null;
+        setPendingOrderPayload(null);
+      }
     }
   };
 
@@ -525,11 +770,30 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
 
     Alert.alert(
       "Payment Cancelled",
-      "The card payment was not completed. You can try again whenever you are ready."
+      "The card payment was not completed. You can try again whenever you are ready.",
     );
   };
 
   const handleConfirm = async () => {
+    // 0. Strict guard against duplicate submissions
+    if (isConfirming || (submitting && !unconfirmedState)) return;
+
+    // 1. Strict guard: NEVER proceed or enter payment flow if session is expired or navigating away
+    const isExpired =
+      isSessionExpired ||
+      isSessionExpiredRef.current ||
+      isNavigatingAwayRef.current ||
+      remainingSeconds <= 0 ||
+      (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now());
+
+    if (isExpired) {
+      handleSessionExpiry();
+      return;
+    }
+
+    checkoutStartedAtRef.current = Date.now();
+    setIsConfirming(true);
+
     // Proactively check availability of items in cart
     const productIds: number[] = (cartProducts || []).map((p: any) => p.id);
     const packageIds: number[] = (cartPackages || []).map((p: any) => p.id);
@@ -539,6 +803,18 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           productIds,
           packageIds,
         );
+
+        if (
+          isSessionExpiredRef.current ||
+          isNavigatingAwayRef.current ||
+          (paymentSessionEndTime !== null &&
+            paymentSessionEndTime <= Date.now())
+        ) {
+          setIsConfirming(false);
+          handleSessionExpiry();
+          return;
+        }
+
         if (availRes.data && availRes.data.status && availRes.data.data) {
           const { products: pMap, packages: pkgMap } = availRes.data.data;
           const hasUnavailProd = productIds.some(
@@ -548,6 +824,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
             (id) => pkgMap && pkgMap[id] === false,
           );
           if (hasUnavailProd || hasUnavailPkg) {
+            setIsConfirming(false);
             setUnavailableModalVisible(true);
             return;
           }
@@ -555,6 +832,17 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
       } catch (err) {
         console.warn("Availability check error:", err);
       }
+    }
+
+    // Guard: check again before initiating payment
+    if (
+      isSessionExpiredRef.current ||
+      isNavigatingAwayRef.current ||
+      (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+    ) {
+      setIsConfirming(false);
+      handleSessionExpiry();
+      return;
     }
 
     const itemDiscount = orderContext?.discount || 0;
@@ -572,7 +860,16 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
       if (isEarliest) {
         // Earliest possible date: User pays NOW via payment gateway
         try {
-          setSubmitting(true);
+          if (
+            isSessionExpiredRef.current ||
+            isNavigatingAwayRef.current ||
+            (paymentSessionEndTime !== null &&
+              paymentSessionEndTime <= Date.now())
+          ) {
+            setIsConfirming(false);
+            handleSessionExpiry();
+            return;
+          }
           const payload = {
             cartId: orderContext?.cartId || 0,
             paymentMethod: "card",
@@ -596,29 +893,55 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
             },
           };
 
-          const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
+          const adapter = PaymentGatewayFactory.getGateway(
+            "payments_lk",
+          ) as PaymentsLkAdapter;
 
           // Option 1: 1-Click Pay with Saved Card
           if (selectedCardOption === "saved_card" && savedCard) {
             try {
+              setIsConfirming(false);
+              setSubmitting(true);
+              setProcessingStage(1); // Payment stage
+              await orderRecoveryService.savePendingOrder({
+                correlationId: orderRecoveryService.generateCorrelationId(),
+                flowType: "checkout",
+                amount: paymentAmount,
+                paymentMethod: "card",
+                isPaid: false,
+                timestamp: Date.now(),
+                payload,
+              });
+
               const chargeRes = await adapter.chargeSavedCard({
                 cardId: savedCard.id,
                 amount: paymentAmount,
-                itemsDescription: "GoviMart Order Payment",
+                itemsDescription: "Polygon Order Payment",
                 paymentType: "order",
               });
 
               if (chargeRes.success) {
+                await orderRecoveryService.updatePendingOrder({ isPaid: true });
+                setProcessingStage(2); // Creating order on server
                 const response = await orderService.createOrder(payload);
-                if (!response.data || !response.data.status || !response.data.data) {
-                  throw new Error(response.data?.message || "Failed to finalize order");
+                if (
+                  !response.data ||
+                  !response.data.status ||
+                  !response.data.data
+                ) {
+                  throw new Error(
+                    response.data?.message || "Failed to finalize order",
+                  );
                 }
                 const orderData = response.data.data;
 
+                setProcessingStage(3); // Invoice
+                await orderRecoveryService.clearPendingOrder();
                 isOrderFinalizedRef.current = true;
                 isNavigatingAwayRef.current = true;
                 clearSessionTimers();
                 dispatch(clearCart());
+                setSubmitting(false);
                 navigation.navigate("OrderConfirmed", {
                   orderId: orderData.orderId,
                   processOrderId: orderData.processOrderId,
@@ -630,7 +953,10 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                 return;
               }
             } catch (chargeErr: any) {
-              console.warn("[PaymentMethodScreen] 1-Click charge failed:", chargeErr);
+              console.warn(
+                "[PaymentMethodScreen] 1-Click charge failed:",
+                chargeErr,
+              );
               const isInvalid =
                 chargeErr?.response?.data?.cardInvalid ||
                 chargeErr?.message?.includes("invalid") ||
@@ -638,6 +964,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                 chargeErr?.message?.includes("No such object");
 
               if (isInvalid) {
+                setSubmitting(false);
                 setSavedCard(null);
                 setSelectedCardOption("new_card");
                 Alert.alert(
@@ -647,31 +974,135 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                     {
                       text: "Continue to Pay",
                       onPress: async () => {
+                        if (
+                          isSessionExpiredRef.current ||
+                          isNavigatingAwayRef.current ||
+                          (paymentSessionEndTime !== null &&
+                            paymentSessionEndTime <= Date.now())
+                        ) {
+                          handleSessionExpiry();
+                          return;
+                        }
                         try {
                           pendingOrderPayloadRef.current = payload;
                           setPendingOrderPayload(payload);
-                          const fallbackSession = await adapter.initiatePayment({
-                            amount: paymentAmount,
-                            paymentType: "order",
-                            itemsDescription: "GoviMart Order Payment",
-                            saveCard: true,
-                          });
+                          const fallbackSession = await adapter.initiatePayment(
+                            {
+                              amount: paymentAmount,
+                              paymentType: "order",
+                              itemsDescription: "Polygon Order Payment",
+                              saveCard: true,
+                            },
+                          );
                           setCheckoutSession(fallbackSession);
                           setCheckoutModalVisible(true);
                         } catch (launchErr: any) {
-                          Alert.alert("Error", launchErr?.message || "Failed to launch payment sheet.");
+                          Alert.alert(
+                            "Error",
+                            launchErr?.message ||
+                              "Failed to launch payment sheet.",
+                          );
                         }
                       },
                     },
-                  ]
+                  ],
                 );
                 return;
               }
+
+              const isTimeout =
+                chargeErr?.code === "ECONNABORTED" ||
+                chargeErr?.message?.includes("timeout") ||
+                !chargeErr?.response ||
+                chargeErr?.message?.includes("Network Error");
+
+              if (isTimeout) {
+                setIsReconciling(true);
+                const check =
+                  await orderRecoveryService.reconcileCheckoutOrder(
+                    totalAmount,
+                  );
+                setIsReconciling(false);
+                if (check.reconciled && check.orderData) {
+                  await orderRecoveryService.clearPendingOrder();
+                  clearSessionTimers();
+                  dispatch(clearCart());
+                  setSubmitting(false);
+                  navigation.navigate("OrderConfirmed", {
+                    orderId: check.orderData.orderId,
+                    processOrderId: check.orderData.processOrderId,
+                    invoiceNumber: check.orderData.invoiceNumber,
+                    total: check.orderData.total || totalAmount,
+                    couponValue: couponVal,
+                    orderContext,
+                  });
+                  return;
+                }
+
+                setUnconfirmedState({
+                  title: "Order Taking Longer Than Expected",
+                  message:
+                    "A network delay occurred while finalizing your 1-click payment. Your order state has been protected.",
+                  isPaid: true,
+                  onCheckStatus: async () => {
+                    setIsReconciling(true);
+                    const statusCheck =
+                      await orderRecoveryService.reconcileCheckoutOrder(
+                        totalAmount,
+                      );
+                    setIsReconciling(false);
+                    if (statusCheck.reconciled && statusCheck.orderData) {
+                      await orderRecoveryService.clearPendingOrder();
+                      clearSessionTimers();
+                      dispatch(clearCart());
+                      setUnconfirmedState(null);
+                      setSubmitting(false);
+                      navigation.navigate("OrderConfirmed", {
+                        orderId: statusCheck.orderData.orderId,
+                        processOrderId: statusCheck.orderData.processOrderId,
+                        invoiceNumber: statusCheck.orderData.invoiceNumber,
+                        total: statusCheck.orderData.total || totalAmount,
+                        couponValue: couponVal,
+                        orderContext,
+                      });
+                    } else {
+                      Alert.alert(
+                        "Processing in Background",
+                        "The server is still processing your order. Please check again in a few moments.",
+                      );
+                    }
+                  },
+                  onRetry: async () => {
+                    setUnconfirmedState(null);
+                    setSubmitting(false);
+                    setIsConfirming(false);
+                    handleConfirm();
+                  },
+                  onCancel: () => {
+                    setUnconfirmedState(null);
+                    setSubmitting(false);
+                  },
+                });
+                return;
+              }
+
+              setSubmitting(false);
               throw chargeErr;
             }
           }
 
           // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
+          if (
+            isSessionExpiredRef.current ||
+            isNavigatingAwayRef.current ||
+            (paymentSessionEndTime !== null &&
+              paymentSessionEndTime <= Date.now())
+          ) {
+            setIsConfirming(false);
+            handleSessionExpiry();
+            return;
+          }
+
           // Store order payload in ref/state — order will ONLY be created upon payment success!
           pendingOrderPayloadRef.current = payload;
           setPendingOrderPayload(payload);
@@ -679,27 +1110,42 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           const session = await adapter.initiatePayment({
             amount: paymentAmount,
             paymentType: "order",
-            itemsDescription: "GoviMart Order Payment",
+            itemsDescription: "Polygon Order Payment",
             saveCard: true,
           });
 
+          setIsConfirming(false);
           setCheckoutSession(session);
           setCheckoutModalVisible(true);
         } catch (err: any) {
+          setIsConfirming(false);
+          setSubmitting(false);
           console.error("[PaymentMethod] Card payment error:", err);
           Alert.alert(
             "Payment Failed",
             err?.response?.data?.message ||
               err?.message ||
-              "Could not process card payment. Please try again or pay with cash."
+              "Could not process card payment. Please try again or pay with cash.",
           );
         } finally {
+          setIsConfirming(false);
           setSubmitting(false);
         }
         return;
       } else {
         // NOT earliest possible date: Do NOT navigate to payment gateway. Confirm order directly with isPaid = 0, amount = 0.0, moneyPaid = 0.0
+        if (
+          isSessionExpiredRef.current ||
+          isNavigatingAwayRef.current ||
+          (paymentSessionEndTime !== null &&
+            paymentSessionEndTime <= Date.now())
+        ) {
+          setIsConfirming(false);
+          handleSessionExpiry();
+          return;
+        }
         try {
+          setIsConfirming(false);
           setSubmitting(true);
           const payload = {
             cartId: orderContext?.cartId || 0,
@@ -765,28 +1211,60 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
             });
             return;
           } else {
-            throw new Error(response.data?.message || "Failed to finalize order");
+            throw new Error(
+              response.data?.message || "Failed to finalize order",
+            );
           }
         } catch (err: any) {
+          setIsConfirming(false);
+          setSubmitting(false);
           console.error("[PaymentMethod] Future card order error:", err);
-          const isTimeout = err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
+          const isTimeout =
+            err?.code === "ECONNABORTED" || err?.message?.includes("timeout");
           Alert.alert(
             isTimeout ? "Order Processing Delay" : "Order Failed",
             isTimeout
               ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
               : err?.response?.data?.message ||
-                err?.message ||
-                "Could not place your order. Please try again."
+                  err?.message ||
+                  "Could not place your order. Please try again.",
           );
         } finally {
+          setIsConfirming(false);
           setSubmitting(false);
         }
         return;
       }
     }
 
+    if (
+      isSessionExpiredRef.current ||
+      isNavigatingAwayRef.current ||
+      (paymentSessionEndTime !== null && paymentSessionEndTime <= Date.now())
+    ) {
+      setIsConfirming(false);
+      handleSessionExpiry();
+      return;
+    }
+
     try {
+      setIsConfirming(false);
       setSubmitting(true);
+      setProcessingStage(0); // Validating
+      setUnconfirmedState(null);
+
+      // Persist pending order intent
+      await orderRecoveryService.savePendingOrder({
+        correlationId: orderRecoveryService.generateCorrelationId(),
+        flowType: "checkout",
+        amount: totalAmount,
+        paymentMethod: paymentMethod === "card" ? "card" : "cash",
+        isPaid: Boolean(isFullCredit),
+        timestamp: Date.now(),
+        payload: null,
+      });
+
+      setProcessingStage(1); // Payment / Credit
       const payload = {
         cartId: orderContext?.cartId || 0,
         paymentMethod:
@@ -815,12 +1293,16 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
         },
       };
 
+      setProcessingStage(2); // Creating order on server
       const response = await orderService.createOrder(payload);
       if (response.data && response.data.status && response.data.data) {
+        setProcessingStage(3); // Finalizing invoice
+        await orderRecoveryService.clearPendingOrder();
         isOrderFinalizedRef.current = true;
         isNavigatingAwayRef.current = true;
         clearSessionTimers();
         dispatch(clearCart());
+        setSubmitting(false);
         navigation.navigate("OrderConfirmed", {
           orderId: response.data.data.orderId,
           processOrderId: response.data.data.processOrderId,
@@ -859,13 +1341,98 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           },
         });
       } else {
+        setSubmitting(false);
         Alert.alert(
           "Order Failed",
-          response.data.message || "Failed to create order. Please try again.",
+          response.data?.message || "Failed to create order. Please try again.",
         );
       }
     } catch (error: any) {
       const errorData = error?.response?.data;
+      const isTimeout =
+        error?.code === "ECONNABORTED" ||
+        error?.message?.includes("timeout") ||
+        !error?.response ||
+        error?.message?.includes("Network Error");
+
+      const isCartMissingOrCleared =
+        error?.response?.status === 403 ||
+        errorData?.message?.includes("Cart does not belong") ||
+        errorData?.message?.includes("Active cart not found");
+
+      if (isTimeout || isCartMissingOrCleared) {
+        setIsReconciling(true);
+        const check = await orderRecoveryService.reconcileCheckoutOrder({
+          expectedTotal: totalAmount,
+          checkoutStartedAt: checkoutStartedAtRef.current,
+        });
+        setIsReconciling(false);
+        if (check.reconciled && check.orderData) {
+          await orderRecoveryService.clearPendingOrder();
+          clearSessionTimers();
+          dispatch(clearCart());
+          setSubmitting(false);
+          navigation.navigate("OrderConfirmed", {
+            orderId: check.orderData.orderId,
+            processOrderId: check.orderData.processOrderId,
+            invoiceNumber: check.orderData.invoiceNumber,
+            total: check.orderData.total || totalAmount,
+            couponValue: couponVal,
+            orderContext,
+          });
+          return;
+        }
+
+        setUnconfirmedState({
+          title: "Network Delay Detected",
+          message:
+            "Your order was submitted, but the network timed out before receiving confirmation. Check status to see if it was placed.",
+          isPaid: Boolean(isFullCredit),
+          onCheckStatus: async () => {
+            setIsReconciling(true);
+            const statusCheck =
+              await orderRecoveryService.reconcileCheckoutOrder({
+                expectedTotal: totalAmount,
+                checkoutStartedAt: checkoutStartedAtRef.current,
+              });
+            setIsReconciling(false);
+            if (statusCheck.reconciled && statusCheck.orderData) {
+              await orderRecoveryService.clearPendingOrder();
+              clearSessionTimers();
+              dispatch(clearCart());
+              setUnconfirmedState(null);
+              setSubmitting(false);
+              navigation.navigate("OrderConfirmed", {
+                orderId: statusCheck.orderData.orderId,
+                processOrderId: statusCheck.orderData.processOrderId,
+                invoiceNumber: statusCheck.orderData.invoiceNumber,
+                total: statusCheck.orderData.total || totalAmount,
+                couponValue: couponVal,
+                orderContext,
+              });
+            } else {
+              Alert.alert(
+                "Order Not Found",
+                "Your order has not been placed on the server yet. You can retry safely.",
+              );
+            }
+          },
+          onRetry: async () => {
+            setUnconfirmedState(null);
+            setSubmitting(false);
+            setIsConfirming(false);
+            handleConfirm();
+          },
+          onCancel: () => {
+            setUnconfirmedState(null);
+            setSubmitting(false);
+          },
+        });
+        return;
+      }
+
+      setIsConfirming(false);
+      setSubmitting(false);
       const errorMsg =
         errorData?.message ||
         (Array.isArray(errorData?.details)
@@ -876,16 +1443,9 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
       console.error("Order error in PaymentMethodScreen:", errorMsg, errorData);
       if (errorData?.code === "ITEMS_UNAVAILABLE") {
         setUnavailableModalVisible(true);
-      } else if (error?.code === "ECONNABORTED" || error?.message?.includes("timeout")) {
-        Alert.alert(
-          "Order Processing Delay",
-          "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again.",
-        );
       } else {
         Alert.alert("Order Failed", errorMsg);
       }
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -1246,7 +1806,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                       color: "#111111",
                     }}
                   >
-                    Use Credit Balance
+                    Use My Polygon Wallet
                   </Text>
 
                   <Text
@@ -1279,7 +1839,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                       marginTop: 4,
                     }}
                   >
-                    Pay with your credit balance and pay the rest with cash or
+                    Pay with your Polygon Wallet and pay the rest with cash or
                     card.
                   </Text>
                 </View>
@@ -1584,8 +2144,7 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
             </View>
           )}
 
-          {/* PLEASE NOTE BANNER WHEN SCHEDULED AFTER EPSD */}
-         {(isPackagePayToConfirm || (!isFullCredit && !isEarliestDeliveryDate())) && (
+          {!isFullCredit && !isEarliestDeliveryDate() && (
             <View
               style={{
                 marginHorizontal: 15,
@@ -1608,18 +2167,14 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
               >
                 Please Note :
               </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: "#475569",
-                  lineHeight: 19,
-                }}
-              >
-                Please make sure to complete your payment by{" "}
+              <Text style={{ fontSize: 13, color: "#475569", lineHeight: 19 }}>
+                Please review and finalize your order by{" "}
                 <Text style={{ fontWeight: "700", color: "#1E293B" }}>
                   {getPaymentDueText()}
                 </Text>
-                , once you receive your order confirmation.
+                {" "}after receiving your order confirmation. If paying by card or
+                using Polygon Wallet to cover the full order total, complete any
+                outstanding payments by the deadline.
               </Text>
             </View>
           )}
@@ -1677,6 +2232,8 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           paymentMethod={paymentMethod}
           totalAmount={totalAmount}
           submitting={submitting}
+          loading={isConfirming}
+          disabled={isSessionExpired || remainingSeconds <= 0}
           onConfirm={handleConfirm}
         />
       </ScrollView>
@@ -1689,9 +2246,12 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           setAppliedCoupon(couponResult);
         }}
         deliveryMethod={orderContext?.deliveryMethod || "home"}
-        cartTotal={
-          (orderContext?.packageTotal || 0) + (orderContext?.productTotal || 0)
-        }
+        cartTotal={Math.max(
+          0,
+          (orderContext?.packageTotal || 0) +
+            (orderContext?.productTotal || 0) -
+            (orderContext?.discount || 0),
+        )}
         cartId={orderContext?.cartId}
       />
 
@@ -1736,7 +2296,12 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
       />
 
       {/* ─── FULL SCREEN LOADING CONFIRMATION ──────────────────────────── */}
-      <Modal visible={submitting} transparent animationType="fade" statusBarTranslucent>
+      <Modal
+        visible={(submitting || isConfirming) && !checkoutModalVisible && !unconfirmedState}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
         <View
           style={{
             flex: 1,
@@ -1771,8 +2336,10 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
                 textAlign: "center",
               }}
             >
-              {paymentMethod === "card" && paymentAmount > 0 && isEarliestDeliveryDate()
-                ? "Processing payment..."
+              {paymentMethod === "card" &&
+              paymentAmount > 0 &&
+              (isEarliestDeliveryDate() || isPackagePayToConfirm)
+                ? "Awaiting Payment..."
                 : "Confirming your order..."}
             </Text>
             <Text
@@ -1789,6 +2356,16 @@ const isPackagePayToConfirm = !isImmediateFinalize && hasPackageInCart;
           </View>
         </View>
       </Modal>
+
+      {/* ─── ENHANCED ORDER PROCESSING MODAL (PHASE 2 & PHASE 3) ───────────── */}
+      <OrderProcessingModal
+        visible={submitting}
+        currentStepIndex={processingStage}
+        title="Processing Your Order"
+        isReconciling={isReconciling}
+        unconfirmedState={unconfirmedState}
+        slowThresholdSeconds={5}
+      />
     </View>
   );
 };

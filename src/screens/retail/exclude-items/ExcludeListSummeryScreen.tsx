@@ -23,6 +23,7 @@ import { environment } from "@/environment/environment";
 import { store, RootState } from "@/store";
 import { useSelector } from "react-redux";
 import { tokenStorage } from "@/utils/tokenStorage";
+import NeedHelpModal from "@/component/help/Needhelpmodal";
 
 const getEffectiveToken = async (): Promise<string | null> => {
   return (
@@ -72,6 +73,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
   const [selectedPreferIds, setSelectedPreferIds] = useState<number[]>([]);
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{
     id: number;
     type: "prefer" | "exclude" | "bulk-prefer" | "bulk-exclude";
@@ -431,12 +433,30 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         titleLines={2}
       />
 
-      <View className="mx-auto w-full max-w-[500px]">
+      <View className="mx-auto w-full ">
         {displayCusId ? (
           <Text className="text-center text-black text-base -mt-[3px]">
             Customer ID : {displayCusId}
           </Text>
         ) : null}
+      </View>
+
+      {/* Need Help link */}
+      <View className="mx-auto w-full px-6 mt-3 items-end">
+        <TouchableOpacity
+          onPress={() => setShowHelp(true)}
+          activeOpacity={0.7}
+          className="flex-row items-center"
+          style={{ gap: 6 }}
+        >
+          <Ionicons name="help-circle" size={18} color="#0A84FF" />
+          <Text
+            className="text-sm font-medium"
+            style={{ color: "#0A84FF", textDecorationLine: "underline" }}
+          >
+            Need Help ?
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -445,7 +465,7 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
         className="flex-1 mb-24"
         contentContainerStyle={{ flexGrow: 1 }}
       >
-        <View className="mx-auto w-full max-w-[500px] px-6">
+        <View className="mx-auto w-full px-6">
           {/* ---------------- Items prefer to include ---------------- */}
           <View className="mt-6 border border-gray-200 rounded-xl bg-white overflow-hidden">
             <View className="flex-row items-center gap-3 px-4 py-3 bg-[#E6F2E5]">
@@ -675,13 +695,31 @@ const ExcludeListSummery: React.FC<ExcludeListSummeryProps> = ({
               : handleCompleteOnboarding
           }
           activeOpacity={0.8}
-          className="bg-black border-2 border-[#D9D9D9] rounded-full items-center justify-center shadow-sm h-[50px] w-full max-w-[500px]"
+          style={{
+            height: 50,
+            width: '100%',
+            borderRadius: 27,
+            backgroundColor: "#000000",
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+            shadowOpacity: 0.18,
+            shadowRadius: 5,
+            elevation: 4,
+          }}
         >
           <Text className="text-white text-base font-bold">
             {isFromAccount ? "Add More" : "Continue"}
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* How Customization Works modal */}
+      <NeedHelpModal visible={showHelp} onClose={() => setShowHelp(false)} />
 
       {/* Reusable Delete Confirmation Modal */}
       <ConfirmationModal

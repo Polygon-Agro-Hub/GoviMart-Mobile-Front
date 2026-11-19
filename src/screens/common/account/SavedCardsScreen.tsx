@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Image,
 } from "react-native";
 import {
-  FontAwesome6,
   Ionicons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
@@ -41,11 +40,6 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
     (state: RootState) => state.auth?.userProfile,
   );
   const userId = userProfile?.id || "current";
-  const defaultHolder =
-    userProfile?.firstName && userProfile?.lastName
-      ? `${userProfile.firstName} ${userProfile.lastName}`
-      : "Samantha Kularathna";
-
   const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);

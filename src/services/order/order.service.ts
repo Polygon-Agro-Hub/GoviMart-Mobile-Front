@@ -34,6 +34,14 @@ class OrderService {
         });
     }
 
+    async getCancelOrderAdditionalItems(orderId: string | number, processOrderId?: string | number) {
+        const headers = await getAuthHeader();
+        return apiClient.get(ENDPOINTS.ORDER.GET_CANCEL_ORDER_ADDITIONAL_ITEMS.replace(":orderId", String(orderId)), {
+            headers,
+            params: processOrderId ? { processOrderId } : undefined,
+        });
+    }
+
     async createOrder(payload: any) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CREATE_ORDER, payload, {
@@ -146,6 +154,11 @@ class OrderService {
             price?: number; // fallback only
         }>;
         deletedAdditionalItemIds?: number[];
+        packageReviewValues?: Array<{
+            orderPackageId: number;
+            packageId?: string | number;
+            reviewValue: number;
+        }>;
         packages?: Array<{
             orderPackageId: number;
             packageId?: string | number;
@@ -169,6 +182,8 @@ class OrderService {
         processOrderId?: number | string;
         newTotal?: number;
         isPaid?: number | boolean;
+        amount?: number;
+        moneyPaid?: number;
     }) {
         const headers = await getAuthHeader();
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_ORDER, payload, { headers });
@@ -188,12 +203,12 @@ class OrderService {
     }
 
     async cancelOrderBeforeConfirm(payload: {
-    orderId?: number | string;
-    processOrderId?: number | string;
-}) {
-    const headers = await getAuthHeader();
-    return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER_BEFORE_CONFIRM, payload, { headers });
-}
+        orderId?: number | string;
+        processOrderId?: number | string;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.CANCEL_ORDER_BEFORE_CONFIRM, payload, { headers });
+    }
 }
 
 export default new OrderService();

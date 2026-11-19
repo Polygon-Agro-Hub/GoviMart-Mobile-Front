@@ -4,7 +4,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  Alert,
   ScrollView,
   BackHandler,
 } from "react-native";
@@ -34,6 +33,15 @@ interface ProfileProps {
   navigation: ProfileNavigationProp;
 }
 
+const WALLET_INFO_POINTS = [
+  "Polygon Wallet keeps track of your return related balance.",
+  "A negative balance means you have an outstanding amount to pay before placing your next order (such as handling or delivery fees).",
+  "A positive balance means you have available credit that you can use towards your next purchase, just like regular money.",
+];
+
+const TOOLTIP_SIDE_INSET = 24;
+const ARROW_SIZE = 14;
+
 const Profile: React.FC<ProfileProps> = ({ navigation }) => {
   const user = useSelector((state: RootState) => state.auth.userProfile);
   const isWholesale = (user?.buyerType || "").toLowerCase() === "wholesale";
@@ -45,6 +53,15 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
     useState<boolean>(true);
   const [logoutModalVisible, setLogoutModalVisible] = useState<boolean>(false);
   const [imageError, setImageError] = useState<boolean>(false);
+
+  // Wallet info tooltip
+  const [walletInfoVisible, setWalletInfoVisible] = useState<boolean>(false);
+  const [labelRowLayout, setLabelRowLayout] = useState({
+    x: 0,
+    y: 0,
+    height: 0,
+  });
+  const [infoIconLayout, setInfoIconLayout] = useState({ x: 0, width: 0 });
 
   useEffect(() => {
     setImageError(false);
@@ -78,6 +95,8 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           email: email || user?.email || "",
           phoneNumber: phoneNumber || user?.phoneNumber || "",
           cusId: cusId || user?.cusId,
+          nic: data.nic || user?.nic,
+          docType: data.docType || user?.docType,
           firstTimeUser: user?.firstTimeUser ?? 0,
           id: data.id || user?.id,
         };
@@ -109,7 +128,10 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
         handleBackPress,
       );
 
-      return () => subscription.remove();
+      return () => {
+        subscription.remove();
+        setWalletInfoVisible(false);
+      };
     }, [handleBackPress]),
   );
 
@@ -153,6 +175,15 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
     ? `${titlePrefix}${user.firstName || ""} ${user.lastName || ""}`.trim()
     : "Guest User";
 
+  // Tooltip position (relative to the wallet card)
+  const tooltipTop = labelRowLayout.y + labelRowLayout.height + 8;
+  const iconCenterX =
+    labelRowLayout.x + infoIconLayout.x + infoIconLayout.width / 2;
+  const arrowLeft = Math.max(
+    16,
+    iconCenterX - TOOLTIP_SIDE_INSET - ARROW_SIZE / 2,
+  );
+
   return (
     <View
       style={{
@@ -187,7 +218,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
           <View
             style={{
               alignItems: "center",
-              paddingHorizontal: 24, 
+              paddingHorizontal: 24,
             }}
           >
             <View
@@ -197,7 +228,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 shadowOpacity: 0.15,
                 shadowRadius: 5,
                 elevation: 3,
-                marginTop:6
+                marginTop: 6,
               }}
             >
               <Image
@@ -223,11 +254,11 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 fontSize: 23,
                 fontWeight: "800",
                 marginTop: 12,
-                textAlign: "center", 
-                maxWidth: "90%", 
+                textAlign: "center",
+                maxWidth: "90%",
                 paddingHorizontal: 4,
               }}
-              numberOfLines={2} 
+              numberOfLines={2}
             >
               {fullName}
             </Text>
@@ -242,6 +273,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
             padding: 10,
             marginTop: 22,
             marginBottom: 24,
+            zIndex: 20,
             backgroundColor: isCreditBalanceLoading
               ? "#F2F2F6"
               : creditBalance === 0
@@ -306,16 +338,46 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                 <FontAwesome6 name="wallet" size={15} color="#FFF" />
               </View>
 
-              <Text
+              {/* Label + info icon */}
+              <View
+                onLayout={(e) => {
+                  const { x, y, height } = e.nativeEvent.layout;
+                  setLabelRowLayout({ x, y, height });
+                }}
                 style={{
                   marginTop: 15,
-                  fontSize: 14,
-                  color: "#111",
-                  fontWeight: "400",
+                  flexDirection: "row",
+                  alignItems: "center",
                 }}
               >
-                My Credit Balance
-              </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#111",
+                    fontWeight: "400",
+                  }}
+                >
+                  My Polygon Wallet
+                </Text>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onLayout={(e) => {
+                    const { x, width } = e.nativeEvent.layout;
+                    setInfoIconLayout({ x, width });
+                  }}
+                  onPress={() => setWalletInfoVisible((prev) => !prev)}
+                  style={{ marginLeft: 6 }}
+                >
+                  <FontAwesome6
+                    name="circle-info"
+                    size={13}
+                    color="#111"
+                    solid
+                  />
+                </TouchableOpacity>
+              </View>
 
               <Text
                 style={{
@@ -348,7 +410,7 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                     onPress={() => {
                       navigation.navigate("PaymentScreen", {
                         amount: Math.abs(creditBalance),
-                        title: "Payment Summery",
+                        title: "Payment Summary",
                       });
                     }}
                     style={{
@@ -381,6 +443,133 @@ const Profile: React.FC<ProfileProps> = ({ navigation }) => {
                     </Text>
                   </TouchableOpacity>
                 </>
+              )}
+
+              {/* Wallet info tooltip */}
+              {walletInfoVisible && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: tooltipTop,
+                    left: TOOLTIP_SIDE_INSET,
+                    right: TOOLTIP_SIDE_INSET,
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                    paddingHorizontal: 18,
+                    paddingTop: 14,
+                    paddingBottom: 16,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 10,
+                    elevation: 12,
+                  }}
+                >
+                  {/* Arrow pointing at the info icon */}
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -ARROW_SIZE / 2,
+                      left: arrowLeft,
+                      width: ARROW_SIZE,
+                      height: ARROW_SIZE,
+                      backgroundColor: "#FFFFFF",
+                      borderLeftWidth: 1,
+                      borderTopWidth: 1,
+                      borderColor: "#E5E7EB",
+                      transform: [{ rotate: "45deg" }],
+                    }}
+                  />
+
+                  {/* Header */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingBottom: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#EEF0F3",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: "#DCFCE7",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 10,
+                      }}
+                    >
+                      <FontAwesome6 name="check" size={11} color="#16A34A" />
+                    </View>
+
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 15,
+                        fontWeight: "800",
+                        color: "#111111",
+                      }}
+                    >
+                      What is Polygon Wallet?
+                    </Text>
+
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPress={() => setWalletInfoVisible(false)}
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: "#4B5563",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <FontAwesome6 name="xmark" size={10} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Points */}
+                  <View style={{ marginTop: 12 }}>
+                    {WALLET_INFO_POINTS.map((point, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          flexDirection: "row",
+                          marginBottom:
+                            index === WALLET_INFO_POINTS.length - 1 ? 0 : 2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            width: 14,
+                            fontSize: 13,
+                            lineHeight: 20,
+                            color: "#55596D",
+                          }}
+                        >
+                          •
+                        </Text>
+                        <Text
+                          style={{
+                            flex: 1,
+                            fontSize: 13,
+                            lineHeight: 20,
+                            color: "#55596D",
+                          }}
+                        >
+                          {point}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
               )}
             </>
           )}

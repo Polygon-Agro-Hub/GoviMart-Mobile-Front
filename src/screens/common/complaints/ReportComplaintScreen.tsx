@@ -22,9 +22,9 @@ import CustomHeader from "@/component/common/CustomHeader";
 import LoadingPage from "@/component/common/LoadingPage";
 import complaintService from "@/services/complaint/complaint.service";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system/legacy";
 import GlobalSearchModal from "@/component/common/GlobalSearchModal";
 import { AlertModal } from "@/component/common/AlertModal";
+import { compressImageUnder5MB } from "@/utils/imageCompress";
 
 type ReportComplaintNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -53,12 +53,26 @@ const MAX_IMAGES = 6;
 // Space (px) to keep between the Description box and the top of the keyboard.
 const DESC_EXTRA_SPACE = 24;
 
-const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
+// Category auto-selected when the screen is opened from Order Details
+const ORDER_COMPLAINT_CATEGORY = "complain about my order";
+
+const ReportComplaint: React.FC<ReportComplaintProps> = ({
+  navigation,
+  route,
+}) => {
+  // Params passed from Order Details (both optional)
+  const params = (route?.params || {}) as {
+    orderId?: number;
+    invoiceNo?: string;
+  };
+  const orderId = params.orderId;
+  const invoiceNo = params.invoiceNo;
+  const isOrderComplaint = !!invoiceNo;
+
   const { width: windowWidth } = useWindowDimensions();
   const CONTAINER_PADDING = 16;
   const IMAGE_GAP = 10;
   const NUM_COLUMNS = 3;
-  // Dynamically calculate size so 3 images perfectly fill the container edge to edge
   const imageSize =
     (windowWidth - CONTAINER_PADDING * 2 - IMAGE_GAP * (NUM_COLUMNS - 1)) /
     NUM_COLUMNS;
@@ -76,21 +90,32 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const [imageError, setImageError] = useState<string | null>(null);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [processingImages, setProcessingImages] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // AlertModal States
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"success" | "error">("error");
 
-  // ---------- Keyboard / scroll handling ----------
   const scrollRef = useRef<ScrollView>(null);
   const rootRef = useRef<View>(null);
   const descWrapRef = useRef<View>(null);
   const scrollYRef = useRef(0);
   const keyboardTopRef = useRef(0);
   const keyboardOpenRef = useRef(false);
+  const processingRef = useRef(false); // blocks double taps instantly
+
+  // Where to go when the user leaves this screen
+  const goBackToPrevious = useCallback(() => {
+    if (orderId) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("ComplaintHistory");
+    }
+  }, [navigation, orderId]);
+
+  const categoryLocked = isOrderComplaint && !!selectedCategoryId;
 
   // Scroll only as much as needed so the Description box sits just above
   // the keyboard.
@@ -108,7 +133,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   }, []);
 
   const handleDescFocus = () => {
-    // if keyboard is already open, adjust now
     if (keyboardOpenRef.current) {
       setTimeout(ensureVisible, 150);
     }
@@ -119,9 +143,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       keyboardOpenRef.current = true;
       keyboardTopRef.current = e.endCoordinates.screenY;
 
-      // Measure how much the keyboard REALLY covers the screen. If the OS
-      // already resized the window, the overlap is 0 and no extra padding
-      // is added.
       const kbTop = e.endCoordinates.screenY;
       setTimeout(() => {
         rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
@@ -129,7 +150,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         });
       }, 100);
 
-      // wait for bottom padding to render, then scroll
       setTimeout(ensureVisible, 300);
     });
 
@@ -149,15 +169,13 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   const showAlert = (
     title: string,
     message: string,
-    type: "success" | "error" = "error"
+    type: "success" | "error" = "error",
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
     setAlertVisible(true);
   };
-
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -175,6 +193,19 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     };
     fetchCategories();
   }, []);
+
+  // Auto-select "Complain about my order" when opened from Order Details
+  useEffect(() => {
+    if (!isOrderComplaint || categories.length === 0) return;
+    const found = categories.find(
+      (c) =>
+        c.categoryEnglish?.trim().toLowerCase() === ORDER_COMPLAINT_CATEGORY,
+    );
+    if (found) {
+      setSelectedCategoryId(found.id);
+      setSelectedCategoryName(found.categoryEnglish);
+    }
+  }, [categories, isOrderComplaint]);
 
   const categoryModalData = categories.map((cat) => ({
     label: cat.categoryEnglish,
@@ -194,9 +225,35 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     }
   };
 
+  const handleAddPhotoPress = () => {
+    if (processingRef.current) return;
+    if (images.length >= MAX_IMAGES) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+    pickImage();
+  };
+
   const pickImage = async () => {
+    if (processingRef.current) return;
+
+    const remainingSlots = MAX_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+
     if (Platform.OS === "ios") {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
@@ -204,7 +261,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           [
             { text: "Cancel", style: "cancel" },
             { text: "Open Settings", onPress: () => Linking.openSettings() },
-          ]
+          ],
         );
         return;
       }
@@ -213,94 +270,62 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_IMAGES - images.length,
-      aspect: [4, 3],
-      quality: 0.7,
+      selectionLimit: remainingSlots,
+      quality: 1, // picker quality: raw from library so compressImageUnder5MB compresses up to 50%
     });
 
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      return;
-    }
+    if (result.canceled || !result.assets?.length) return;
 
-    if (images.length + result.assets.length > MAX_IMAGES) {
-      showAlert(
-        "Limit Reached",
-        `You can attach up to ${MAX_IMAGES} images.`,
-        "error"
-      );
-      return;
-    }
+    // Defensively enforce remainingSlots (max 6 photos total)
+    const selectedAssets = result.assets.slice(0, remainingSlots);
 
-    let hasOversized = false;
+    // 2) Convert (HEIC -> JPEG) and compress each image up to 50%
+    //    One by one, so multiple heavy photos don't spike memory.
+    processingRef.current = true;
+    setProcessingImages(true);
+
     const validPhotos: { uri: string; name: string; type: string }[] = [];
+    let failedCount = 0;
 
-    for (let i = 0; i < result.assets.length; i++) {
-      const asset = result.assets[i];
-      let size = asset.fileSize || 0;
-      if (!size) {
+    try {
+      for (let i = 0; i < selectedAssets.length; i++) {
+        const asset = selectedAssets[i];
         try {
-          const info = await FileSystem.getInfoAsync(asset.uri);
-          if (info.exists && typeof (info as any).size === "number") {
-            size = (info as any).size;
-          }
-        } catch (e) {
-          console.log("Failed to get asset size:", e);
+          const { uri } = await compressImageUnder5MB(asset.uri, asset.width);
+
+          const baseName =
+            asset.fileName?.replace(/\.[^.]+$/, "") ||
+            `image_${Date.now()}_${i}`;
+
+          validPhotos.push({
+            uri,
+            name: `${baseName}.jpg`,
+            type: "image/jpeg",
+          });
+        } catch (err) {
+          failedCount++;
+          console.log("image compress failed:", err);
         }
       }
 
-      if (size > MAX_IMAGE_SIZE) {
-        hasOversized = true;
+      // 3) Error if any image could not be processed
+      if (failedCount > 0) {
+        setImageError("Could not process some images.");
+        showAlert(
+          "Image Processing Error",
+          "Could not process some of the selected images. Please try selecting different photos.",
+          "error",
+        );
       } else {
-        const uri = asset.uri;
-        let fileName = asset.fileName;
-        if (!fileName) {
-          const uriParts = uri.split("/");
-          fileName =
-            uriParts[uriParts.length - 1] || `image_${Date.now()}_${i}.jpg`;
-        }
-
-        const ext = (fileName.split(".").pop() || "").toLowerCase();
-        let mimeType = asset.mimeType;
-
-        if (!mimeType) {
-          if (ext === "heic" || ext === "heif") {
-            mimeType = `image/${ext}`;
-          } else if (ext === "png") {
-            mimeType = "image/png";
-          } else if (ext === "webp") {
-            mimeType = "image/webp";
-          } else {
-            mimeType = "image/jpeg";
-          }
-        } else if (
-          (mimeType === "image/heic" || mimeType === "image/heif") &&
-          !fileName.toLowerCase().endsWith(".heic") &&
-          !fileName.toLowerCase().endsWith(".heif")
-        ) {
-          fileName = `${fileName}.${mimeType.replace("image/", "")}`;
-        }
-
-        validPhotos.push({
-          uri: asset.uri,
-          name: fileName,
-          type: mimeType,
-        });
+        setImageError(null);
       }
-    }
 
-    if (hasOversized) {
-      setImageError("Image size must not exceed 5MB");
-      showAlert(
-        "Image Too Large",
-        "Image size must not exceed 5MB. Please choose a smaller image.",
-        "error"
-      );
-    } else {
-      setImageError(null);
-    }
-
-    if (validPhotos.length > 0) {
-      setImages((prev) => [...prev, ...validPhotos]);
+      if (validPhotos.length > 0) {
+        setImages((prev) => [...prev, ...validPhotos].slice(0, MAX_IMAGES));
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingImages(false);
     }
   };
 
@@ -315,7 +340,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || processingImages) return;
     Keyboard.dismiss();
 
     if (!selectedCategoryId) {
@@ -323,6 +348,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
       return;
     }
 
+    // Validate only the customer's own text (the invoice prefix is added below)
     if (!complain.trim() || complain.trim().length < 3) {
       Alert.alert(
         "Required",
@@ -334,9 +360,16 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
     try {
       setSubmitting(true);
 
+      // Prefix line + line break (new line) + customer text:
+      //   Complaint regarding Invoice No : [INV_NO]
+      //   <customer text>
+      const description = invoiceNo
+        ? `Complaint regarding Invoice No : ${invoiceNo}\n${complain.trim()}`
+        : complain.trim();
+
       const formData: any = new FormData();
       formData.append("complaicategoryId", String(selectedCategoryId));
-      formData.append("complain", complain.trim());
+      formData.append("complain", description);
 
       images.forEach((img) => {
         formData.append("images", {
@@ -355,7 +388,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           [
             {
               text: "OK",
-              onPress: () => navigation.navigate("ComplaintHistory"),
+              onPress: goBackToPrevious,
             },
           ],
         );
@@ -363,11 +396,14 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         Alert.alert(
           "Error",
           response.data?.message ||
-          "Failed to submit complaint. Please try again.",
+            "Failed to submit complaint. Please try again.",
         );
       }
     } catch (error: any) {
-      console.log("failed to create complaint response data: ", error?.response?.data);
+      console.log(
+        "failed to create complaint response data: ",
+        error?.response?.data,
+      );
       console.log("failed to create complaint: ", error);
       const errorDetails = error?.response?.data?.errors;
       const errorMessage =
@@ -383,17 +419,17 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const onHardwareBack = () => {
-        navigation.navigate("ComplaintHistory");
+        goBackToPrevious();
         return true;
       };
 
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        onHardwareBack
+        onHardwareBack,
       );
 
       return () => subscription.remove();
-    }, [navigation])
+    }, [goBackToPrevious]),
   );
 
   if (loadingCategories) {
@@ -404,7 +440,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           titleColor="black"
           showBackButton={true}
           navigation={navigation}
-          onBackPress={() => navigation.navigate("ComplaintHistory")}
+          onBackPress={goBackToPrevious}
         />
         <View
           style={{
@@ -430,7 +466,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         titleColor="black"
         showBackButton={true}
         navigation={navigation}
-        onBackPress={() => navigation.navigate("ComplaintHistory")}
+        onBackPress={goBackToPrevious}
       />
 
       <ScrollView
@@ -445,14 +481,10 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 12,
-          // Manually lift content above the keyboard (works on iOS and
-          // Android, including edge-to-edge production builds).
           paddingBottom: (Platform.OS === "ios" ? 30 : 20) + keyboardHeight,
         }}
       >
-        {/* ================================================= */}
         {/* COMPLAINT ICON */}
-        {/* ================================================= */}
 
         <View
           style={{
@@ -466,7 +498,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
               height: 55,
               borderRadius: 26,
               backgroundColor: "#F3F3F7",
-
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -474,6 +505,24 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             <FontAwesome6 solid name="headset" size={29} color="#000" />
           </View>
         </View>
+
+        {/* INVOICE PILL (only when opened from Order Details) */}
+        {invoiceNo ? (
+          <View style={{ alignItems: "center", marginTop: 14 }}>
+            <View
+              style={{
+                backgroundColor: "#F3F3F7",
+                borderRadius: 99,
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+              }}
+            >
+              <Text style={{ fontSize: 11, color: "#444", fontWeight: "500" }}>
+                Complain regarding Invoice No: {invoiceNo}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* DESCRIPTION TEXT */}
 
@@ -483,7 +532,6 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             color: "#666",
             fontSize: 13.5,
             lineHeight: 19,
-
             marginTop: 16,
             marginHorizontal: 8,
             marginBottom: 26,
@@ -493,61 +541,66 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           of your complaint below.
         </Text>
 
-        {/* CATEGORY */}
-
-        <View
-          style={{
-            marginBottom: 20,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setCategoryModalVisible(true)}
+        {/* CATEGORY (hidden when opened from Order Details and auto-selected) */}
+        {!categoryLocked && (
+          <View
             style={{
-              height: 60,
-
-              borderWidth: 1,
-              borderColor: "#D9DEE4",
-
-              borderRadius: 30,
-
-              paddingHorizontal: 21,
-
-              justifyContent: "center",
+              marginBottom: 20,
             }}
           >
-            <Text
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={categoryLocked}
+              onPress={() => setCategoryModalVisible(true)}
               style={{
-                fontSize: 13,
-                color: "#000000",
-                marginBottom: 3,
+                minHeight: 60,
+                borderWidth: 1,
+                borderColor: "#D9DEE4",
+                borderRadius: 26,
+                paddingHorizontal: 21,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              Complaint Category
-            </Text>
+              <View
+                style={{
+                  flex: 1,
+                  marginRight: 12,
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#000000",
+                    marginBottom: 3,
+                  }}
+                >
+                  Complaint Category
+                </Text>
 
-            <Text
-              style={{
-                fontSize: 14,
-                color: selectedCategoryName ? "#000000" : "#747990",
-                fontWeight: selectedCategoryName ? "bold" : "normal",
-              }}
-            >
-              {selectedCategoryName || "Select From Here"}
-            </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: selectedCategoryName ? "#000000" : "#747990",
+                    fontWeight: selectedCategoryName ? "bold" : "normal",
+                  }}
+                >
+                  {selectedCategoryName || "Select From Here"}
+                </Text>
+              </View>
 
-            <Ionicons
-              name="chevron-down"
-              size={19}
-              color="#000"
-              style={{
-                position: "absolute",
-                right: 18,
-                top: 21,
-              }}
-            />
-          </TouchableOpacity>
-        </View>
+              {categoryLocked ? (
+                <Ionicons name="lock-closed" size={16} color="#747990" />
+              ) : (
+                <Ionicons name="chevron-down" size={19} color="#000" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* CATEGORY SEARCH MODAL */}
 
@@ -581,15 +634,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           <View
             style={{
               height: 204,
-
               borderWidth: 1,
               borderColor: "#D9DEE4",
-
               borderRadius: 17,
-
               paddingHorizontal: 21,
               paddingTop: 13,
-
               marginBottom: 19,
             }}
           >
@@ -613,9 +662,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* ================================================= */}
         {/* PHOTOS TITLE */}
-        {/* ================================================= */}
 
         <Text
           style={{
@@ -638,9 +685,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           Limit : Up to 6 photos (JPG, PNG, HEIC - Max 5MB each)
         </Text>
 
-        {/* ================================================= */}
         {/* PHOTO LIST */}
-        {/* ================================================= */}
 
         <View
           style={{
@@ -650,10 +695,11 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
             paddingBottom: 10,
           }}
         >
-          {images.length < 6 && (
+          {images.length < MAX_IMAGES ? (
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={pickImage}
+              onPress={handleAddPhotoPress}
+              disabled={processingImages}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -666,24 +712,60 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
                 alignItems: "center",
               }}
             >
-              <FontAwesome6 name="camera" solid size={27} color="#000" />
+              {processingImages ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <>
+                  <FontAwesome6 name="camera" solid size={27} color="#000" />
+
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#747990",
+                      marginTop: 5,
+                    }}
+                  >
+                    Add Photo
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleAddPhotoPress}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: "#E5E7EB",
+                backgroundColor: "#F3F4F6",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: 0.7,
+              }}
+            >
+              <FontAwesome6 name="camera" solid size={27} color="#9CA3AF" />
 
               <Text
                 style={{
                   fontSize: 13,
                   fontWeight: "600",
-                  color: "#747990",
+                  color: "#9CA3AF",
                   marginTop: 5,
                 }}
               >
-                Add Photo
+                Max (6)
               </Text>
             </TouchableOpacity>
           )}
 
           {images.map((img, index) => (
             <View
-              key={index}
+              key={img.uri}
               style={{
                 width: imageSize,
                 height: imageSize,
@@ -702,6 +784,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
 
               <TouchableOpacity
                 onPress={() => removeImage(index)}
+                disabled={processingImages || submitting}
                 style={{
                   position: "absolute",
                   top: 5,
@@ -748,9 +831,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           </View>
         ) : null}
 
-        {/* ================================================= */}
         {/* SUBMIT BUTTON */}
-        {/* ================================================= */}
 
         <View
           style={{
@@ -761,6 +842,7 @@ const ReportComplaint: React.FC<ReportComplaintProps> = ({ navigation }) => {
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={handleSubmit}
+            disabled={submitting || processingImages}
             style={{
               height: 50,
               borderRadius: 27,

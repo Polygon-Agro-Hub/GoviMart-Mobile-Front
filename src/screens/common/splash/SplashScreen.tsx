@@ -127,7 +127,7 @@ const Splash: React.FC = () => {
       } catch (e) {
         // Fallback silently to auth selection
       }
-      navigation.replace("ChooseAuth");
+      navigation.replace("Home");
     };
 
     const timer = setTimeout(() => {
