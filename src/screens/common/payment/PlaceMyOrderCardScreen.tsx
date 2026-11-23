@@ -22,6 +22,7 @@ import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
 import orderService from "@/services/order/order.service";
 import { orderRecoveryService } from "@/services/order/orderRecovery.service";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type PlaceMyOrderCardNavProp = StackNavigationProp<
   RootStackParamList,
@@ -424,53 +425,15 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* ─── HEADER ──────────────────────────────────────────────────────── */}
-      <View
-        style={{
-          paddingTop: Math.max(insets.top + 8, 20),
-          paddingBottom: 16,
-          paddingHorizontal: 20,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => navigation.goBack()}
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            backgroundColor: "#FFFFFF",
-            justifyContent: "center",
-            alignItems: "center",
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color="#000000" />
-        </TouchableOpacity>
-
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "700",
-            color: "#000000",
-          }}
-        >
-          {flowType === "review_package" || flowType === "order_confirmation"
+     
+       <CustomHeader
+        navigation={navigation}
+        title= {flowType === "review_package" || flowType === "order_confirmation"
             ? "Confirm Order Payment"
             : "Place My Order"}
-        </Text>
-
-        {/* Empty balancing spacer */}
-        <View style={{ width: 42 }} />
-      </View>
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
