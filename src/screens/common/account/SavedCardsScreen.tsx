@@ -92,14 +92,10 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleCheckoutSuccess = async (orderId: string) => {
+  const handleCheckoutSuccess = async (orderId: string, cardHolder?: string) => {
     setCheckoutModalVisible(false);
     try {
       setLoading(true);
-
-      // Give the card.saved webhook time to arrive and be processed before querying DB
-      // The webhook is async — it may arrive a second or two after the WebView success callback
-      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       let syncResult: any = null;
       if (checkoutSession?.sessionId) {
@@ -107,30 +103,21 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
           "payments_lk",
         ) as PaymentsLkAdapter;
         syncResult = await adapter
-          .syncCheckout(checkoutSession.sessionId)
+          .syncCheckout(checkoutSession.sessionId, cardHolder)
           .catch((err) => {
             console.warn("[SavedCardsScreen] syncCheckout error:", err);
             return null;
           });
       }
 
-      // Primary source: DB (populated by card.saved webhook)
+      // Check card in DB or via syncResult
       let loaded = await cardStorageService.getSavedCard(userId);
-
-      // If still not in DB, wait a bit more and retry (webhook may be slightly delayed)
-      if (!loaded) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        loaded = await cardStorageService.getSavedCard(userId);
+      if (!loaded && syncResult?.card) {
+        loaded = syncResult.card;
       }
 
       setSavedCard(loaded);
       if (loaded) {
-        Alert.alert(
-          "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
-        );
-      } else if (syncResult?.card) {
-        setSavedCard(syncResult.card);
         Alert.alert(
           "Card Saved Successfully",
           "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",

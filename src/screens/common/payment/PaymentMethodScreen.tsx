@@ -263,7 +263,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               invoiceNumber: check.orderData.invoiceNumber,
               total: check.orderData.total || pending.amount,
               couponValue: appliedCoupon?.discount || 0,
-              orderContext,
+              orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
             });
           }
         }
@@ -594,7 +598,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
   // Fully paid with credit balance: no earliest-date check, order is saved as paid
   const isFullCredit = useCredit && creditUsed > 0 && paymentAmount <= 0;
 
-  const handleCheckoutSuccess = async (orderId: string) => {
+  const handleCheckoutSuccess = async (orderId: string, cardHolder?: string) => {
     // Prevent double invocation if WebView fires onSuccess multiple times
     if (isCreatingOrderRef.current) return;
     isCreatingOrderRef.current = true;
@@ -613,7 +617,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         const adapter = PaymentGatewayFactory.getGateway(
           "payments_lk",
         ) as PaymentsLkAdapter;
-        await adapter.syncCheckout(checkoutSession.sessionId).catch(() => null);
+        await adapter.syncCheckout(checkoutSession.sessionId, cardHolder).catch(() => null);
       }
 
       const payloadToUse =
@@ -658,7 +662,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         invoiceNumber: orderData.invoiceNumber,
         total: orderData.total || paymentAmount,
         couponValue: appliedCoupon?.discount || 0,
-        orderContext,
+        orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
       });
     } catch (err: any) {
       isOrderFinalizedRef.current = false;
@@ -698,7 +706,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             invoiceNumber: check.orderData.invoiceNumber,
             total: check.orderData.total || paymentAmount,
             couponValue: appliedCoupon?.discount || 0,
-            orderContext,
+            orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
           });
           return;
         }
@@ -728,7 +740,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 invoiceNumber: statusCheck.orderData.invoiceNumber,
                 total: statusCheck.orderData.total || paymentAmount,
                 couponValue: appliedCoupon?.discount || 0,
-                orderContext,
+                orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
               });
             } else {
               Alert.alert(
@@ -765,7 +781,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  const handleCheckoutCancel = (orderId: string) => {
+  const handleCheckoutCancel = async (orderId: string) => {
     setCheckoutModalVisible(false);
     pendingOrderPayloadRef.current = null;
     setPendingOrderPayload(null);
@@ -774,10 +790,34 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     paymentSessionEndTime = Date.now() + 5 * 60 * 1000;
     setRemainingSeconds(300);
 
-    Alert.alert(
-      "Payment Cancelled",
-      "The card payment was not completed. You can try again whenever you are ready.",
-    );
+    // Check if Payments.lk returned a specific reason for decline/cancellation
+    let failureReason = "";
+    if (checkoutSession?.sessionId) {
+      try {
+        const adapter = PaymentGatewayFactory.getGateway(
+          "payments_lk"
+        ) as PaymentsLkAdapter;
+        const syncRes = await adapter.syncCheckout(checkoutSession.sessionId);
+        const payment = syncRes?.checkout?.payment || syncRes?.payment || {};
+        if (payment.failureMessage) {
+          failureReason = payment.failureMessage;
+        } else if (payment.failure?.reason) {
+          failureReason = payment.failure.reason;
+        }
+      } catch {}
+    }
+
+    if (failureReason) {
+      Alert.alert(
+        "Card Payment Unsuccessful",
+        `${failureReason} Please verify your card details or try with another card.`
+      );
+    } else {
+      Alert.alert(
+        "Payment Cancelled",
+        "The card payment was not completed. You can try again whenever you are ready."
+      );
+    }
   };
 
   const handleConfirm = async () => {
@@ -903,201 +943,27 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             "payments_lk",
           ) as PaymentsLkAdapter;
 
-          // Option 1: 1-Click Pay with Saved Card
-          if (selectedCardOption === "saved_card" && savedCard) {
-            try {
-              setIsConfirming(false);
-              setSubmitting(true);
-              setProcessingStage(1); // Payment stage
-              await orderRecoveryService.savePendingOrder({
-                correlationId: orderRecoveryService.generateCorrelationId(),
-                flowType: "checkout",
-                amount: paymentAmount,
-                paymentMethod: "card",
-                isPaid: false,
-                timestamp: Date.now(),
-                payload,
-              });
-
-              const chargeRes = await adapter.chargeSavedCard({
-                cardId: savedCard.id,
-                amount: paymentAmount,
-                itemsDescription: "Polygon Order Payment",
-                paymentType: "order",
-              });
-
-              if (chargeRes.success) {
-                await orderRecoveryService.updatePendingOrder({ isPaid: true });
-                setProcessingStage(2); // Creating order on server
-                const response = await orderService.createOrder(payload);
-                if (
-                  !response.data ||
-                  !response.data.status ||
-                  !response.data.data
-                ) {
-                  throw new Error(
-                    response.data?.message || "Failed to finalize order",
-                  );
-                }
-                const orderData = response.data.data;
-
-                setProcessingStage(3); // Invoice
-                await orderRecoveryService.clearPendingOrder();
-                isOrderFinalizedRef.current = true;
-                isNavigatingAwayRef.current = true;
-                clearSessionTimers();
-                dispatch(clearCart());
-                setSubmitting(false);
-                navigation.navigate("OrderConfirmed", {
-                  orderId: orderData.orderId,
-                  processOrderId: orderData.processOrderId,
-                  invoiceNumber: orderData.invoiceNumber,
-                  total: orderData.total || totalAmount,
-                  couponValue: couponVal,
-                  orderContext,
-                });
-                return;
-              }
-            } catch (chargeErr: any) {
-              console.warn(
-                "[PaymentMethodScreen] 1-Click charge failed:",
-                chargeErr,
-              );
-              const isInvalid =
-                chargeErr?.response?.data?.cardInvalid ||
-                chargeErr?.message?.includes("invalid") ||
-                chargeErr?.message?.includes("expired") ||
-                chargeErr?.message?.includes("No such object");
-
-              if (isInvalid) {
-                setSubmitting(false);
-                setSavedCard(null);
-                setSelectedCardOption("new_card");
-                Alert.alert(
-                  "Card Not Valid",
-                  "Your saved card is expired or no longer available. Please enter card details to complete payment.",
-                  [
-                    {
-                      text: "Continue to Pay",
-                      onPress: async () => {
-                        if (
-                          isSessionExpiredRef.current ||
-                          isNavigatingAwayRef.current ||
-                          (paymentSessionEndTime !== null &&
-                            paymentSessionEndTime <= Date.now())
-                        ) {
-                          handleSessionExpiry();
-                          return;
-                        }
-                        try {
-                          pendingOrderPayloadRef.current = payload;
-                          setPendingOrderPayload(payload);
-                          const fallbackSession = await adapter.initiatePayment(
-                            {
-                              amount: paymentAmount,
-                              paymentType: "order",
-                              itemsDescription: "Polygon Order Payment",
-                              saveCard: true,
-                            },
-                          );
-                          setCheckoutSession(fallbackSession);
-                          setCheckoutModalVisible(true);
-                        } catch (launchErr: any) {
-                          Alert.alert(
-                            "Error",
-                            launchErr?.message ||
-                              "Failed to launch payment sheet.",
-                          );
-                        }
-                      },
-                    },
-                  ],
-                );
-                return;
-              }
-
-              const isTimeout =
-                chargeErr?.code === "ECONNABORTED" ||
-                chargeErr?.message?.includes("timeout") ||
-                !chargeErr?.response ||
-                chargeErr?.message?.includes("Network Error");
-
-              if (isTimeout) {
-                setIsReconciling(true);
-                const check =
-                  await orderRecoveryService.reconcileCheckoutOrder(
-                    totalAmount,
-                  );
-                setIsReconciling(false);
-                if (check.reconciled && check.orderData) {
-                  await orderRecoveryService.clearPendingOrder();
-                  clearSessionTimers();
-                  dispatch(clearCart());
-                  setSubmitting(false);
-                  navigation.navigate("OrderConfirmed", {
-                    orderId: check.orderData.orderId,
-                    processOrderId: check.orderData.processOrderId,
-                    invoiceNumber: check.orderData.invoiceNumber,
-                    total: check.orderData.total || totalAmount,
-                    couponValue: couponVal,
-                    orderContext,
-                  });
-                  return;
-                }
-
-                setUnconfirmedState({
-                  title: "Order Taking Longer Than Expected",
-                  message:
-                    "A network delay occurred while finalizing your 1-click payment. Your order state has been protected.",
-                  isPaid: true,
-                  onCheckStatus: async () => {
-                    setIsReconciling(true);
-                    const statusCheck =
-                      await orderRecoveryService.reconcileCheckoutOrder(
-                        totalAmount,
-                      );
-                    setIsReconciling(false);
-                    if (statusCheck.reconciled && statusCheck.orderData) {
-                      await orderRecoveryService.clearPendingOrder();
-                      clearSessionTimers();
-                      dispatch(clearCart());
-                      setUnconfirmedState(null);
-                      setSubmitting(false);
-                      navigation.navigate("OrderConfirmed", {
-                        orderId: statusCheck.orderData.orderId,
-                        processOrderId: statusCheck.orderData.processOrderId,
-                        invoiceNumber: statusCheck.orderData.invoiceNumber,
-                        total: statusCheck.orderData.total || totalAmount,
-                        couponValue: couponVal,
-                        orderContext,
-                      });
-                    } else {
-                      Alert.alert(
-                        "Processing in Background",
-                        "The server is still processing your order. Please check again in a few moments.",
-                      );
-                    }
-                  },
-                  onRetry: async () => {
-                    setUnconfirmedState(null);
-                    setSubmitting(false);
-                    setIsConfirming(false);
-                    handleConfirm();
-                  },
-                  onCancel: () => {
-                    setUnconfirmedState(null);
-                    setSubmitting(false);
-                  },
-                });
-                return;
-              }
-
-              setSubmitting(false);
-              throw chargeErr;
-            }
+          // If user has a saved card, navigate to "Place My Order" screen
+          if (savedCard) {
+            setIsConfirming(false);
+            setSubmitting(false);
+            navigation.navigate("PlaceMyOrderCard", {
+              orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
+              payload,
+              paymentAmount,
+              totalAmount,
+              couponVal,
+              savedCard,
+              initialDeliveryCharge,
+            });
+            return;
           }
 
-          // Option 2: Launch Payments.lk Hosted Modal (New/Another Card)
+          // Option 2: Launch Payments.lk Hosted Modal (When no saved card exists)
           if (
             isSessionExpiredRef.current ||
             isNavigatingAwayRef.current ||
@@ -1191,6 +1057,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               couponValue: couponVal,
               orderContext: {
                 ...(orderContext as any),
+                paymentMethod: paymentMethod,
                 grandTotal: totalAmount,
                 deliveryCharge: deliveryChargeToSave,
                 discount: itemDiscount,
@@ -1384,7 +1251,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             invoiceNumber: check.orderData.invoiceNumber,
             total: check.orderData.total || totalAmount,
             couponValue: couponVal,
-            orderContext,
+            orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
           });
           return;
         }
@@ -1414,7 +1285,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 invoiceNumber: statusCheck.orderData.invoiceNumber,
                 total: statusCheck.orderData.total || totalAmount,
                 couponValue: couponVal,
-                orderContext,
+                orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
               });
             } else {
               Alert.alert(
@@ -1877,229 +1752,6 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             selected={paymentMethod === "card"}
             onPress={() => setPaymentMethod("card")}
           />
-
-          {/* ─── SAVED CARD / CARD SELECTION SMALL SECTION ───────────── */}
-          {/* {paymentMethod === "card" && (
-            <View
-              style={{
-                marginHorizontal: 15,
-                marginTop: 10,
-                backgroundColor: "#FFFFFF",
-                borderRadius: 18,
-                borderWidth: 1.5,
-                borderColor: "#E5E7EB",
-                padding: 14,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.04,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: "#64748B",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                  marginBottom: 10,
-                }}
-              >
-                Card Payment Selection
-              </Text>
-
-              {savedCard ? (
-                <>
-             
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedCardOption("saved_card")}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      backgroundColor:
-                        selectedCardOption === "saved_card" ? "#F0FDF4" : "#F8FAFC",
-                      borderWidth: 1.5,
-                      borderColor:
-                        selectedCardOption === "saved_card" ? "#16A34A" : "#E2E8F0",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                      <View
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 9,
-                          borderWidth: 2,
-                          borderColor:
-                            selectedCardOption === "saved_card" ? "#16A34A" : "#94A3B8",
-                          justifyContent: "center",
-                          alignItems: "center",
-                        }}
-                      >
-                        {selectedCardOption === "saved_card" && (
-                          <View
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 4,
-                              backgroundColor: "#16A34A",
-                            }}
-                          />
-                        )}
-                      </View>
-
-              
-                      <View
-                        style={{
-                          paddingHorizontal: 7,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                          backgroundColor:
-                            savedCard.scheme === "mastercard" ? "#FEF3C7" : "#EFF6FF",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: "800",
-                            color:
-                              savedCard.scheme === "mastercard" ? "#D97706" : "#1D4ED8",
-                          }}
-                        >
-                          {savedCard.scheme === "mastercard" ? "Mastercard" : "VISA"}
-                        </Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 13.5,
-                            fontWeight: "700",
-                            color: "#0F172A",
-                          }}
-                        >
-                          •••• {savedCard.last4}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: "#64748B",
-                          }}
-                        >
-                          Expires {savedCard.expiryMonth}/{savedCard.expiryYear}
-                        </Text>
-                      </View>
-                    </View>
-
-                 
-                    <View
-                      style={{
-                        backgroundColor: "#DCFCE7",
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 10,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "700",
-                          color: "#15803D",
-                        }}
-                      >
-                        1-Click Pay
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-           
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedCardOption("new_card")}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      backgroundColor:
-                        selectedCardOption === "new_card" ? "#EFF6FF" : "#F8FAFC",
-                      borderWidth: 1.5,
-                      borderColor:
-                        selectedCardOption === "new_card" ? "#2563EB" : "#E2E8F0",
-                    }}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <View
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 9,
-                          borderWidth: 2,
-                          borderColor:
-                            selectedCardOption === "new_card" ? "#2563EB" : "#94A3B8",
-                          justifyContent: "center",
-                          alignItems: "center",
-                        }}
-                      >
-                        {selectedCardOption === "new_card" && (
-                          <View
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 4,
-                              backgroundColor: "#2563EB",
-                            }}
-                          />
-                        )}
-                      </View>
-
-                      <FontAwesome6 name="credit-card" size={14} color="#64748B" />
-
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: "600",
-                          color: "#1E293B",
-                        }}
-                      >
-                        Pay with Another Card (Payments.lk)
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Ionicons name="lock-closed" size={18} color="#0788FF" />
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12.5,
-                      color: "#475569",
-                      lineHeight: 17,
-                    }}
-                  >
-                    Card will be charged securely via Payments.lk hosted sheet. You can choose to save your card for 1-click payments.
-                  </Text>
-                </View>
-              )}
-            </View>
-          )} */}
 
           {/* CASH UNAVAILABLE BANNER */}
           {isCashDisabled && (
