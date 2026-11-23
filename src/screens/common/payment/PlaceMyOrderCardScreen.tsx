@@ -102,9 +102,12 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
       if (chargeRes.success) {
         await orderRecoveryService.updatePendingOrder({ isPaid: true });
 
-        // Finalize order creation
+        // Finalize order creation with verified payment ID
         const finalPayload = {
           ...payload,
+          isPaid: 1,
+          paymentId: chargeRes.paymentId || null,
+          transactionId: chargeRes.paymentId || null,
           checkoutSessionId: chargeRes.paymentId || null,
         };
         const response = await orderService.createOrder(finalPayload);
