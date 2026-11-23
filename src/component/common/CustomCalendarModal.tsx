@@ -12,6 +12,8 @@ interface CustomCalendarModalProps {
   title?: string;
   showPreparationNotice?: boolean;
   buyerType?: string;
+  /** true when the order contains only à la carte items (no packages) */
+  alaCarteOnly?: boolean;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -22,22 +24,26 @@ export const isWholesaleBuyer = (buyerType?: string): boolean =>
 
 /**
  * Required gap in days from today:
- *  Wholesale: 2 days (before 6 PM), 3 days (after 6 PM)
- *  Retail:    3 days (before 6 PM), 4 days (after 6 PM)
- *
- * Example (today = Nov 12):
- *  Wholesale before 6 PM -> Nov 14 | after 6 PM -> Nov 15
- *  Retail    before 6 PM -> Nov 15 | after 6 PM -> Nov 16
+ *  Wholesale:             2 days (3 after 6 PM)
+ *  Retail, à la carte:    2 days (3 after 6 PM)  -> today 23rd => 25th
+ *  Retail, with packages: 3 days (4 after 6 PM)  -> today 23rd => 26th
  */
-export const getRequiredDays = (buyerType?: string, now: Date = new Date()): number => {
+export const getRequiredDays = (
+  buyerType?: string,
+  alaCarteOnly: boolean = false,
+  now: Date = new Date()
+): number => {
   const isAfterCutoff = now.getHours() >= CUTOFF_HOUR;
-  const baseDays = isWholesaleBuyer(buyerType) ? 2 : 3;
+  const baseDays = isWholesaleBuyer(buyerType) || alaCarteOnly ? 2 : 3;
   return isAfterCutoff ? baseDays + 1 : baseDays;
 };
 
-export const getMinDeliveryDate = (buyerType?: string): Date => {
+export const getMinDeliveryDate = (
+  buyerType?: string,
+  alaCarteOnly: boolean = false
+): Date => {
   const now = new Date();
-  const extraDays = getRequiredDays(buyerType, now);
+  const extraDays = getRequiredDays(buyerType, alaCarteOnly, now);
 
   const minDate = new Date(
     now.getFullYear(),
@@ -65,7 +71,8 @@ const parseLocalDate = (dateStr: string): Date | null => {
 export const validateDeliveryDate = (
   dateStr?: string | null,
   minDeliveryDate?: Date,
-  buyerType?: string
+  buyerType?: string,
+  alaCarteOnly: boolean = false
 ): { isValid: boolean; error: string } => {
   if (!dateStr || !dateStr.trim()) {
     return { isValid: false, error: "Delivery date is required." };
@@ -78,7 +85,7 @@ export const validateDeliveryDate = (
 
   const minDate = minDeliveryDate
     ? new Date(minDeliveryDate)
-    : getMinDeliveryDate(buyerType);
+    : getMinDeliveryDate(buyerType, alaCarteOnly);
   minDate.setHours(0, 0, 0, 0);
 
   if (selected < minDate) {
@@ -96,7 +103,7 @@ export const validateDeliveryDate = (
 
     const now = new Date();
     const isAfterCutoff = now.getHours() >= CUTOFF_HOUR;
-    const requiredDays = getRequiredDays(buyerType, now);
+    const requiredDays = getRequiredDays(buyerType, alaCarteOnly, now);
 
     return {
       isValid: false,
@@ -135,14 +142,13 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   title,
   showPreparationNotice,
   buyerType,
+  alaCarteOnly = false,
 }) => {
-  const wholesale = isWholesaleBuyer(buyerType);
-
   // Recomputed every time the modal opens so the 6 PM cutoff is always current
   const minDate = useMemo(
-    () => customMinDate || getMinDeliveryDate(buyerType),
+    () => customMinDate || getMinDeliveryDate(buyerType, alaCarteOnly),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customMinDate, buyerType, visible]
+    [customMinDate, buyerType, alaCarteOnly, visible]
   );
 
   const maxDate = useMemo(() => {
@@ -157,9 +163,21 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   const shouldShowNotice =
     showPreparationNotice !== undefined ? showPreparationNotice : !customMinDate;
 
-  const noticeText = wholesale
-    ? "Orders require 2 days preparation (3 days after 6:00 PM cutoff)."
-    : "Orders require 3 days preparation (4 days after 6:00 PM cutoff).";
+  // Same gap the screen banner shows: required days - 1 (before 6 PM)
+  const baseGap = getRequiredDays(buyerType, alaCarteOnly, new Date(2000, 0, 1, 9)) - 1;
+  const gapLabel = `${baseGap} ${baseGap === 1 ? "day" : "days"}`;
+  const afterCutoffLabel = `${baseGap + 1} days`;
+
+  // Three scenarios:
+  //  1. Wholesale user                    -> Wholesale note (1 day / 2 after 6 PM)
+  //  2. Retail, à la carte items only     -> À la carte note (1 day / 2 after 6 PM)
+  //  3. Retail, packages (+/- à la carte) -> Package note (2 days / 3 after 6 PM)
+  const noticePrefix = isWholesaleBuyer(buyerType)
+    ? "Wholesale orders"
+    : alaCarteOnly
+      ? "À la carte orders"
+      : "Orders with packages";
+  const noticeText = `${noticePrefix} require ${gapLabel} preparation (${afterCutoffLabel} after the 6:00 PM cutoff).`;
 
   const modalTitle = title || "Select Schedule Date";
 
