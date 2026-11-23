@@ -155,12 +155,15 @@ export type RootStackParamList = {
   } | undefined;
   PlaceMyOrderCard: {
     orderContext?: OrderContext;
-    payload: any;
+    payload?: any;
     paymentAmount: number;
     totalAmount: number;
     couponVal?: number;
     savedCard: any;
     initialDeliveryCharge?: number;
+    flowType?: "checkout" | "review_package" | "order_confirmation";
+    reviewPayload?: any;
+    invoiceNumber?: string;
   };
   PaymentScreen: {
     amount?: number;

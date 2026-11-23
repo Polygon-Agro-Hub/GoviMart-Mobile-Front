@@ -604,44 +604,24 @@ const buildConfirmPayload = (overrideIsPaid?: boolean | number) => {
     if (isPaidCardOrder && additionalDue >= 0.01) {
       const confirmPayload = buildConfirmPayload(1);
       setPendingConfirmPayload(confirmPayload);
+
+      // If user has a saved card, go to "Use Saved Debit / Credit Card" or "Use Another" selection screen
+      if (savedCard) {
+        setIsSubmitting(false);
+        navigation.navigate("PlaceMyOrderCard", {
+          flowType: "review_package",
+          paymentAmount: additionalDue,
+          totalAmount: finalOrderTotalWithDelivery,
+          savedCard,
+          reviewPayload: confirmPayload,
+          invoiceNumber: confirmedInv,
+        });
+        return;
+      }
+
+      // Hosted checkout (no saved card)
       try {
         const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
-
-        // Attempt 1-click saved card charge first
-        if (savedCard && adapter.chargeSavedCard) {
-          try {
-            const chargeRes = await adapter.chargeSavedCard({
-              cardId: savedCard.id,
-              amount: additionalDue,
-              paymentType: "order",
-              orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `Polygon Package Additional Payment - ${invoiceNo}`,
-            });
-            if (chargeRes.success) {
-              await handleAdditionalPaymentSuccess(confirmPayload);
-              return;
-            }
-          } catch (chargeErr: any) {
-            const isInvalid =
-              chargeErr?.response?.data?.cardInvalid ||
-              chargeErr?.message?.includes("invalid") ||
-              chargeErr?.message?.includes("expired") ||
-              chargeErr?.message?.includes("No such object");
-            if (!isInvalid) {
-              setIsSubmitting(false);
-              Alert.alert(
-                "Payment Error",
-                chargeErr?.response?.data?.message ||
-                chargeErr?.message ||
-                "Payment failed. Please try again.",
-              );
-              return;
-            }
-            setSavedCard(null); // invalid/expired → fall through to hosted checkout
-          }
-        }
-
-        // Hosted checkout (no saved card, or saved card was invalid/expired)
         const session = await adapter.initiatePayment({
           orderId: String(processOrderId || effectiveOrderId),
           amount: additionalDue,
@@ -684,44 +664,24 @@ const buildConfirmPayload = (overrideIsPaid?: boolean | number) => {
     if (isUnpaidCardOrder && payableNow > 0) {
       const confirmPayload = buildConfirmPayload(1);
       setPendingConfirmPayload(confirmPayload);
+
+      // If user has a saved card, go to "Use Saved Debit / Credit Card" or "Use Another" selection screen
+      if (savedCard) {
+        setIsSubmitting(false);
+        navigation.navigate("PlaceMyOrderCard", {
+          flowType: "review_package",
+          paymentAmount: payableNow,
+          totalAmount: finalOrderTotalWithDelivery,
+          savedCard,
+          reviewPayload: confirmPayload,
+          invoiceNumber: confirmedInv,
+        });
+        return;
+      }
+
+      // Hosted checkout (no saved card)
       try {
         const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
-
-        // Attempt 1-click saved card charge first
-        if (savedCard && adapter.chargeSavedCard) {
-          try {
-            const chargeRes = await adapter.chargeSavedCard({
-              cardId: savedCard.id,
-              amount: payableNow,
-              paymentType: "order",
-              orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: `Polygon Package Order Payment - ${invoiceNo}`,
-            });
-            if (chargeRes.success) {
-              await handleAdditionalPaymentSuccess(confirmPayload);
-              return;
-            }
-          } catch (chargeErr: any) {
-            const isInvalid =
-              chargeErr?.response?.data?.cardInvalid ||
-              chargeErr?.message?.includes("invalid") ||
-              chargeErr?.message?.includes("expired") ||
-              chargeErr?.message?.includes("No such object");
-            if (!isInvalid) {
-              setIsSubmitting(false);
-              Alert.alert(
-                "Payment Error",
-                chargeErr?.response?.data?.message ||
-                chargeErr?.message ||
-                "Payment failed. Please try again.",
-              );
-              return;
-            }
-            setSavedCard(null); // invalid/expired → fall through to hosted checkout
-          }
-        }
-
-        // Hosted checkout (no saved card, or saved card was invalid/expired)
         const session = await adapter.initiatePayment({
           orderId: String(processOrderId || effectiveOrderId),
           amount: payableNow,
