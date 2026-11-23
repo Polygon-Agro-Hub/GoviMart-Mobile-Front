@@ -152,6 +152,15 @@ export type RootStackParamList = {
     total?: number;
     orderContext?: OrderContext;
   } | undefined;
+  PlaceMyOrderCard: {
+    orderContext?: OrderContext;
+    payload: any;
+    paymentAmount: number;
+    totalAmount: number;
+    couponVal?: number;
+    savedCard: any;
+    initialDeliveryCharge?: number;
+  };
   PaymentScreen: {
     amount?: number;
     title?: string;

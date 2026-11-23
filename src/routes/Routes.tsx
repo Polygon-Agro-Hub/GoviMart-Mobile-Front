@@ -42,6 +42,7 @@ import CheckoutScreen from "@/screens/common/checkout/CheckoutScreen";
 import ScheduleOrder from "@/screens/common/checkout/ScheduleOrderScreen";
 import PaymentMethod from "@/screens/common/payment/PaymentMethodScreen";
 import PaymentScreen from "@/screens/common/payment/PaymentScreen";
+import PlaceMyOrderCard from "@/screens/common/payment/PlaceMyOrderCardScreen";
 import OrderDeliveryMethod from "@/screens/common/locations/OrderDeliveryMethodScreen";
 import OrderConfirmed from "@/screens/common/order/OrderConfirmedScreen";
 import OrderConfirmation from "@/screens/common/order/OrderConfirmed";
@@ -207,6 +208,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ScheduleOrder", component: ScheduleOrder, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "PaymentMethod", component: PaymentMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "PlaceMyOrderCard", component: PlaceMyOrderCard, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "PaymentScreen", component: PaymentScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderDeliveryMethod", component: OrderDeliveryMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderConfirmed", component: OrderConfirmed, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
