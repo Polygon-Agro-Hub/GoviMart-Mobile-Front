@@ -124,7 +124,11 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
           invoiceNumber: orderData.invoiceNumber,
           total: orderData.total || totalAmount,
           couponValue: couponVal,
-          orderContext,
+          orderContext: {
+            ...(orderContext as any),
+            paymentMethod: "card",
+            savedCard: savedCard,
+          },
         });
         return;
       }
@@ -246,7 +250,10 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
         invoiceNumber: orderData.invoiceNumber,
         total: orderData.total || totalAmount,
         couponValue: couponVal,
-        orderContext,
+        orderContext: {
+          ...(orderContext as any),
+          paymentMethod: "card",
+        },
       });
     } catch (err: any) {
       setSubmitting(false);
