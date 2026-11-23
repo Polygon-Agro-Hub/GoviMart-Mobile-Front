@@ -15,5 +15,5 @@ export const environment = {
   // API_BASE_URL: "https://uat-mob-api.polygon.lk/polygon/",
 
   // PROD --------------------
-  API_BASE_URL: "https://mob-api.polygon.lk/polygon/",
+  // API_BASE_URL: "https://mob-api.polygon.lk/polygon/",
 };
