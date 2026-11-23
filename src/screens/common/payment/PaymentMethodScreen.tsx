@@ -1725,7 +1725,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           />
 
           {/* ─── SAVED CARD / CARD SELECTION SMALL SECTION ───────────── */}
-          {/* {paymentMethod === "card" && (
+          {paymentMethod === "card" && (
             <View
               style={{
                 marginHorizontal: 15,
@@ -1826,7 +1826,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 </View>
               )}
             </View>
-          )} */}
+          )}
 
           {/* CASH UNAVAILABLE BANNER */}
           {isCashDisabled && (
