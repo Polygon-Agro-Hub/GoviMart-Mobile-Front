@@ -5,11 +5,16 @@ interface UserProfile {
   lastName: string;
   email: string;
   phoneNumber: string;
+  phoneCode?: string;
   image: string;
   firstTimeUser: number;
   buyerType: string;
   id?: number;
   title?: string;
+  cusId?: string;
+  companyName?: string;
+  nic?: string;
+  docType?: string;
 }
 
 interface RememberedDetails {
@@ -73,6 +78,9 @@ const authSlice = createSlice({
         state.userProfile = action.payload as UserProfile;
       }
     },
+    updateToken: (state, action: PayloadAction<string>) => {
+      state.token = action.payload;
+    },
   },
 });
 
@@ -83,6 +91,7 @@ export const {
   updateUserProfileFlag,
   updateUserProfileImage,
   updateUserProfile,
+  updateToken,
 } = authSlice.actions;
 
 export default authSlice.reducer;

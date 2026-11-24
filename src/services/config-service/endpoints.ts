@@ -6,6 +6,12 @@ export const ENDPOINTS = {
     UPDATE_PASSWORD: "api/auth/update-password",
     REFRESH_TOKEN: "api/auth/refresh-token",
     GET_CITIES: "api/auth/cities",
+    FORGOT_PASSWORD_REQUEST_OTP: "api/auth/forgot-password/request-otp",
+    FORGOT_PASSWORD_RESEND_OTP: "api/auth/forgot-password/resend-otp",
+    FORGOT_PASSWORD_VERIFY_OTP: "api/auth/forgot-password/verify-otp",
+    FORGOT_PASSWORD_RESET: "api/auth/forgot-password/reset-password",
+    RESUBMIT_WHOLESALE_BR: "api/auth/resubmit-wholesale-br",
+    UPLOAD_WHOLESALE_BR: "api/auth/upload-wholesale-br",
   },
 
   CUSTOMER: {
@@ -22,6 +28,7 @@ export const ENDPOINTS = {
     RESEND_PHONE_CHANGE_OTP: "api/customer/resend-phone-change-otp",
     UPDATE_CREDIT_BALANCE: "api/customer/update-credit-balance",
     UPLOAD_PROFILE_IMAGE: "api/customer/upload-profile-image",
+    GET_DELIVERY_ELIGIBILITY: "api/customer/delivery-eligibility",
   },
 
   COMPLAINT: {
@@ -34,7 +41,9 @@ export const ENDPOINTS = {
   PRODUCT: {
     GET_ALL_PRODUCTS: "api/product/all-product",
     GET_PACKAGE_DETAILS: "api/product/package-details/:packageId",
+    GET_PACKAGE_ITEM_PRODUCTS: "api/product/package-item-products/:productTypeId",
     GET_PRODUCTS_BY_CATEGORY: "api/product/by-category",
+    GET_PRODUCTS_BY_PRODUCT_TYPE: "api/product/by-product-type/:productTypeId",
     GET_BANNERS: "api/product/slides",
     CHECK_AVAILABILITY: "api/product/check-availability",
   },
@@ -50,19 +59,36 @@ export const ENDPOINTS = {
 
   ORDER: {
     GET_ORDER_HISTORY: "api/order/order-history",
+    GET_SCHEDULE_ORDERS: "api/order/schedule-orders",
     GET_ORDER_BY_ID: "api/order/:orderId",
     GET_ORDER_PACKAGES: "api/order/packages/:orderId",
     GET_ORDER_ADDITIONAL_ITEMS: "api/order/additional-items/:orderId",
+    GET_CANCEL_ORDER_ADDITIONAL_ITEMS: "api/order/cancel/additional-items/:orderId",
     CREATE_ORDER: "api/order/create-order",
     GET_PICKUP_CENTERS: "api/order/pickup-centers",
     GET_DELIVERY_CITIES: "api/order/delivery-cities",
     GET_COUPONS: "api/order/coupons",
     CHECK_COUPON: "api/order/check-coupon",
     GET_INVOICE: "api/order/invoice/:orderId",
+    GET_PACKAGE_REVIEW: "api/order/package/review/:orderId",
+    GET_PACKING_LIMIT: "api/order/package/packing-limit",
+    REPLACE_PACKAGE_ITEM: "api/order/package/replace-item",
+    RESET_PACKAGE_ITEM: "api/order/package/reset-item",
+    CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
+    CONFIRM_ORDER: "api/order/confirm-order",
+    GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
+    CANCEL_ORDER: "api/order/package/cancel-order",
+    CANCEL_ORDER_BEFORE_CONFIRM: "/api/order/package/cancel-before-confirm",
   },
 
   PAYMENT: {
+    INITIATE: "api/payment/initiate",
+    ACTIVE_GATEWAY: "api/payment/active-gateway",
+    PAYMENTS_LK_INITIATE: "api/payment/payments-lk/initiate",
     PAYHERE_INITIATE: "api/payment/payhere/initiate",
+    CARDS: "api/payment/cards",
+    SYNC_CHECKOUT: "api/payment/sync-checkout",
+    CHARGE_SAVED_CARD: "api/payment/charge-saved-card",
   },
 
   NOTIFICATION: {

@@ -45,8 +45,8 @@ const ViewCartPopup = ({ visible, itemCount, onPress }: Props) => {
           <Text
             style={{
               color: "#FFF",
-              fontWeight: "600",
-              fontSize: 12,
+              fontWeight: "700",
+              fontSize: 13,
             }}
           >
             View Cart
@@ -54,8 +54,8 @@ const ViewCartPopup = ({ visible, itemCount, onPress }: Props) => {
 
           <Text
             style={{
-              color: "#CFCFCF",
-              fontSize: 10,
+              color: "#D1D5DB",
+              fontSize: 11.5,
               marginTop: 1,
             }}
           >

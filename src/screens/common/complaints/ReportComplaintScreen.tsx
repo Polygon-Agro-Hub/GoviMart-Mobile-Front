@@ -1,0 +1,891 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  Platform,
+  Image,
+  ActivityIndicator,
+  useWindowDimensions,
+  BackHandler,
+  Linking,
+  Keyboard,
+} from "react-native";
+import { FontAwesome6, Ionicons } from "@expo/vector-icons";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
+import { RootStackParamList } from "@/types/types";
+import CustomHeader from "@/component/common/CustomHeader";
+import LoadingPage from "@/component/common/LoadingPage";
+import complaintService from "@/services/complaint/complaint.service";
+import * as ImagePicker from "expo-image-picker";
+import GlobalSearchModal from "@/component/common/GlobalSearchModal";
+import { AlertModal } from "@/component/common/AlertModal";
+import { compressImageUnder5MB } from "@/utils/imageCompress";
+
+type ReportComplaintNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "ReportComplaint"
+>;
+
+type ReportComplaintRouteProp = RouteProp<
+  RootStackParamList,
+  "ReportComplaint"
+>;
+
+interface ReportComplaintProps {
+  navigation: ReportComplaintNavigationProp;
+  route: ReportComplaintRouteProp;
+}
+
+interface ComplaintCategory {
+  id: number;
+  categoryEnglish: string;
+  categorySinhala?: string;
+  categoryTamil?: string;
+}
+
+const MAX_IMAGES = 6;
+
+// Space (px) to keep between the Description box and the top of the keyboard.
+const DESC_EXTRA_SPACE = 24;
+
+// Category auto-selected when the screen is opened from Order Details
+const ORDER_COMPLAINT_CATEGORY = "complain about my order";
+
+const ReportComplaint: React.FC<ReportComplaintProps> = ({
+  navigation,
+  route,
+}) => {
+  // Params passed from Order Details (both optional)
+  const params = (route?.params || {}) as {
+    orderId?: number;
+    invoiceNo?: string;
+  };
+  const orderId = params.orderId;
+  const invoiceNo = params.invoiceNo;
+  const isOrderComplaint = !!invoiceNo;
+
+  const { width: windowWidth } = useWindowDimensions();
+  const CONTAINER_PADDING = 16;
+  const IMAGE_GAP = 10;
+  const NUM_COLUMNS = 3;
+  const imageSize =
+    (windowWidth - CONTAINER_PADDING * 2 - IMAGE_GAP * (NUM_COLUMNS - 1)) /
+    NUM_COLUMNS;
+
+  const [categories, setCategories] = useState<ComplaintCategory[]>([]);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    null,
+  );
+  const [selectedCategoryName, setSelectedCategoryName] = useState("");
+  const [complain, setComplain] = useState("");
+  const [images, setImages] = useState<
+    { uri: string; name: string; type: string }[]
+  >([]);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [processingImages, setProcessingImages] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error">("error");
+
+  const scrollRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
+  const descWrapRef = useRef<View>(null);
+  const scrollYRef = useRef(0);
+  const keyboardTopRef = useRef(0);
+  const keyboardOpenRef = useRef(false);
+  const processingRef = useRef(false); // blocks double taps instantly
+
+  // Where to go when the user leaves this screen
+  const goBackToPrevious = useCallback(() => {
+    if (orderId) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("ComplaintHistory");
+    }
+  }, [navigation, orderId]);
+
+  const categoryLocked = isOrderComplaint && !!selectedCategoryId;
+
+  // Scroll only as much as needed so the Description box sits just above
+  // the keyboard.
+  const ensureVisible = useCallback(() => {
+    descWrapRef.current?.measureInWindow((_x, y, _w, h) => {
+      const limit = keyboardTopRef.current - DESC_EXTRA_SPACE;
+      const overflow = y + h - limit;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: scrollYRef.current + overflow,
+          animated: true,
+        });
+      }
+    });
+  }, []);
+
+  const handleDescFocus = () => {
+    if (keyboardOpenRef.current) {
+      setTimeout(ensureVisible, 150);
+    }
+  };
+
+  useEffect(() => {
+    const showListener = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardOpenRef.current = true;
+      keyboardTopRef.current = e.endCoordinates.screenY;
+
+      const kbTop = e.endCoordinates.screenY;
+      setTimeout(() => {
+        rootRef.current?.measureInWindow((_rx, ry, _rw, rh) => {
+          setKeyboardHeight(Math.max(0, ry + rh - kbTop));
+        });
+      }, 100);
+
+      setTimeout(ensureVisible, 300);
+    });
+
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      keyboardOpenRef.current = false;
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [ensureVisible]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: "success" | "error" = "error",
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await complaintService.getComplaintCategories();
+        if (response.data && response.data.status) {
+          setCategories(response.data.data || []);
+        }
+      } catch (error) {
+        console.log("failed to fetch complaint categories: ", error);
+        Alert.alert("Error", "Failed to load complaint categories.");
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Auto-select "Complain about my order" when opened from Order Details
+  useEffect(() => {
+    if (!isOrderComplaint || categories.length === 0) return;
+    const found = categories.find(
+      (c) =>
+        c.categoryEnglish?.trim().toLowerCase() === ORDER_COMPLAINT_CATEGORY,
+    );
+    if (found) {
+      setSelectedCategoryId(found.id);
+      setSelectedCategoryName(found.categoryEnglish);
+    }
+  }, [categories, isOrderComplaint]);
+
+  const categoryModalData = categories.map((cat) => ({
+    label: cat.categoryEnglish,
+    value: String(cat.id),
+    categorySinhala: cat.categorySinhala,
+    categoryTamil: cat.categoryTamil,
+  }));
+
+  const handleCategorySelect = (items: string[]) => {
+    const value = items[0];
+    if (!value) return;
+
+    const found = categories.find((cat) => String(cat.id) === value);
+    if (found) {
+      setSelectedCategoryId(found.id);
+      setSelectedCategoryName(found.categoryEnglish);
+    }
+  };
+
+  const handleAddPhotoPress = () => {
+    if (processingRef.current) return;
+    if (images.length >= MAX_IMAGES) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+    pickImage();
+  };
+
+  const pickImage = async () => {
+    if (processingRef.current) return;
+
+    const remainingSlots = MAX_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      showAlert(
+        "Limit Exceeded",
+        `You can attach up to ${MAX_IMAGES} photos.`,
+        "error",
+      );
+      return;
+    }
+
+    if (Platform.OS === "ios") {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo library.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: remainingSlots,
+      quality: 1, // picker quality: raw from library so compressImageUnder5MB compresses up to 50%
+    });
+
+    if (result.canceled || !result.assets?.length) return;
+
+    // Defensively enforce remainingSlots (max 6 photos total)
+    const selectedAssets = result.assets.slice(0, remainingSlots);
+
+    // 2) Convert (HEIC -> JPEG) and compress each image up to 50%
+    //    One by one, so multiple heavy photos don't spike memory.
+    processingRef.current = true;
+    setProcessingImages(true);
+
+    const validPhotos: { uri: string; name: string; type: string }[] = [];
+    let failedCount = 0;
+
+    try {
+      for (let i = 0; i < selectedAssets.length; i++) {
+        const asset = selectedAssets[i];
+        try {
+          const { uri } = await compressImageUnder5MB(asset.uri, asset.width);
+
+          const baseName =
+            asset.fileName?.replace(/\.[^.]+$/, "") ||
+            `image_${Date.now()}_${i}`;
+
+          validPhotos.push({
+            uri,
+            name: `${baseName}.jpg`,
+            type: "image/jpeg",
+          });
+        } catch (err) {
+          failedCount++;
+          console.log("image compress failed:", err);
+        }
+      }
+
+      // 3) Error if any image could not be processed
+      if (failedCount > 0) {
+        setImageError("Could not process some images.");
+        showAlert(
+          "Image Processing Error",
+          "Could not process some of the selected images. Please try selecting different photos.",
+          "error",
+        );
+      } else {
+        setImageError(null);
+      }
+
+      if (validPhotos.length > 0) {
+        setImages((prev) => [...prev, ...validPhotos].slice(0, MAX_IMAGES));
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingImages(false);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) {
+        setImageError(null);
+      }
+      return next;
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (submitting || processingImages) return;
+    Keyboard.dismiss();
+
+    if (!selectedCategoryId) {
+      Alert.alert("Required", "Please select a complaint category.");
+      return;
+    }
+
+    // Validate only the customer's own text (the invoice prefix is added below)
+    if (!complain.trim() || complain.trim().length < 3) {
+      Alert.alert(
+        "Required",
+        "Please describe your complaint (at least 3 characters).",
+      );
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      // Prefix line + line break (new line) + customer text:
+      //   Complaint regarding Invoice No : [INV_NO]
+      //   <customer text>
+      const description = invoiceNo
+        ? `Complaint regarding Invoice No : ${invoiceNo}\n${complain.trim()}`
+        : complain.trim();
+
+      const formData: any = new FormData();
+      formData.append("complaicategoryId", String(selectedCategoryId));
+      formData.append("complain", description);
+
+      images.forEach((img) => {
+        formData.append("images", {
+          uri: img.uri,
+          name: img.name,
+          type: img.type,
+        });
+      });
+
+      const response = await complaintService.createComplaint(formData);
+
+      if (response.data && response.data.status) {
+        Alert.alert(
+          "Success",
+          "Your complaint has been submitted successfully.",
+          [
+            {
+              text: "OK",
+              onPress: goBackToPrevious,
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          "Error",
+          response.data?.message ||
+            "Failed to submit complaint. Please try again.",
+        );
+      }
+    } catch (error: any) {
+      console.log(
+        "failed to create complaint response data: ",
+        error?.response?.data,
+      );
+      console.log("failed to create complaint: ", error);
+      const errorDetails = error?.response?.data?.errors;
+      const errorMessage =
+        (Array.isArray(errorDetails) ? errorDetails.join("\n") : null) ||
+        error?.response?.data?.message ||
+        "Failed to submit complaint. Please try again.";
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        goBackToPrevious();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack,
+      );
+
+      return () => subscription.remove();
+    }, [goBackToPrevious]),
+  );
+
+  if (loadingCategories) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+        <CustomHeader
+          title="Report a Complaint"
+          titleColor="black"
+          showBackButton={true}
+          navigation={navigation}
+          onBackPress={goBackToPrevious}
+        />
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <LoadingPage message="Loading..." fullScreen={false} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      ref={rootRef}
+      collapsable={false}
+      style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+    >
+      <CustomHeader
+        title="Report a Complaint"
+        titleColor="black"
+        showBackButton={true}
+        navigation={navigation}
+        onBackPress={goBackToPrevious}
+      />
+
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: (Platform.OS === "ios" ? 30 : 20) + keyboardHeight,
+        }}
+      >
+        {/* COMPLAINT ICON */}
+
+        <View
+          style={{
+            alignItems: "center",
+            marginTop: 2,
+          }}
+        >
+          <View
+            style={{
+              width: 55,
+              height: 55,
+              borderRadius: 26,
+              backgroundColor: "#F3F3F7",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <FontAwesome6 solid name="headset" size={29} color="#000" />
+          </View>
+        </View>
+
+        {/* INVOICE PILL (only when opened from Order Details) */}
+        {invoiceNo ? (
+          <View style={{ alignItems: "center", marginTop: 14 }}>
+            <View
+              style={{
+                backgroundColor: "#F3F3F7",
+                borderRadius: 99,
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+              }}
+            >
+              <Text style={{ fontSize: 11, color: "#444", fontWeight: "500" }}>
+                Complain regarding Invoice No: {invoiceNo}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* DESCRIPTION TEXT */}
+
+        <Text
+          style={{
+            textAlign: "center",
+            color: "#666",
+            fontSize: 13.5,
+            lineHeight: 19,
+            marginTop: 16,
+            marginHorizontal: 8,
+            marginBottom: 26,
+          }}
+        >
+          We're here to help. Please provide the details{"\n"}
+          of your complaint below.
+        </Text>
+
+        {/* CATEGORY (hidden when opened from Order Details and auto-selected) */}
+        {!categoryLocked && (
+          <View
+            style={{
+              marginBottom: 20,
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={categoryLocked}
+              onPress={() => setCategoryModalVisible(true)}
+              style={{
+                minHeight: 60,
+                borderWidth: 1,
+                borderColor: "#D9DEE4",
+                borderRadius: 26,
+                paddingHorizontal: 21,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  marginRight: 12,
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#000000",
+                    marginBottom: 3,
+                  }}
+                >
+                  Complaint Category
+                </Text>
+
+                <Text
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: selectedCategoryName ? "#000000" : "#747990",
+                    fontWeight: selectedCategoryName ? "bold" : "normal",
+                  }}
+                >
+                  {selectedCategoryName || "Select From Here"}
+                </Text>
+              </View>
+
+              {categoryLocked ? (
+                <Ionicons name="lock-closed" size={16} color="#747990" />
+              ) : (
+                <Ionicons name="chevron-down" size={19} color="#000" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* CATEGORY SEARCH MODAL */}
+
+        <GlobalSearchModal
+          visible={categoryModalVisible}
+          onClose={() => setCategoryModalVisible(false)}
+          title="Complaint Category"
+          data={categoryModalData}
+          selectedItems={selectedCategoryId ? [String(selectedCategoryId)] : []}
+          onSelect={handleCategorySelect}
+          searchPlaceholder="Search category..."
+          noResultsText="No categories found"
+          multiSelect={false}
+          searchKeys={["label"]}
+        />
+
+        {/* DESCRIPTION */}
+
+        <Text
+          style={{
+            fontSize: 15,
+            fontWeight: "normal",
+            color: "#111111",
+            marginBottom: 8,
+          }}
+        >
+          1. Description
+        </Text>
+
+        <View ref={descWrapRef} collapsable={false}>
+          <View
+            style={{
+              height: 204,
+              borderWidth: 1,
+              borderColor: "#D9DEE4",
+              borderRadius: 17,
+              paddingHorizontal: 21,
+              paddingTop: 13,
+              marginBottom: 19,
+            }}
+          >
+            <TextInput
+              value={complain}
+              onChangeText={setComplain}
+              onFocus={handleDescFocus}
+              multiline
+              textAlignVertical="top"
+              placeholder="Please describe your issue in detail.."
+              placeholderTextColor="#A0A0A0"
+              style={{
+                flex: 1,
+                padding: 0,
+                fontSize: 14.5,
+                lineHeight: 20,
+                color: "#111111",
+                fontWeight: "500",
+              }}
+            />
+          </View>
+        </View>
+
+        {/* PHOTOS TITLE */}
+
+        <Text
+          style={{
+            fontSize: 15,
+            fontWeight: "normal",
+            color: "#111111",
+            marginBottom: 6,
+          }}
+        >
+          2. Upload Photos (Optional)
+        </Text>
+
+        <Text
+          style={{
+            fontSize: 12.5,
+            color: "#777",
+            marginBottom: 12,
+          }}
+        >
+          Limit : Up to 6 photos (JPG, PNG, HEIC - Max 5MB each)
+        </Text>
+
+        {/* PHOTO LIST */}
+
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: IMAGE_GAP,
+            paddingBottom: 10,
+          }}
+        >
+          {images.length < MAX_IMAGES ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleAddPhotoPress}
+              disabled={processingImages}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: "#D7DCE1",
+                backgroundColor: "#F9FAFB",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {processingImages ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <>
+                  <FontAwesome6 name="camera" solid size={27} color="#000" />
+
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: "#747990",
+                      marginTop: 5,
+                    }}
+                  >
+                    Add Photo
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleAddPhotoPress}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: "#E5E7EB",
+                backgroundColor: "#F3F4F6",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: 0.7,
+              }}
+            >
+              <FontAwesome6 name="camera" solid size={27} color="#9CA3AF" />
+
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#9CA3AF",
+                  marginTop: 5,
+                }}
+              >
+                Max (6)
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {images.map((img, index) => (
+            <View
+              key={img.uri}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 15,
+                overflow: "hidden",
+              }}
+            >
+              <Image
+                source={{ uri: img.uri }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                }}
+                resizeMode="cover"
+              />
+
+              <TouchableOpacity
+                onPress={() => removeImage(index)}
+                disabled={processingImages || submitting}
+                style={{
+                  position: "absolute",
+                  top: 5,
+                  right: 5,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  backgroundColor: "rgba(0,0,0,0.65)",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Ionicons name="close" size={14} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+
+        {/* INLINE ERROR MESSAGE */}
+        {imageError ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: 4,
+              marginBottom: 8,
+            }}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={16}
+              color="#FF3B30"
+              style={{ marginRight: 5 }}
+            />
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#FF3B30",
+                fontWeight: "500",
+              }}
+            >
+              {imageError}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* SUBMIT BUTTON */}
+
+        <View
+          style={{
+            marginTop: 24,
+            marginBottom: Platform.OS === "ios" ? 20 : 10,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleSubmit}
+            disabled={submitting || processingImages}
+            style={{
+              height: 50,
+              borderRadius: 27,
+              backgroundColor: "#000000",
+              justifyContent: "center",
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: {
+                width: 0,
+                height: 3,
+              },
+              shadowOpacity: 0.18,
+              shadowRadius: 5,
+              elevation: 4,
+            }}
+          >
+            {submitting ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 15.5,
+                  fontWeight: "800",
+                }}
+              >
+                Submit Complaint
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* ALERT MODAL */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+    </View>
+  );
+};
+
+export default ReportComplaint;

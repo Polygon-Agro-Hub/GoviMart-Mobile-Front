@@ -13,7 +13,21 @@ export interface ServerNotificationItem {
   sheduleDate?: string;
   amount?: string | number;
   orderStatus?: string;
+  isFinalized?: number | boolean;
+  isConfirmed?: number | boolean;
   delivaryMethod?: string;
+  unreadCount?: number;
+}
+
+export interface NotificationTriggerPayload {
+  id?: number;
+  unreadCount?: number;
+  title?: string;
+  message?: string;
+  createdAt?: string;
+  processOrderId?: number;
+  orderId?: number;
+  [key: string]: any;
 }
 
 export interface NotificationResponse {
@@ -23,7 +37,7 @@ export interface NotificationResponse {
 }
 
 class NotificationService {
-  async getNotifications(limit: number = 50, offset: number = 0) {
+  async getNotifications(limit: number = 10, offset: number = 0) {
     return apiClient.get<NotificationResponse>(
       `${ENDPOINTS.NOTIFICATION.GET_ALL}?limit=${limit}&offset=${offset}`
     );

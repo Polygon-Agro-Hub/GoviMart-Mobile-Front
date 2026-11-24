@@ -1,0 +1,691 @@
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  BackHandler,
+} from "react-native";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState } from "@/store";
+import { logoutSuccess, updateUserProfile } from "@/store/authSlice";
+import { clearCart } from "@/store/cartSlice";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { tokenStorage } from "@/utils/tokenStorage";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { useFocusEffect } from "@react-navigation/native";
+import { RootStackParamList } from "@/types/types";
+import { FontAwesome6 } from "@expo/vector-icons";
+import CustomHeader from "@/component/common/CustomHeader";
+import ConfirmationModal from "@/component/common/ConfirmationModal";
+import ProfileMenuItem from "@/component/my-profile/ProfileMenuItemCard";
+import BottomNavigation from "@/component/common/BottomNavigationBar";
+import customerService from "@/services/customer/customer.service";
+import authService from "@/services/auth/auth.service";
+import { environment } from "@/environment/environment";
+
+const defaultUserIcon = require("@/assets/images/auth/user-vector-icon.webp");
+
+type ProfileNavigationProp = StackNavigationProp<RootStackParamList, "Profile">;
+
+interface ProfileProps {
+  navigation: ProfileNavigationProp;
+}
+
+const WALLET_INFO_POINTS = [
+  "Polygon Wallet keeps track of your return related balance.",
+  "A negative balance means you have an outstanding amount to pay before placing your next order (such as handling or delivery fees).",
+  "A positive balance means you have available credit that you can use towards your next purchase, just like regular money.",
+];
+
+const TOOLTIP_SIDE_INSET = 24;
+const ARROW_SIZE = 14;
+
+const Profile: React.FC<ProfileProps> = ({ navigation }) => {
+  const user = useSelector((state: RootState) => state.auth.userProfile);
+  const isWholesale = (user?.buyerType || "").toLowerCase() === "wholesale";
+
+  const dispatch = useDispatch();
+
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [isCreditBalanceLoading, setIsCreditBalanceLoading] =
+    useState<boolean>(true);
+  const [logoutModalVisible, setLogoutModalVisible] = useState<boolean>(false);
+  const [imageError, setImageError] = useState<boolean>(false);
+
+  // Wallet info tooltip
+  const [walletInfoVisible, setWalletInfoVisible] = useState<boolean>(false);
+  const [labelRowLayout, setLabelRowLayout] = useState({
+    x: 0,
+    y: 0,
+    height: 0,
+  });
+  const [infoIconLayout, setInfoIconLayout] = useState({ x: 0, width: 0 });
+
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.image]);
+
+  const fetchAcccountDetails = async () => {
+    try {
+      setIsCreditBalanceLoading(true);
+      const response = await customerService.getAccountDetails();
+      if (response.data && response.data.data) {
+        const data = response.data.data;
+        const {
+          creditBalance,
+          image,
+          firstName,
+          lastName,
+          title,
+          buyerType,
+          email,
+          phoneNumber,
+          cusId,
+        } = data;
+        setCreditBalance(Number(creditBalance || 0));
+
+        const updatedProfile = {
+          firstName: firstName || user?.firstName || "",
+          lastName: lastName || user?.lastName || "",
+          title: title || user?.title,
+          image: image !== undefined ? image : user?.image,
+          buyerType: buyerType || user?.buyerType || "Retail",
+          email: email || user?.email || "",
+          phoneNumber: phoneNumber || user?.phoneNumber || "",
+          cusId: cusId || user?.cusId,
+          nic: data.nic || user?.nic,
+          docType: data.docType || user?.docType,
+          firstTimeUser: user?.firstTimeUser ?? 0,
+          id: data.id || user?.id,
+        };
+
+        dispatch(updateUserProfile(updatedProfile));
+        await AsyncStorage.setItem(
+          "userProfile",
+          JSON.stringify(updatedProfile),
+        );
+      }
+    } catch (error) {
+      console.log("error fetching acc details: ", error);
+    } finally {
+      setIsCreditBalanceLoading(false);
+    }
+  };
+
+  const handleBackPress = useCallback(() => {
+    navigation.navigate("Home");
+    return true;
+  }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAcccountDetails();
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        handleBackPress,
+      );
+
+      return () => {
+        subscription.remove();
+        setWalletInfoVisible(false);
+      };
+    }, [handleBackPress]),
+  );
+
+  const handleLogoutPress = () => {
+    setLogoutModalVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutModalVisible(false);
+    try {
+      // Call backend logout API to expire/clear token
+      await authService.logout().catch((err) => {
+        console.log("Server logout failed, proceeding with local logout:", err);
+      });
+    } catch (e) {
+      console.log("Logout API call error:", e);
+    } finally {
+      try {
+        await tokenStorage.clearTokens();
+        await AsyncStorage.removeItem("userProfile");
+        await AsyncStorage.removeItem("userLoginTime");
+
+        dispatch(clearCart());
+        dispatch(logoutSuccess());
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "ChooseAuth" }],
+        });
+      } catch (e) {
+        console.error("Logout error:", e);
+      }
+    }
+  };
+
+  const hasValidUserImage =
+    !imageError && user?.image && user.image.trim() !== "";
+
+  const titlePrefix = user?.title ? `${user.title}. ` : "";
+  const fullName = user
+    ? `${titlePrefix}${user.firstName || ""} ${user.lastName || ""}`.trim()
+    : "Guest User";
+
+  // Tooltip position (relative to the wallet card)
+  const tooltipTop = labelRowLayout.y + labelRowLayout.height + 8;
+  const iconCenterX =
+    labelRowLayout.x + infoIconLayout.x + infoIconLayout.width / 2;
+  const arrowLeft = Math.max(
+    16,
+    iconCenterX - TOOLTIP_SIDE_INSET - ARROW_SIZE / 2,
+  );
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      {/* Header */}
+
+      <CustomHeader
+        title=""
+        titleColor="black"
+        showBackButton={true}
+        navigation={navigation}
+        onBackPress={handleBackPress}
+      />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 120,
+        }}
+      >
+        <View
+          style={{
+            alignItems: "center",
+          }}
+        >
+          {/* Profile Image */}
+
+          <View
+            style={{
+              alignItems: "center",
+              paddingHorizontal: 24,
+            }}
+          >
+            <View
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 5,
+                elevation: 3,
+                marginTop: 6,
+              }}
+            >
+              <Image
+                source={
+                  hasValidUserImage ? { uri: user.image } : defaultUserIcon
+                }
+                onError={() => setImageError(true)}
+                style={{
+                  width: 110,
+                  height: 110,
+                  borderRadius: 55,
+                  borderWidth: 4,
+                  borderColor: "#F3F4F6",
+                  backgroundColor: "#EAEFF5",
+                }}
+              />
+            </View>
+
+            {/* Name */}
+            <Text
+              style={{
+                color: "#000",
+                fontSize: 23,
+                fontWeight: "800",
+                marginTop: 12,
+                textAlign: "center",
+                maxWidth: "90%",
+                paddingHorizontal: 4,
+              }}
+              numberOfLines={2}
+            >
+              {fullName}
+            </Text>
+          </View>
+        </View>
+
+        {/* CREDIT BALANCE */}
+
+        <View
+          style={{
+            width: "100%",
+            padding: 10,
+            marginTop: 22,
+            marginBottom: 24,
+            zIndex: 20,
+            backgroundColor: isCreditBalanceLoading
+              ? "#F2F2F6"
+              : creditBalance === 0
+                ? "#F2F2F6"
+                : creditBalance > 0
+                  ? "#E3FFEA"
+                  : "#FFEBEB",
+            borderRadius: 12,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {isCreditBalanceLoading ? (
+            <>
+              {/* Credit Icon Skeleton */}
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "#D9DCE3",
+                }}
+              />
+
+              {/* Label Skeleton */}
+              <View
+                style={{
+                  width: 120,
+                  height: 14,
+                  borderRadius: 7,
+                  backgroundColor: "#D9DCE3",
+                  marginTop: 15,
+                }}
+              />
+
+              {/* Amount Skeleton */}
+              <View
+                style={{
+                  width: 100,
+                  height: 22,
+                  borderRadius: 8,
+                  backgroundColor: "#D9DCE3",
+                  marginTop: 6,
+                  marginBottom: 4,
+                }}
+              />
+            </>
+          ) : (
+            <>
+              {/* Credit Icon */}
+
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 999,
+                  backgroundColor: "#000",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <FontAwesome6 name="wallet" size={15} color="#FFF" />
+              </View>
+
+              {/* Label + info icon */}
+              <View
+                onLayout={(e) => {
+                  const { x, y, height } = e.nativeEvent.layout;
+                  setLabelRowLayout({ x, y, height });
+                }}
+                style={{
+                  marginTop: 15,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#111",
+                    fontWeight: "400",
+                  }}
+                >
+                  My Polygon Wallet
+                </Text>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onLayout={(e) => {
+                    const { x, width } = e.nativeEvent.layout;
+                    setInfoIconLayout({ x, width });
+                  }}
+                  onPress={() => setWalletInfoVisible((prev) => !prev)}
+                  style={{ marginLeft: 6 }}
+                >
+                  <FontAwesome6
+                    name="circle-info"
+                    size={13}
+                    color="#111"
+                    solid
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <Text
+                style={{
+                  marginTop: 1,
+                  fontSize: 20,
+                  fontWeight: "800",
+                  color: creditBalance < 0 ? "#FF383C" : "#000",
+                }}
+              >
+                Rs. {creditBalance.toFixed(2)}
+              </Text>
+
+              {creditBalance < 0 && (
+                <>
+                  <Text
+                    className="text-center px-5 my-2"
+                    style={{
+                      fontSize: 13,
+                    }}
+                  >
+                    You won’t be able to place a new order until the negative
+                    balance is cleared. This balance occurred due to a previous
+                    return order. Once the outstanding amount is paid, you’ll be
+                    able to place orders again. Thank you for your
+                    understanding!
+                  </Text>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      navigation.navigate("PaymentScreen", {
+                        amount: Math.abs(creditBalance),
+                        title: "Payment Summary",
+                      });
+                    }}
+                    style={{
+                      paddingVertical: 12,
+                      marginTop: 10,
+                      marginBottom: 10,
+                      width: "90%",
+                      backgroundColor: "#FF383C",
+                      borderRadius: 30,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      shadowColor: "#000",
+                      shadowOpacity: 0.18,
+                      shadowRadius: 6,
+                      shadowOffset: {
+                        width: 0,
+                        height: 3,
+                      },
+                      elevation: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#FFF",
+                        fontSize: 17,
+                        fontWeight: "700",
+                      }}
+                    >
+                      Clear the negative balance
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Wallet info tooltip */}
+              {walletInfoVisible && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: tooltipTop,
+                    left: TOOLTIP_SIDE_INSET,
+                    right: TOOLTIP_SIDE_INSET,
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                    paddingHorizontal: 18,
+                    paddingTop: 14,
+                    paddingBottom: 16,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 10,
+                    elevation: 12,
+                  }}
+                >
+                  {/* Arrow pointing at the info icon */}
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -ARROW_SIZE / 2,
+                      left: arrowLeft,
+                      width: ARROW_SIZE,
+                      height: ARROW_SIZE,
+                      backgroundColor: "#FFFFFF",
+                      borderLeftWidth: 1,
+                      borderTopWidth: 1,
+                      borderColor: "#E5E7EB",
+                      transform: [{ rotate: "45deg" }],
+                    }}
+                  />
+
+                  {/* Header */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingBottom: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#EEF0F3",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        backgroundColor: "#DCFCE7",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 10,
+                      }}
+                    >
+                      <FontAwesome6 name="check" size={11} color="#16A34A" />
+                    </View>
+
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 15,
+                        fontWeight: "800",
+                        color: "#111111",
+                      }}
+                    >
+                      What is Polygon Wallet?
+                    </Text>
+
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPress={() => setWalletInfoVisible(false)}
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: "#4B5563",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <FontAwesome6 name="xmark" size={10} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Points */}
+                  <View style={{ marginTop: 12 }}>
+                    {WALLET_INFO_POINTS.map((point, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          flexDirection: "row",
+                          marginBottom:
+                            index === WALLET_INFO_POINTS.length - 1 ? 0 : 2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            width: 14,
+                            fontSize: 13,
+                            lineHeight: 20,
+                            color: "#55596D",
+                          }}
+                        >
+                          •
+                        </Text>
+                        <Text
+                          style={{
+                            flex: 1,
+                            fontSize: 13,
+                            lineHeight: 20,
+                            color: "#55596D",
+                          }}
+                        >
+                          {point}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* MENU */}
+
+        <View>
+          {/* My Account */}
+
+          <ProfileMenuItem
+            icon="thumbs-up"
+            title="My Account"
+            onPress={() => {
+              navigation.navigate("MyAccount");
+            }}
+          />
+
+          {/* Update Password */}
+
+          <ProfileMenuItem
+            icon="lock"
+            title="Update My Password"
+            onPress={() => {
+              navigation.navigate("UpdatePassword", { redirectTo: "Profile" });
+            }}
+          />
+
+          {/* Package Preferences - Retail Only */}
+          {!isWholesale && (
+            <ProfileMenuItem
+              icon="thumbs-up"
+              title="My Package Preferences"
+              onPress={() => {
+                navigation.navigate("ExcludeListSummery", {
+                  customerId: user?.id || 1002,
+                  name:
+                    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+                    undefined,
+                  title: user?.title || undefined,
+                  phoneNumber: user?.phoneNumber || undefined,
+                  cusId: user?.cusId || undefined,
+                  fromAccount: true,
+                });
+              }}
+            />
+          )}
+
+          {/* Saved Addresses */}
+
+          <ProfileMenuItem
+            icon="house"
+            title="My Saved Addresses"
+            onPress={() => {
+              navigation.navigate("SavedAddresses");
+            }}
+          />
+
+          {/* Saved Cards */}
+
+          <ProfileMenuItem
+            icon="credit-card"
+            title="Saved Cards"
+            onPress={() => {
+              navigation.navigate("SavedCards");
+            }}
+          />
+
+          {/* Complaint */}
+
+          <ProfileMenuItem
+            icon="headset"
+            title="Report a Complaint"
+            onPress={() => {
+              navigation.navigate("ComplaintHistory");
+            }}
+          />
+
+          {/* Logout */}
+
+          <ProfileMenuItem
+            icon="right-from-bracket"
+            title="Logout"
+            danger={true}
+            onPress={handleLogoutPress}
+          />
+
+          {/* Developer Mode (Shown only when environment.isDeveloper is true) */}
+          {environment.isDeveloper && (
+            <ProfileMenuItem
+              icon="code-working"
+              title="DEVELOPER MODE"
+              onPress={() => {
+                navigation.navigate("Developer");
+              }}
+            />
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Reusable Confirmation Modal for Logout */}
+      <ConfirmationModal
+        visible={logoutModalVisible}
+        title="Confirm Logout"
+        message="Are you sure you want to log out?"
+        confirmLabel="Logout"
+        cancelLabel="Cancel"
+        iconName="log-out-outline"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutModalVisible(false)}
+      />
+
+      {/* Floating Bottom Navigation Bar */}
+      <BottomNavigation activeScreen="Profile" navigation={navigation} />
+    </View>
+  );
+};
+
+export default Profile;

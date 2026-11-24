@@ -30,6 +30,51 @@ class AuthService {
       params: q ? { q } : undefined,
     });
   }
+
+  requestForgotPasswordOtp(data: {
+    type: "email" | "sms";
+    email?: string;
+    phoneCode?: string;
+    phoneNumber?: string;
+  }) {
+    return apiClient.post(ENDPOINTS.AUTH.FORGOT_PASSWORD_REQUEST_OTP, data);
+  }
+
+  resendForgotPasswordOtp(data: { resetToken: string }) {
+    return apiClient.post(ENDPOINTS.AUTH.FORGOT_PASSWORD_RESEND_OTP, data);
+  }
+
+  verifyForgotPasswordOtp(data: {
+    code: string;
+    referenceId: string;
+    resetToken: string;
+  }) {
+    return apiClient.post(ENDPOINTS.AUTH.FORGOT_PASSWORD_VERIFY_OTP, data);
+  }
+
+  resetForgotPassword(data: {
+    verifiedResetToken: string;
+    newPassword: string;
+    confirmNewPassword: string;
+  }) {
+    return apiClient.post(ENDPOINTS.AUTH.FORGOT_PASSWORD_RESET, data);
+  }
+
+  resubmitWholesaleBR(formData: FormData) {
+    return apiClient.post(ENDPOINTS.AUTH.RESUBMIT_WHOLESALE_BR, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
+
+  uploadWholesaleBR(formData: FormData) {
+    return apiClient.post(ENDPOINTS.AUTH.UPLOAD_WHOLESALE_BR, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
 }
 
 export default new AuthService();

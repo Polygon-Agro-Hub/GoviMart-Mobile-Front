@@ -7,13 +7,15 @@ export const SummaryRow = ({
     value,
     bold = false,
     iconColor,
-    icon
+    icon,
+    valueColor,
 }: {
     label: string;
     value: string;
     bold?: boolean;
-    iconColor?: string,
-    icon?: any
+    iconColor?: string;
+    icon?: any;
+    valueColor?: string;
 }) => {
     return (
         <View
@@ -26,18 +28,17 @@ export const SummaryRow = ({
         >
             <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
                 {/* Icon */}
-
-                {icon &&
+                {icon && (
                     <FontAwesome6
                         name={icon}
                         size={16}
                         color={iconColor}
                     />
-                }
+                )}
                 <Text
                     style={{
                         fontSize: 14,
-                        color: "#00000",
+                        color: "#111111",
                         fontWeight: bold ? "600" : "400",
                     }}
                 >
@@ -48,7 +49,7 @@ export const SummaryRow = ({
             <Text
                 style={{
                     fontSize: 14,
-                    color: "#00000",
+                    color: valueColor || "#111111",
                     fontWeight: bold ? "600" : "500",
                 }}
             >

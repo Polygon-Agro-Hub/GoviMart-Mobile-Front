@@ -13,6 +13,7 @@ import {
 
 import authReducer from "./authSlice";
 import cartReducer from "./cartSlice";
+import packageReviewReducer from "./packageReviewSlice";
 
 const persistConfig = {
   key: "root",
@@ -23,6 +24,7 @@ const persistConfig = {
 const rootReducer = combineReducers({
   auth: authReducer,
   cart: cartReducer,
+  packageReview: packageReviewReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

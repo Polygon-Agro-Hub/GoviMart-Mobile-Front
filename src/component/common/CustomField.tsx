@@ -1,48 +1,84 @@
+import React, { useState, useRef, useEffect } from "react";
 import {
     View,
     Text,
     TextInput,
-    TouchableOpacity
+    TouchableOpacity,
+    Platform,
 } from "react-native";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 
+const formatDisplayText = (val: string, ph?: string, width?: number) => {
+    if (!val) return ph || "";
+    if (!width || width <= 0) return val;
+    // At fontSize 14, average char width is ~8.2px, "..." takes ~16px
+    const maxChars = Math.floor((width - 8) / 8.2);
+    if (maxChars > 3 && val.length > maxChars) {
+        return val.slice(0, Math.max(3, maxChars - 1)).trimEnd() + "...";
+    }
+    return val;
+};
+
 // INPUT FIELD
 
-export const InputField = ({
+export const InputField = React.memo(({
     isIconThemeDark,
     icon,
     label,
     value,
     onChangeText,
+    onBlur,
+    onFocus,
     keyboardType = "default",
     placeholder,
     maxLength,
     error,
-    prefix
+    prefix,
+    iconBgColor,
+    iconColor,
+    circleSize = 36,
+    iconSize = 17,
+    paddingHorizontal = 11,
+    marginLeft = 10,
+    autoCapitalize,
+    secureTextEntry,
+    editable = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
-    isIconThemeDark?: boolean,
+    isIconThemeDark?: boolean;
+    iconBgColor?: string;
+    iconColor?: string;
+    circleSize?: number;
+    iconSize?: number;
+    paddingHorizontal?: number;
+    marginLeft?: number;
     label: string;
     value: string;
     onChangeText: (text: string) => void;
+    onBlur?: () => void;
+    onFocus?: () => void;
     keyboardType?: "default" | "phone-pad" | "email-address";
     placeholder?: string;
     maxLength?: number;
-    error?: string
-    prefix?: string
+    error?: string;
+    prefix?: string;
+    autoCapitalize?: "none" | "sentences" | "words" | "characters";
+    secureTextEntry?: boolean;
+    editable?: boolean;
 }) => {
-    const handleIconColor = () => {
-        if (isIconThemeDark) {
-            return "#00000"
+    const resolvedBgColor = iconBgColor || (isIconThemeDark === false ? "#F2F2F6" : "#000000");
+    const resolvedIconColor = iconColor || (isIconThemeDark === false ? "#000000" : "#FFFFFF");
+    const resolvedPlaceholder = placeholder !== undefined ? placeholder : label;
+    const inputRef = useRef<TextInput>(null);
+    const [isFocused, setIsFocused] = useState(false);
+    const [containerWidth, setContainerWidth] = useState<number>(0);
+
+    useEffect(() => {
+        if (isFocused && inputRef.current) {
+            inputRef.current.focus();
         }
-        return "#F2F2F6"
-    }
-    const handleBackgroundColor = () => {
-        if (isIconThemeDark) {
-            return "#FFFFF"
-        }
-        return "#00000"
-    }
+    }, [isFocused]);
+
     return (
         <View
             style={{
@@ -57,18 +93,19 @@ export const InputField = ({
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-                    paddingHorizontal: 11,
+                    paddingHorizontal: paddingHorizontal,
                     backgroundColor: "#FFFFFF",
+                    overflow: "hidden",
                 }}
             >
                 {/* Icon */}
 
                 <View
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 999,
-                        backgroundColor: handleIconColor(),
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
+                        backgroundColor: resolvedBgColor,
                         justifyContent: "center",
                         alignItems: "center",
                     }}
@@ -76,8 +113,8 @@ export const InputField = ({
                     <FontAwesome6
                         name={icon}
                         solid
-                        size={17}
-                        color={handleBackgroundColor()}
+                        size={iconSize}
+                        color={resolvedIconColor}
                     />
                 </View>
 
@@ -86,8 +123,10 @@ export const InputField = ({
                 <View
                     style={{
                         flex: 1,
-                        marginLeft: 10,
+                        minWidth: 0,
+                        marginLeft: marginLeft,
                         justifyContent: "center",
+                        overflow: "hidden",
                     }}
                 >
                     <Text
@@ -104,6 +143,9 @@ export const InputField = ({
                     <View style={{
                         flexDirection: "row",
                         alignItems: "center",
+                        width: "100%",
+                        minWidth: 0,
+                        overflow: "hidden",
                     }}>
                         {prefix && (
                             <Text
@@ -118,22 +160,81 @@ export const InputField = ({
                             </Text>
                         )}
 
-                        <TextInput
-                            value={value}
-                            onChangeText={onChangeText}
-                            keyboardType={keyboardType}
-                            placeholder={placeholder}
-                            placeholderTextColor="#9CA3AF"
-                            maxLength={maxLength}
+                        <View
                             style={{
-                                height: 21,
-                                paddingVertical: 0,
-                                fontSize: 14,
-                                color: "#111",
-                                fontWeight: "500",
-                                paddingLeft: 0
+                                flex: 1,
+                                minWidth: 0,
+                                justifyContent: "center",
+                                overflow: "hidden",
                             }}
-                        />
+                            onLayout={(e) => {
+                                const w = e.nativeEvent.layout.width;
+                                if (w > 0 && Math.abs(w - containerWidth) > 1) {
+                                    setContainerWidth(w);
+                                }
+                            }}
+                        >
+                            {!isFocused && !secureTextEntry ? (
+                                <TouchableOpacity
+                                    activeOpacity={editable ? 1 : 1}
+                                    disabled={!editable}
+                                    onPress={() => { if (editable) setIsFocused(true); }}
+                                    style={{
+                                        width: "100%",
+                                        height: 24,
+                                        justifyContent: "center",
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    <Text
+                                        numberOfLines={1}
+                                        ellipsizeMode="tail"
+                                        adjustsFontSizeToFit={true}
+                                        minimumFontScale={0.8}
+                                        style={{
+                                            fontSize: 14,
+                                            color: value ? "#111111" : "#9CA3AF",
+                                            fontWeight: "500",
+                                            paddingHorizontal: 1.7,
+                                            width: containerWidth > 0 ? containerWidth - 4 : "100%",
+                                        }}
+                                    >
+                                        {formatDisplayText(value, resolvedPlaceholder, containerWidth)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TextInput
+                                    ref={inputRef}
+                                    value={value}
+                                    onChangeText={onChangeText}
+                                    onBlur={() => {
+                                        setIsFocused(false);
+                                        onBlur?.();
+                                    }}
+                                    onFocus={() => {
+                                        setIsFocused(true);
+                                        onFocus?.();
+                                    }}
+                                    keyboardType={keyboardType}
+                                    placeholder={resolvedPlaceholder}
+                                    placeholderTextColor="#9CA3AF"
+                                    maxLength={maxLength}
+                                    autoCapitalize={autoCapitalize}
+                                    secureTextEntry={secureTextEntry}
+                                    editable={editable}
+                                    style={{
+                                        width: "100%",
+                                        height: 24,
+                                        paddingVertical: 0,
+                                        paddingHorizontal: 1.7,
+                                        fontSize: 14,
+                                        color: "#111111",
+                                        fontWeight: "500",
+                                        textAlignVertical: "center",
+                                    }}
+                                />
+                            )}
+                        </View>
                     </View>
                 </View>
             </View>
@@ -141,7 +242,7 @@ export const InputField = ({
             {error ? (
                 <Text
                     style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "#FF3B30",
                         marginTop: 4,
                         marginLeft: 16,
@@ -152,7 +253,7 @@ export const InputField = ({
             ) : null}
         </View>
     );
-};
+});
 
 // DROPDOWN
 
@@ -167,6 +268,13 @@ export const DropdownField = ({
     highlighted = false,
     error,
     placeholder = "Select From Here",
+    circleSize = 36,
+    iconSize = 17,
+    paddingHorizontal = 11,
+    marginLeft = 10,
+    arrowSize = 19,
+    disabled = false,
+    showArrow = true,
 }: {
     icon: keyof typeof Ionicons.glyphMap | any;
     label: string;
@@ -178,6 +286,13 @@ export const DropdownField = ({
     highlighted?: boolean;
     error?: string;
     placeholder?: string;
+    circleSize?: number;
+    iconSize?: number;
+    paddingHorizontal?: number;
+    marginLeft?: number;
+    arrowSize?: number;
+    disabled?: boolean;
+    showArrow?: boolean;
 }) => {
     return (
         <View
@@ -187,8 +302,9 @@ export const DropdownField = ({
             }}
         >
             <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setOpen(!open)}
+                activeOpacity={disabled ? 1 : 0.8}
+                disabled={disabled}
+                onPress={() => { if (!disabled) setOpen(!open); }}
                 style={{
                     height: 67,
                     borderWidth: highlighted ? 2 : 1,
@@ -196,7 +312,7 @@ export const DropdownField = ({
                     borderRadius: 40,
                     flexDirection: "row",
                     alignItems: "center",
-                    paddingHorizontal: 11,
+                    paddingHorizontal: paddingHorizontal,
                     backgroundColor: "#FFFFFF",
                 }}
             >
@@ -204,9 +320,9 @@ export const DropdownField = ({
 
                 <View
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
                         backgroundColor: "#F2F2F6",
                         justifyContent: "center",
                         alignItems: "center",
@@ -215,7 +331,7 @@ export const DropdownField = ({
                     <FontAwesome6
                         name={icon}
                         solid
-                        size={17}
+                        size={iconSize}
                         color="#000000"
                     />
                 </View>
@@ -225,7 +341,7 @@ export const DropdownField = ({
                 <View
                     style={{
                         flex: 1,
-                        marginLeft: 10,
+                        marginLeft: marginLeft,
                         justifyContent: "center",
                     }}
                 >
@@ -241,6 +357,9 @@ export const DropdownField = ({
                     </Text>
 
                     <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.85}
                         style={{
                             fontSize: 14,
                             lineHeight: 18,
@@ -254,15 +373,17 @@ export const DropdownField = ({
 
                 {/* Arrow */}
 
-                <Ionicons
-                    name={
-                        open
-                            ? "chevron-up"
-                            : "chevron-down"
-                    }
-                    size={19}
-                    color="#111"
-                />
+                {showArrow && (
+                    <Ionicons
+                        name={
+                            open
+                                ? "chevron-up"
+                                : "chevron-down"
+                        }
+                        size={arrowSize}
+                        color="#111"
+                    />
+                )}
             </TouchableOpacity>
 
             {/* Dropdown Options */}
@@ -331,7 +452,7 @@ export const DropdownField = ({
             {error ? (
                 <Text
                     style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "#FF3B30",
                         marginTop: 4,
                         marginLeft: 16,

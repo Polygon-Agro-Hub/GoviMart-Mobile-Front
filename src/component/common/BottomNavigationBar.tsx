@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import {
     View,
     Text,
@@ -9,6 +11,8 @@ import { Ionicons } from "@expo/vector-icons";
 import Feather from '@expo/vector-icons/Feather';
 import notificationService from "@/services/notification/notification.service";
 import socketService from "@/services/socket/socket.service";
+import pushNotificationService from "@/services/notification/pushNotification.service";
+import { subscribeToUnreadCount, updateGlobalUnreadCount } from "@/store/notificationStore";
 
 type BottomScreen =
     | "Home"
@@ -20,46 +24,64 @@ type BottomScreen =
 interface BottomNavigationProps {
     activeScreen: BottomScreen;
     navigation: any;
+    onRequireAuth?: () => void;
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
     activeScreen,
     navigation,
+    onRequireAuth,
 }) => {
     const isOrdersActive = activeScreen === "OrderHistory" || activeScreen === "MyCart";
     const [unreadCount, setUnreadCount] = useState<number>(0);
+    const token = useSelector((state: RootState) => state.auth.token);
+
+    const handleProtectedNavigation = (screenName: string) => {
+        if (!token) {
+            if (onRequireAuth) {
+                onRequireAuth();
+            } else {
+                navigation.navigate("ChooseAuth");
+            }
+            return;
+        }
+        navigation.navigate(screenName);
+    };
 
     useEffect(() => {
-        // Fetch unread count
-        let isMounted = true;
+        if (!token) {
+            setUnreadCount(0);
+            return;
+        }
+
+        // ── 1. Subscribe to the global unread count store (Sales Dash pattern) ──
+        const unsubscribe = subscribeToUnreadCount((count) => {
+            setUnreadCount(count);
+        });
+
+        // ── 2. Ensure socket is connected so we receive real-time events ──
+        socketService.connect();
+
+        // ── 3. Fetch fresh count from API on first mount ──
         notificationService
             .getNotifications(1, 0)
             .then((res) => {
-                if (isMounted && res.data?.status) {
-                    setUnreadCount(Number(res.data?.unreadCount) || 0);
+                if (res.data?.status) {
+                    updateGlobalUnreadCount(Number(res.data?.unreadCount) || 0);
                 }
             })
-            .catch(() => {});
-
-        // Listen for real-time notification socket updates
-        socketService.connect();
-        const unsubscribe = socketService.onNewNotification(() => {
-            if (isMounted) {
-                setUnreadCount((prev) => prev + 1);
-            }
-        });
+            .catch(() => { });
 
         return () => {
-            isMounted = false;
             unsubscribe();
         };
-    }, [activeScreen]);
+    }, [token]);
 
     return (
         <View
             style={{
                 position: "absolute",
-                bottom: Platform.OS === "ios" ? 10 : 24,
+                bottom: Platform.OS === "ios" ? 10 : 10,
                 left: 24, // mx-6
                 right: 24, // mx-6
 
@@ -82,7 +104,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 shadowOpacity: 0.25,
                 shadowRadius: 8,
 
-                elevation: 10,
+                elevation: 6,
 
                 zIndex: 20,
             }}
@@ -131,7 +153,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* ORDERS */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("OrderHistory")}
+                onPress={() => handleProtectedNavigation("OrderHistory")}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -167,7 +189,29 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* NOTIFICATIONS / ALERTS */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("Notification")}
+                onPress={async () => {
+                    if (!token) {
+                        if (onRequireAuth) {
+                            onRequireAuth();
+                        } else {
+                            navigation.navigate("ChooseAuth");
+                        }
+                        return;
+                    }
+                    if (activeScreen === "Notification") return;
+                    try {
+                        const hasPerm = await pushNotificationService.hasPermission();
+                        if (hasPerm) {
+                            navigation.navigate("Notification");
+                        } else {
+                            navigation.navigate("NotificationAccess", {
+                                returnScreen: "Notification",
+                            });
+                        }
+                    } catch (e) {
+                        navigation.navigate("Notification");
+                    }
+                }}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -249,7 +293,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
             {/* PROFILE */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("Profile")}
+                onPress={() => handleProtectedNavigation("Profile")}
                 style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -285,7 +329,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
                             marginLeft: 6,
                         }}
                     >
-                        Profile
+                        Account
                     </Text>
                 )}
             </TouchableOpacity>
