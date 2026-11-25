@@ -139,11 +139,15 @@ export class PaymentsLkAdapter implements IPaymentGatewayAdapter {
   /**
    * Directly syncs a checkout session with backend/Payments.lk
    */
-  async syncCheckout(checkoutId: string): Promise<any> {
+  async syncCheckout(checkoutId: string, cardHolder?: string): Promise<any> {
     const headers = await getAuthHeader();
+    const payload: { checkoutId: string; cardHolder?: string } = { checkoutId };
+    if (cardHolder && cardHolder.trim()) {
+      payload.cardHolder = cardHolder.trim();
+    }
     const response = await apiClient.post(
       ENDPOINTS.PAYMENT.SYNC_CHECKOUT,
-      { checkoutId },
+      payload,
       { headers }
     );
     return response.data?.data;

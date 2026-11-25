@@ -92,14 +92,10 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleCheckoutSuccess = async (orderId: string) => {
+  const handleCheckoutSuccess = async (orderId: string, cardHolder?: string) => {
     setCheckoutModalVisible(false);
     try {
       setLoading(true);
-
-      // Give the card.saved webhook time to arrive and be processed before querying DB
-      // The webhook is async — it may arrive a second or two after the WebView success callback
-      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       let syncResult: any = null;
       if (checkoutSession?.sessionId) {
@@ -107,33 +103,24 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
           "payments_lk",
         ) as PaymentsLkAdapter;
         syncResult = await adapter
-          .syncCheckout(checkoutSession.sessionId)
+          .syncCheckout(checkoutSession.sessionId, cardHolder)
           .catch((err) => {
             console.warn("[SavedCardsScreen] syncCheckout error:", err);
             return null;
           });
       }
 
-      // Primary source: DB (populated by card.saved webhook)
+      // Check card in DB or via syncResult
       let loaded = await cardStorageService.getSavedCard(userId);
-
-      // If still not in DB, wait a bit more and retry (webhook may be slightly delayed)
-      if (!loaded) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        loaded = await cardStorageService.getSavedCard(userId);
+      if (!loaded && syncResult?.card) {
+        loaded = syncResult.card;
       }
 
       setSavedCard(loaded);
       if (loaded) {
         Alert.alert(
           "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
-        );
-      } else if (syncResult?.card) {
-        setSavedCard(syncResult.card);
-        Alert.alert(
-          "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
+          "Your card has been securely verified and linked via Payments.lk! Any previous card was automatically replaced so only 1 active card is kept.",
         );
       } else {
         Alert.alert(
@@ -171,7 +158,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
               setLoading(true);
               await cardStorageService.removeCard(userId, savedCard?.id);
               setSavedCard(null);
-              Alert.alert("Card Removed", "Your saved card has been removed.");
+              Alert.alert("Removed Successfully", "Your saved card has been removed.");
             } catch (err) {
               Alert.alert("Error", "Failed to remove card. Please try again.");
             } finally {
@@ -661,7 +648,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                 {/* Masked Card Number */}
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: "700",
                     letterSpacing: 2,
                     color: "#FFFFFF",
@@ -697,7 +684,6 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                         fontSize: 13,
                         fontWeight: "700",
                         color: "#FFFFFF",
-                        textTransform: "uppercase",
                       }}
                     >
                       {savedCard.cardHolder}
@@ -913,6 +899,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
           orderId={String(checkoutSession.orderId)}
           amount={checkoutSession.amount}
           customerAddress={checkoutSession.customerAddress}
+          isSaveCardOnly={true}
           onSuccess={handleCheckoutSuccess}
           onCancel={handleCheckoutCancel}
           onClose={() => setCheckoutModalVisible(false)}
