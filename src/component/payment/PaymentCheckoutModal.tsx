@@ -263,77 +263,41 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
     };
   }, [checkoutUrl, postBody, htmlForm, domain]);
 
-  // Injected JavaScript: when isSaveCardOnly is true, automatically tick and keep checked the "Keep my card on file" checkbox
+  // Injected JavaScript: when isSaveCardOnly is true, automatically click and keep checked the "Keep my card on file" checkbox
   const injectedSaveCardScript = useMemo(() => {
     if (!isSaveCardOnly) return undefined;
     return `
       (function() {
-        function checkSaveCardBox() {
+        function ensureSaveCardChecked() {
           try {
             var checkboxes = document.querySelectorAll('input[type="checkbox"]');
             for (var i = 0; i < checkboxes.length; i++) {
               var cb = checkboxes[i];
               var label = cb.closest('label') || document.querySelector('label[for="' + cb.id + '"]') || cb.parentElement;
-              var labelText = (label ? (label.innerText || label.textContent) : '').toLowerCase();
+              var text = (label ? (label.innerText || label.textContent) : '').toLowerCase();
               var name = (cb.name || cb.id || '').toLowerCase();
 
-              var isTarget =
-                labelText.includes('keep') ||
-                labelText.includes('save') ||
-                labelText.includes('file') ||
+              var isSaveCard =
+                text.includes('keep') ||
+                text.includes('save') ||
+                text.includes('file') ||
                 name.includes('save') ||
                 name.includes('keep') ||
                 checkboxes.length === 1;
 
-              if (isTarget) {
+              if (isSaveCard) {
                 if (!cb.checked) {
-                  // 1. Reset React valueTracker if present so React detects the update
-                  if (cb._valueTracker) {
-                    cb._valueTracker.setValue(false);
-                  }
-
-                  // 2. Use native prototype setter so React controlled component updates state
-                  var descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked');
-                  if (descriptor && descriptor.set) {
-                    descriptor.set.call(cb, true);
-                  } else {
-                    cb.checked = true;
-                  }
-
-                  // 3. Dispatch bubbles: true change and input events
-                  cb.dispatchEvent(new Event('input', { bubbles: true }));
-                  cb.dispatchEvent(new Event('change', { bubbles: true }));
+                  // Trigger genuine click event on unchecked box so React captures it and sets state (ez = true)
+                  cb.click();
                 }
               }
             }
           } catch (e) {}
         }
 
-        // Run immediately
-        checkSaveCardBox();
-
-        // Continuous interval: keep checking every 250ms throughout the session
-        setInterval(checkSaveCardBox, 250);
-
-        // Event listeners: whenever user types, changes, focuses, or blurs ANY field in the form
-        document.addEventListener('input', checkSaveCardBox, true);
-        document.addEventListener('change', checkSaveCardBox, true);
-        document.addEventListener('keyup', checkSaveCardBox, true);
-        document.addEventListener('focus', checkSaveCardBox, true);
-        document.addEventListener('blur', checkSaveCardBox, true);
-
-        // MutationObserver: whenever React re-renders or changes DOM attributes
-        if (window.MutationObserver) {
-          var observer = new MutationObserver(function() {
-            checkSaveCardBox();
-          });
-          observer.observe(document.documentElement || document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['checked', 'value', 'class']
-          });
-        }
+        // Run check immediately and keep safety interval
+        ensureSaveCardChecked();
+        setInterval(ensureSaveCardChecked, 400);
       })();
       true;
     `;
