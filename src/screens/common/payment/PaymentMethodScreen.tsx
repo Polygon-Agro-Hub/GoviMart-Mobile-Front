@@ -1997,7 +1997,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             >
               {paymentMethod === "card" &&
               paymentAmount > 0 &&
-              (isEarliestDeliveryDate() || isPackagePayToConfirm)
+              (isEarliestDeliveryDate())
                 ? "Awaiting Payment..."
                 : "Confirming your order..."}
             </Text>

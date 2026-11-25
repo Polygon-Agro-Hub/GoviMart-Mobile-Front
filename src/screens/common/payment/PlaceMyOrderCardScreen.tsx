@@ -764,6 +764,13 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
             flexDirection: "row",
             justifyContent: "center",
             alignItems: "center",
+             shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+
+    // Android shadow
+    elevation: 6,
           }}
         >
           {submitting && submittingType === "another" ? (

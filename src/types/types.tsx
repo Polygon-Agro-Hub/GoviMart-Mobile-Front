@@ -107,6 +107,7 @@ export type RootStackParamList = {
   };
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   PrivacyPolicy: undefined;
+  TermsConditions:undefined;
   Home: undefined;
   SignUpOTP: {
     phoneCode: string;

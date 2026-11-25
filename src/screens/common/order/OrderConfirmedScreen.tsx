@@ -1135,56 +1135,6 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
               </View>
             </>
           )}
-
-          {/* Card Payment row */}
-          {isCard && amountToPay > 0 && (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingVertical: 4,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <FontAwesome6 name="credit-card" size={13} color="#0088FF" />
-                <Text style={{ fontSize: 13, color: "#60647A" }}>
-                  {savedCard?.last4
-                    ? `Paid with Card (•••• ${savedCard.last4})`
-                    : "Paid with Card"}
-                </Text>
-              </View>
-              <Text
-                style={{ fontSize: 13, fontWeight: "600", color: "#16A34A" }}
-              >
-                Rs. {formatAmount(amountToPay)}
-              </Text>
-            </View>
-          )}
-
-          {/* Cash Payment row */}
-          {isCash && amountToPay > 0 && (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingVertical: 4,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <FontAwesome6 name="money-bill-wave" size={13} color="#00B83D" />
-                <Text style={{ fontSize: 13, color: "#60647A" }}>
-                  Cash on Delivery
-                </Text>
-              </View>
-              <Text
-                style={{ fontSize: 13, fontWeight: "600", color: "#222222" }}
-              >
-                Rs. {formatAmount(amountToPay)}
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* ─── DELIVERY NOTIFICATION BANNER ─────────────────────────────── */}

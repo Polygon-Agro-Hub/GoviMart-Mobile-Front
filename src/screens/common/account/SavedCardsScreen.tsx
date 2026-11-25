@@ -158,7 +158,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
               setLoading(true);
               await cardStorageService.removeCard(userId, savedCard?.id);
               setSavedCard(null);
-              Alert.alert("Card Removed", "Your saved card has been removed.");
+              Alert.alert("Removed Successfully", "Your saved card has been removed.");
             } catch (err) {
               Alert.alert("Error", "Failed to remove card. Please try again.");
             } finally {
@@ -648,7 +648,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                 {/* Masked Card Number */}
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: "700",
                     letterSpacing: 2,
                     color: "#FFFFFF",
@@ -684,7 +684,6 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                         fontSize: 13,
                         fontWeight: "700",
                         color: "#FFFFFF",
-                        textTransform: "uppercase",
                       }}
                     >
                       {savedCard.cardHolder}

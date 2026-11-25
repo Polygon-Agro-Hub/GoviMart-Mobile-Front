@@ -1765,11 +1765,7 @@ const serviceFee = isDashServiceFee
                       the card payment is completed */}
                   {showCardRows && cardDueAmount > 0 && (
                     <SummaryRow
-                      label={
-                        savedCard?.last4
-                          ? `Pay with Saved Card (•••• ${savedCard.last4})`
-                          : "Pay with Card"
-                      }
+                      label="Pay with Card"
                       value={`Rs. ${formatAmount(cardDueAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"
