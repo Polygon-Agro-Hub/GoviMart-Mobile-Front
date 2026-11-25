@@ -1799,15 +1799,7 @@ const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
 
                   {isCardOrder && cardRemainingAmount > 0 && (
                     <SummaryRow
-                      label={
-                        isPaid
-                          ? (savedCard?.last4
-                              ? `Paid with Card (•••• ${savedCard.last4})`
-                              : "Paid with Card")
-                          : (savedCard?.last4
-                              ? `Pay with Saved Card (•••• ${savedCard.last4})`
-                              : "Pay with Card")
-                      }
+                      label={isPaid ? "Paid with Card" : "Pay with Card"}
                       value={`Rs. ${formatAmount(cardRemainingAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"

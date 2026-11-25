@@ -1143,8 +1143,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                     }}
                   >
                     {selectedPaymentOption === "saved_card"
-                      ? `1-Click Pay Rs. ${formatAmount(fullTotal)} with Saved Card`
-                      : `Pay Rs. ${formatAmount(fullTotal)} with ${gatewayDisplayName}`}
+                      ? `Pay Rs. ${formatAmount(fullTotal)} `
+                      : `Pay Rs. ${formatAmount(fullTotal)}`}
                   </Text>
                 </>
               )}
