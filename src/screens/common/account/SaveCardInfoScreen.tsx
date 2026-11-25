@@ -449,6 +449,7 @@ const SaveCardInfoScreen: React.FC<Props> = ({ navigation }) => {
           checkoutUrl={checkoutSession.checkoutUrl}
           orderId={String(checkoutSession.orderId)}
           amount={checkoutSession.amount}
+          isSaveCardOnly={true}
           onSuccess={handlePaymentSuccess}
           onCancel={handlePaymentCancel}
           onClose={() => setCheckoutModalVisible(false)}

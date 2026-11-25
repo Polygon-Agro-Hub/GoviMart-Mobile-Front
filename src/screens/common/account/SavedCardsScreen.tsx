@@ -120,7 +120,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
       if (loaded) {
         Alert.alert(
           "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
+          "Your card has been securely verified and linked via Payments.lk! Any previous card was automatically replaced so only 1 active card is kept.",
         );
       } else {
         Alert.alert(
@@ -900,6 +900,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
           orderId={String(checkoutSession.orderId)}
           amount={checkoutSession.amount}
           customerAddress={checkoutSession.customerAddress}
+          isSaveCardOnly={true}
           onSuccess={handleCheckoutSuccess}
           onCancel={handleCheckoutCancel}
           onClose={() => setCheckoutModalVisible(false)}

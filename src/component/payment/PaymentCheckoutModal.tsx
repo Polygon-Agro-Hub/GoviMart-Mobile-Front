@@ -30,6 +30,8 @@ interface Props {
     city?: string;
     postcode?: string;
   };
+  /** If true, this checkout session is explicitly for saving a card (from Saved Cards flow) */
+  isSaveCardOnly?: boolean;
   onSuccess: (orderId: string, cardHolder?: string) => void;
   onCancel: (orderId: string) => void;
   onClose: () => void;
@@ -49,6 +51,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   amount,
   sessionId,
   customerAddress,
+  isSaveCardOnly = false,
   onSuccess,
   onCancel,
   onClose,
@@ -260,6 +263,82 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
     };
   }, [checkoutUrl, postBody, htmlForm, domain]);
 
+  // Injected JavaScript: when isSaveCardOnly is true, automatically tick and keep checked the "Keep my card on file" checkbox
+  const injectedSaveCardScript = useMemo(() => {
+    if (!isSaveCardOnly) return undefined;
+    return `
+      (function() {
+        function checkSaveCardBox() {
+          try {
+            var checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            for (var i = 0; i < checkboxes.length; i++) {
+              var cb = checkboxes[i];
+              var label = cb.closest('label') || document.querySelector('label[for="' + cb.id + '"]') || cb.parentElement;
+              var labelText = (label ? (label.innerText || label.textContent) : '').toLowerCase();
+              var name = (cb.name || cb.id || '').toLowerCase();
+
+              var isTarget =
+                labelText.includes('keep') ||
+                labelText.includes('save') ||
+                labelText.includes('file') ||
+                name.includes('save') ||
+                name.includes('keep') ||
+                checkboxes.length === 1;
+
+              if (isTarget) {
+                if (!cb.checked) {
+                  // 1. Reset React valueTracker if present so React detects the update
+                  if (cb._valueTracker) {
+                    cb._valueTracker.setValue(false);
+                  }
+
+                  // 2. Use native prototype setter so React controlled component updates state
+                  var descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked');
+                  if (descriptor && descriptor.set) {
+                    descriptor.set.call(cb, true);
+                  } else {
+                    cb.checked = true;
+                  }
+
+                  // 3. Dispatch bubbles: true change and input events
+                  cb.dispatchEvent(new Event('input', { bubbles: true }));
+                  cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Run immediately
+        checkSaveCardBox();
+
+        // Continuous interval: keep checking every 250ms throughout the session
+        setInterval(checkSaveCardBox, 250);
+
+        // Event listeners: whenever user types, changes, focuses, or blurs ANY field in the form
+        document.addEventListener('input', checkSaveCardBox, true);
+        document.addEventListener('change', checkSaveCardBox, true);
+        document.addEventListener('keyup', checkSaveCardBox, true);
+        document.addEventListener('focus', checkSaveCardBox, true);
+        document.addEventListener('blur', checkSaveCardBox, true);
+
+        // MutationObserver: whenever React re-renders or changes DOM attributes
+        if (window.MutationObserver) {
+          var observer = new MutationObserver(function() {
+            checkSaveCardBox();
+          });
+          observer.observe(document.documentElement || document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['checked', 'value', 'class']
+          });
+        }
+      })();
+      true;
+    `;
+  }, [isSaveCardOnly]);
+
   return (
     <Modal
       visible={visible}
@@ -328,32 +407,34 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
         </View>
 
         {/* Help Banner for Saving Cards */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: "#F0FDF4",
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderColor: "#BBF7D0",
-            gap: 8,
-          }}
-        >
-          <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-          <Text
+        {isSaveCardOnly && (
+          <View
             style={{
-              flex: 1,
-              fontSize: 12,
-              color: "#166534",
-              fontWeight: "600",
-              lineHeight: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#F0FDF4",
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderBottomWidth: 1,
+              borderColor: "#BBF7D0",
+              gap: 8,
             }}
           >
-            Please ensure "Keep my card on file" is checked below to securely
-            save your card.
-          </Text>
-        </View>
+            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 12,
+                color: "#166534",
+                fontWeight: "600",
+                lineHeight: 16,
+              }}
+            >
+              "Keep my card on file" is automatically checked for you to securely
+              save your card.
+            </Text>
+          </View>
+        )}
 
         {/* WebView container */}
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -396,6 +477,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
 
           <WebView
             source={webViewSource}
+            injectedJavaScript={injectedSaveCardScript}
             onLoadStart={() => {
               if (!hasLoadedInitialRef.current) {
                 setInitialLoading(true);
