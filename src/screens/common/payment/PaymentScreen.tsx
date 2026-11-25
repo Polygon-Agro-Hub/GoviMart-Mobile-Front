@@ -424,14 +424,25 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           }
         }
 
-        // Update order in backend: isPaid = 1, amount = fullTotal, moneyPaid = fullTotal
-        await orderService.confirmOrderWithLivePrices({
-          orderId: orderIdParam,
-          processOrderId: processOrderIdParam,
-          isPaid: 1,
-          amount: fullTotal,
-          moneyPaid: fullTotal,
-        });
+        // Update order in backend: isPaid = 1, amount = fullTotal, moneyPaid = fullTotal, isConfirmed = 1
+        try {
+          await orderService.payReminderOrder({
+            orderId: orderIdParam,
+            processOrderId: processOrderIdParam,
+            isPaid: 1,
+            amount: fullTotal,
+            moneyPaid: fullTotal,
+          });
+        } catch (payErr) {
+          console.warn("[PaymentScreen] payReminderOrder error, falling back to confirmOrderWithLivePrices:", payErr);
+          await orderService.confirmOrderWithLivePrices({
+            orderId: orderIdParam,
+            processOrderId: processOrderIdParam,
+            isPaid: 1,
+            amount: fullTotal,
+            moneyPaid: fullTotal,
+          });
+        }
 
         showAlert(
           "Payment Successful",

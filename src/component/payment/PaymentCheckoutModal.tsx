@@ -30,6 +30,8 @@ interface Props {
     city?: string;
     postcode?: string;
   };
+  /** If true, this checkout session is explicitly for saving a card (from Saved Cards flow) */
+  isSaveCardOnly?: boolean;
   onSuccess: (orderId: string, cardHolder?: string) => void;
   onCancel: (orderId: string) => void;
   onClose: () => void;
@@ -49,6 +51,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   amount,
   sessionId,
   customerAddress,
+  isSaveCardOnly = false,
   onSuccess,
   onCancel,
   onClose,
@@ -260,6 +263,46 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
     };
   }, [checkoutUrl, postBody, htmlForm, domain]);
 
+  // Injected JavaScript: when isSaveCardOnly is true, automatically click and keep checked the "Keep my card on file" checkbox
+  const injectedSaveCardScript = useMemo(() => {
+    if (!isSaveCardOnly) return undefined;
+    return `
+      (function() {
+        function ensureSaveCardChecked() {
+          try {
+            var checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            for (var i = 0; i < checkboxes.length; i++) {
+              var cb = checkboxes[i];
+              var label = cb.closest('label') || document.querySelector('label[for="' + cb.id + '"]') || cb.parentElement;
+              var text = (label ? (label.innerText || label.textContent) : '').toLowerCase();
+              var name = (cb.name || cb.id || '').toLowerCase();
+
+              var isSaveCard =
+                text.includes('keep') ||
+                text.includes('save') ||
+                text.includes('file') ||
+                name.includes('save') ||
+                name.includes('keep') ||
+                checkboxes.length === 1;
+
+              if (isSaveCard) {
+                if (!cb.checked) {
+                  // Trigger genuine click event on unchecked box so React captures it and sets state (ez = true)
+                  cb.click();
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Run check immediately and keep safety interval
+        ensureSaveCardChecked();
+        setInterval(ensureSaveCardChecked, 400);
+      })();
+      true;
+    `;
+  }, [isSaveCardOnly]);
+
   return (
     <Modal
       visible={visible}
@@ -328,32 +371,34 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
         </View>
 
         {/* Help Banner for Saving Cards */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: "#F0FDF4",
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderColor: "#BBF7D0",
-            gap: 8,
-          }}
-        >
-          <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-          <Text
+        {isSaveCardOnly && (
+          <View
             style={{
-              flex: 1,
-              fontSize: 12,
-              color: "#166534",
-              fontWeight: "600",
-              lineHeight: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#F0FDF4",
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderBottomWidth: 1,
+              borderColor: "#BBF7D0",
+              gap: 8,
             }}
           >
-            Please ensure "Keep my card on file" is checked below to securely
-            save your card.
-          </Text>
-        </View>
+            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 12,
+                color: "#166534",
+                fontWeight: "600",
+                lineHeight: 16,
+              }}
+            >
+              "Keep my card on file" is automatically checked for you to securely
+              save your card.
+            </Text>
+          </View>
+        )}
 
         {/* WebView container */}
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -396,6 +441,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
 
           <WebView
             source={webViewSource}
+            injectedJavaScript={injectedSaveCardScript}
             onLoadStart={() => {
               if (!hasLoadedInitialRef.current) {
                 setInitialLoading(true);

@@ -76,6 +76,7 @@ export const ENDPOINTS = {
     RESET_PACKAGE_ITEM: "api/order/package/reset-item",
     CONFIRM_PACKAGE_REVIEW: "api/order/package/confirm-review",
     CONFIRM_ORDER: "api/order/confirm-order",
+    PAY_REMINDER_ORDER: "api/order/pay-reminder-order",
     GET_DELIVERED_ORDERS_TOTAL: "api/order/delivered-total/:userId",
     CANCEL_ORDER: "api/order/package/cancel-order",
     CANCEL_ORDER_BEFORE_CONFIRM: "/api/order/package/cancel-before-confirm",
