@@ -31,6 +31,7 @@ function withCustomAndroidPermissions(config) {
       "android.permission.SYSTEM_ALERT_WINDOW",
       "android.permission.CALL_PHONE",
       "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+      "android.permission.FOREGROUND_SERVICE",
       "android.permission.BLUETOOTH",
       "android.permission.BLUETOOTH_ADMIN",
       "android.permission.BLUETOOTH_SCAN",
@@ -65,6 +66,57 @@ function withCustomAndroidPermissions(config) {
           $: {
             "android:name": permName,
             "tools:node": "remove",
+          },
+        });
+      }
+    }
+
+    // 3. Mark non-essential hardware features as optional (android:required="false")
+    // Fixes Google Play Console review blockers (same as SalesDash project):
+    // - "android.hardware.screen.portrait affects Phone, Tablet, Desktop, and Android XR users"
+    // - "android.hardware.wifi affects Phone, Tablet, Desktop, and Android XR users"
+    // Also marks camera, location, audio, touchscreen, bluetooth features as optional for maximum device compatibility.
+    const optionalFeatures = [
+      "android.hardware.screen.portrait",
+      "android.hardware.screen.landscape",
+      "android.hardware.wifi",
+      "android.hardware.telephony",
+      "android.hardware.camera",
+      "android.hardware.camera.autofocus",
+      "android.hardware.camera.front",
+      "android.hardware.camera.any",
+      "android.hardware.camera.flash",
+      "android.hardware.location",
+      "android.hardware.location.gps",
+      "android.hardware.location.network",
+      "android.hardware.microphone",
+      "android.hardware.audio.output",
+      "android.hardware.touchscreen",
+      "android.hardware.faketouch",
+      "android.hardware.bluetooth",
+      "android.hardware.fingerprint",
+      "android.hardware.biometrics",
+    ];
+
+    if (!Array.isArray(androidManifest["uses-feature"])) {
+      androidManifest["uses-feature"] = [];
+    }
+
+    for (const feature of optionalFeatures) {
+      const existing = androidManifest["uses-feature"].find(
+        (f) => f?.$?.["android:name"] === feature
+      );
+
+      if (existing) {
+        if (!existing.$) existing.$ = {};
+        existing.$["android:required"] = "false";
+        existing.$["tools:replace"] = "android:required";
+      } else {
+        androidManifest["uses-feature"].push({
+          $: {
+            "android:name": feature,
+            "android:required": "false",
+            "tools:replace": "android:required",
           },
         });
       }

@@ -189,6 +189,17 @@ class OrderService {
         return apiClient.post(ENDPOINTS.ORDER.CONFIRM_ORDER, payload, { headers });
     }
 
+    async payReminderOrder(payload: {
+        orderId?: number | string;
+        processOrderId?: number | string;
+        amount?: number;
+        moneyPaid?: number;
+        isPaid?: number | boolean;
+    }) {
+        const headers = await getAuthHeader();
+        return apiClient.post(ENDPOINTS.ORDER.PAY_REMINDER_ORDER, payload, { headers });
+    }
+
     async cancelOrder(payload: {
         orderId?: number | string;
         processOrderId?: number | string;

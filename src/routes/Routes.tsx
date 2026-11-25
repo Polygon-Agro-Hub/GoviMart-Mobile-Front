@@ -15,6 +15,7 @@ import ChooseAuth from "@/screens/common/auth/ChooseAuth";
 import Login from "@/screens/common/auth/SignInScreen";
 import SignUp from "@/screens/common/auth/SignUpScreen";
 import PrivacyPolicy from "@/screens/common/privacy-policy/PrivacyPolicyScreen";
+import TermsConditions from "@/screens/common/privacy-policy/TermsConditionsScreen";
 import SignUpOTP from "@/screens/common/auth/SignUpOTPScreen";
 import UpdatePassword from "@/screens/common/auth/UpdatePasswordScreen";
 import ForgotPassword from "@/screens/common/auth/ForgotPasswordScreen";
@@ -42,6 +43,7 @@ import CheckoutScreen from "@/screens/common/checkout/CheckoutScreen";
 import ScheduleOrder from "@/screens/common/checkout/ScheduleOrderScreen";
 import PaymentMethod from "@/screens/common/payment/PaymentMethodScreen";
 import PaymentScreen from "@/screens/common/payment/PaymentScreen";
+import PlaceMyOrderCard from "@/screens/common/payment/PlaceMyOrderCardScreen";
 import OrderDeliveryMethod from "@/screens/common/locations/OrderDeliveryMethodScreen";
 import OrderConfirmed from "@/screens/common/order/OrderConfirmedScreen";
 import OrderConfirmation from "@/screens/common/order/OrderConfirmed";
@@ -179,6 +181,7 @@ export const PUBLIC_STACK_SCREENS: StackRouteConfig[] = [
   { name: "Login", component: Login, allowedRoles: "PUBLIC" },
   { name: "SignUp", component: SignUp, allowedRoles: "PUBLIC" },
   { name: "PrivacyPolicy", component: PrivacyPolicy, allowedRoles: "PUBLIC" },
+  { name: "TermsConditions", component: TermsConditions, allowedRoles: "PUBLIC" },
   { name: "SignUpOTP", component: SignUpOTP, allowedRoles: "PUBLIC" },
   { name: "UpdatePassword", component: UpdatePassword, allowedRoles: "PUBLIC" },
   { name: "ForgotPassword", component: ForgotPassword, allowedRoles: "PUBLIC" },
@@ -207,6 +210,7 @@ export const CUSTOMER_STACK_SCREENS: StackRouteConfig[] = [
   { name: "CheckoutScreen", component: CheckoutScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "ScheduleOrder", component: ScheduleOrder, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "PaymentMethod", component: PaymentMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
+  { name: "PlaceMyOrderCard", component: PlaceMyOrderCard, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "PaymentScreen", component: PaymentScreen, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderDeliveryMethod", component: OrderDeliveryMethod, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },
   { name: "OrderConfirmed", component: OrderConfirmed, allowedRoles: [ROLES.RETAIL, ROLES.WHOLESALE] },

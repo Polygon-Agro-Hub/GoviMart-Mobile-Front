@@ -1706,7 +1706,7 @@ const SignUp: React.FC<SignUpProps> = ({ navigation, route }) => {
                 I agree to the{" "}
                 <Text
                   className="font-bold underline"
-                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                  onPress={() => navigation.navigate("TermsConditions")}
                 >
                   Terms & Conditions
                 </Text>{" "}

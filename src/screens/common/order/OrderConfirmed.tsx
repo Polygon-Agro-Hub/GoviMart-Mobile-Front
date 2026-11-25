@@ -722,44 +722,24 @@ const OrderConfirmation: React.FC<Props> = ({ navigation, route }) => {
         ? `Polygon Order Price Difference - ${invoiceNo}`
         : `Polygon Order Payment - ${invoiceNo}`;
 
+      // If user has a saved card, go to "PlaceMyOrderCard" selection screen
+      if (savedCard) {
+        setSubmitting(null);
+        navigation.navigate("PlaceMyOrderCard", {
+          flowType: "order_confirmation",
+          paymentAmount: gatewayAmount,
+          totalAmount: liveTotal || gatewayAmount,
+          savedCard,
+          reviewPayload: confirmPayload,
+          invoiceNumber: invoiceNo,
+        });
+        return;
+      }
+
       try {
         const adapter = PaymentGatewayFactory.getAdapter(activeGateway as any);
 
-        // 1-Click Saved Card attempt first
-        if (savedCard && adapter.chargeSavedCard) {
-          try {
-            const chargeRes = await adapter.chargeSavedCard({
-              cardId: savedCard.id,
-              amount: gatewayAmount,
-              paymentType: "order",
-              orderId: String(processOrderId || effectiveOrderId),
-              itemsDescription: description,
-            });
-            if (chargeRes.success) {
-              await handlePaymentSuccess(confirmPayload);
-              return;
-            }
-          } catch (chargeErr: any) {
-            const isInvalid =
-              chargeErr?.response?.data?.cardInvalid ||
-              chargeErr?.message?.includes("invalid") ||
-              chargeErr?.message?.includes("expired") ||
-              chargeErr?.message?.includes("No such object");
-            if (!isInvalid) {
-              setSubmitting(null);
-              Alert.alert(
-                "Payment Error",
-                chargeErr?.response?.data?.message ||
-                  chargeErr?.message ||
-                  "Payment failed. Please try again.",
-              );
-              return;
-            }
-            setSavedCard(null); // Fallback to hosted checkout modal
-          }
-        }
-
-        // Hosted Checkout Modal
+        // Hosted Checkout Modal (no saved card)
         const session = await adapter.initiatePayment({
           orderId: String(processOrderId || effectiveOrderId),
           amount: gatewayAmount,
