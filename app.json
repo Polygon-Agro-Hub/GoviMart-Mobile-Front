@@ -10,7 +10,7 @@
     "android": {
       "package": "com.polygonagro.Polygon",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 4,
+      "versionCode": 55,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/public/app-icon-android.png",
@@ -24,8 +24,7 @@
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.FOREGROUND_SERVICE"
+        "android.permission.RECEIVE_BOOT_COMPLETED"
       ],
       "blockedPermissions": [
         "com.google.android.gms.permission.AD_ID",
@@ -42,6 +41,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.FOREGROUND_SERVICE",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_SCAN",
@@ -61,9 +61,6 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        },
         "NSCameraUsageDescription": "Camera access is required to take profile photos and capture images.",
         "NSPhotoLibraryUsageDescription": "Photo library access is required to upload profile and complaint images.",
         "NSPhotoLibraryAddUsageDescription": "Photo library access is required to save related images.",
