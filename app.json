@@ -118,12 +118,13 @@
         }
       ],
       "./plugins/withCustomAndroidPermissions",
+      "./plugins/withRemoveScreenOrientation",
       "expo-asset",
       "expo-sharing"
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "005cddc4-ac69-436c-ba45-b94721b1603f"
       }
     }
   }
