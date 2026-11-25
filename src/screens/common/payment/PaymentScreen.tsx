@@ -531,8 +531,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           isTimeout
             ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
             : orderErr?.response?.data?.message ||
-              orderErr?.message ||
-              "Payment received, but there was an issue finalizing your order."
+            orderErr?.message ||
+            "Payment received, but there was an issue finalizing your order."
         );
       } finally {
         setLoading(false);
@@ -630,8 +630,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   {isClearBalanceFlow
                     ? "Total Negative Polygon Wallet"
                     : isExistingOrderPayFlow
-                    ? "Payable Balance"
-                    : "Order Total"}
+                      ? "Payable Balance"
+                      : "Order Total"}
                 </Text>
                 <Text
                   style={{
@@ -1010,43 +1010,7 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 </View>
 
-                {/* Save card checkbox for new card */}
-                {selectedPaymentOption === "new_card" && (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setSaveCardForFuture(!saveCardForFuture)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginTop: 12,
-                      paddingTop: 10,
-                      paddingRight:5,
-                      borderTopWidth: 1,
-                      borderColor: "#F1F5F9",
-                      paddingLeft: 32,
-                    }}
-                  >
-                    <Ionicons
-                      name={
-                        saveCardForFuture
-                          ? "checkbox"
-                          : "square-outline"
-                      }
-                      size={20}
-                      color={saveCardForFuture ? "#FF7A00" : "#94A3B8"}
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: "600",
-                        color: "#334155",
-                      }}
-                    >
-                      Save card securely for 1-click checkout
-                    </Text>
-                  </TouchableOpacity>
-                )}
+
               </TouchableOpacity>
             </View>
 
@@ -1182,8 +1146,8 @@ const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
           alertType === "success" && isClearBalanceFlow
             ? "Back to Profile"
             : alertType === "success" && isExistingOrderPayFlow
-            ? "Back to Notifications"
-            : "OK"
+              ? "Back to Notifications"
+              : "OK"
         }
       />
 
