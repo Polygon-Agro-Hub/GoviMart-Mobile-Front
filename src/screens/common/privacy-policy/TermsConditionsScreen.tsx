@@ -6,12 +6,10 @@ import {
   TouchableOpacity,
   Linking,
   StatusBar,
-  StyleSheet,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "@/types/types";
-import CustomHeader from "@/component/common/CustomHeader";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome } from "@expo/vector-icons";
 
 type TermsConditionsNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -22,27 +20,12 @@ interface TermsConditionsProps {
   navigation: TermsConditionsNavigationProp;
 }
 
-/* ----------------------------- Theme ----------------------------- */
-const COLORS = {
-  primary: "#1E3A8A",
-  text: "#374151",
-  heading: "#111827",
-  cardBg: "#F3F6FF",
-  cardBorder: "#E2E8F8",
-  badgeBg: "#DCFCE7",
-  badgeText: "#15803D",
-  noteBg: "#ECFDF5",
-  noteBorder: "#BBF7D0",
-  noteTitle: "#166534",
-  white: "#FFFFFF",
-};
-
 /* ----------------------------- Types ----------------------------- */
 type Block = {
   title?: string;
   body?: string;
   bullets?: { bold: string; text: string }[];
-  note?: { title: string; body: string };
+  note?: { title: string; body: string; highlight?: string };
 };
 
 type Section = {
@@ -58,22 +41,22 @@ const SECTIONS: Section[] = [
     number: "01",
     title: "Definitions",
     intro:
-      'In these Terms, the following capitalized terms have the meanings set forth below:',
+      "In these Terms, the following capitalized terms have the meanings set forth below:",
     blocks: [
       {
-        title: '"App"',
+        title: "“App”",
         body: "Refers to the Polygon mobile software application made available via iOS App Store and other authorized platforms.",
       },
       {
-        title: '"User, you, or your"',
+        title: "“User, you, or your”",
         body: "Refers to any registered individual or business entity that browses, orders, or interacts through the App.",
       },
       {
-        title: '"Products"',
+        title: "“Products”",
         body: "Refers to fresh vegetables, farm fruits, essentials, curated subscription boxes, and packaged goods sold via the platform.",
       },
       {
-        title: '"Polygon Wallet"',
+        title: "“Polygon Wallet”",
         body: "An integrated in-app stored value system enabling instant refunds, loyalty credits, and seamless checkout payments.",
       },
     ],
@@ -118,8 +101,10 @@ const SECTIONS: Section[] = [
       },
       {
         note: {
-          title: "Please Note:",
-          body: "As stated inside the App: You must carefully select your current city during your first order, as you will not be able to change it until after your first successful delivery.",
+          title: "Please Note :",
+          body: "As stated inside the App: You must carefully select your current city during your first order, ",
+          highlight:
+            "as you will not be able to change it until after your first successful delivery.",
         },
       },
     ],
@@ -246,7 +231,7 @@ const SECTIONS: Section[] = [
       },
       {
         title: "9.2 Disclaimer of Warranties",
-        body: 'The App and products are provided "as is" without warranties of uninterrupted service or error-free availability.',
+        body: "The App and products are provided “as is” without warranties of uninterrupted service or error-free availability.",
       },
       {
         title: "9.3 Limitation of Liability",
@@ -288,40 +273,86 @@ const SectionHeader: React.FC<{ number: string; title: string }> = ({
   number,
   title,
 }) => (
-  <View style={styles.sectionHeader}>
-    <View style={styles.badge}>
-      <Text style={styles.badgeText}>{number}</Text>
+  <View className="flex-row items-center mb-2">
+    <View className="bg-[#DCFCE7] rounded-full w-6 h-6 items-center justify-center mr-2.5">
+      <Text className="text-[#15803D] text-[10px] font-bold">{number}</Text>
     </View>
-    <Text style={styles.sectionTitle}>{title}</Text>
+    <Text className="flex-1 text-base font-bold text-[#111C2D]">{title}</Text>
   </View>
 );
 
+/* Outer container — fill #EEF3FF @ 80%, no border, radius 16, padding 14, gap 10 */
+const CardContainer: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
+  <View
+    className="rounded-2xl"
+    style={{
+      backgroundColor: "rgba(238, 243, 255, 0.8)",
+      padding: 14,
+      gap: 10,
+    }}
+  >
+    {children}
+  </View>
+);
+
+/* Inner white card */
 const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
   if (block.note) {
     return (
-      <View style={styles.noteBox}>
-        <View style={styles.noteHeader}>
-          <Ionicons
-            name="information-circle"
-            size={16}
-            color={COLORS.noteTitle}
-          />
-          <Text style={styles.noteTitle}>{block.note.title}</Text>
+      <View className="bg-[#E9F9EF] border border-[#BBF0CF] rounded-xl p-3.5 flex-row items-start">
+        <Ionicons
+          name="information-circle"
+          size={16}
+          color="#166534"
+          style={{ marginTop: 1 }}
+        />
+        <View className="flex-1 ml-2">
+          <Text className="text-xs font-bold text-[#10B981] mb-1.5">
+            {block.note.title}
+          </Text>
+          <Text className="text-xs font-semibold text-[#166534] leading-5">
+            {block.note.body}
+            {block.note.highlight ? (
+              <Text className="font-bold underline">
+                {block.note.highlight}
+              </Text>
+            ) : null}
+          </Text>
         </View>
-        <Text style={styles.noteBody}>{block.note.body}</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.card}>
-      {block.title ? <Text style={styles.cardTitle}>{block.title}</Text> : null}
-      {block.body ? <Text style={styles.cardBody}>{block.body}</Text> : null}
+    <View
+      className="bg-white rounded-xl p-3.5"
+      style={{
+        shadowColor: "#1E3A8A",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+        elevation: 1,
+      }}
+    >
+      {block.title ? (
+        <Text className="text-[13px] font-bold text-[#111C2D] mb-1">
+          {block.title}
+        </Text>
+      ) : null}
+
+      {block.body ? (
+        <Text className="text-xs text-[#494A65] font-medium leading-[18px]">
+          {block.body}
+        </Text>
+      ) : null}
+
       {block.bullets?.map((b, i) => (
-        <View key={i} style={styles.bulletRow}>
-          <Text style={styles.bulletDot}>•</Text>
-          <Text style={styles.cardBody}>
-            <Text style={styles.bold}>{b.bold}</Text>
+        <View key={i} className="flex-row items-start mt-1">
+          <Text className="text-xs text-[#494A65] leading-[18px] mr-2">•</Text>
+          <Text className="flex-1 text-xs text-[#494A65] font-medium leading-[18px]">
+            <Text className="text-[#111C2D] font-bold">{b.bold}</Text>
             {b.text}
           </Text>
         </View>
@@ -343,48 +374,58 @@ const TermsConditionsScreen: React.FC<TermsConditionsProps> = ({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <View className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-    
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+        className="flex-1 bg-white"
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingBottom: 40,
           paddingTop: 8,
         }}
       >
-        {/* Intro card */}
-        <View style={styles.introCard}>
-          <Text style={styles.mainTitle}>Terms & Conditions for Polygon</Text>
+        {/* Intro Card */}
+        <View className="bg-[#EEF3FF] border border-[#E4EBF2] rounded-2xl p-4 mb-5">
+          <Text className="text-3xl font-bold text-[#111C2D] mb-3">
+            Terms & Conditions for Polygon
+          </Text>
 
-          <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.dateText}>
-              <Text style={styles.bold}>Effective Date : </Text>September 22,
-              2026
-            </Text>
-          </View>
-          <View style={styles.dateRow}>
-            <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.dateText}>
-              <Text style={styles.bold}>Last Updated : </Text>September 22, 2026
-            </Text>
+          {/* Date Pills */}
+          <View className="flex-row flex-wrap mb-3">
+            <View className="flex-row items-center bg-white rounded-full px-3 py-1.5 mr-2 mb-2">
+              <Ionicons name="calendar-outline" size={14} color="#1E3A8A" />
+              <Text className="text-xs text-[#494A65] font-medium ml-1.5">
+                <Text className="font-bold text-[#494A65]">
+                  Effective Date :{" "}
+                </Text>
+                September 22, 2026
+              </Text>
+            </View>
+
+            <View className="flex-row items-center bg-white rounded-full px-3 py-1.5 mb-2">
+              <Ionicons name="calendar-outline" size={14} color="#1E3A8A" />
+              <Text className="text-xs text-[#494A65] font-medium ml-1.5">
+                <Text className="font-bold text-[#494A65]">
+                  Last Updated :{" "}
+                </Text>
+                September 22, 2026
+              </Text>
+            </View>
           </View>
 
-          <Text style={[styles.cardBody, styles.introSpacing]}>
+          <Text className="text-[11px] text-black font-medium leading-5 mb-2.5">
             Welcome to Polygon. These Terms and Conditions ("Terms") govern your
             access to and use of the Polygon mobile application (the "App") and
             the services provided through it (collectively, the "Services").
           </Text>
-          <Text style={[styles.cardBody, styles.introSpacing]}>
+          <Text className="text-[11px] text-black font-medium leading-5 mb-2.5">
             The App and Services are operated by Polygon Holdings (Pvt) Ltd
             ("Polygon," "we," "us," or "our"), located at No. 46/42, Nawam
             Mawatha, Colombo 02, Sri Lanka.
           </Text>
-          <Text style={[styles.cardBody, styles.introSpacing]}>
+          <Text className="text-[11px] text-black font-medium leading-5">
             By registering for an account, accessing, or using the App, you
             agree to be bound by these Terms. If you do not agree to these
             Terms, you must not use the App. Your use of the App is also
@@ -393,200 +434,81 @@ const TermsConditionsScreen: React.FC<TermsConditionsProps> = ({
           </Text>
         </View>
 
-        {/* Sections */}
+        {/* Sections 01 - 11 */}
         {SECTIONS.map((section) => (
-          <View key={section.number} style={styles.section}>
+          <View key={section.number} className="mb-6">
             <SectionHeader number={section.number} title={section.title} />
             {section.intro ? (
-              <Text style={styles.sectionIntro}>{section.intro}</Text>
+              <Text className="text-[13px] text-[#494A65] font-medium leading-5 mb-3">
+                {section.intro}
+              </Text>
             ) : null}
-            {section.blocks.map((block, idx) => (
-              <BlockCard key={idx} block={block} />
-            ))}
+
+            <CardContainer>
+              {section.blocks.map((block, idx) => (
+                <BlockCard key={idx} block={block} />
+              ))}
+            </CardContainer>
           </View>
         ))}
 
         {/* 12 Contact Us */}
-        <View style={styles.section}>
+        <View className="mb-6">
           <SectionHeader number="12" title="Contact Us" />
-          <Text style={styles.sectionIntro}>
+          <Text className="text-[13px] text-[#494A65] font-medium leading-5 mb-3">
             If you have questions, feedback, or legal inquiries regarding these
             Terms and Conditions, please contact us at:
           </Text>
 
-          <View style={styles.contactRow}>
-            <TouchableOpacity
-              style={styles.emailButton}
-              onPress={handleEmailPress}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="mail-outline" size={16} color={COLORS.white} />
-              <Text style={styles.emailText}>info@polygon.lk</Text>
-            </TouchableOpacity>
+        
+            <View className="flex-row">
+              {/* Email Button */}
+              <TouchableOpacity
+                onPress={handleEmailPress}
+                activeOpacity={0.8}
+                className="bg-black rounded-xl flex-1 py-3.5 px-3 flex-row items-center justify-center mr-2"
+              >
+                <Ionicons name="mail-outline" size={16} color="white" />
+                <Text className="text-white font-semibold text-xs ml-2">
+                  info@polygon.lk
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.phoneButton}
-              onPress={handlePhonePress}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="call-outline" size={16} color={COLORS.heading} />
-              <Text style={styles.phoneText}>011 431 3433</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Phone Button */}
+              <TouchableOpacity
+                onPress={handlePhonePress}
+                activeOpacity={0.8}
+                className="bg-white rounded-xl flex-1 py-3.5 px-3 flex-row items-center justify-center"
+              >
+                <Ionicons name="call-outline" size={16} color="black" />
+                <Text className="text-black font-semibold text-xs ml-2">
+                  011 431 3433
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.officeRow}>
-            <Ionicons name="location-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.officeText}>
-              <Text style={styles.bold}>Physical Office:{"\n"}</Text>
-              No. 46/42, Nawam Mawatha, Colombo 02, Sri Lanka
-            </Text>
-          </View>
+            {/* Physical Office Card */}
+            <View className="bg-white rounded-xl p-3.5 flex-row mt-3 items-start">
+              <FontAwesome
+                name="building"
+                size={20}
+                color="black"
+                style={{ marginTop: 2 }}
+              />
+              <View className="ml-3 flex-1">
+                <Text className="text-xs text-[#64748B] font-medium">
+                  Physical Office
+                </Text>
+                <Text className="text-xs text-[#111C2D]  mt-0.5 leading-5">
+                  No. 46/42, Nawam Mawatha, Colombo 02, Sri Lanka
+                </Text>
+              </View>
+            </View>
+          
         </View>
       </ScrollView>
     </View>
   );
 };
-
-/* ----------------------------- Styles ----------------------------- */
-const styles = StyleSheet.create({
-  introCard: {
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  mainTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: COLORS.primary,
-    marginBottom: 12,
-  },
-  dateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
-  },
-  dateText: { fontSize: 13, color: COLORS.text },
-  introSpacing: { marginTop: 10 },
-
-  section: { marginBottom: 24 },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-  badge: {
-    backgroundColor: COLORS.badgeBg,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeText: { fontSize: 12, fontWeight: "700", color: COLORS.badgeText },
-  sectionTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: "700",
-    color: COLORS.heading,
-  },
-  sectionIntro: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-
-  card: {
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.heading,
-    marginBottom: 6,
-  },
-  cardBody: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 20,
-    color: COLORS.text,
-  },
-  bold: { fontWeight: "700", color: COLORS.heading },
-
-  bulletRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    marginTop: 4,
-  },
-  bulletDot: { fontSize: 14, lineHeight: 20, color: COLORS.primary },
-
-  noteBox: {
-    backgroundColor: COLORS.noteBg,
-    borderWidth: 1,
-    borderColor: COLORS.noteBorder,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-  },
-  noteHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
-  },
-  noteTitle: { fontSize: 13, fontWeight: "700", color: COLORS.noteTitle },
-  noteBody: {
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: "600",
-    color: COLORS.noteTitle,
-  },
-
-  contactRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16,
-  },
-  emailButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: COLORS.heading,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  emailText: { color: COLORS.white, fontSize: 13, fontWeight: "600" },
-  phoneButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-  },
-  phoneText: { color: COLORS.heading, fontSize: 13, fontWeight: "600" },
-
-  officeRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    borderRadius: 14,
-    padding: 14,
-  },
-  officeText: { flex: 1, fontSize: 13, lineHeight: 20, color: COLORS.text },
-});
 
 export default TermsConditionsScreen;
