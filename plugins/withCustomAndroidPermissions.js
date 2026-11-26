@@ -31,6 +31,7 @@ function withCustomAndroidPermissions(config) {
       "android.permission.SYSTEM_ALERT_WINDOW",
       "android.permission.CALL_PHONE",
       "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+      "android.permission.FOREGROUND_SERVICE",
       "android.permission.BLUETOOTH",
       "android.permission.BLUETOOTH_ADMIN",
       "android.permission.BLUETOOTH_SCAN",
@@ -71,18 +72,30 @@ function withCustomAndroidPermissions(config) {
     }
 
     // 3. Mark non-essential hardware features as optional (android:required="false")
-    // Fixes Google Play Console review blockers:
+    // Fixes Google Play Console review blockers (same as SalesDash project):
     // - "android.hardware.screen.portrait affects Phone, Tablet, Desktop, and Android XR users"
     // - "android.hardware.wifi affects Phone, Tablet, Desktop, and Android XR users"
-    // Also marks camera and location features as optional for maximum device compatibility.
+    // Also marks camera, location, audio, touchscreen, bluetooth features as optional for maximum device compatibility.
     const optionalFeatures = [
       "android.hardware.screen.portrait",
+      "android.hardware.screen.landscape",
       "android.hardware.wifi",
+      "android.hardware.telephony",
       "android.hardware.camera",
       "android.hardware.camera.autofocus",
+      "android.hardware.camera.front",
+      "android.hardware.camera.any",
+      "android.hardware.camera.flash",
       "android.hardware.location",
       "android.hardware.location.gps",
       "android.hardware.location.network",
+      "android.hardware.microphone",
+      "android.hardware.audio.output",
+      "android.hardware.touchscreen",
+      "android.hardware.faketouch",
+      "android.hardware.bluetooth",
+      "android.hardware.fingerprint",
+      "android.hardware.biometrics",
     ];
 
     if (!Array.isArray(androidManifest["uses-feature"])) {

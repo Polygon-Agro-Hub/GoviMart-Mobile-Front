@@ -14,6 +14,9 @@ import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { RootStackParamList } from "@/types/types";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import CustomHeader from "@/component/common/CustomHeader";
 import InfoNoticeCard from "@/component/common/InfoNoticeCard";
 import { SummaryRow } from "@/component/order/SummaryRow";
@@ -65,8 +68,29 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const OrderDetails: React.FC<Props> = ({ navigation, route }) => {
   const orderId = route.params?.orderId;
+  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
 
   const [order, setOrder] = useState<any>(null);
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCard = async () => {
+      try {
+        const uid = userProfile?.id || order?.customerId || order?.userId;
+        if (uid) {
+          const card = await cardStorageService.getSavedCard(uid);
+          if (isMounted) setSavedCard(card);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchCard();
+    return () => {
+      isMounted = false;
+    };
+  }, [userProfile?.id, order?.customerId, order?.userId]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);

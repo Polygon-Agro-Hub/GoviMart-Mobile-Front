@@ -61,12 +61,12 @@ const SaveCardInfoScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handlePaymentSuccess = async (orderId: string) => {
+  const handlePaymentSuccess = async (orderId: string, cardHolder?: string) => {
     setCheckoutModalVisible(false);
     try {
       if (checkoutSession?.sessionId) {
         const adapter = PaymentGatewayFactory.getGateway("payments_lk") as PaymentsLkAdapter;
-        await adapter.syncCheckout(checkoutSession.sessionId).catch(() => null);
+        await adapter.syncCheckout(checkoutSession.sessionId, cardHolder).catch(() => null);
       }
       await cardStorageService.getSavedCard(userId);
       Alert.alert(
@@ -449,6 +449,7 @@ const SaveCardInfoScreen: React.FC<Props> = ({ navigation }) => {
           checkoutUrl={checkoutSession.checkoutUrl}
           orderId={String(checkoutSession.orderId)}
           amount={checkoutSession.amount}
+          isSaveCardOnly={true}
           onSuccess={handlePaymentSuccess}
           onCancel={handlePaymentCancel}
           onClose={() => setCheckoutModalVisible(false)}
