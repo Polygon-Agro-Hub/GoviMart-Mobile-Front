@@ -628,10 +628,18 @@ const MyCart: React.FC<Props> = ({ navigation }) => {
     };
 
     if (packages.length > 0) {
-      navigation.navigate("PackageConfirmation", { orderContext });
-    } else {
-      navigation.navigate("OrderDeliveryMethod", { orderContext });
-    }
+  // Packages always use "Finalize Immediately", so the PackageConfirmation
+  // screen (Finalize / Review choice) is skipped.
+  navigation.navigate("OrderDeliveryMethod", {
+    orderContext: {
+      ...(orderContext as any),
+      isFinalizeImdt: 1,
+    },
+  });
+} else {
+  // À la carte only: no package option needed
+  navigation.navigate("OrderDeliveryMethod", { orderContext });
+}
   };
 
   return (

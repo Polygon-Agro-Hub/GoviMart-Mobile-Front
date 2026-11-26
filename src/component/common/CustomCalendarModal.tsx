@@ -12,22 +12,18 @@ interface CustomCalendarModalProps {
   title?: string;
   showPreparationNotice?: boolean;
   buyerType?: string;
-  /** true when the order contains only à la carte items (no packages) */
   alaCarteOnly?: boolean;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const CUTOFF_HOUR = 18; // 6:00 PM
+const CUTOFF_HOUR = 18; 
+
+
+export const CALENDAR_START_DATE = new Date(2026, 11, 12, 0, 0, 0, 0);
 
 export const isWholesaleBuyer = (buyerType?: string): boolean =>
   !!buyerType && buyerType.toLowerCase().includes("wholesale");
 
-/**
- * Required gap in days from today:
- *  Wholesale:             2 days (3 after 6 PM)
- *  Retail, à la carte:    2 days (3 after 6 PM)  -> today 23rd => 25th
- *  Retail, with packages: 3 days (4 after 6 PM)  -> today 23rd => 26th
- */
 export const getRequiredDays = (
   buyerType?: string,
   alaCarteOnly: boolean = false,
@@ -45,13 +41,29 @@ export const getMinDeliveryDate = (
   const now = new Date();
   const extraDays = getRequiredDays(buyerType, alaCarteOnly, now);
 
-  const minDate = new Date(
+  const calculated = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate() + extraDays
   );
-  minDate.setHours(0, 0, 0, 0);
-  return minDate;
+  calculated.setHours(0, 0, 0, 0);
+
+  return calculated;
+};
+
+/**
+ * Earliest date the user can actually pick in the calendar / recurring schedule:
+ * the real earliest date (getMinDeliveryDate) but never before CALENDAR_START_DATE.
+ * Use getMinDeliveryDate for the "true" earliest date (1st-order badge, checkout data).
+ */
+export const getSelectableMinDate = (
+  buyerType?: string,
+  alaCarteOnly: boolean = false
+): Date => {
+  const earliest = getMinDeliveryDate(buyerType, alaCarteOnly);
+  return earliest < CALENDAR_START_DATE
+    ? new Date(CALENDAR_START_DATE)
+    : earliest;
 };
 
 // Parses "YYYY/MM/DD" or "YYYY-MM-DD" as a LOCAL date (avoids UTC day-shift bugs)
@@ -85,19 +97,34 @@ export const validateDeliveryDate = (
 
   const minDate = minDeliveryDate
     ? new Date(minDeliveryDate)
-    : getMinDeliveryDate(buyerType, alaCarteOnly);
+    : getSelectableMinDate(buyerType, alaCarteOnly);
   minDate.setHours(0, 0, 0, 0);
 
-  if (selected < minDate) {
+  // Calendar start: nothing before this date can be selected
+  const floor = new Date(CALENDAR_START_DATE);
+  const effectiveMin = minDate < floor ? floor : minDate;
+
+  if (selected < effectiveMin) {
+    const monthNames = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    const minFormatted = `${monthNames[effectiveMin.getMonth()]} ${effectiveMin.getDate()}, ${effectiveMin.getFullYear()}`;
+
+    // Custom min date given -> "earliest date" message
     if (minDeliveryDate) {
-      const monthNames = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-      ];
-      const minFormatted = `${monthNames[minDate.getMonth()]} ${minDate.getDate()}, ${minDate.getFullYear()}`;
       return {
         isValid: false,
         error: `Earliest delivery date available is ${minFormatted}.`,
+      };
+    }
+
+    // Blocked only because the calendar has not opened yet (before Dec 12)
+    const gapDate = getMinDeliveryDate(buyerType, alaCarteOnly);
+    if (gapDate < CALENDAR_START_DATE) {
+      return {
+        isValid: false,
+        error: `Scheduling is available from ${minFormatted} onward.`,
       };
     }
 
@@ -144,21 +171,25 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   buyerType,
   alaCarteOnly = false,
 }) => {
-  // Recomputed every time the modal opens so the 6 PM cutoff is always current
-  const minDate = useMemo(
-    () => customMinDate || getMinDeliveryDate(buyerType, alaCarteOnly),
+  // Recomputed every time the modal opens so the 6 PM cutoff is always current.
+  // A custom minDate can never go below the calendar start.
+  const minDate = useMemo(() => {
+    const base = customMinDate
+      ? new Date(customMinDate)
+      : getSelectableMinDate(buyerType, alaCarteOnly);
+    base.setHours(0, 0, 0, 0);
+    return base < CALENDAR_START_DATE
+      ? new Date(CALENDAR_START_DATE)
+      : base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customMinDate, buyerType, alaCarteOnly, visible]
-  );
+  }, [customMinDate, buyerType, alaCarteOnly, visible]);
 
+  // Max date comes only from a package expiry date (customMaxDate).
+  // No expiry date -> no limit.
   const maxDate = useMemo(() => {
     if (customMaxDate) return customMaxDate;
-    const max = new Date();
-    max.setDate(max.getDate() + 60); // 60 days in advance
-    max.setHours(23, 59, 59, 999);
-    return max;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customMaxDate, visible]);
+    return new Date(2100, 11, 31, 23, 59, 59, 999);
+  }, [customMaxDate]);
 
   const shouldShowNotice =
     showPreparationNotice !== undefined ? showPreparationNotice : !customMinDate;
@@ -168,10 +199,6 @@ const CustomCalendarModal: React.FC<CustomCalendarModalProps> = ({
   const gapLabel = `${baseGap} ${baseGap === 1 ? "day" : "days"}`;
   const afterCutoffLabel = `${baseGap + 1} days`;
 
-  // Three scenarios:
-  //  1. Wholesale user                    -> Wholesale note (1 day / 2 after 6 PM)
-  //  2. Retail, à la carte items only     -> À la carte note (1 day / 2 after 6 PM)
-  //  3. Retail, packages (+/- à la carte) -> Package note (2 days / 3 after 6 PM)
   const noticePrefix = isWholesaleBuyer(buyerType)
     ? "Wholesale orders"
     : alaCarteOnly

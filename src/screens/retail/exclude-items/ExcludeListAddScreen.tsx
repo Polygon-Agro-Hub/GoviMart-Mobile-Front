@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   Text,
@@ -28,6 +34,10 @@ import { store } from "@/store";
 import { tokenStorage } from "@/utils/tokenStorage";
 import NeedHelpModal from "@/component/help/Needhelpmodal";
 
+const MAX_EXCLUDE_ITEMS = 5;
+const EXCLUDE_LIMIT_TITLE = "Selection Limit Reached!";
+const EXCLUDE_LIMIT_MESSAGE =
+  "You can select a maximum of 5 exclude items. Please deselect an item before selecting another.";
 
 const getEffectiveToken = async (): Promise<string | null> => {
   return (
@@ -150,6 +160,10 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   const [selectedIncludeCrops, setSelectedIncludeCrops] = useState<number[]>([]);
   const [selectedExcludeCrops, setSelectedExcludeCrops] = useState<number[]>([]);
 
+  // Always holds the latest exclude list so toggleExclude can stay stable
+  const selectedExcludeRef = useRef<number[]>([]);
+  selectedExcludeRef.current = selectedExcludeCrops;
+
   const [initialIncludeIds, setInitialIncludeIds] = useState<number[]>([]);
   const [initialExcludeIds, setInitialExcludeIds] = useState<number[]>([]);
 
@@ -185,6 +199,15 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   }, []);
 
   const toggleExclude = useCallback((cropId: number) => {
+    const currentExcluded = selectedExcludeRef.current;
+    const isAlreadyExcluded = currentExcluded.includes(cropId);
+
+    // Block selecting a 6th exclude item (deselecting is always allowed)
+    if (!isAlreadyExcluded && currentExcluded.length >= MAX_EXCLUDE_ITEMS) {
+      Alert.alert(EXCLUDE_LIMIT_TITLE, EXCLUDE_LIMIT_MESSAGE);
+      return;
+    }
+
     setSelectedIncludeCrops((prev) => prev.filter((id) => id !== cropId));
     setSelectedExcludeCrops((prev) =>
       prev.includes(cropId)
@@ -241,7 +264,10 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
 
       const token = await getEffectiveToken();
       if (!token) {
-        Alert.alert("Authentication Required", "Please log in to customize packages.");
+        Alert.alert(
+          "Authentication Required",
+          "Please log in to customize packages.",
+        );
         setCustomerDataLoading(false);
         setListLoading(false);
         navigation.navigate("ChooseAuth");
@@ -251,7 +277,7 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       try {
         const profileRes = await axios.get(
           `${environment.API_BASE_URL}api/customer/profile`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` } },
         );
         if (profileRes.data && profileRes.data.status) {
           setCustomerData(profileRes.data.data);
@@ -262,17 +288,17 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
 
       const suggestionsRes = await axios.get(
         `${environment.API_BASE_URL}api/customer/marketplace/suggestions`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       const excludedRes = await axios.get(
         `${environment.API_BASE_URL}api/customer/marketplace/excluded-items`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       const includedRes = await axios.get(
         `${environment.API_BASE_URL}api/customer/marketplace/include-items`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       const dbSuggestions = suggestionsRes.data.items || [];
@@ -294,12 +320,11 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       setSelectedExcludeCrops(excludedIds);
       setInitialIncludeIds(includedIds);
       setInitialExcludeIds(excludedIds);
-
     } catch (error: any) {
       console.error("Error loading crops and preferences:", error);
       Alert.alert(
         "Connection Error",
-        "Failed to connect to backend. Falling back to local data."
+        "Failed to connect to backend. Falling back to local data.",
       );
       setCrops([]);
       setFilteredCrops([]);
@@ -361,17 +386,33 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
   const handlesubmitexcludelist = async () => {
     if (!hasChanges || loading) return;
 
+    // Safety net: never submit more than the allowed number of excluded items
+    if (selectedExcludeCrops.length > MAX_EXCLUDE_ITEMS) {
+      Alert.alert(EXCLUDE_LIMIT_TITLE, EXCLUDE_LIMIT_MESSAGE);
+      return;
+    }
+
     setLoading(true);
     try {
       const token = await getEffectiveToken();
       if (token) {
-        const addedIncludes = selectedIncludeCrops.filter(id => !initialIncludeIds.includes(id));
-        const deletedIncludes = initialIncludeIds.filter(id => !selectedIncludeCrops.includes(id));
-        const addedExcludes = selectedExcludeCrops.filter(id => !initialExcludeIds.includes(id));
-        const deletedExcludes = initialExcludeIds.filter(id => !selectedExcludeCrops.includes(id));
+        const addedIncludes = selectedIncludeCrops.filter(
+          (id) => !initialIncludeIds.includes(id),
+        );
+        const deletedIncludes = initialIncludeIds.filter(
+          (id) => !selectedIncludeCrops.includes(id),
+        );
+        const addedExcludes = selectedExcludeCrops.filter(
+          (id) => !initialExcludeIds.includes(id),
+        );
+        const deletedExcludes = initialExcludeIds.filter(
+          (id) => !selectedExcludeCrops.includes(id),
+        );
 
         const getCropNames = (ids: number[]) => {
-          return crops.filter(c => ids.includes(c.id)).map(c => c.displayName);
+          return crops
+            .filter((c) => ids.includes(c.id))
+            .map((c) => c.displayName);
         };
 
         const addIncludeNames = getCropNames(addedIncludes);
@@ -382,23 +423,31 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
         const authHeaders = { Authorization: `Bearer ${token}` };
 
         if (addIncludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/add-include-items`,
-            { items: addIncludeNames }, { headers: authHeaders }
+          await axios.post(
+            `${environment.API_BASE_URL}api/customer/marketplace/add-include-items`,
+            { items: addIncludeNames },
+            { headers: authHeaders },
           );
         }
         if (delIncludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-included`,
-            { items: delIncludeNames }, { headers: authHeaders }
+          await axios.post(
+            `${environment.API_BASE_URL}api/customer/marketplace/delete-included`,
+            { items: delIncludeNames },
+            { headers: authHeaders },
           );
         }
         if (addExcludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/exclude-items`,
-            { items: addExcludeNames }, { headers: authHeaders }
+          await axios.post(
+            `${environment.API_BASE_URL}api/customer/marketplace/exclude-items`,
+            { items: addExcludeNames },
+            { headers: authHeaders },
           );
         }
         if (delExcludeNames.length > 0) {
-          await axios.post(`${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`,
-            { items: delExcludeNames }, { headers: authHeaders }
+          await axios.post(
+            `${environment.API_BASE_URL}api/customer/marketplace/delete-excluded`,
+            { items: delExcludeNames },
+            { headers: authHeaders },
           );
         }
       }
@@ -406,7 +455,10 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
       navigateAfterFinish();
     } catch (err: any) {
       console.error("Failed to submit excludelist changes:", err);
-      Alert.alert("Submission Error", "Failed to save excludelist preferences to backend.");
+      Alert.alert(
+        "Submission Error",
+        "Failed to save excludelist preferences to backend.",
+      );
     } finally {
       setLoading(false);
     }
@@ -622,8 +674,9 @@ const ExcludeListAdd: React.FC<ExcludeListAddProps> = ({
             onPress={handlesubmitexcludelist}
             disabled={saveDisabled}
             activeOpacity={0.8}
-            className={`rounded-full items-center justify-center h-[50px] w-full  ${saveDisabled && !loading ? "bg-[#8A9BA8]" : "bg-black"
-              }`}
+            className={`rounded-full items-center justify-center h-[50px] w-full  ${
+              saveDisabled && !loading ? "bg-[#8A9BA8]" : "bg-black"
+            }`}
             style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 3 },
