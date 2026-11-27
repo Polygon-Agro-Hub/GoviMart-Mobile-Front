@@ -62,6 +62,8 @@ type PaymentType = "cash" | "card";
 let paymentSessionEndTime: number | null = null;
 
 // ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
+// Retail alacarte-only orders: pay-by date = delivery - 2 (scheduled date minus 2 days)
+const ALACARTE_GAP_DAYS = 2;
 // Normal orders: pay-by date = delivery - 3 (18 -> 15)
 const NORMAL_GAP_DAYS = 3;
 // Wholesale orders: pay-by date = delivery - 2 (20 -> 18)
@@ -264,10 +266,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               total: check.orderData.total || pending.amount,
               couponValue: appliedCoupon?.discount || 0,
               orderContext: {
-          ...orderContext,
-          paymentMethod: "card",
-          savedCard: savedCard,
-        },
+                ...orderContext,
+                paymentMethod: "card",
+                savedCard: savedCard,
+              },
             });
           }
         }
@@ -342,9 +344,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const scheduledDate = getScheduledDeliveryDate();
     if (!scheduledDate) return false;
 
-    // 3. System Earliest Possible Schedule Date
+    const hasPkg =
+      (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
+    const alaCarteOnly = !hasPkg;
+
     const buyerType = userProfile?.buyerType || orderContext?.buyerType;
-    const sysEarliestDate = getMinDeliveryDate(buyerType);
+    const sysEarliestDate = getMinDeliveryDate(buyerType, alaCarteOnly);
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() === sysEarliestDate.getTime();
@@ -357,6 +362,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const hasPkg =
       (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
     const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
+    const alaCarteOnly = !hasPkg;
 
     const buyerType = userProfile?.buyerType || orderContext?.buyerType;
     const isWholesale = String(buyerType || "").toLowerCase() === "wholesale";
@@ -365,7 +371,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       ? PACKAGE_GAP_DAYS
       : isWholesale
         ? WHOLESALE_GAP_DAYS
-        : NORMAL_GAP_DAYS;
+        : alaCarteOnly
+          ? ALACARTE_GAP_DAYS
+          : NORMAL_GAP_DAYS;
     const due = new Date(scheduledDate);
     due.setDate(due.getDate() - offset);
 
@@ -707,10 +715,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             total: check.orderData.total || paymentAmount,
             couponValue: appliedCoupon?.discount || 0,
             orderContext: {
-          ...orderContext,
-          paymentMethod: "card",
-          savedCard: savedCard,
-        },
+              ...orderContext,
+              paymentMethod: "card",
+              savedCard: savedCard,
+            },
           });
           return;
         }
@@ -741,10 +749,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 total: statusCheck.orderData.total || paymentAmount,
                 couponValue: appliedCoupon?.discount || 0,
                 orderContext: {
-          ...orderContext,
-          paymentMethod: "card",
-          savedCard: savedCard,
-        },
+                  ...orderContext,
+                  paymentMethod: "card",
+                  savedCard: savedCard,
+                },
               });
             } else {
               Alert.alert(
@@ -769,8 +777,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert(
         "Order Processing Issue",
         err?.response?.data?.message ||
-          err?.message ||
-          "Payment was received, but there was an issue finalizing your order. Please contact customer support.",
+        err?.message ||
+        "Payment was received, but there was an issue finalizing your order. Please contact customer support.",
       );
     } finally {
       isCreatingOrderRef.current = false;
@@ -804,7 +812,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         } else if (payment.failure?.reason) {
           failureReason = payment.failure.reason;
         }
-      } catch {}
+      } catch { }
     }
 
     if (failureReason) {
@@ -949,10 +957,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             setSubmitting(false);
             navigation.navigate("PlaceMyOrderCard", {
               orderContext: {
-          ...orderContext,
-          paymentMethod: "card",
-          savedCard: savedCard,
-        },
+                ...orderContext,
+                paymentMethod: "card",
+                savedCard: savedCard,
+              },
               payload,
               paymentAmount,
               totalAmount,
@@ -996,8 +1004,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           Alert.alert(
             "Payment Failed",
             err?.response?.data?.message ||
-              err?.message ||
-              "Could not process card payment. Please try again or pay with cash.",
+            err?.message ||
+            "Could not process card payment. Please try again or pay with cash.",
           );
         } finally {
           setIsConfirming(false);
@@ -1099,8 +1107,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             isTimeout
               ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
               : err?.response?.data?.message ||
-                  err?.message ||
-                  "Could not place your order. Please try again.",
+              err?.message ||
+              "Could not place your order. Please try again.",
           );
         } finally {
           setIsConfirming(false);
@@ -1252,10 +1260,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             total: check.orderData.total || totalAmount,
             couponValue: couponVal,
             orderContext: {
-          ...orderContext,
-          paymentMethod: "card",
-          savedCard: savedCard,
-        },
+              ...orderContext,
+              paymentMethod: "card",
+              savedCard: savedCard,
+            },
           });
           return;
         }
@@ -1286,10 +1294,10 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 total: statusCheck.orderData.total || totalAmount,
                 couponValue: couponVal,
                 orderContext: {
-          ...orderContext,
-          paymentMethod: "card",
-          savedCard: savedCard,
-        },
+                  ...orderContext,
+                  paymentMethod: "card",
+                  savedCard: savedCard,
+                },
               });
             } else {
               Alert.alert(
@@ -1907,8 +1915,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         cartTotal={Math.max(
           0,
           (orderContext?.packageTotal || 0) +
-            (orderContext?.productTotal || 0) -
-            (orderContext?.discount || 0),
+          (orderContext?.productTotal || 0) -
+          (orderContext?.discount || 0),
         )}
         cartId={orderContext?.cartId}
       />
@@ -1996,8 +2004,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               }}
             >
               {paymentMethod === "card" &&
-              paymentAmount > 0 &&
-              (isEarliestDeliveryDate())
+                paymentAmount > 0 &&
+                (isEarliestDeliveryDate())
                 ? "Awaiting Payment..."
                 : "Confirming your order..."}
             </Text>

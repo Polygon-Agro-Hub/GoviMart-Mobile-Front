@@ -478,7 +478,17 @@ const TermsConditionsScreen: React.FC<TermsConditionsProps> = ({
               <TouchableOpacity
                 onPress={handlePhonePress}
                 activeOpacity={0.8}
-                className="bg-white rounded-xl flex-1 py-3.5 px-3 flex-row items-center justify-center"
+                className="bg-white border border-[#E4EBF2] rounded-xl flex-1 py-3.5 px-3 flex-row items-center justify-center shadow-sm"
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "#E4EBF2",
+                  borderWidth: 1,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 2,
+                  elevation: 2,
+                }}
               >
                 <Ionicons name="call-outline" size={16} color="black" />
                 <Text className="text-black font-semibold text-xs ml-2">
