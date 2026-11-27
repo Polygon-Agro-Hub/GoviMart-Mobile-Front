@@ -62,6 +62,8 @@ type PaymentType = "cash" | "card";
 let paymentSessionEndTime: number | null = null;
 
 // ─── PAYMENT DUE DATE HELPERS ───────────────────────────────────────────────
+// Retail alacarte-only orders: pay-by date = delivery - 2 (scheduled date minus 2 days)
+const ALACARTE_GAP_DAYS = 2;
 // Normal orders: pay-by date = delivery - 3 (18 -> 15)
 const NORMAL_GAP_DAYS = 3;
 // Wholesale orders: pay-by date = delivery - 2 (20 -> 18)
@@ -360,6 +362,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const hasPkg =
       (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
     const isPackageFlow = orderContext?.isFinalizeImdt !== 1 && hasPkg;
+    const alaCarteOnly = !hasPkg;
 
     const buyerType = userProfile?.buyerType || orderContext?.buyerType;
     const isWholesale = String(buyerType || "").toLowerCase() === "wholesale";
@@ -368,7 +371,9 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       ? PACKAGE_GAP_DAYS
       : isWholesale
         ? WHOLESALE_GAP_DAYS
-        : NORMAL_GAP_DAYS;
+        : alaCarteOnly
+          ? ALACARTE_GAP_DAYS
+          : NORMAL_GAP_DAYS;
     const due = new Date(scheduledDate);
     due.setDate(due.getDate() - offset);
 
