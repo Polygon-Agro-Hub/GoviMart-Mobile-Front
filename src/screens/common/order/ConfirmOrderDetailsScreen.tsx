@@ -16,6 +16,11 @@ import { SummaryRow } from "@/component/order/SummaryRow";
 import { PackageModal } from "@/component/order/PackageModal";
 import LoadingPage from "@/component/common/LoadingPage";
 import orderService from "@/services/order/order.service";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 
 type ConfirmOrderDetailsScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -111,8 +116,29 @@ const formatScheduleTime = (raw: any): string | null => {
 
 const ConfirmOrderDetailsScreen: React.FC<Props> = ({ navigation, route }) => {
   const orderId = route.params?.orderId;
+  const userProfile = useSelector((state: RootState) => state.auth?.userProfile);
 
   const [order, setOrder] = useState<any>(null);
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCard = async () => {
+      try {
+        const uid = userProfile?.id || order?.customerId || order?.userId;
+        if (uid) {
+          const card = await cardStorageService.getSavedCard(uid);
+          if (isMounted) setSavedCard(card);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchCard();
+    return () => {
+      isMounted = false;
+    };
+  }, [userProfile?.id, order?.customerId, order?.userId]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1724,7 +1750,11 @@ const serviceFee = isDashServiceFee
                   {/* Paid with Card: only money really received by card */}
                   {showCardRows && cardPaidAmount > 0 && (
                     <SummaryRow
-                      label="Paid with Card"
+                      label={
+                        savedCard?.last4
+                          ? `Paid with Card (•••• ${savedCard.last4})`
+                          : "Paid with Card"
+                      }
                       value={`Rs. ${formatAmount(cardPaidAmount)}`}
                       icon="credit-card"
                       iconColor="#0088FF"

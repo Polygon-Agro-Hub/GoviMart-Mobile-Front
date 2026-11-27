@@ -44,18 +44,18 @@ export interface CheckoutDetails {
 
 export interface OrderContext {
   cartId?: number;
-  grandTotal: number;
-  packageTotal: number;
-  productTotal: number;
-  discount: number;
+  grandTotal?: number;
+  packageTotal?: number;
+  productTotal?: number;
+  discount?: number;
   packages?: any[];
   additionalItems?: any[];
   deliveryCharge?: number;
   buyerType?: string;
   isFinalizeImdt?: number;
-  deliveryMethod?: "home" | "pickup";
+  deliveryMethod?: "home" | "pickup" | string;
   checkoutDetails?: CheckoutDetails;
-  paymentMethod?: "cash" | "card";
+  paymentMethod?: "cash" | "card" | string;
   creditPaid?: number;
   moneyPaid?: number;
   isCoupon?: boolean;
@@ -65,6 +65,7 @@ export interface OrderContext {
   couponCode?: string;
   isFreeDeliveryCoupon?: boolean;
   appliedCoupon?: any;
+  savedCard?: any;
 }
 
 export type RootStackParamList = {
@@ -106,6 +107,7 @@ export type RootStackParamList = {
   };
   SignUp: { nearestCity?: string; cityId?: number } | undefined;
   PrivacyPolicy: undefined;
+  TermsConditions:undefined;
   Home: undefined;
   SignUpOTP: {
     phoneCode: string;
@@ -154,12 +156,15 @@ export type RootStackParamList = {
   } | undefined;
   PlaceMyOrderCard: {
     orderContext?: OrderContext;
-    payload: any;
+    payload?: any;
     paymentAmount: number;
     totalAmount: number;
     couponVal?: number;
     savedCard: any;
     initialDeliveryCharge?: number;
+    flowType?: "checkout" | "review_package" | "order_confirmation";
+    reviewPayload?: any;
+    invoiceNumber?: string;
   };
   PaymentScreen: {
     amount?: number;

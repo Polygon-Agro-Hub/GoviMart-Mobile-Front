@@ -30,6 +30,8 @@ interface Props {
     city?: string;
     postcode?: string;
   };
+  /** If true, this checkout session is explicitly for saving a card (from Saved Cards flow) */
+  isSaveCardOnly?: boolean;
   onSuccess: (orderId: string, cardHolder?: string) => void;
   onCancel: (orderId: string) => void;
   onClose: () => void;
@@ -49,6 +51,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
   amount,
   sessionId,
   customerAddress,
+  isSaveCardOnly = false,
   onSuccess,
   onCancel,
   onClose,
@@ -260,6 +263,46 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
     };
   }, [checkoutUrl, postBody, htmlForm, domain]);
 
+  // Injected JavaScript: when isSaveCardOnly is true, automatically click and keep checked the "Keep my card on file" checkbox
+  const injectedSaveCardScript = useMemo(() => {
+    if (!isSaveCardOnly) return undefined;
+    return `
+      (function() {
+        function ensureSaveCardChecked() {
+          try {
+            var checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            for (var i = 0; i < checkboxes.length; i++) {
+              var cb = checkboxes[i];
+              var label = cb.closest('label') || document.querySelector('label[for="' + cb.id + '"]') || cb.parentElement;
+              var text = (label ? (label.innerText || label.textContent) : '').toLowerCase();
+              var name = (cb.name || cb.id || '').toLowerCase();
+
+              var isSaveCard =
+                text.includes('keep') ||
+                text.includes('save') ||
+                text.includes('file') ||
+                name.includes('save') ||
+                name.includes('keep') ||
+                checkboxes.length === 1;
+
+              if (isSaveCard) {
+                if (!cb.checked) {
+                  // Trigger genuine click event on unchecked box so React captures it and sets state (ez = true)
+                  cb.click();
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Run check immediately and keep safety interval
+        ensureSaveCardChecked();
+        setInterval(ensureSaveCardChecked, 400);
+      })();
+      true;
+    `;
+  }, [isSaveCardOnly]);
+
   return (
     <Modal
       visible={visible}
@@ -328,32 +371,34 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
         </View>
 
         {/* Help Banner for Saving Cards */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: "#F0FDF4",
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderColor: "#BBF7D0",
-            gap: 8,
-          }}
-        >
-          <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-          <Text
+        {isSaveCardOnly && (
+          <View
             style={{
-              flex: 1,
-              fontSize: 12,
-              color: "#166534",
-              fontWeight: "600",
-              lineHeight: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#F0FDF4",
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderBottomWidth: 1,
+              borderColor: "#BBF7D0",
+              gap: 8,
             }}
           >
-            Please ensure "Keep my card on file" is checked below to securely
-            save your card.
-          </Text>
-        </View>
+            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 12,
+                color: "#166534",
+                fontWeight: "600",
+                lineHeight: 16,
+              }}
+            >
+              "Keep my card on file" is automatically checked for you to securely
+              save your card.
+            </Text>
+          </View>
+        )}
 
         {/* WebView container */}
         <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -396,6 +441,7 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
 
           <WebView
             source={webViewSource}
+            injectedJavaScript={injectedSaveCardScript}
             onLoadStart={() => {
               if (!hasLoadedInitialRef.current) {
                 setInitialLoading(true);
@@ -415,173 +461,20 @@ export const PaymentCheckoutModal: React.FC<Props> = ({
                 }
               } catch {}
             }}
-            injectedJavaScript={`
-              (function() {
-                function postCardHolder(name) {
-                  if (!name) return;
-                  var trimmed = name.trim();
-                  if (trimmed.length >= 2 && window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'CARD_HOLDER',
-                      name: trimmed
-                    }));
-                  }
-                }
-
-                // Listen for cardholder input typing
-                document.addEventListener('input', function(e) {
-                  var t = e.target;
-                  if (!t) return;
-                  var isName = 
-                    t.autocomplete === 'cc-name' || 
-                    (t.name && (t.name.toLowerCase().includes('name') || t.name.toLowerCase().includes('holder'))) ||
-                    (t.placeholder && t.placeholder.toLowerCase().includes('name')) ||
-                    (t.id && (t.id.toLowerCase().includes('name') || t.id.toLowerCase().includes('holder')));
-                  if (isName && t.value) {
-                    postCardHolder(t.value);
-                  }
-                }, true);
-
-                document.addEventListener('change', function(e) {
-                  var t = e.target;
-                  if (!t) return;
-                  var isName = 
-                    t.autocomplete === 'cc-name' || 
-                    (t.name && (t.name.toLowerCase().includes('name') || t.name.toLowerCase().includes('holder'))) ||
-                    (t.placeholder && t.placeholder.toLowerCase().includes('name')) ||
-                    (t.id && (t.id.toLowerCase().includes('name') || t.id.toLowerCase().includes('holder')));
-                  if (isName && t.value) {
-                    postCardHolder(t.value);
-                  }
-                }, true);
-
-                function setNativeValue(element, value) {
-                  if (!element) return;
-                  var valueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
-                    ? Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-                    : null;
-                  if (valueSetter) {
-                    valueSetter.call(element, value);
-                  } else {
-                    element.value = value;
-                  }
-                  element.dispatchEvent(new Event('input', { bubbles: true }));
-                  element.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-
-                function setReactCheckbox(cb) {
-                  if (!cb) return;
-                  var label = cb.closest('label') || cb.parentElement;
-                  var labelText = label ? label.textContent.toLowerCase() : '';
-                  // Only target the save card checkbox - Payments.lk uses "keep my card on file"
-                  if (!labelText.includes('keep') && !labelText.includes('card') && !labelText.includes('file') && !labelText.includes('save')) {
-                    return;
-                  }
-
-                  // Visually highlight the checkbox container so it is clearly visible to the customer
-                  var highlightEl = cb.closest('label') || cb.parentElement;
-                  if (highlightEl && !highlightEl.dataset.styled) {
-                    highlightEl.dataset.styled = 'true';
-                    highlightEl.style.backgroundColor = '#F0FDF4';
-                    highlightEl.style.border = '2px solid #16A34A';
-                    highlightEl.style.borderRadius = '8px';
-                    highlightEl.style.padding = '8px 12px';
-                    highlightEl.style.marginTop = '4px';
-                    highlightEl.style.marginBottom = '4px';
-                    highlightEl.style.display = 'flex';
-                    highlightEl.style.alignItems = 'center';
-                  }
-
-                  // Check and fire React-compatible events if not already checked
-                  if (!cb.checked && !cb.dataset.autochecked) {
-                    cb.dataset.autochecked = 'true';
-                    // Method 1: Native click (works for most React checkboxes)
-                    cb.click();
-                    // Method 2: If still not checked, force via React internal setter + events
-                    setTimeout(function() {
-                      if (!cb.checked) {
-                        try {
-                          var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked');
-                          if (nativeInputValueSetter && nativeInputValueSetter.set) {
-                            nativeInputValueSetter.set.call(cb, true);
-                          } else {
-                            cb.checked = true;
-                          }
-                          cb.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                          cb.dispatchEvent(new Event('change', { bubbles: true }));
-                          cb.dispatchEvent(new Event('input', { bubbles: true }));
-                        } catch(e) {}
-                      }
-                    }, 100);
-                  }
-                }
-
-                function autofill() {
-                  // Check existing cardholder name on DOM
-                  var nameEl = document.querySelector('input[autocomplete="cc-name"]') ||
-                               document.querySelector('input[placeholder*="name" i]') ||
-                               document.querySelector('input[name*="name" i]') ||
-                               document.querySelector('input[name*="holder" i]');
-                  if (nameEl && nameEl.value) {
-                    postCardHolder(nameEl.value);
-                  }
-
-                  // 1. Street address
-                  var streetVal = ${JSON.stringify(customerAddress?.street || "")};
-                  if (streetVal) {
-                    var streetEl = document.querySelector('input[autocomplete="address-line1"]') ||
-                                   document.querySelector('input[id$="-street"]') ||
-                                   document.querySelector('input[placeholder*="street" i]');
-                    if (streetEl && (!streetEl.value || streetEl.value.trim() === '')) {
-                      setNativeValue(streetEl, streetVal);
-                    }
-                  }
-
-                  // 2. Town or city
-                  var cityVal = ${JSON.stringify(customerAddress?.city || "")};
-                  if (cityVal) {
-                    var cityEl = document.querySelector('input[autocomplete="address-level2"]') ||
-                                 document.querySelector('input[id$="-city"]') ||
-                                 document.querySelector('input[placeholder*="city" i]');
-                    if (cityEl && (!cityEl.value || cityEl.value.trim() === '')) {
-                      setNativeValue(cityEl, cityVal);
-                    }
-                  }
-
-                  // 3. Postal code
-                  var postcodeVal = ${JSON.stringify(customerAddress?.postcode || "")};
-                  if (postcodeVal) {
-                    var postcodeEl = document.querySelector('input[autocomplete="postal-code"]') ||
-                                     document.querySelector('input[id$="-postcode"]') ||
-                                     document.querySelector('input[placeholder*="postal" i]') ||
-                                     document.querySelector('input[placeholder="00600"]');
-                    if (postcodeEl && (!postcodeEl.value || postcodeEl.value.trim() === '')) {
-                      setNativeValue(postcodeEl, postcodeVal);
-                    }
-                  }
-
-                  // 4. "Keep my card on file" Checkbox
-                  var checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                  checkboxes.forEach(function(cb) {
-                    setReactCheckbox(cb);
-                  });
-                }
-
-                autofill();
-                var tries = 0;
-                var interval = setInterval(function() {
-                  autofill();
-                  tries++;
-                  if (tries > 30) clearInterval(interval);
-                }, 300);
-              })();
-              true;
-            `}
             javaScriptEnabled={true}
             domStorageEnabled={true}
+            thirdPartyCookiesEnabled={true}
+            sharedCookiesEnabled={true}
+            javaScriptCanOpenWindowsAutomatically={true}
+            setSupportMultipleWindows={false}
             originWhitelist={["*"]}
             mixedContentMode="always"
             allowsBackForwardNavigationGestures={false}
+            userAgent={
+              Platform.OS === "android"
+                ? "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                : undefined
+            }
             onError={(syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
               console.warn(`[${displayGateway} WebView Error]`, nativeEvent);

@@ -120,7 +120,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
       if (loaded) {
         Alert.alert(
           "Card Saved Successfully",
-          "Your card has been securely verified and linked via Payments.lk for fast 1-click checkout!",
+          "Your card has been securely verified and linked via Payments.lk! Any previous card was automatically replaced so only 1 active card is kept.",
         );
       } else {
         Alert.alert(
@@ -158,7 +158,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
               setLoading(true);
               await cardStorageService.removeCard(userId, savedCard?.id);
               setSavedCard(null);
-              Alert.alert("Card Removed", "Your saved card has been removed.");
+              Alert.alert("Removed Successfully", "Your saved card has been removed.");
             } catch (err) {
               Alert.alert("Error", "Failed to remove card. Please try again.");
             } finally {
@@ -648,7 +648,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                 {/* Masked Card Number */}
                 <Text
                   style={{
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: "700",
                     letterSpacing: 2,
                     color: "#FFFFFF",
@@ -684,7 +684,6 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
                         fontSize: 13,
                         fontWeight: "700",
                         color: "#FFFFFF",
-                        textTransform: "uppercase",
                       }}
                     >
                       {savedCard.cardHolder}
@@ -900,6 +899,7 @@ const SavedCardsScreen: React.FC<Props> = ({ navigation }) => {
           orderId={String(checkoutSession.orderId)}
           amount={checkoutSession.amount}
           customerAddress={checkoutSession.customerAddress}
+          isSaveCardOnly={true}
           onSuccess={handleCheckoutSuccess}
           onCancel={handleCheckoutCancel}
           onClose={() => setCheckoutModalVisible(false)}

@@ -9,7 +9,10 @@ import {
   ActivityIndicator,
   BackHandler,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome6 } from "@expo/vector-icons";
+import cardStorageService, {
+  SavedCard,
+} from "@/services/payment/cardStorageService";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
@@ -42,19 +45,39 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
-  // Payment info fetched from the backend invoice (credit / money paid)
+  // Payment info fetched from the backend invoice (credit / money paid / paymentMethod)
   const [apiPayment, setApiPayment] = useState<{
     creditPaid: number;
     moneyPaid: number;
+    paymentMethod?: string;
   } | null>(null);
+
+  const orderContext = route.params?.orderContext;
+  const invoiceNo = route.params?.invoiceNumber || "INV-PENDING";
+  const passedTotal = route.params?.total;
+
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(
+    (orderContext as any)?.savedCard || null
+  );
 
   React.useEffect(() => {
     dispatch(clearCart());
   }, [dispatch]);
 
-  const orderContext = route.params?.orderContext;
-  const invoiceNo = route.params?.invoiceNumber || "INV-PENDING";
-  const passedTotal = route.params?.total;
+  React.useEffect(() => {
+    if (!savedCard && userProfile?.id) {
+      let isMounted = true;
+      cardStorageService
+        .getSavedCard(userProfile.id)
+        .then((card) => {
+          if (isMounted && card) setSavedCard(card);
+        })
+        .catch(() => {});
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [userProfile?.id, savedCard]);
 
   // Fetch the saved invoice so we know how much was paid using credit
   React.useEffect(() => {
@@ -77,6 +100,7 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
           setApiPayment({
             creditPaid: parseFloat(String(inv.creditPaid ?? 0)) || 0,
             moneyPaid: parseFloat(String(inv.moneyPaid ?? 0)) || 0,
+            paymentMethod: inv.paymentMethod || inv.payment_method,
           });
         }
       } catch (e) {
@@ -188,6 +212,15 @@ const OrderConfirmed: React.FC<Props> = ({ navigation, route }) => {
         ) || 0;
 
   const amountToPay = Math.max(0, Number(total) - creditPaid);
+
+  const methodStr = String(
+    apiPayment?.paymentMethod ||
+      (orderContext as any)?.paymentMethod ||
+      (route.params as any)?.paymentMethod ||
+      ""
+  ).toLowerCase();
+  const isCard = methodStr === "card" || methodStr === "payhere";
+  const isCash = methodStr === "cash";
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("en-US", {

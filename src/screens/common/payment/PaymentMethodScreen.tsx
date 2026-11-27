@@ -263,7 +263,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               invoiceNumber: check.orderData.invoiceNumber,
               total: check.orderData.total || pending.amount,
               couponValue: appliedCoupon?.discount || 0,
-              orderContext,
+              orderContext: {
+                ...orderContext,
+                paymentMethod: "card",
+                savedCard: savedCard,
+              },
             });
           }
         }
@@ -338,9 +342,12 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
     const scheduledDate = getScheduledDeliveryDate();
     if (!scheduledDate) return false;
 
-    // 3. System Earliest Possible Schedule Date
+    const hasPkg =
+      (cartPackages?.length || 0) > 0 || (orderContext?.packageTotal || 0) > 0;
+    const alaCarteOnly = !hasPkg;
+
     const buyerType = userProfile?.buyerType || orderContext?.buyerType;
-    const sysEarliestDate = getMinDeliveryDate(buyerType);
+    const sysEarliestDate = getMinDeliveryDate(buyerType, alaCarteOnly);
     sysEarliestDate.setHours(0, 0, 0, 0);
 
     return scheduledDate.getTime() === sysEarliestDate.getTime();
@@ -658,7 +665,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         invoiceNumber: orderData.invoiceNumber,
         total: orderData.total || paymentAmount,
         couponValue: appliedCoupon?.discount || 0,
-        orderContext,
+        orderContext: {
+          ...orderContext,
+          paymentMethod: "card",
+          savedCard: savedCard,
+        },
       });
     } catch (err: any) {
       isOrderFinalizedRef.current = false;
@@ -698,7 +709,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             invoiceNumber: check.orderData.invoiceNumber,
             total: check.orderData.total || paymentAmount,
             couponValue: appliedCoupon?.discount || 0,
-            orderContext,
+            orderContext: {
+              ...orderContext,
+              paymentMethod: "card",
+              savedCard: savedCard,
+            },
           });
           return;
         }
@@ -728,7 +743,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 invoiceNumber: statusCheck.orderData.invoiceNumber,
                 total: statusCheck.orderData.total || paymentAmount,
                 couponValue: appliedCoupon?.discount || 0,
-                orderContext,
+                orderContext: {
+                  ...orderContext,
+                  paymentMethod: "card",
+                  savedCard: savedCard,
+                },
               });
             } else {
               Alert.alert(
@@ -753,8 +772,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert(
         "Order Processing Issue",
         err?.response?.data?.message ||
-          err?.message ||
-          "Payment was received, but there was an issue finalizing your order. Please contact customer support.",
+        err?.message ||
+        "Payment was received, but there was an issue finalizing your order. Please contact customer support.",
       );
     } finally {
       isCreatingOrderRef.current = false;
@@ -788,7 +807,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         } else if (payment.failure?.reason) {
           failureReason = payment.failure.reason;
         }
-      } catch {}
+      } catch { }
     }
 
     if (failureReason) {
@@ -932,7 +951,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             setIsConfirming(false);
             setSubmitting(false);
             navigation.navigate("PlaceMyOrderCard", {
-              orderContext,
+              orderContext: {
+                ...orderContext,
+                paymentMethod: "card",
+                savedCard: savedCard,
+              },
               payload,
               paymentAmount,
               totalAmount,
@@ -976,8 +999,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
           Alert.alert(
             "Payment Failed",
             err?.response?.data?.message ||
-              err?.message ||
-              "Could not process card payment. Please try again or pay with cash.",
+            err?.message ||
+            "Could not process card payment. Please try again or pay with cash.",
           );
         } finally {
           setIsConfirming(false);
@@ -1037,6 +1060,7 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               couponValue: couponVal,
               orderContext: {
                 ...(orderContext as any),
+                paymentMethod: paymentMethod,
                 grandTotal: totalAmount,
                 deliveryCharge: deliveryChargeToSave,
                 discount: itemDiscount,
@@ -1078,8 +1102,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             isTimeout
               ? "Your order is taking longer than usual to process. Please check your Order History or contact support before trying again."
               : err?.response?.data?.message ||
-                  err?.message ||
-                  "Could not place your order. Please try again.",
+              err?.message ||
+              "Could not place your order. Please try again.",
           );
         } finally {
           setIsConfirming(false);
@@ -1230,7 +1254,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             invoiceNumber: check.orderData.invoiceNumber,
             total: check.orderData.total || totalAmount,
             couponValue: couponVal,
-            orderContext,
+            orderContext: {
+              ...orderContext,
+              paymentMethod: "card",
+              savedCard: savedCard,
+            },
           });
           return;
         }
@@ -1260,7 +1288,11 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
                 invoiceNumber: statusCheck.orderData.invoiceNumber,
                 total: statusCheck.orderData.total || totalAmount,
                 couponValue: couponVal,
-                orderContext,
+                orderContext: {
+                  ...orderContext,
+                  paymentMethod: "card",
+                  savedCard: savedCard,
+                },
               });
             } else {
               Alert.alert(
@@ -1724,110 +1756,6 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
             onPress={() => setPaymentMethod("card")}
           />
 
-          {/* ─── SAVED CARD / CARD SELECTION SMALL SECTION ───────────── */}
-          {/* {paymentMethod === "card" && (
-            <View
-              style={{
-                marginHorizontal: 15,
-                marginTop: 10,
-                backgroundColor: "#FFFFFF",
-                borderRadius: 18,
-                borderWidth: 1.5,
-                borderColor: "#E5E7EB",
-                padding: 14,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.04,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: "#64748B",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                  marginBottom: 10,
-                }}
-              >
-                Card Payment Selection
-              </Text>
-
-              {savedCard ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 14,
-                    backgroundColor: "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    gap: 12,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: "#EFF6FF",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <FontAwesome6 name="credit-card" size={16} color="#0077FF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontSize: 13.5,
-                        fontWeight: "700",
-                        color: "#0F172A",
-                      }}
-                    >
-                      Saved Card on File (•••• {savedCard.last4})
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 11.5,
-                        color: "#64748B",
-                        marginTop: 2,
-                      }}
-                    >
-                      You will be asked to use your saved card or another card next.
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </View>
-              ) : (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Ionicons name="lock-closed" size={18} color="#0788FF" />
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12.5,
-                      color: "#475569",
-                      lineHeight: 17,
-                    }}
-                  >
-                    Card will be charged securely via Payments.lk hosted sheet. You can choose to save your card for 1-click payments.
-                  </Text>
-                </View>
-              )}
-            </View>
-          )} */}
-
           {/* CASH UNAVAILABLE BANNER */}
           {isCashDisabled && (
             <View
@@ -1982,8 +1910,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
         cartTotal={Math.max(
           0,
           (orderContext?.packageTotal || 0) +
-            (orderContext?.productTotal || 0) -
-            (orderContext?.discount || 0),
+          (orderContext?.productTotal || 0) -
+          (orderContext?.discount || 0),
         )}
         cartId={orderContext?.cartId}
       />
@@ -2071,8 +1999,8 @@ const PaymentMethod: React.FC<Props> = ({ navigation, route }) => {
               }}
             >
               {paymentMethod === "card" &&
-              paymentAmount > 0 &&
-              (isEarliestDeliveryDate() || isPackagePayToConfirm)
+                paymentAmount > 0 &&
+                (isEarliestDeliveryDate())
                 ? "Awaiting Payment..."
                 : "Confirming your order..."}
             </Text>

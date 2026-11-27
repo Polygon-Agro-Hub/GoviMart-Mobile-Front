@@ -22,6 +22,7 @@ import { UnifiedCheckoutSession } from "@/services/payment/payment.types";
 import { PaymentCheckoutModal } from "@/component/payment/PaymentCheckoutModal";
 import orderService from "@/services/order/order.service";
 import { orderRecoveryService } from "@/services/order/orderRecovery.service";
+import CustomHeader from "@/component/common/CustomHeader";
 
 type PlaceMyOrderCardNavProp = StackNavigationProp<
   RootStackParamList,
@@ -50,6 +51,9 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
     totalAmount = 0,
     couponVal = 0,
     savedCard,
+    flowType = "checkout",
+    reviewPayload,
+    invoiceNumber,
   } = route.params || {};
 
   const [submitting, setSubmitting] = useState(false);
@@ -80,31 +84,89 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
       setSubmitting(true);
       setSubmittingType("saved");
 
-      // Save pending order intent
-      await orderRecoveryService.savePendingOrder({
-        correlationId: orderRecoveryService.generateCorrelationId(),
-        flowType: "checkout",
-        amount: paymentAmount,
-        paymentMethod: "card",
-        isPaid: false,
-        timestamp: Date.now(),
-        payload,
-      });
+      const description =
+        flowType === "review_package"
+          ? `Polygon Package Order Payment - ${invoiceNumber || ""}`
+          : flowType === "order_confirmation"
+          ? `Polygon Order Price Difference - ${invoiceNumber || ""}`
+          : "Polygon Order Payment";
+
+      const targetOrderId =
+        reviewPayload?.processOrderId ||
+        reviewPayload?.orderId ||
+        payload?.cartId ||
+        orderContext?.cartId ||
+        Date.now();
 
       // 1-Click Charge saved card
       const chargeRes = await adapter.chargeSavedCard({
         cardId: savedCard.id,
         amount: paymentAmount,
-        itemsDescription: "Polygon Order Payment",
+        itemsDescription: description,
         paymentType: "order",
+        orderId: String(targetOrderId),
       });
 
       if (chargeRes.success) {
+        // Flow 1: Review Package
+        if (flowType === "review_package") {
+          await orderService.confirmPackageReview({
+            ...reviewPayload,
+            isPaid: 1,
+            paymentId: chargeRes.paymentId || null,
+          });
+          setSubmitting(false);
+          Alert.alert(
+            "Successful!",
+            `Your order ${invoiceNumber || ""}\nreviewed and dispatched successfully!`,
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: "Home" }],
+                  });
+                },
+              },
+            ]
+          );
+          return;
+        }
+
+        // Flow 2: Order Confirmation (price changes)
+        if (flowType === "order_confirmation") {
+          await orderService.confirmOrderWithLivePrices({
+            ...reviewPayload,
+            isPaid: 1,
+          });
+          setSubmitting(false);
+          Alert.alert(
+            "Successful!",
+            `Your order ${invoiceNumber || ""}\nconfirmed successfully!`,
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: "Home" }],
+                  });
+                },
+              },
+            ]
+          );
+          return;
+        }
+
+        // Flow 3: Standard Checkout
         await orderRecoveryService.updatePendingOrder({ isPaid: true });
 
-        // Finalize order creation
+        // Finalize order creation with verified payment ID
         const finalPayload = {
           ...payload,
+          isPaid: 1,
+          paymentId: chargeRes.paymentId || null,
           checkoutSessionId: chargeRes.paymentId || null,
         };
         const response = await orderService.createOrder(finalPayload);
@@ -124,7 +186,11 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
           invoiceNumber: orderData.invoiceNumber,
           total: orderData.total || totalAmount,
           couponValue: couponVal,
-          orderContext,
+          orderContext: {
+            ...(orderContext as any),
+            paymentMethod: "card",
+            savedCard: savedCard,
+          },
         });
         return;
       }
@@ -178,10 +244,25 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
       setSubmitting(true);
       setSubmittingType("another");
 
+      const description =
+        flowType === "review_package"
+          ? `Polygon Package Order Payment - ${invoiceNumber || ""}`
+          : flowType === "order_confirmation"
+          ? `Polygon Order Price Difference - ${invoiceNumber || ""}`
+          : "Polygon Order Payment";
+
+      const targetOrderId =
+        reviewPayload?.processOrderId ||
+        reviewPayload?.orderId ||
+        payload?.cartId ||
+        orderContext?.cartId ||
+        Date.now();
+
       const session = await adapter.initiatePayment({
+        orderId: String(targetOrderId),
         amount: paymentAmount,
         paymentType: "order",
-        itemsDescription: "Polygon Order Payment",
+        itemsDescription: description,
         saveCard: true,
       });
 
@@ -215,6 +296,58 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
         await adapter.syncCheckout(checkoutSession.sessionId, cardHolder).catch(() => null);
       }
 
+      // Flow 1: Review Package
+      if (flowType === "review_package") {
+        await orderService.confirmPackageReview({
+          ...reviewPayload,
+          isPaid: 1,
+          checkoutSessionId: checkoutSession?.sessionId ?? null,
+        });
+        setSubmitting(false);
+        Alert.alert(
+          "Successful!",
+          `Your order ${invoiceNumber || ""}\nreviewed and dispatched successfully!`,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "Home" }],
+                });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Flow 2: Order Confirmation
+      if (flowType === "order_confirmation") {
+        await orderService.confirmOrderWithLivePrices({
+          ...reviewPayload,
+          isPaid: 1,
+        });
+        setSubmitting(false);
+        Alert.alert(
+          "Successful!",
+          `Your order ${invoiceNumber || ""}\nconfirmed successfully!`,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "Home" }],
+                });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Flow 3: Standard Checkout
       await orderRecoveryService.savePendingOrder({
         correlationId: orderRecoveryService.generateCorrelationId(),
         flowType: "checkout",
@@ -246,7 +379,10 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
         invoiceNumber: orderData.invoiceNumber,
         total: orderData.total || totalAmount,
         couponValue: couponVal,
-        orderContext,
+        orderContext: {
+          ...(orderContext as any),
+          paymentMethod: "card",
+        },
       });
     } catch (err: any) {
       setSubmitting(false);
@@ -289,51 +425,15 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       {/* ─── HEADER ──────────────────────────────────────────────────────── */}
-      <View
-        style={{
-          paddingTop: Math.max(insets.top + 8, 20),
-          paddingBottom: 16,
-          paddingHorizontal: 20,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => navigation.goBack()}
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            backgroundColor: "#FFFFFF",
-            justifyContent: "center",
-            alignItems: "center",
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color="#000000" />
-        </TouchableOpacity>
-
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "700",
-            color: "#000000",
-          }}
-        >
-          Place My Order
-        </Text>
-
-        {/* Empty balancing spacer */}
-        <View style={{ width: 42 }} />
-      </View>
+     
+       <CustomHeader
+        navigation={navigation}
+        title= {flowType === "review_package" || flowType === "order_confirmation"
+            ? "Confirm Order Payment"
+            : "Place My Order"}
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -664,6 +764,13 @@ export const PlaceMyOrderCardScreen: React.FC<Props> = ({ navigation, route }) =
             flexDirection: "row",
             justifyContent: "center",
             alignItems: "center",
+             shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+
+    // Android shadow
+    elevation: 6,
           }}
         >
           {submitting && submittingType === "another" ? (
